@@ -165,7 +165,31 @@ The picoclaw gateway also handles Telegram messages independently of the voice a
 
 ---
 
-### 7. Gmail Digest Agent (cron job)
+### 7. Telegram Menu Bot (`telegram_menu_bot.py`)
+
+Interactive Telegram bot that exposes three operating modes via inline keyboard:
+
+| Mode | Button | Description |
+|---|---|---|
+| Mail Digest | 📧 Mail Digest | Runs `gmail_digest.py --stdout` and returns the summary inline |
+| Free Chat | 💬 Free Chat | Any text sent goes directly to `picoclaw agent -m` and returns the LLM response |
+| System Chat | 🖥 System Chat | Like Free Chat but prepends a system-admin context prompt |
+
+| Property | Value |
+|---|---|
+| Script | `/home/stas/.picoclaw/telegram_menu_bot.py` |
+| Service | `picoclaw-telegram.service` (systemd) |
+| Bot | `@smartpico_bot` |
+| Token source | `/home/stas/.picoclaw/bot.env` (loaded via `EnvironmentFile=`) |
+| Allowed user | `ALLOWED_USER` env var (chat ID) |
+| LLM backend | `picoclaw agent -m` subprocess (same config as gateway) |
+
+**Relationship to the gateway:**  
+`picoclaw-gateway.service` handles Telegram natively via the picoclaw Go binary (currently with `"enabled": false` in config.json — disabled in favour of the menu bot). `picoclaw-telegram.service` runs the menu bot independently and gives a structured, button-driven UX instead of raw chat.
+
+---
+
+### 8. Gmail Digest Agent (cron job)
 
 Daily email digest sent to Telegram at 19:00 Pi local time:
 
@@ -186,6 +210,11 @@ systemd
   ├── picoclaw-gateway.service
   │     └── /usr/bin/picoclaw gateway
   │
+  ├── picoclaw-telegram.service
+  │     └── /usr/bin/python3 telegram_menu_bot.py
+  │           └── /usr/bin/picoclaw agent -m "..." [subprocess, per message]
+  │           └── /usr/bin/python3 gmail_digest.py --stdout [subprocess, on demand]
+  │
   └── picoclaw-voice.service
         └── /usr/bin/python3 voice_assistant.py
               ├── pw-record [subprocess, stdout pipe] ← continuous hotword listen
@@ -200,14 +229,17 @@ systemd
 
 ```
 /home/stas/.picoclaw/
-  voice_assistant.py          ← main daemon
+  voice_assistant.py          ← main voice daemon
+  telegram_menu_bot.py        ← interactive Telegram menu bot
   config.json                 ← picoclaw + LLM config (API key here)
   gmail_digest.py             ← daily email digest agent
+  bot.env                     ← BOT_TOKEN + ALLOWED_USER (loaded by systemd EnvironmentFile=)
   vosk-model-small-ru/        ← 48 MB STT model directory
   ru_RU-irina-medium.onnx     ← 66 MB Piper TTS voice model
   ru_RU-irina-medium.onnx.json← Piper voice metadata
   voice.log                   ← voice assistant log (append)
   digest.log                  ← Gmail digest log
+  last_digest.txt             ← last digest output (read by menu bot)
 
 /usr/local/bin/piper          ← Piper wrapper script
 /usr/local/share/piper/       ← Piper binary + bundled libs (libonnxruntime, etc.)
@@ -223,6 +255,7 @@ systemd
 /etc/systemd/system/
   picoclaw-gateway.service
   picoclaw-voice.service
+  picoclaw-telegram.service
 
 /etc/modprobe.d/
   usb-audio-fix.conf          ← options snd-usb-audio implicit_fb=1

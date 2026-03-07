@@ -8,7 +8,17 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - LLM via OpenRouter (100+ models, free tier available)
 - Telegram bot channel via picoclaw gateway
 - Daily Gmail digest to Telegram
+- Interactive Telegram menu bot (Mail Digest / Free Chat / System Chat modes)
 - Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7)
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [doc/architecture.md](doc/architecture.md) | Full pipeline diagram, all components, file layout, configuration reference |
+| [backup/device/README.md](backup/device/README.md) | Captured device configuration snapshot + restore instructions |
 
 ---
 
@@ -131,7 +141,7 @@ This installs Vosk, Piper, and configures the audio.
 ```bash
 # From your dev machine — copy files to Pi:
 pscp -pw "<password>" src\voice_assistant.py pi@<hostname>:/home/pi/.picoclaw/voice_assistant.py
-pscp -pw "<password>" setup\setup_voice.sh pi@<hostname>:/tmp/setup_voice.sh
+pscp -pw "<password>" src\setup\setup_voice.sh pi@<hostname>:/tmp/setup_voice.sh
 
 # On the Pi:
 sudo bash /tmp/setup_voice.sh
@@ -314,7 +324,7 @@ picoclaw agent -m "Сколько будет два плюс два?"
 XDG_RUNTIME_DIR=/run/user/1000 pactl list sources short
 ```
 
-Hardware test scripts are in [`tests/hw/`](tests/hw/).
+Hardware test scripts are in [`src/tests/`](src/tests/).
 
 ---
 
@@ -348,28 +358,34 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 
 ```
 .
-├── src/                          ← Python application source
+├── src/                          ← ALL target-side sources
 │   ├── voice_assistant.py        ← voice loop daemon
-│   ├── telegram_menu_bot.py      ← Telegram menu bot
+│   ├── telegram_menu_bot.py      ← interactive Telegram menu bot
 │   ├── gmail_digest.py           ← daily email digest agent
-│   └── gmail_auth.py             ← OAuth2 setup helper
-├── setup/                        ← shell installation scripts
+│   ├── gmail_auth.py             ← OAuth2 setup helper (run once on Windows)
+│   ├── setup/                    ← installation & fix scripts (run on Pi)
+│   │   ├── setup_voice.sh        ← full voice stack installer
+│   │   ├── setup_gateway.sh      ← picoclaw gateway service installer
+│   │   ├── deploy_telegram_bot.sh← Telegram menu bot deploy
+│   │   ├── fix_implicit_fb.sh    ← USB audio snd-usb-audio quirk fix
+│   │   ├── fix_usb_audio_quirk.sh
+│   │   ├── fix_webcam_vol.sh
+│   │   ├── piper_wrapper.sh      ← Piper TTS wrapper script
+│   │   └── bot.env.example       ← template for /home/stas/.picoclaw/bot.env
 │   ├── services/                 ← systemd unit files
-│   │   ├── picoclaw-voice.service
-│   │   └── picoclaw-telegram.service
-│   ├── setup_voice.sh            ← full voice stack installer
-│   ├── setup_gateway.sh          ← Telegram gateway service
-│   ├── deploy_telegram_bot.sh    ← Telegram menu bot deploy
-│   ├── fix_implicit_fb.sh        ← USB audio fixes
-│   ├── fix_usb_audio_quirk.sh
-│   ├── fix_webcam_vol.sh
-│   └── piper_wrapper.sh
-├── tests/hw/                     ← hardware diagnostic scripts
-│   ├── test_tts.sh
-│   ├── test_mic.py
-│   ├── test_webcam_mic.sh
-│   ├── check_kernel_audio.sh
-│   └── ...
+│   │   ├── picoclaw-voice.service    ← voice assistant daemon
+│   │   └── picoclaw-telegram.service ← Telegram menu bot daemon
+│   └── tests/                    ← hardware diagnostic scripts
+│       ├── test_tts.sh
+│       ├── test_mic.py
+│       ├── test_webcam_mic.sh
+│       ├── check_kernel_audio.sh
+│       └── ...
+├── backup/device/                ← sanitized Pi config snapshot
+│   ├── picoclaw-config.json
+│   ├── crontab
+│   ├── systemd/
+│   └── modprobe.d/
 ├── doc/
 │   └── architecture.md           ← component architecture & design notes
 └── .credentials/                 ← secrets ONLY (gitignored)

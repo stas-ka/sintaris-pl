@@ -329,6 +329,25 @@ plink -pw "$HOSTPWD" -batch stas@OpenClawPI "node /path/to/your/script.js"
 
 ---
 
+## Documentation Maintenance Rule
+
+**When you add new functionality, change the architecture, add a new service, script, or component, or make any significant change to how the system works, you MUST update the relevant documents:**
+
+| Document | Update when… |
+|---|---|
+| `README.md` | New setup steps, new features listed in the intro, directory structure changes, new services/scripts |
+| `doc/architecture.md` | New component added, new pipeline stage, new systemd service, new file appears on the Pi, process hierarchy changes |
+| `backup/device/README.md` | New software installed on Pi, new systemd services, new cron jobs, version upgrades |
+
+**Rules:**
+- Always update documents **in the same commit** as the code change, not in a later "fix docs" commit.
+- The `README.md` features list and directory structure must always accurately reflect what exists in `src/`.
+- The `architecture.md` "File Layout on Pi", "Process Hierarchy", and component sections must stay in sync with what actually runs.
+- If a new `.service` file is added to `src/services/`, it must appear in the architecture process hierarchy.
+- If new env vars or config keys are introduced, they must be added to the configuration reference table in `architecture.md`.
+
+---
+
 ## Notes
 
 - All credentials are stored in `.credentials/.pico_env` — never hard-code them and never commit that file.
