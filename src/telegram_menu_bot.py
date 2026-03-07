@@ -1018,13 +1018,36 @@ def cmd_status(message):
     _set_lang(message.chat.id, message.from_user)
     cid = message.chat.id
     mode = _user_mode.get(cid, "—")
-    rc, out = _run_subprocess(["systemctl", "is-active",
-                               "picoclaw-voice", "picoclaw-gateway",
-                               "picoclaw-telegram"], timeout=5)
-    bot.send_message(cid,
-                     f"*Mode:* `{mode}`\n"
-                     f"*Services:*\n```\n{out}\n```",
-                     parse_mode="Markdown", reply_markup=_back_keyboard())
+    active_model = _get_active_model() or "default"
+
+    # Query each service individually with a label
+    services = [
+        ("🤖 Telegram Bot",    "picoclaw-telegram"),
+        ("🌐 AI Gateway",      "picoclaw-gateway"),
+        ("🎤 Voice Assistant", "picoclaw-voice"),
+    ]
+    svc_lines = []
+    for label, svc_name in services:
+        _, state = _run_subprocess(["systemctl", "is-active", svc_name], timeout=5)
+        state = state.strip()
+        icon = "✅" if state == "active" else "❌"
+        svc_lines.append(f"{icon} {label}: `{state}`")
+
+    if _is_admin(cid):
+        role = "👑 Admin"
+    elif _is_guest(cid):
+        role = "👥 Guest"
+    else:
+        role = "👤 Full"
+
+    text = (
+        f"🖥️ *Pico Bot Status*\n\n"
+        f"🎯 *Mode:* `{mode}`\n"
+        f"🤖 *LLM:* `{active_model}`\n"
+        f"👤 *Role:* {role}\n\n"
+        f"*Services:*\n" + "\n".join(svc_lines)
+    )
+    bot.send_message(cid, text, parse_mode="Markdown", reply_markup=_back_keyboard())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
