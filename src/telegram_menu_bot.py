@@ -121,7 +121,7 @@ LAST_DIGEST_FILE = os.environ.get("LAST_DIGEST_FILE",
                                    os.path.expanduser("~/.picoclaw/last_digest.txt"))
 
 # Bot version — bump this string with every deployment so admins get notified
-BOT_VERSION           = "2026.3.18"
+BOT_VERSION           = "2026.3.19"
 RELEASE_NOTES_FILE    = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
@@ -238,6 +238,11 @@ PIPER_MODEL        = os.environ.get("PIPER_MODEL",
                          os.path.expanduser("~/.picoclaw/ru_RU-irina-medium.onnx"))
 PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser("~/.picoclaw/ru_RU-irina-medium.onnx")))
+PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
+                         os.path.expanduser("~/.picoclaw/ru_RU-irina-low.onnx"))
+WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
+WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
+                         os.path.expanduser("~/.picoclaw/ggml-tiny.bin"))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
 
 VOICE_SAMPLE_RATE     = 16000
@@ -262,6 +267,11 @@ _VOICE_OPTS_DEFAULTS: dict = {
     "parallel_tts":      False,   # #5: start TTS thread immediately after LLM
     "user_audio_toggle": False,   # #9: show 🔊/🔇 per-voice-reply audio toggle
     "tmpfs_model":       False,   # #10: copy Piper ONNX to /dev/shm (RAM disk) for ~10x faster load
+    # §5.3 improvements (all default OFF — current behaviour unchanged)
+    "vad_prefilter":     False,   # §5.3: webrtcvad silence/noise gate before Vosk STT
+    "whisper_stt":       False,   # §5.3: use whisper.cpp tiny instead of Vosk for STT
+    "piper_low_model":   False,   # §5.3: use ru_RU-irina-low.onnx (faster, smaller TTS)
+    "persistent_piper":  False,   # §5.3: keep a warm Piper process alive → ONNX stays in page cache
 }
 
 if not BOT_TOKEN:
@@ -300,7 +310,8 @@ _user_mode: dict[int, str] = {}
 _pending_cmd: dict[int, str] = {}
 # per-user language: 'ru' or 'en', set on first incoming message/callback
 _user_lang: dict[int, str] = {}
-_vosk_model_cache = None   # lazy-loaded Vosk model singleton
+_vosk_model_cache = None          # lazy-loaded Vosk model singleton
+_persistent_piper_proc = None    # §5.3 persistent_piper: keeps the Piper ONNX hot in page cache
 _pending_llm_key: dict[int, str] = {}  # chat_id → waiting for OpenAI API key input
 _user_audio: dict[int, bool] = {}      # chat_id → True=audio on (default); used when user_audio_toggle enabled
 _pending_note: dict[int, dict] = {}   # chat_id → {"step": "title"|"content"|"edit_content", "slug": str, "title": str}
@@ -1090,6 +1101,11 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
         ("parallel_tts",      f"{_flag('parallel_tts')}  Parallel TTS thread  ·  text-first UX"),
         ("user_audio_toggle", f"{_flag('user_audio_toggle')}  Per-user audio 🔊/🔇 toggle"),
         ("tmpfs_model",       f"{_flag('tmpfs_model')}  Piper model in RAM (/dev/shm)  ·  −10s TTS load"),
+        # §5.3 new opts
+        ("vad_prefilter",     f"{_flag('vad_prefilter')}  VAD pre-filter (webrtcvad)  ·  −3s STT"),
+        ("whisper_stt",       f"{_flag('whisper_stt')}  Whisper STT (whisper.cpp)  ·  +accuracy"),
+        ("piper_low_model",   f"{_flag('piper_low_model')}  Piper low model  ·  −13s TTS"),
+        ("persistent_piper",  f"{_flag('persistent_piper')}  Persistent Piper process  ·  ONNX hot"),
     ]
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))
@@ -1121,11 +1137,19 @@ def _handle_voice_opt_toggle(chat_id: int, key: str) -> None:
     _save_voice_opts()
     state = "ON ✅" if _voice_opts[key] else "OFF ◻️"
     log.info(f"[VoiceOpts] {key} → {state} (by admin {chat_id})")
-    # If warm_piper was just enabled, start background warm-up immediately
+    # warm_piper: pre-warm immediately when enabled
     if key == "warm_piper" and _voice_opts[key]:
         threading.Thread(target=_warm_piper_cache, daemon=True).start()
         bot.send_message(chat_id, "⚡ _Warming Piper cache in background…_",
                          parse_mode="Markdown")
+    # persistent_piper: start/stop keepalive process
+    if key == "persistent_piper":
+        if _voice_opts[key]:
+            threading.Thread(target=_start_persistent_piper, daemon=True).start()
+            bot.send_message(chat_id, "⚡ _Starting persistent Piper process…_",
+                             parse_mode="Markdown")
+        else:
+            threading.Thread(target=_stop_persistent_piper, daemon=True).start()
     _handle_voice_opts_menu(chat_id)
 
 
@@ -1701,10 +1725,13 @@ def _get_vosk_model():
 
 def _piper_model_path() -> str:
     """Return the effective Piper ONNX model path.
-    When tmpfs_model is enabled and the RAM-disk copy exists, use it (~10x faster
-    reads vs microSD).  Otherwise fall back to the original PIPER_MODEL path."""
+    Priority: tmpfs copy (RAM disk) > low model > original medium model.
+    piper_low_model uses ru_RU-irina-low.onnx when available (§5.3).
+    tmpfs_model (~10x faster reads vs microSD) always wins if the copy exists."""
     if _voice_opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_TMPFS):
         return PIPER_MODEL_TMPFS
+    if _voice_opts.get("piper_low_model") and os.path.exists(PIPER_MODEL_LOW):
+        return PIPER_MODEL_LOW
     return PIPER_MODEL
 
 
@@ -1755,6 +1782,117 @@ def _warm_piper_cache() -> None:
                         f"{result.stderr[:100]}")
     except Exception as e:
         log.warning(f"[VoiceOpt] Piper warmup failed: {e}")
+
+
+def _start_persistent_piper() -> None:
+    """Launch a long-running Piper process to keep the ONNX model resident in
+    the kernel page cache (§5.3 persistent_piper opt).
+    The subprocess never receives any input — it just holds the model in memory.
+    Actual TTS synthesis still uses fresh subprocess.run() calls for safety."""
+    global _persistent_piper_proc
+    _stop_persistent_piper()   # kill any stale instance first
+    try:
+        _persistent_piper_proc = subprocess.Popen(
+            [PIPER_BIN, "--model", _piper_model_path(), "--output-raw"],
+            stdin=subprocess.PIPE,    # hold open without writing
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        log.info(f"[PersistentPiper] started PID={_persistent_piper_proc.pid} — "
+                 f"ONNX model kept warm in page cache")
+    except Exception as e:
+        log.warning(f"[PersistentPiper] failed to start: {e}")
+
+
+def _stop_persistent_piper() -> None:
+    """Terminate the persistent Piper keepalive subprocess."""
+    global _persistent_piper_proc
+    if _persistent_piper_proc is not None:
+        try:
+            if _persistent_piper_proc.poll() is None:
+                _persistent_piper_proc.terminate()
+                _persistent_piper_proc.wait(timeout=5)
+            log.info(f"[PersistentPiper] stopped PID={_persistent_piper_proc.pid}")
+        except Exception as e:
+            log.debug(f"[PersistentPiper] stop: {e}")
+        _persistent_piper_proc = None
+
+
+def _vad_filter_pcm(raw_pcm: bytes, sample_rate: int) -> bytes:
+    """Apply WebRTC VAD to remove non-speech frames from raw S16LE PCM.
+    Returns filtered PCM.  Falls back to original PCM if webrtcvad is not
+    installed or an error occurs — so this is always safe to call.
+    Requires: pip3 install webrtcvad"""
+    try:
+        import webrtcvad as _vad_lib
+        vad = _vad_lib.Vad(2)   # aggressiveness 0–3 (2 = balanced)
+        frame_ms = 30            # 10 / 20 / 30 ms frames allowed by WebRTC VAD
+        frame_bytes = int(sample_rate * (frame_ms / 1000.0)) * 2  # 16-bit samples
+        out_frames = []
+        for i in range(0, len(raw_pcm) - frame_bytes + 1, frame_bytes):
+            frame = raw_pcm[i:i + frame_bytes]
+            try:
+                if vad.is_speech(frame, sample_rate):
+                    out_frames.append(frame)
+            except Exception:
+                out_frames.append(frame)  # keep on per-frame error
+        filtered = b"".join(out_frames)
+        removed_pct = 100 * (1 - len(filtered) / max(len(raw_pcm), 1))
+        log.debug(f"[VAD] removed {removed_pct:.0f}% non-speech frames")
+        return filtered if filtered else raw_pcm   # never return empty
+    except ImportError:
+        log.debug("[VAD] webrtcvad not installed — skipping filter")
+        return raw_pcm
+    except Exception as e:
+        log.debug(f"[VAD] filter error: {e} — skipping")
+        return raw_pcm
+
+
+def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
+    """Run whisper.cpp (§5.3) on raw S16LE PCM. Returns transcript or None.
+    Writes PCM to a temp WAV file, invokes WHISPER_BIN, parses stdout.
+    Falls back to None on any error so caller can use Vosk as fallback."""
+    try:
+        import tempfile, wave as _wave_mod
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+        # Write a proper 16-bit WAV file so whisper.cpp can read it
+        with _wave_mod.open(tmp_path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)     # 16-bit
+            wf.setframerate(sample_rate)
+            wf.writeframes(raw_pcm)
+        result = subprocess.run(
+            [WHISPER_BIN, "-m", WHISPER_MODEL, "-f", tmp_path,
+             "-l", "ru", "--no-timestamps", "-otxt"],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=60,
+        )
+        os.unlink(tmp_path)
+        if result.returncode != 0:
+            log.warning(f"[WhisperSTT] rc={result.returncode}: {result.stderr[:200]}")
+            return None
+        # whisper.cpp -otxt writes <file>.txt — also check stdout
+        txt_path = tmp_path + ".txt"
+        if os.path.exists(txt_path):
+            text = open(txt_path, encoding="utf-8").read().strip()
+            os.unlink(txt_path)
+        else:
+            text = result.stdout.strip()
+        # Strip whisper.cpp timestamp markers like [00:00:00.000 --> 00:00:05.000]
+        import re as _re_w
+        text = _re_w.sub(r"\[[\d:.]+ --> [\d:.]+\]\s*", "", text).strip()
+        return text if text else None
+    except FileNotFoundError:
+        log.debug(f"[WhisperSTT] binary not found: {WHISPER_BIN}")
+        return None
+    except subprocess.TimeoutExpired:
+        log.warning("[WhisperSTT] timed out after 60 s")
+        return None
+    except Exception as e:
+        log.warning(f"[WhisperSTT] error: {e}")
+        return None
 
 
 def _tts_to_ogg(text: str) -> Optional[bytes]:
@@ -1906,45 +2044,61 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                        reply_markup=_back_keyboard())
             return
 
-        # ── Vosk STT ─────────────────────────────────────────────────────────
-        # STT_CONF_THRESHOLD: words with confidence below this are marked [?word]
-        # so the LLM can attempt to fill them from context.
-        STT_CONF_THRESHOLD = 0.65
+        # ── VAD pre-filter (§5.3) ─────────────────────────────────────────────
+        if _voice_opts.get("vad_prefilter"):
+            _ts = time.time()
+            raw_pcm = _vad_filter_pcm(raw_pcm, _srate)
+            _timing["VAD"] = time.time() - _ts
+
+        # ── STT: whisper.cpp (§5.3) OR Vosk (default / fallback) ─────────────
         _ts = time.time()
-        try:
-            import vosk as _vosk_lib
-            import json as _json
-            model = _get_vosk_model()
-            rec = _vosk_lib.KaldiRecognizer(model, _srate)
-            rec.SetWords(True)
-            chunk = VOICE_CHUNK_SIZE * 2 * _srate // VOICE_SAMPLE_RATE  # adjust for sample rate
-            for i in range(0, len(raw_pcm), chunk):
-                rec.AcceptWaveform(raw_pcm[i:i + chunk])
-            final = _json.loads(rec.FinalResult())
-            words = final.get("result", [])
-            if words:
-                # Build transcript: low-confidence words wrapped in [?…]
-                parts = []
-                low_conf_count = 0
-                for w in words:
-                    conf = w.get("conf", 1.0)
-                    word = w.get("word", "")
-                    if conf < STT_CONF_THRESHOLD:
-                        parts.append(f"[?{word}]")
-                        low_conf_count += 1
-                    else:
-                        parts.append(word)
-                text = " ".join(parts).strip()
-                if low_conf_count:
-                    log.debug(f"STT: {low_conf_count}/{len(words)} words below "
-                              f"conf={STT_CONF_THRESHOLD}: {text[:120]}")
+        text = ""
+        if _voice_opts.get("whisper_stt"):
+            text = _stt_whisper(raw_pcm, _srate) or ""
+            if text:
+                log.debug(f"[WhisperSTT] transcript: {text[:80]}")
             else:
-                text = final.get("text", "").strip()
-        except Exception as e:
-            _safe_edit(chat_id, msg.message_id,
-                       _t(chat_id, "vosk_error", e=e),
-                       reply_markup=_back_keyboard())
-            return
+                log.warning("[WhisperSTT] no result — falling back to Vosk")
+
+        if not text:
+            # ─ Vosk STT (default / fallback) ────────────────────────────────
+            # STT_CONF_THRESHOLD: words with confidence below this are marked [?word]
+            # so the LLM can attempt to fill them from context.
+            STT_CONF_THRESHOLD = 0.65
+            try:
+                import vosk as _vosk_lib
+                import json as _json
+                model = _get_vosk_model()
+                rec = _vosk_lib.KaldiRecognizer(model, _srate)
+                rec.SetWords(True)
+                chunk = VOICE_CHUNK_SIZE * 2 * _srate // VOICE_SAMPLE_RATE  # adjust for sample rate
+                for i in range(0, len(raw_pcm), chunk):
+                    rec.AcceptWaveform(raw_pcm[i:i + chunk])
+                final = _json.loads(rec.FinalResult())
+                words = final.get("result", [])
+                if words:
+                    # Build transcript: low-confidence words wrapped in [?…]
+                    parts = []
+                    low_conf_count = 0
+                    for w in words:
+                        conf = w.get("conf", 1.0)
+                        word = w.get("word", "")
+                        if conf < STT_CONF_THRESHOLD:
+                            parts.append(f"[?{word}]")
+                            low_conf_count += 1
+                        else:
+                            parts.append(word)
+                    text = " ".join(parts).strip()
+                    if low_conf_count:
+                        log.debug(f"STT: {low_conf_count}/{len(words)} words below "
+                                  f"conf={STT_CONF_THRESHOLD}: {text[:120]}")
+                else:
+                    text = final.get("text", "").strip()
+            except Exception as e:
+                _safe_edit(chat_id, msg.message_id,
+                           _t(chat_id, "vosk_error", e=e),
+                           reply_markup=_back_keyboard())
+                return
         _timing["STT"] = time.time() - _ts
 
         if not text:
@@ -2559,6 +2713,11 @@ def main():
     if _voice_opts.get("warm_piper"):
         log.info("[VoiceOpt] warm_piper enabled — starting background warm-up")
         threading.Thread(target=_warm_piper_cache, daemon=True).start()
+
+    # Start persistent Piper keepalive process if opt is enabled
+    if _voice_opts.get("persistent_piper"):
+        log.info("[VoiceOpt] persistent_piper enabled — starting Piper keepalive")
+        threading.Thread(target=_start_persistent_piper, daemon=True).start()
 
     # Clean up any 'Generating audio…' messages orphaned by a previous restart
     _cleanup_orphaned_tts()

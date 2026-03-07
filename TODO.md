@@ -133,33 +133,13 @@ Lightweight offline-capable knowledge base for personal/technical documents.
 | Vosk confidence filtering (`[?word]`) | always on | ✅ STT accuracy |
 | `TTS_MAX_CHARS = 600` | constant | ✅ balanced audio length |
 
-### 5.3 Planned improvements 🔲
+### 5.3 Planned improvements ✅ Implemented (v2026.3.19)
 
-#### STT
-
-- [ ] **Switch to `whisper.cpp` tiny model** (aarch64 binary, ~75 MB)
-  - Expected: STT ~15 s → ~4 s; better Russian accuracy
-  - Ref: https://github.com/ggerganov/whisper.cpp
-
-- [ ] **VAD pre-filter** (`webrtcvad`, ~50 KB, no heavy deps)
-  - Removes inter-word pauses before Vosk; complements silence strip
-  ```bash
-  pip3 install webrtcvad
-  ```
-
-#### TTS
-
-- [ ] **Persistent Piper subprocess** (warm `Popen` singleton)
-  - Eliminates ONNX cold-load on every call
-  - ⚠️ Needs careful `stdin`/`stdout` flush handling (previous Popen attempt deadlocked)
-  - Expected: TTS total ~40 s → ~5 s
-
-- [ ] **Switch to `ru_RU-irina-low`** model
-  - Half the computation of `medium`; acceptable quality for bot use
-  - Expected: inference ~25 s → ~12 s
-  ```bash
-  wget https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/low/ru_RU-irina-low.onnx
-  ```
+All items added as optional voice opts toggles (all default OFF, existing behaviour unchanged):
+- **`vad_prefilter`** — webrtcvad noise gate before Vosk STT
+- **`whisper_stt`** — whisper.cpp tiny model instead of Vosk (needs binary + `~/.picoclaw/ggml-tiny.bin`)
+- **`piper_low_model`** — ru\_RU-irina-low.onnx for faster TTS (needs model download)
+- **`persistent_piper`** — keepalive Piper subprocess holds ONNX in page cache
 
 ### 5.4 Effort vs. impact summary
 

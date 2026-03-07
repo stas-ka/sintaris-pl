@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.19",
+    "date": "2026-03-07",
+    "title": "§5.3 Voice pipeline improvements as optional toggles",
+    "notes": "- VAD pre-filter (webrtcvad): removes non-speech frames before Vosk — toggle: vad\_prefilter\n- Whisper STT (whisper.cpp): use tiny model instead of Vosk — toggle: whisper\_stt (needs binary + model)\n- Piper low model (ru\_RU-irina-low.onnx): faster TTS synthesis — toggle: piper\_low\_model (needs model)\n- Persistent Piper keepalive: holds ONNX in page cache between calls — toggle: persistent\_piper\n- All 4 opts default OFF — existing behaviour unchanged\n- New opts visible in Admin → ⚡ Voice Opts menu"
+  },
+  {
     "version": "2026.3.18",
     "date": "2026-03-08",
     "title": "Notes System — create, list, edit, delete + voice dictation & read",
