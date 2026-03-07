@@ -196,6 +196,7 @@ _pending_cmd: dict[int, str] = {}
 # per-user language: 'ru' or 'en', set on first incoming message/callback
 _user_lang: dict[int, str] = {}
 _vosk_model_cache = None   # lazy-loaded Vosk model singleton
+_pending_llm_key: dict[int, str] = {}  # chat_id → waiting for OpenAI API key input
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bot setup
@@ -550,25 +551,32 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
         return
 
     kb = InlineKeyboardMarkup(row_width=1)
+    # OpenAI sub-menu button
+    shared_openai_key = _get_shared_openai_key()
+    openai_prefix = "✔️" if shared_openai_key else "⚠️"
+    kb.add(InlineKeyboardButton(f"🔵 {openai_prefix} OpenAI ChatGPT ▶", callback_data="openai_llm_menu"))
+
+    # Other models from config (exclude openai.com — shown in sub-menu)
     for m in models:
         name = m.get("model_name", "")
         if not name:
+            continue
+        if "openai.com" in m.get("api_base", ""):
             continue
         has_key = bool(m.get("api_key", "").strip())
         is_current = (name == current) or (not current and name == "openrouter-auto")
         prefix = "✅" if is_current else ("✔️" if has_key else "⚠️")
         kb.add(InlineKeyboardButton(f"{prefix}  {name}", callback_data=f"llm_select:{name}"))
 
-    kb.add(InlineKeyboardButton("\u21a9️  Reset to default", callback_data="llm_select:"))
+    kb.add(InlineKeyboardButton("↩️  Reset to default", callback_data="llm_select:"))
     kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
 
     current_label = current or "(config default: openrouter-auto)"
     bot.send_message(
         chat_id,
-        f"🤖 *Switch LLM*\n\nCurrent: `{current_label}`\n\n"
-        f"✅ = currently active\n✔️ = API key configured\n⚠️ = API key missing in config.json\n\n"
-        f"_To use ChatGPT directly, add your OpenAI API key to the `gpt-5.2` entry in `~/.picoclaw/config.json`._\n"
-        f"_`openrouter-auto` already works and can route to GPT via your OpenRouter key._",
+        f"🤖 *Switch LLM*\n\nActive: `{current_label}`\n\n"
+        f"✅ active   ✔️ key set   ⚠️ needs key\n\n"
+        f"Tap *OpenAI ChatGPT* to select GPT-4o / GPT-4o-mini and set your API key.",
         parse_mode="Markdown",
         reply_markup=kb,
     )
@@ -578,10 +586,137 @@ def _handle_set_llm(chat_id: int, model_name: str) -> None:
     """Apply LLM model selection and confirm to user."""
     _set_active_model(model_name)
     if model_name:
-        msg = f"✅ *LLM switched to:* `{model_name}`\n\n_All subsequent chat, system, and voice requests will use this model._"
+        models_map = {m["model_name"]: m for m in _get_picoclaw_models() if m.get("model_name")}
+        m = models_map.get(model_name, {})
+        has_key = bool(m.get("api_key", "").strip())
+        warn = "" if has_key else "\n\n⚠️ _No API key set for this model — go to OpenAI ChatGPT menu to add one._"
+        msg = f"✅ *LLM switched to:* `{model_name}`{warn}\n\n_All subsequent chat, system, and voice requests will use this model._"
     else:
-        msg = f"↩️ *LLM reset to config default* (`openrouter-auto`)."
+        msg = "↩️ *LLM reset to config default* (`openrouter-auto`)."
     bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard())
+
+
+# ── OpenAI ChatGPT sub-menu ───────────────────────────────────────────────────
+
+_OPENAI_CATALOG = [
+    ("gpt-4o",          "openai/gpt-4o",          "GPT-4o (flagship)"),
+    ("gpt-4o-mini",     "openai/gpt-4o-mini",     "GPT-4o mini (fast & cheap)"),
+    ("o3-mini",         "openai/o3-mini",          "o3-mini (reasoning)"),
+    ("o1",              "openai/o1",               "o1 (advanced reasoning)"),
+    ("gpt-4.5-preview", "openai/gpt-4.5-preview",  "GPT-4.5 preview"),
+]
+_OPENAI_API_BASE = "https://api.openai.com/v1"
+
+
+def _get_shared_openai_key() -> str:
+    """Return the first OpenAI api_key found in config.json, or ''."""
+    for m in _get_picoclaw_models():
+        if "openai.com" in m.get("api_base", "") and m.get("api_key", "").strip():
+            return m["api_key"].strip()
+    return ""
+
+
+def _save_openai_apikey(api_key: str) -> bool:
+    """Set api_key for all openai.com models in config.json. Add catalog models if missing."""
+    try:
+        p = Path(PICOCLAW_CONFIG)
+        cfg = json.loads(p.read_text(encoding="utf-8"))
+        model_names = {m["model_name"] for m in cfg.get("model_list", []) if m.get("model_name")}
+        for m in cfg.get("model_list", []):
+            if "openai.com" in m.get("api_base", ""):
+                m["api_key"] = api_key
+        for name, model_id, _ in _OPENAI_CATALOG:
+            if name not in model_names:
+                cfg["model_list"].append({
+                    "model_name": name,
+                    "model": model_id,
+                    "api_base": _OPENAI_API_BASE,
+                    "api_key": api_key,
+                })
+        p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+        log.info("[LLM] OpenAI key saved to config.json")
+        return True
+    except Exception as e:
+        log.error(f"[LLM] Failed to save OpenAI key: {e}")
+        return False
+
+
+def _handle_openai_llm_menu(chat_id: int) -> None:
+    """Show OpenAI ChatGPT model selection keyboard with key status."""
+    models = {m["model_name"]: m for m in _get_picoclaw_models() if m.get("model_name")}
+    shared_key = _get_shared_openai_key()
+    current = _get_active_model()
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    for name, _, description in _OPENAI_CATALOG:
+        m = models.get(name, {})
+        has_key = bool(m.get("api_key", "").strip()) or bool(shared_key)
+        is_current = (name == current)
+        prefix = "✅" if is_current else ("✔️" if has_key else "⚠️")
+        kb.add(InlineKeyboardButton(f"{prefix} {name} — {description}",
+                                    callback_data=f"llm_select:{name}"))
+
+    key_label = (f"🔑 Update OpenAI Key (…{shared_key[-4:]})" if shared_key
+                 else "🔑 Set OpenAI API Key")
+    kb.add(InlineKeyboardButton(key_label, callback_data="llm_setkey_openai"))
+    kb.add(InlineKeyboardButton("🔙  LLM Menu", callback_data="admin_llm_menu"))
+
+    status_line = (f"🔑 Key: `…{shared_key[-4:]}` ✅ configured"
+                   if shared_key else "🔑 Key: ⚠️ not set — tap below to add")
+    bot.send_message(
+        chat_id,
+        f"🔵 *OpenAI ChatGPT Models*\n\n"
+        f"{status_line}\n\n"
+        f"✅ active   ✔️ key set   ⚠️ needs key\n\n"
+        f"_One API key is shared by all OpenAI models._\n"
+        f"_Get yours at: https://platform.openai.com/api-keys_",
+        parse_mode="Markdown",
+        reply_markup=kb,
+    )
+
+
+def _handle_llm_setkey_prompt(chat_id: int) -> None:
+    """Ask admin to paste their OpenAI API key into chat."""
+    _pending_llm_key[chat_id] = "openai"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("❌ Cancel", callback_data="openai_llm_menu"))
+    bot.send_message(
+        chat_id,
+        "🔑 *Set OpenAI API Key*\n\n"
+        "Paste your OpenAI API key in a message below.\n"
+        "_It starts with_ `sk-proj-...` _or_ `sk-...`\n\n"
+        "_The key is stored in_ `~/.picoclaw/config.json` _on the Pi._\n"
+        "_It applies to all OpenAI models (GPT-4o, GPT-4o-mini, o3-mini…)._",
+        parse_mode="Markdown",
+        reply_markup=kb,
+    )
+
+
+def _handle_save_llm_key(chat_id: int, raw_key: str) -> None:
+    """Validate and save the typed OpenAI API key, return to OpenAI sub-menu."""
+    _pending_llm_key.pop(chat_id, None)
+    raw_key = raw_key.strip()
+    if not raw_key.startswith("sk-"):
+        bot.send_message(
+            chat_id,
+            "❌ *Invalid key* — OpenAI keys start with `sk-`.\n\nTap the button to try again.",
+            parse_mode="Markdown",
+        )
+        _handle_openai_llm_menu(chat_id)
+        return
+    ok = _save_openai_apikey(raw_key)
+    if ok:
+        bot.send_message(
+            chat_id,
+            f"✅ *OpenAI API key saved!*\n\nKey: `…{raw_key[-4:]}`\n"
+            f"_All OpenAI models now use this key._",
+            parse_mode="Markdown",
+        )
+    else:
+        bot.send_message(chat_id, "❌ Failed to save key — check Pi logs.", parse_mode="Markdown")
+    _handle_openai_llm_menu(chat_id)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_digest(chat_id: int) -> None:
@@ -1135,6 +1270,18 @@ def callback_handler(call):
             model_name = data[len("llm_select:"):]
             _handle_set_llm(cid, model_name)
 
+    elif data == "openai_llm_menu":
+        if not _is_admin(cid):
+            bot.send_message(cid, _t(cid, "admin_only"))
+        else:
+            _handle_openai_llm_menu(cid)
+
+    elif data == "llm_setkey_openai":
+        if not _is_admin(cid):
+            bot.send_message(cid, _t(cid, "admin_only"))
+        else:
+            _handle_llm_setkey_prompt(cid)
+
     elif data == "cancel":
         _pending_cmd.pop(cid, None)
         bot.send_message(cid, _t(cid, "cancelled"), reply_markup=_back_keyboard())
@@ -1155,6 +1302,15 @@ def text_handler(message):
         return
 
     _set_lang(cid, message.from_user)
+
+    # Admin is typing an API key
+    if cid in _pending_llm_key:
+        if _is_admin(cid):
+            _handle_save_llm_key(cid, message.text)
+        else:
+            _pending_llm_key.pop(cid, None)
+        return
+
     mode = _user_mode.get(cid)
 
     if mode is None:
