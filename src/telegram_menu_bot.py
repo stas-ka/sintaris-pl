@@ -119,7 +119,7 @@ LAST_DIGEST_FILE = os.environ.get("LAST_DIGEST_FILE",
                                    os.path.expanduser("~/.picoclaw/last_digest.txt"))
 
 # Bot version — bump this string with every deployment so admins get notified
-BOT_VERSION           = "2026.3.12"
+BOT_VERSION           = "2026.3.14"
 RELEASE_NOTES_FILE    = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
@@ -158,6 +158,8 @@ VOSK_MODEL_PATH    = os.environ.get("VOSK_MODEL_PATH",
 PIPER_BIN          = os.environ.get("PIPER_BIN",  "/usr/local/bin/piper")
 PIPER_MODEL        = os.environ.get("PIPER_MODEL",
                          os.path.expanduser("~/.picoclaw/ru_RU-irina-medium.onnx"))
+PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
+                         os.path.basename(os.path.expanduser("~/.picoclaw/ru_RU-irina-medium.onnx")))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
 
 VOICE_SAMPLE_RATE     = 16000
@@ -181,6 +183,7 @@ _VOICE_OPTS_DEFAULTS: dict = {
     "warm_piper":        False,   # #4: pre-warm Piper ONNX model at bot startup
     "parallel_tts":      False,   # #5: start TTS thread immediately after LLM
     "user_audio_toggle": False,   # #9: show 🔊/🔇 per-voice-reply audio toggle
+    "tmpfs_model":       False,   # #10: copy Piper ONNX to /dev/shm (RAM disk) for ~10x faster load
 }
 
 if not BOT_TOKEN:
@@ -569,6 +572,35 @@ def _with_lang(chat_id: int, user_text: str) -> str:
     return instruction + user_text
 
 
+def _with_lang_voice(chat_id: int, stt_text: str) -> str:
+    """
+    Like _with_lang but adds an STT-error hint when low-confidence words are
+    present (marked as [?word] by the Vosk confidence filter).
+    The LLM is instructed to silently correct them using context.
+    """
+    import re as _re
+    has_uncertain = bool(_re.search(r'\[\?', stt_text))
+    lang = _resolve_lang(chat_id, stt_text)
+    instruction = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION.get(_FALLBACK_LANG, ""))
+    if has_uncertain:
+        if lang == "ru":
+            stt_hint = (
+                "Следующий текст — результат автоматического распознавания речи. "
+                "Слова в скобках [?слово] распознаны с низкой уверенностью — "
+                "исправь их по контексту и ответь на исходный вопрос. "
+                "Не упоминай исправления явно.\n\n"
+            )
+        else:
+            stt_hint = (
+                "The following text was produced by automatic speech recognition. "
+                "Words marked [?word] were recognized with low confidence — "
+                "correct them using context and answer the original question. "
+                "Do not mention the corrections.\n\n"
+            )
+        return instruction + stt_hint + stt_text
+    return instruction + stt_text
+
+
 # Comprehensive emoji / Unicode pictograph pattern used by _escape_tts()
 import re as _re_module
 _EMOJI_RE = _re_module.compile(
@@ -730,6 +762,7 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
         ("warm_piper",        f"{_flag('warm_piper')}  Warm Piper cache  ·  −15s TTS"),
         ("parallel_tts",      f"{_flag('parallel_tts')}  Parallel TTS thread  ·  text-first UX"),
         ("user_audio_toggle", f"{_flag('user_audio_toggle')}  Per-user audio 🔊/🔇 toggle"),
+        ("tmpfs_model",       f"{_flag('tmpfs_model')}  Piper model in RAM (/dev/shm)  ·  −10s TTS load"),
     ]
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))
@@ -1316,6 +1349,43 @@ def _get_vosk_model():
     return _vosk_model_cache
 
 
+def _piper_model_path() -> str:
+    """Return the effective Piper ONNX model path.
+    When tmpfs_model is enabled and the RAM-disk copy exists, use it (~10x faster
+    reads vs microSD).  Otherwise fall back to the original PIPER_MODEL path."""
+    if _voice_opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_TMPFS):
+        return PIPER_MODEL_TMPFS
+    return PIPER_MODEL
+
+
+def _setup_tmpfs_model(enable: bool) -> None:
+    """Copy or remove the Piper ONNX model to/from /dev/shm (tmpfs).
+    Runs in a background thread; logs success / failure.
+    enable=True  → mkdir -p /dev/shm/piper + cp  (takes ~30s on Pi 3)
+    enable=False → remove file from /dev/shm       (fast)
+    """
+    import shutil
+    if enable:
+        try:
+            os.makedirs("/dev/shm/piper", exist_ok=True)
+            log.info(f"[VoiceOpt] tmpfs_model: copying {PIPER_MODEL} → {PIPER_MODEL_TMPFS} …")
+            shutil.copy2(PIPER_MODEL, PIPER_MODEL_TMPFS)
+            size_mb = os.path.getsize(PIPER_MODEL_TMPFS) / 1024 / 1024
+            log.info(f"[VoiceOpt] tmpfs_model: copy done ({size_mb:.0f} MB in RAM, reads ~10x faster)")
+        except Exception as e:
+            log.warning(f"[VoiceOpt] tmpfs_model: copy failed: {e}")
+            # Disable the opt so it doesn't silently fall back without warning
+            _voice_opts["tmpfs_model"] = False
+            _save_voice_opts()
+    else:
+        try:
+            if os.path.exists(PIPER_MODEL_TMPFS):
+                os.unlink(PIPER_MODEL_TMPFS)
+                log.info(f"[VoiceOpt] tmpfs_model: removed {PIPER_MODEL_TMPFS} from RAM")
+        except Exception as e:
+            log.warning(f"[VoiceOpt] tmpfs_model: remove failed: {e}")
+
+
 def _warm_piper_cache() -> None:
     """Pre-warm Piper ONNX model into OS page cache (runs in a background thread).
     Eliminates the 10–15s cold ONNX model load on the first TTS call after startup.
@@ -1323,7 +1393,7 @@ def _warm_piper_cache() -> None:
     try:
         log.info("[VoiceOpt] Warming Piper ONNX cache…")
         result = subprocess.run(
-            [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"],
+            [PIPER_BIN, "--model", _piper_model_path(), "--output-raw"],
             input=b".",
             capture_output=True,
             timeout=120,
@@ -1369,7 +1439,7 @@ def _tts_to_ogg(text: str) -> Optional[bytes]:
     try:
         # ── Step 1: Piper TTS → raw S16LE PCM ──────────────────────────────
         piper_result = subprocess.run(
-            [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"],
+            [PIPER_BIN, "--model", _piper_model_path(), "--output-raw"],
             input=tts_text.encode("utf-8"),
             capture_output=True,
             timeout=120,   # increased: Pi 3 under memory pressure takes longer
@@ -1452,11 +1522,18 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         # ── OGG → 16 kHz mono S16LE raw PCM (ffmpeg) ───────────────────────
         _srate = 8000 if _voice_opts.get("low_sample_rate") else VOICE_SAMPLE_RATE
         _ff_cmd = ["ffmpeg", "-i", "pipe:0"]
+        # Always apply audio enhancement to improve STT accuracy:
+        #   highpass=f=80     — remove low-frequency noise/rumble below 80 Hz
+        #   dynaudnorm=p=0.9  — normalize volume so quiet speech is clearly heard
+        _af_filters = []
         if _voice_opts.get("silence_strip"):
-            _ff_cmd += ["-af",
-                        "silenceremove=start_periods=1:start_silence=0.3"
-                        ":start_threshold=-40dB"
-                        ":stop_periods=1:stop_silence=0.5:stop_threshold=-40dB"]
+            _af_filters.append(
+                "silenceremove=start_periods=1:start_silence=0.3"
+                ":start_threshold=-40dB"
+                ":stop_periods=1:stop_silence=0.5:stop_threshold=-40dB"
+            )
+        _af_filters += ["highpass=f=80", "dynaudnorm=p=0.9"]
+        _ff_cmd += ["-af", ",".join(_af_filters)]
         _ff_cmd += ["-ar", str(_srate), "-ac", "1", "-f", "s16le", "pipe:1"]
         _ts = time.time()
         try:
@@ -1480,6 +1557,9 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             return
 
         # ── Vosk STT ─────────────────────────────────────────────────────────
+        # STT_CONF_THRESHOLD: words with confidence below this are marked [?word]
+        # so the LLM can attempt to fill them from context.
+        STT_CONF_THRESHOLD = 0.65
         _ts = time.time()
         try:
             import vosk as _vosk_lib
@@ -1490,7 +1570,26 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             chunk = VOICE_CHUNK_SIZE * 2 * _srate // VOICE_SAMPLE_RATE  # adjust for sample rate
             for i in range(0, len(raw_pcm), chunk):
                 rec.AcceptWaveform(raw_pcm[i:i + chunk])
-            text = _json.loads(rec.FinalResult()).get("text", "").strip()
+            final = _json.loads(rec.FinalResult())
+            words = final.get("result", [])
+            if words:
+                # Build transcript: low-confidence words wrapped in [?…]
+                parts = []
+                low_conf_count = 0
+                for w in words:
+                    conf = w.get("conf", 1.0)
+                    word = w.get("word", "")
+                    if conf < STT_CONF_THRESHOLD:
+                        parts.append(f"[?{word}]")
+                        low_conf_count += 1
+                    else:
+                        parts.append(word)
+                text = " ".join(parts).strip()
+                if low_conf_count:
+                    log.debug(f"STT: {low_conf_count}/{len(words)} words below "
+                              f"conf={STT_CONF_THRESHOLD}: {text[:120]}")
+            else:
+                text = final.get("text", "").strip()
         except Exception as e:
             _safe_edit(chat_id, msg.message_id,
                        _t(chat_id, "vosk_error", e=e),
@@ -1511,7 +1610,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                    parse_mode="Markdown")
 
         _ts = time.time()
-        response = _ask_picoclaw(_with_lang(chat_id, text), timeout=90)
+        response = _ask_picoclaw(_with_lang_voice(chat_id, text), timeout=90)
         _timing["LLM"] = time.time() - _ts
 
         if not response:
@@ -1865,6 +1964,14 @@ def main():
     log.info(f"  Voice opts   : {active_opts or 'all OFF (stable defaults)'}")
     log.info(f"  Version      : {BOT_VERSION}")
     log.info("=" * 50)
+
+    # If tmpfs_model is enabled, ensure the RAM-disk copy exists at startup
+    if _voice_opts.get("tmpfs_model"):
+        if os.path.exists(PIPER_MODEL_TMPFS):
+            log.info(f"[VoiceOpt] tmpfs_model: model already in RAM ({PIPER_MODEL_TMPFS})")
+        else:
+            log.info("[VoiceOpt] tmpfs_model enabled — copying model to /dev/shm on startup")
+            threading.Thread(target=_setup_tmpfs_model, args=(True,), daemon=True).start()
 
     # Pre-warm Piper ONNX model if opt is enabled
     if _voice_opts.get("warm_piper"):

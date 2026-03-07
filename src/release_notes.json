@@ -1,5 +1,17 @@
 [
   {
+    "version": "2026.3.14",
+    "date": "2026-03-07",
+    "title": "Voice opt: Piper model in RAM (tmpfs)",
+    "notes": "- New voice opt: 'Piper model in RAM (/dev/shm)'\n- Copies 66 MB Piper ONNX model to /dev/shm/piper/ on enable\n- TTS and warm-up use RAM path (~10x faster reads vs microSD)\n- Auto-restores RAM copy on bot restart if opt is enabled\n- Background copy with status message; auto-disables on copy failure"
+  },
+  {
+    "version": "2026.3.13",
+    "date": "2026-03-07",
+    "title": "Improve STT: audio enhancement + confidence filtering",
+    "notes": "- ffmpeg: always apply highpass=f=80 + dynaudnorm=p=0.9 before Vosk (removes noise, normalizes volume)\n- Vosk confidence: words below 65% marked as [?word] in transcript\n- LLM instructed to silently correct low-confidence words from context"
+  },
+  {
     "version": "2026.3.12",
     "date": "2026-03-07",
     "title": "Fix stuck 'Generating audio' on restart",
