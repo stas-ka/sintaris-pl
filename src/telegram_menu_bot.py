@@ -44,7 +44,7 @@ from bot_users import (
 
 # ─── Voice pipeline ───────────────────────────────────────────────────────────
 from bot_voice import (
-    _handle_voice_message, _start_voice_session,
+    _handle_voice_message, _start_voice_session, _handle_note_read_aloud,
     _warm_piper_cache, _start_persistent_piper, _setup_tmpfs_model,
     _cleanup_orphaned_tts,
 )
@@ -324,6 +324,12 @@ def callback_handler(call):
     elif data.startswith("note_open:"):
         if not _is_guest(cid):
             _handle_note_open(cid, data[len("note_open:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_tts:"):
+        if not _is_guest(cid):
+            _handle_note_read_aloud(cid, data[len("note_tts:"):])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

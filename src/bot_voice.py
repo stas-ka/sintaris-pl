@@ -381,6 +381,59 @@ def _tts_to_ogg(text: str) -> Optional[bytes]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Notes TTS — “Read aloud” button handler
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_note_read_aloud(chat_id: int, slug: str) -> None:
+    """
+    Read a note aloud via Piper TTS.
+    Strips Markdown/emoji before synthesis, sends as a Telegram voice message.
+    Runs in a background thread to avoid blocking the callback handler.
+    """
+    from bot_handlers import _notes_menu_keyboard  # deferred — avoids circular import at module level
+
+    note_text = _load_note_text(chat_id, slug)
+    if note_text is None:
+        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
+
+    msg = bot.send_message(chat_id, _t(chat_id, "gen_audio"), parse_mode="Markdown")
+    _save_pending_tts(chat_id, msg.message_id)
+
+    def _run():
+        try:
+            # Strip title header and Markdown/emoji before TTS
+            lines = note_text.splitlines()
+            body  = "\n".join(lines[2:] if len(lines) > 2 else lines).strip() or note_text
+            plain = _escape_tts(body)
+            if not plain.strip():
+                plain = _escape_tts(note_text)
+
+            ogg = _tts_to_ogg(plain)
+            if ogg:
+                import io as _io
+                note_title = lines[0].lstrip("# ").strip()
+                bot.send_voice(chat_id, _io.BytesIO(ogg),
+                               caption=f"🔊 {note_title}")
+                bot.delete_message(chat_id, msg.message_id)
+            else:
+                _safe_edit(chat_id, msg.message_id,
+                           _t(chat_id, "audio_na"), parse_mode="Markdown")
+        except Exception as e:
+            log.warning(f"[NotesTTS] error: {e}")
+            try:
+                _safe_edit(chat_id, msg.message_id,
+                           _t(chat_id, "audio_error", e=str(e)), parse_mode="Markdown")
+            except Exception:
+                pass
+        finally:
+            _clear_pending_tts(chat_id)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Voice session entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
