@@ -15,7 +15,7 @@
 
     "chat_enter":      "💬 *Чат* — напишите что угодно.\nНажмите /menu для выхода.",
     "system_enter":    "🖥️ *Системный чат* — опишите задачу, я предложу команду.\n_Примеры: «покажи диск», «список сервисов», «температура CPU»_\n\nНажмите /menu для выхода.",
-    "voice_enter":     "🎤 *Голосовой запрос*\n\nНажмите кнопку 🎤 в поле ввода Telegram, запишите вопрос по-русски и отправьте голосовое сообщение.\n\n_Бот распознаёт речь через Vosk и ответит текстом + голосом._\n\nНажмите 🔙 Menu чтобы выйти.",
+    "voice_enter":     "🎤 *Голосовой запрос*\n\nНажмите кнопку 🎤 в поле ввода Telegram, запишите вопрос и отправьте голосовое сообщение.\n\n🔊 *Поддерживаемые языки:*\n• 🇷🇺 Русский — Vosk (`vosk-model-small-ru`, оффлайн) + Piper TTS (голос «Ирина»)\n\n_Бот распознаёт речь через Vosk и ответит текстом и аудио._\n\nНажмите 🔙 Menu чтобы выйти.",
     "voice_hint":      "🎤 _Отправьте голосовое сообщение — нажмите 🎤 в поле ввода._",
 
     "recognizing":     "🎤 _Распознаю речь…_",
@@ -71,7 +71,7 @@
 
     "chat_enter":      "💬 *Free Chat* — type anything.\nPress /menu to exit.",
     "system_enter":    "🖥️ *System Chat* — describe a task, I'll suggest a command.\n_Examples: show disk, list services, CPU temperature_\n\nPress /menu to exit.",
-    "voice_enter":     "🎤 *Voice Session*\n\nTap the 🎤 button in the Telegram input bar, record your question and send it.\n\n_Bot will recognise speech via Vosk and reply with text + voice._\n\nPress 🔙 Menu to exit.",
+    "voice_enter":     "🎤 *Voice Session*\n\nTap the 🎤 button in the Telegram input bar, record your question and send it.\n\n🔊 *Supported languages:*\n• 🇷🇺 Russian — Vosk (`vosk-model-small-ru`, offline) + Piper TTS (voice: Irina)\n\n_Bot will recognise speech via Vosk and reply with text + voice._\n\nPress 🔙 Menu to exit.",
     "voice_hint":      "🎤 _Send a voice message — tap 🎤 in the input bar._",
 
     "recognizing":     "🎤 _Recognising speech…_",

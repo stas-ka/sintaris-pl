@@ -501,8 +501,15 @@ def main() -> None:
     else:
         log.info("[AUDIO] Using system default microphone")
 
-    # Startup announcement
-    speak("Голосовой ассистент Пико запущен. Скажите «Пико» для активации.")
+    # Startup announcement — spoken through the speaker
+    model_name = Path(CONFIG["vosk_model_path"]).name   # e.g. vosk-model-small-ru
+    tts_model  = Path(CONFIG["piper_model"]).stem        # e.g. ru_RU-irina-medium
+    log.info(f"[READY] STT model: {model_name}  |  TTS model: {tts_model}")
+    speak(
+        f"Голосовой ассистент Пико запущен. "
+        f"Поддерживаемые языки: русский. "
+        f"Скажите «Пико» для активации."
+    )
 
     log.info("[READY] Listening for hotword...")
 
