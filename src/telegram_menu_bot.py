@@ -19,7 +19,14 @@ Menus
 Config (env vars or ~/.picoclaw/bot.env):
   BOT_TOKEN         Telegram bot token  (from @BotFather)
   ALLOWED_USERS     Comma-separated Telegram chat_ids allowed to use the bot
-                    Example: ALLOWED_USERS=994963580,123456789
+                    (full access: Mail, Free Chat, System Chat, Voice)
+                    Example: ALLOWED_USERS=994963580
+  ADMIN_USERS       Comma-separated chat_ids with admin privileges
+                    Admins see all menus + 🔐 Admin; can add/remove guest users.
+                    Defaults to ALLOWED_USERS if not set.
+                    Example: ADMIN_USERS=994963580
+  USERS_FILE        Path to runtime users file  (default ~/.picoclaw/users.json)
+                    Stores guest users added via the Admin menu at runtime.
   PICOCLAW_BIN      path to picoclaw binary   (default /usr/bin/picoclaw)
   DIGEST_SCRIPT     path to gmail_digest.py  (default ~/.picoclaw/gmail_digest.py)
   LAST_DIGEST_FILE  path to last saved digest (default ~/.picoclaw/last_digest.txt)
@@ -29,6 +36,11 @@ Config (env vars or ~/.picoclaw/bot.env):
   XDG_RUNTIME_DIR   PipeWire runtime dir      (default /run/user/1000)
   VOICE_TIMING_DEBUG  set to 1/true to append per-step timing to voice replies
                       (for testing only — leave 0 in production)
+
+User roles:
+  Admin    — chat_id in ADMIN_USERS: all menus + 🔐 Admin panel
+  Full     — chat_id in ALLOWED_USERS (not admin): all menus except Admin
+  Guest    — added at runtime by admin: Mail Digest, Free Chat, Voice Session only
 """
 
 import logging
@@ -79,11 +91,49 @@ def _parse_allowed_users() -> set[int]:
     return ids
 
 ALLOWED_USERS: set[int] = _parse_allowed_users()
+
+def _parse_admin_users() -> set[int]:
+    raw = os.environ.get("ADMIN_USERS", "")
+    ids = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.add(int(part))
+    # Default: all ALLOWED_USERS are admins if ADMIN_USERS not explicitly set
+    return ids if ids else set(ALLOWED_USERS)
+
+ADMIN_USERS: set[int] = _parse_admin_users()
+USERS_FILE       = os.environ.get("USERS_FILE",
+                       os.path.expanduser("~/.picoclaw/users.json"))
 PICOCLAW_BIN     = os.environ.get("PICOCLAW_BIN", "/usr/bin/picoclaw")
 DIGEST_SCRIPT    = os.environ.get("DIGEST_SCRIPT",
                                    os.path.expanduser("~/.picoclaw/gmail_digest.py"))
 LAST_DIGEST_FILE = os.environ.get("LAST_DIGEST_FILE",
                                    os.path.expanduser("~/.picoclaw/last_digest.txt"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dynamic guest-user storage (persisted to USERS_FILE)
+# ─────────────────────────────────────────────────────────────────────────────
+import json as _json_mod
+
+def _load_dynamic_users() -> set[int]:
+    try:
+        data = _json_mod.loads(Path(USERS_FILE).read_text(encoding="utf-8"))
+        return set(int(x) for x in data.get("users", []))
+    except Exception:
+        return set()
+
+def _save_dynamic_users() -> None:
+    try:
+        Path(USERS_FILE).write_text(
+            _json_mod.dumps({"users": sorted(_dynamic_users)}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning(f"Failed to save users file: {e}")
+
+# Populated after logging is set up (see bottom of config section)
+_dynamic_users: set[int] = set()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice session config (mirrors defaults from voice_assistant.py)
@@ -104,7 +154,7 @@ VOICE_TIMING_DEBUG    = os.environ.get("VOICE_TIMING_DEBUG", "0").lower() in ("1
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set. Add it to ~/.picoclaw/bot.env")
-if not ALLOWED_USERS:
+if not ALLOWED_USERS and not ADMIN_USERS:
     raise RuntimeError("ALLOWED_USERS (or ALLOWED_USER / TELEGRAM_CHAT_ID) not set. "
                        "Set to a comma-separated list of Telegram chat IDs.")
 
@@ -124,6 +174,9 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger("pico-tgbot")
+
+# Load dynamic users now that logging is available
+_dynamic_users = _load_dynamic_users()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Session state (per chat_id)
@@ -146,7 +199,15 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_allowed(chat_id: int) -> bool:
-    return chat_id in ALLOWED_USERS
+    """True for admins, full users, and dynamically added guests."""
+    return chat_id in ADMIN_USERS or chat_id in ALLOWED_USERS or chat_id in _dynamic_users
+
+def _is_admin(chat_id: int) -> bool:
+    return chat_id in ADMIN_USERS
+
+def _is_guest(chat_id: int) -> bool:
+    """Guest = runtime-added user; cannot use System Chat or Admin."""
+    return chat_id in _dynamic_users and chat_id not in ALLOWED_USERS and chat_id not in ADMIN_USERS
 
 def _deny(chat_id: int) -> None:
     bot.send_message(chat_id, "⛔ Access denied.")
@@ -156,14 +217,16 @@ def _deny(chat_id: int) -> None:
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _menu_keyboard() -> InlineKeyboardMarkup:
+def _menu_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
+    """Return the main menu keyboard filtered by the caller's role."""
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(
-        InlineKeyboardButton("📧  Mail Digest",    callback_data="digest"),
-        InlineKeyboardButton("💬  Free Chat",       callback_data="mode_chat"),
-        InlineKeyboardButton("🖥️   System Chat",    callback_data="mode_system"),
-        InlineKeyboardButton("🎤  Voice Session",  callback_data="voice_session"),
-    )
+    kb.add(InlineKeyboardButton("📧  Mail Digest",   callback_data="digest"))
+    kb.add(InlineKeyboardButton("💬  Free Chat",      callback_data="mode_chat"))
+    if not _is_guest(chat_id):          # guests cannot see System Chat
+        kb.add(InlineKeyboardButton("🖥️   System Chat",  callback_data="mode_system"))
+    kb.add(InlineKeyboardButton("🎤  Voice Session", callback_data="voice_session"))
+    if _is_admin(chat_id):              # admins get the Admin panel
+        kb.add(InlineKeyboardButton("🔐  Admin",         callback_data="admin_menu"))
     return kb
 
 
@@ -184,7 +247,9 @@ def _confirm_keyboard(cmd_hash: str) -> InlineKeyboardMarkup:
 
 def _send_menu(chat_id: int, text: str = "Choose an action:") -> None:
     _user_mode.pop(chat_id, None)
-    bot.send_message(chat_id, text, reply_markup=_menu_keyboard())
+    bot.send_message(chat_id, text,
+                     parse_mode="Markdown",
+                     reply_markup=_menu_keyboard(chat_id))
 
 
 def _truncate(text: str, limit: int = 3800) -> str:
@@ -272,6 +337,119 @@ def _clean_picoclaw_output(text: str) -> str:
         clean = m.group(1).replace("\\n", "\n").replace("\\'", "'").strip()
 
     return clean
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin panel
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _admin_keyboard() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("➕  Add user",     callback_data="admin_add_user"),
+        InlineKeyboardButton("📋  List users",   callback_data="admin_list_users"),
+        InlineKeyboardButton("🗑   Remove user",  callback_data="admin_remove_user"),
+        InlineKeyboardButton("🔙  Menu",          callback_data="menu"),
+    )
+    return kb
+
+
+def _handle_admin_menu(chat_id: int) -> None:
+    bot.send_message(
+        chat_id,
+        "🔐 *Admin Panel*",
+        parse_mode="Markdown",
+        reply_markup=_admin_keyboard(),
+    )
+
+
+def _handle_admin_list_users(chat_id: int) -> None:
+    if not _dynamic_users:
+        bot.send_message(chat_id, "_Нет добавленных гостевых пользователей._",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+        return
+    lines = [f"• `{uid}`" for uid in sorted(_dynamic_users)]
+    bot.send_message(
+        chat_id,
+        "👥 *Гостевые пользователи:*\n" + "\n".join(lines),
+        parse_mode="Markdown",
+        reply_markup=_admin_keyboard(),
+    )
+
+
+def _start_admin_add_user(chat_id: int) -> None:
+    _user_mode[chat_id] = "admin_add_user"
+    bot.send_message(
+        chat_id,
+        "➕ *Добавить пользователя*\n\n"
+        "Введите Telegram *chat_id* нового пользователя.\n"
+        "_(Пользователь получит доступ к: Mail Digest, Free Chat, Voice Session)_\n\n"
+        "Отмена: /menu",
+        parse_mode="Markdown",
+    )
+
+
+def _finish_admin_add_user(admin_id: int, text: str) -> None:
+    text = text.strip()
+    if not text.lstrip("-").isdigit():
+        bot.send_message(admin_id,
+                         "❌ Некорректный chat_id — введите только цифры.",
+                         parse_mode="Markdown")
+        return
+    uid = int(text)
+    if uid in _dynamic_users:
+        bot.send_message(admin_id, f"ℹ️ Пользователь `{uid}` уже добавлен.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+    elif uid in ALLOWED_USERS or uid in ADMIN_USERS:
+        bot.send_message(admin_id, f"ℹ️ Пользователь `{uid}` уже имеет полный доступ.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+    else:
+        _dynamic_users.add(uid)
+        _save_dynamic_users()
+        log.info(f"Admin {admin_id} added guest user {uid}")
+        bot.send_message(
+            admin_id,
+            f"✅ Пользователь `{uid}` добавлен как гость.\n"
+            f"_Доступ: Mail Digest, Free Chat, Voice Session._",
+            parse_mode="Markdown",
+            reply_markup=_admin_keyboard(),
+        )
+    _user_mode.pop(admin_id, None)
+
+
+def _start_admin_remove_user(chat_id: int) -> None:
+    if not _dynamic_users:
+        bot.send_message(chat_id, "_Нет гостевых пользователей для удаления._",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+        return
+    _user_mode[chat_id] = "admin_remove_user"
+    lines = [f"• `{uid}`" for uid in sorted(_dynamic_users)]
+    bot.send_message(
+        chat_id,
+        "🗑 *Удалить пользователя*\n\n"
+        "Текущие гостевые пользователи:\n" + "\n".join(lines) + "\n\n"
+        "Введите *chat_id* для удаления. Отмена: /menu",
+        parse_mode="Markdown",
+    )
+
+
+def _finish_admin_remove_user(admin_id: int, text: str) -> None:
+    text = text.strip()
+    if not text.lstrip("-").isdigit():
+        bot.send_message(admin_id, "❌ Некорректный chat_id.",
+                         parse_mode="Markdown")
+        return
+    uid = int(text)
+    if uid in _dynamic_users:
+        _dynamic_users.discard(uid)
+        _save_dynamic_users()
+        log.info(f"Admin {admin_id} removed guest user {uid}")
+        bot.send_message(admin_id, f"✅ Пользователь `{uid}` удалён.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+    else:
+        bot.send_message(admin_id, f"ℹ️ Пользователь `{uid}` не найден в списке.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+    _user_mode.pop(admin_id, None)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -692,7 +870,7 @@ def callback_handler(call):
         _user_mode.pop(cid, None)
         _pending_cmd.pop(cid, None)
         bot.send_message(cid, "👋 *Pico* — что делаем?",
-                         parse_mode="Markdown", reply_markup=_menu_keyboard())
+                         parse_mode="Markdown", reply_markup=_menu_keyboard(cid))
 
     elif data == "digest":
         _handle_digest(cid)
@@ -719,6 +897,30 @@ def callback_handler(call):
     elif data == "voice_session":
         _start_voice_session(cid)
 
+    elif data == "admin_menu":
+        if not _is_admin(cid):
+            bot.send_message(cid, "⛔ Только для администраторов.")
+        else:
+            _handle_admin_menu(cid)
+
+    elif data == "admin_add_user":
+        if not _is_admin(cid):
+            bot.send_message(cid, "⛔ Только для администраторов.")
+        else:
+            _start_admin_add_user(cid)
+
+    elif data == "admin_list_users":
+        if not _is_admin(cid):
+            bot.send_message(cid, "⛔ Только для администраторов.")
+        else:
+            _handle_admin_list_users(cid)
+
+    elif data == "admin_remove_user":
+        if not _is_admin(cid):
+            bot.send_message(cid, "⛔ Только для администраторов.")
+        else:
+            _start_admin_remove_user(cid)
+
     elif data == "cancel":
         _pending_cmd.pop(cid, None)
         bot.send_message(cid, "❌ Отменено.", reply_markup=_back_keyboard())
@@ -743,6 +945,22 @@ def text_handler(message):
     if mode is None:
         # No mode selected — show menu
         _send_menu(cid, "👋 Выберите режим:")
+        return
+
+    if mode == "admin_add_user":
+        if _is_admin(cid):
+            _finish_admin_add_user(cid, message.text)
+        else:
+            _user_mode.pop(cid, None)
+            bot.send_message(cid, "⛔ Только для администраторов.")
+        return
+
+    elif mode == "admin_remove_user":
+        if _is_admin(cid):
+            _finish_admin_remove_user(cid, message.text)
+        else:
+            _user_mode.pop(cid, None)
+            bot.send_message(cid, "⛔ Только для администраторов.")
         return
 
     if mode == "chat":
@@ -778,7 +996,9 @@ def voice_handler(message):
 def main():
     log.info("=" * 50)
     log.info("Pico Telegram Menu Bot starting")
+    log.info(f"  Admin users  : {sorted(ADMIN_USERS)}")
     log.info(f"  Allowed users: {sorted(ALLOWED_USERS)}")
+    log.info(f"  Guest users  : {sorted(_dynamic_users)}")
     log.info(f"  picoclaw     : {PICOCLAW_BIN}")
     log.info(f"  Digest script: {DIGEST_SCRIPT}")
     log.info("=" * 50)
