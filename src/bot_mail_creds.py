@@ -326,12 +326,17 @@ def _run_refresh_thread(chat_id: int, msg_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _mail_main_keyboard(chat_id: int) -> InlineKeyboardMarkup:
-    """Keyboard shown alongside a digest — Refresh + Settings + Menu."""
+    """Keyboard shown alongside a digest — Refresh + Read aloud + Settings + Menu."""
+    lang = _st._user_lang.get(chat_id, "ru")
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
         InlineKeyboardButton(_t(chat_id, "btn_refresh_now"),   callback_data="digest_refresh"),
         InlineKeyboardButton(_t(chat_id, "mail_btn_settings"), callback_data="mail_settings"),
     )
+    kb.add(InlineKeyboardButton(
+        "🔊  " + ("Прочитать вслух" if lang == "ru" else "Read aloud"),
+        callback_data="digest_tts",
+    ))
     kb.add(InlineKeyboardButton("🔙  Menu", callback_data="menu"))
     return kb
 

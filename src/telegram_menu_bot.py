@@ -44,7 +44,7 @@ from bot_users import (
 
 # ─── Voice pipeline ───────────────────────────────────────────────────────────
 from bot_voice import (
-    _handle_voice_message, _start_voice_session, _handle_note_read_aloud,
+    _handle_voice_message, _start_voice_session, _handle_note_read_aloud, _handle_digest_tts,
     _warm_piper_cache, _start_persistent_piper, _setup_tmpfs_model,
     _cleanup_orphaned_tts,
 )
@@ -230,6 +230,8 @@ def callback_handler(call):
         _handle_digest(cid)
     elif data == "digest_refresh":
         _refresh_digest(cid)
+    elif data == "digest_tts":
+        _handle_digest_tts(cid)
 
     # ── Chat / System mode ─────────────────────────────────────────────────
     elif data == "mode_chat":

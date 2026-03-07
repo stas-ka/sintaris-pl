@@ -435,6 +435,53 @@ def _handle_note_read_aloud(chat_id: int, slug: str) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+def _handle_digest_tts(chat_id: int) -> None:
+    """
+    Read the last mail digest aloud via Piper TTS.
+    Strips Markdown before synthesis, sends as a Telegram voice message.
+    Runs in a background thread to avoid blocking the callback handler.
+    """
+    from bot_mail_creds import _last_digest_file  # deferred — avoids circular import
+
+    fp = _last_digest_file(chat_id)
+    if not fp.exists() or fp.stat().st_size == 0:
+        bot.send_message(chat_id, _t(chat_id, "digest_not_ready"), parse_mode="Markdown")
+        return
+
+    digest_text = fp.read_text(encoding="utf-8", errors="replace").strip()
+
+    msg = bot.send_message(chat_id, _t(chat_id, "gen_audio"), parse_mode="Markdown")
+    _save_pending_tts(chat_id, msg.message_id)
+
+    def _run():
+        try:
+            plain = _escape_tts(digest_text)
+            if not plain.strip():
+                _safe_edit(chat_id, msg.message_id,
+                           _t(chat_id, "audio_na"), parse_mode="Markdown")
+                return
+            ogg = _tts_to_ogg(plain)
+            if ogg:
+                import io as _io
+                bot.send_voice(chat_id, _io.BytesIO(ogg),
+                               caption="🔊 " + _t(chat_id, "mail_digest_audio_caption"))
+                bot.delete_message(chat_id, msg.message_id)
+            else:
+                _safe_edit(chat_id, msg.message_id,
+                           _t(chat_id, "audio_na"), parse_mode="Markdown")
+        except Exception as e:
+            log.warning(f"[DigestTTS] error: {e}")
+            try:
+                _safe_edit(chat_id, msg.message_id,
+                           _t(chat_id, "audio_error", e=str(e)), parse_mode="Markdown")
+            except Exception:
+                pass
+        finally:
+            _clear_pending_tts(chat_id)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice session entry point
 # ─────────────────────────────────────────────────────────────────────────────
