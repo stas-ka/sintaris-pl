@@ -18,7 +18,8 @@ Menus
 
 Config (env vars or ~/.picoclaw/bot.env):
   BOT_TOKEN         Telegram bot token  (from @BotFather)
-  ALLOWED_USER      Telegram chat_id    (numeric, single allowed user)
+  ALLOWED_USERS     Comma-separated Telegram chat_ids allowed to use the bot
+                    Example: ALLOWED_USERS=994963580,123456789
   PICOCLAW_BIN      path to picoclaw binary   (default /usr/bin/picoclaw)
   DIGEST_SCRIPT     path to gmail_digest.py  (default ~/.picoclaw/gmail_digest.py)
   LAST_DIGEST_FILE  path to last saved digest (default ~/.picoclaw/last_digest.txt)
@@ -64,7 +65,18 @@ _load_env_file(os.path.expanduser("~/.picoclaw/bot.env"))
 _load_env_file(os.path.expanduser("~/.picoclaw/.pico_env"))
 
 BOT_TOKEN        = os.environ.get("BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
-ALLOWED_USER     = int(os.environ.get("ALLOWED_USER") or os.environ.get("TELEGRAM_CHAT_ID", "0"))
+def _parse_allowed_users() -> set[int]:
+    raw = (os.environ.get("ALLOWED_USERS")
+           or os.environ.get("ALLOWED_USER")
+           or os.environ.get("TELEGRAM_CHAT_ID", ""))
+    ids = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.add(int(part))
+    return ids
+
+ALLOWED_USERS: set[int] = _parse_allowed_users()
 PICOCLAW_BIN     = os.environ.get("PICOCLAW_BIN", "/usr/bin/picoclaw")
 DIGEST_SCRIPT    = os.environ.get("DIGEST_SCRIPT",
                                    os.path.expanduser("~/.picoclaw/gmail_digest.py"))
@@ -88,8 +100,9 @@ VOICE_MAX_DURATION    = 30.0      # hard session cap (seconds)
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set. Add it to ~/.picoclaw/bot.env")
-if not ALLOWED_USER:
-    raise RuntimeError("ALLOWED_USER (or TELEGRAM_CHAT_ID) not set.")
+if not ALLOWED_USERS:
+    raise RuntimeError("ALLOWED_USERS (or ALLOWED_USER / TELEGRAM_CHAT_ID) not set. "
+                       "Set to a comma-separated list of Telegram chat IDs.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -129,7 +142,7 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_allowed(chat_id: int) -> bool:
-    return chat_id == ALLOWED_USER
+    return chat_id in ALLOWED_USERS
 
 def _deny(chat_id: int) -> None:
     bot.send_message(chat_id, "⛔ Access denied.")
@@ -739,7 +752,7 @@ def voice_handler(message):
 def main():
     log.info("=" * 50)
     log.info("Pico Telegram Menu Bot starting")
-    log.info(f"  Allowed user : {ALLOWED_USER}")
+    log.info(f"  Allowed users: {sorted(ALLOWED_USERS)}")
     log.info(f"  picoclaw     : {PICOCLAW_BIN}")
     log.info(f"  Digest script: {DIGEST_SCRIPT}")
     log.info("=" * 50)

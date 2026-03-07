@@ -11,10 +11,11 @@ ExecStart=/usr/bin/python3 /home/stas/.picoclaw/telegram_menu_bot.py
 Restart=on-failure
 RestartSec=15
 Environment=PYTHONUNBUFFERED=1
-# Secrets: BOT_TOKEN, ALLOWED_USER, and other vars are loaded from bot.env.
+# Secrets: BOT_TOKEN, ALLOWED_USERS, and other vars are loaded from bot.env.
 # Create /home/stas/.picoclaw/bot.env on the device with content:
 #   BOT_TOKEN=<from @BotFather>
-#   ALLOWED_USER=<your Telegram chat_id>
+#   ALLOWED_USERS=<comma-separated Telegram chat_ids, e.g. 994963580,123456789>
+# ALLOWED_USER (single ID) is also accepted for backwards compatibility.
 # See .credentials/.pico_env for the actual values (gitignored).
 EnvironmentFile=/home/stas/.picoclaw/bot.env
 Environment=PICOCLAW_BIN=/usr/bin/picoclaw
