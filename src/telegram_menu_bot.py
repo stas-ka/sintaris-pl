@@ -658,28 +658,66 @@ def _tts_to_ogg(text: str) -> Optional[bytes]:
     Synthesise text with Piper TTS, encode with ffmpeg as OGG Opus.
     Returns bytes suitable for bot.send_voice(), or None on failure.
     Requires: ffmpeg with libopus + piper (installed by setup_voice.sh).
+
+    Uses two sequential subprocess.run() calls instead of Popen pipe-chaining.
+    The Popen approach caused a deadlock: the parent process held piper.stdout
+    open, so ffmpeg never received EOF on its stdin and blocked forever.
+    Sequential approach: piper → raw PCM bytes → ffmpeg → OGG bytes.
+    Text is truncated to TTS_MAX_CHARS to keep synthesis fast on Pi 3.
     """
+    TTS_MAX_CHARS = 400   # ~50 words, ~25s audio on Pi 3 — fits well within 90s
+
+    # Trim to whole sentences where possible, hard-cap at TTS_MAX_CHARS
+    tts_text = text.strip()
+    if len(tts_text) > TTS_MAX_CHARS:
+        # Try to cut at last sentence boundary before the limit
+        cut = tts_text[:TTS_MAX_CHARS]
+        for sep in (". ", "! ", "? ", ".\n", "!\n", "?\n"):
+            idx = cut.rfind(sep)
+            if idx > TTS_MAX_CHARS // 2:
+                cut = cut[:idx + 1]
+                break
+        tts_text = cut.strip()
+
     try:
-        piper = subprocess.Popen(
+        # ── Step 1: Piper TTS → raw S16LE PCM ──────────────────────────────
+        piper_result = subprocess.run(
             [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            input=tts_text.encode("utf-8"),
+            capture_output=True,
+            timeout=60,
         )
-        ffmpeg = subprocess.Popen(
+        raw_pcm = piper_result.stdout
+        if not raw_pcm:
+            log.warning(f"TTS→OGG: piper produced no output "
+                        f"(rc={piper_result.returncode}): "
+                        f"{piper_result.stderr[:200]}")
+            return None
+
+        # ── Step 2: ffmpeg PCM → OGG Opus ─────────────────────────────────
+        ff_result = subprocess.run(
             ["ffmpeg", "-y",
              "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
              "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
-            stdin=piper.stdout, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            input=raw_pcm,
+            capture_output=True,
+            timeout=30,
         )
-        piper.stdin.write(text.encode("utf-8"))
-        piper.stdin.close()
-        ogg_bytes, _ = ffmpeg.communicate(timeout=90)
-        piper.wait(timeout=5)
-        return ogg_bytes or None
+        ogg_bytes = ff_result.stdout
+        if not ogg_bytes:
+            log.warning(f"TTS→OGG: ffmpeg produced no output "
+                        f"(rc={ff_result.returncode}): "
+                        f"{ff_result.stderr[:200]}")
+            return None
+        return ogg_bytes
+
+    except subprocess.TimeoutExpired as e:
+        log.warning(f"TTS→OGG timeout: {e}")
+        return None
     except Exception as e:
         log.warning(f"TTS→OGG failed: {e}")
         return None
+
 
 
 def _start_voice_session(chat_id: int) -> None:
