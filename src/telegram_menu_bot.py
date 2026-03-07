@@ -36,6 +36,8 @@ Config (env vars or ~/.picoclaw/bot.env):
   XDG_RUNTIME_DIR   PipeWire runtime dir      (default /run/user/1000)
   VOICE_TIMING_DEBUG  set to 1/true to append per-step timing to voice replies
                       (for testing only — leave 0 in production)
+  STRINGS_FILE        path to strings.json UI text file
+                      (default: strings.json next to this script)
 
 User roles:
   Admin    — chat_id in ADMIN_USERS: all menus + 🔐 Admin panel
@@ -45,6 +47,7 @@ User roles:
 
 import logging
 import io
+import json
 import os
 import subprocess
 import textwrap
@@ -221,154 +224,28 @@ def _deny(chat_id: int) -> None:
 # Telegram language_code starts with 'ru' for Russian; everything else → English.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_STRINGS: dict[str, dict[str, str]] = {
-    "ru": {
-        # menu buttons
-        "btn_digest":       "📧  Почта",
-        "btn_chat":         "💬  Чат",
-        "btn_system":       "🖥️   Системный чат",
-        "btn_voice":        "🎤  Голосовой запрос",
-        "btn_admin":        "🔐  Админ",
-        # greetings
-        "welcome":          "👋 Привет! Я *Pico* — ваш умный ассистент на Raspberry Pi.\n\nМогу:\n• 📧 сделать дайджест почты\n• 💬 ответить на любой вопрос\n• 🖥️ помочь с системными командами\n• 🎤 понять голосовой запрос\n\nВыберите режим:",
-        "greet":            "👋 *Pico* — что делаем?",
-        "choose":           "👋 Выберите режим:",
-        "admin_only":       "⛔ Только для администраторов.",
-        "cancelled":        "❌ Отменено.",
-        # modes
-        "chat_enter":       "💬 *Чат* — напишите что угодно.\nНажмите /menu для выхода.",
-        "system_enter":     "🖥️ *Системный чат* — опишите задачу, я предложу команду.\n_Примеры: «покажи диск», «список сервисов», «температура CPU»_\n\nНажмите /menu для выхода.",
-        "voice_enter":      "🎤 *Голосовой запрос*\n\nНажмите кнопку 🎤 в поле ввода Telegram, запишите вопрос по-русски и отправьте голосовое сообщение.\n\n_Бот распознаёт речь через Vosk и ответит текстом + голосом._\n\nНажмите 🔙 Menu чтобы выйти.",
-        "voice_hint":       "🎤 _Отправьте голосовое сообщение — нажмите 🎤 в поле ввода._",
-        # voice processing
-        "recognizing":      "🎤 _Распознаю речь…_",
-        "dl_error":         "❌ Ошибка загрузки аудио: {e}",
-        "decode_error":     "❌ Ошибка декодирования аудио (ffmpeg): {e}",
-        "ffmpeg_no_data":   "❌ ffmpeg не выдал данных — проверьте установку ffmpeg.",
-        "vosk_error":       "❌ Ошибка Vosk: {e}",
-        "not_recognized":   "🎤 _Речь не распознана. Говорите внятнее или используйте русский язык._",
-        "you_said":         "📝 *Вы сказали:*\n_{text}_\n\n⏳ _Спрашиваю picoclaw…_",
-        "no_answer":        "_(picoclaw не вернул ответ)_",
-        "gen_audio":        "🔊 _Генерирую аудио…_",
-        "audio_caption":    "🔊 Аудио ответ",
-        "audio_error":      "_Аудио не отправлено: {e}_",
-        "audio_na":         "_(Аудио недоступно — piper не установлен)_",
-        # admin
-        "no_guests":        "_Нет добавленных гостевых пользователей._",
-        "no_guests_del":    "_Нет гостевых пользователей для удаления._",
-        "guest_header":     "👥 *Гостевые пользователи:*",
-        "add_prompt":       "➕ *Добавить пользователя*\n\nВведите Telegram *chat_id* нового пользователя.\n_(Доступ: Почта, Чат, Голос)_\n\nОтмена: /menu",
-        "bad_id":           "❌ Некорректный chat_id — введите только цифры.",
-        "already_guest":    "ℹ️ Пользователь `{uid}` уже добавлен.",
-        "already_full":     "ℹ️ Пользователь `{uid}` уже имеет полный доступ.",
-        "user_added":       "✅ Пользователь `{uid}` добавлен как гость.\n_Доступ: Почта, Чат, Голос._",
-        "bad_id_rem":       "❌ Некорректный chat_id.",
-        "remove_prompt":    "🗑 *Удалить пользователя*\n\nГостевые пользователи:\n{lst}\n\nВведите *chat_id* для удаления. Отмена: /menu",
-        "user_removed":     "✅ Пользователь `{uid}` удалён.",
-        "user_not_found":   "ℹ️ Пользователь `{uid}` не найден в списке.",
-        # digest
-        "digest_header":    "📧 *Последний дайджест* _(создан {age:.1f}ч назад)_\n\n",
-        "digest_none":      "📧 Дайджест ещё не создан. Загружаю…",
-        "digest_hint":      "_Обновите, чтобы получить письма за последние 24ч._",
-        "btn_refresh_now":  "🔄  Обновить",
-        "fetching":         "⏳ Загружаю письма…",
-        "digest_fresh":     "📧 *Свежий дайджест*\n\n",
-        "digest_no_out":    "Нет данных от скрипта дайджеста.",
-        # help
-        "btn_help":         "❓  Справка",
-        "help_text":        (
-            "❓ *Справка — Pico Bot*\n\n"
-            "*Режимы:*\n"
-            "📧 *Почта* — дайджест Gmail за 24ч. Нажмите 🔄 для обновления.\n"
-            "💬 *Чат* — свободный разговор с ИИ. Задайте любой вопрос.\n"
-            "🖥️ *Системный чат* — состояние Pi: диск, температура, сервисы, логи.\n"
-            "_Примеры: \"температура CPU\", \"покажи диск\", \"список сервисов\", \"последние 20 строк лога\"_\n"
-            "🎤 *Голосовой запрос* — нажмите 🎤 в поле ввода, запишите вопрос. Ответ — текст и аудио.\n"
-            "🔐 *Админ* — управление гостевыми пользователями.\n\n"
-            "*Команды:*\n"
-            "`/start` — приветствие и меню\n"
-            "`/menu` — открыть меню\n"
-            "`/status` — статус режима и сервисов\n\n"
-            "*Роли:*\n"
-            "👑 Admin — полный доступ + управление пользователями\n"
-            "👤 Full — все режимы кроме Админ\n"
-            "👥 Guest — Почта, Чат, Голос"
-        ),
-    },
-    "en": {
-        # menu buttons
-        "btn_digest":       "📧  Mail Digest",
-        "btn_chat":         "💬  Free Chat",
-        "btn_system":       "🖥️   System Chat",
-        "btn_voice":        "🎤  Voice Session",
-        "btn_admin":        "🔐  Admin",
-        # greetings
-        "welcome":          "👋 Hi! I'm *Pico* — your smart assistant running on Raspberry Pi.\n\nI can:\n• 📧 summarise your mail inbox\n• 💬 chat freely about anything\n• 🖥️ help with system commands\n• 🎤 understand voice messages\n\nChoose a mode:",
-        "greet":            "👋 *Pico* — what can I do for you?",
-        "choose":           "👋 Choose a mode:",
-        "admin_only":       "⛔ Admins only.",
-        "cancelled":        "❌ Cancelled.",
-        # modes
-        "chat_enter":       "💬 *Free Chat* — type anything.\nPress /menu to exit.",
-        "system_enter":     "🖥️ *System Chat* — describe a task, I\u2019ll suggest a command.\n_Examples: show disk, list services, CPU temperature_\n\nPress /menu to exit.",
-        "voice_enter":      "🎤 *Voice Session*\n\nTap the 🎤 button in the Telegram input bar, record your question and send it.\n\n_Bot will recognise speech via Vosk and reply with text + voice._\n\nPress 🔙 Menu to exit.",
-        "voice_hint":       "🎤 _Send a voice message — tap 🎤 in the input bar._",
-        # voice processing
-        "recognizing":      "🎤 _Recognising speech…_",
-        "dl_error":         "❌ Audio download error: {e}",
-        "decode_error":     "❌ Audio decode error (ffmpeg): {e}",
-        "ffmpeg_no_data":   "❌ ffmpeg produced no output — check ffmpeg installation.",
-        "vosk_error":       "❌ Vosk error: {e}",
-        "not_recognized":   "🎤 _Speech not recognised. Speak more clearly or use Russian._",
-        "you_said":         "📝 *You said:*\n_{text}_\n\n⏳ _Asking picoclaw…_",
-        "no_answer":        "_(picoclaw returned no answer)_",
-        "gen_audio":        "🔊 _Generating audio…_",
-        "audio_caption":    "🔊 Audio reply",
-        "audio_error":      "_Audio not sent: {e}_",
-        "audio_na":         "_(Audio unavailable — piper not installed)_",
-        # admin
-        "no_guests":        "_No guest users added._",
-        "no_guests_del":    "_No guest users to remove._",
-        "guest_header":     "👥 *Guest users:*",
-        "add_prompt":       "➕ *Add user*\n\nEnter the Telegram *chat_id* of the new user.\n_(Access: Mail, Chat, Voice)_\n\nCancel: /menu",
-        "bad_id":           "❌ Invalid chat_id — digits only.",
-        "already_guest":    "ℹ️ User `{uid}` already added.",
-        "already_full":     "ℹ️ User `{uid}` already has full access.",
-        "user_added":       "✅ User `{uid}` added as guest.\n_Access: Mail, Chat, Voice._",
-        "bad_id_rem":       "❌ Invalid chat_id.",
-        "remove_prompt":    "🗑 *Remove user*\n\nGuest users:\n{lst}\n\nEnter *chat_id* to remove. Cancel: /menu",
-        "user_removed":     "✅ User `{uid}` removed.",
-        "user_not_found":   "ℹ️ User `{uid}` not found in list.",
-        # digest
-        "digest_header":    "📧 *Last digest* _(generated {age:.1f}h ago)_\n\n",
-        "digest_none":      "📧 No saved digest yet. Fetching now…",
-        "digest_hint":      "_Refresh to fetch new emails from the last 24h._",
-        "btn_refresh_now":  "🔄  Refresh now",
-        "fetching":         "⏳ Fetching emails…",
-        "digest_fresh":     "📧 *Fresh digest*\n\n",
-        "digest_no_out":    "No output from digest script.",
-        # help
-        "btn_help":         "❓  Help",
-        "help_text":        (
-            "❓ *Pico Bot Help*\n\n"
-            "*Modes:*\n"
-            "📧 *Mail Digest* — summarises Gmail inbox for the last 24h. Tap 🔄 to refresh.\n"
-            "💬 *Free Chat* — open-ended conversation with the AI. Ask anything.\n"
-            "🖥️ *System Chat* — query Pi status: disk, CPU temp, services, logs.\n"
-            "_Examples: \"show disk\", \"CPU temperature\", \"list services\", \"last 20 lines of log\"_\n"
-            "🎤 *Voice Session* — tap 🎤 in the input bar, record a question. Reply arrives as text and audio.\n"
-            "🔐 *Admin* — manage guest user access.\n\n"
-            "*Commands:*\n"
-            "`/start` — welcome screen and menu\n"
-            "`/menu` — open main menu\n"
-            "`/status` — current mode and service status\n\n"
-            "*Roles:*\n"
-            "👑 Admin — full access + user management\n"
-            "👤 Full — all modes except Admin\n"
-            "👥 Guest — Mail, Chat, Voice"
-        ),
-    },
-}
+# ─────────────────────────────────────────────────────────────────────────────
+# UI strings — loaded from strings.json (same directory as this script)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_STRINGS_FILE = os.environ.get(
+    "STRINGS_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "strings.json"),
+)
+
+
+def _load_strings(path: str) -> dict:
+    """Load UI strings from a JSON file.  Exits with a clear error if missing."""
+    try:
+        with open(path, encoding="utf-8") as _f:
+            return json.load(_f)
+    except FileNotFoundError:
+        raise SystemExit(f"[strings] File not found: {path}")
+    except json.JSONDecodeError as _exc:
+        raise SystemExit(f"[strings] JSON parse error in {path}: {_exc}")
+
+
+_STRINGS: dict[str, dict[str, str]] = _load_strings(_STRINGS_FILE)
 
 
 def _set_lang(chat_id: int, from_user) -> None:
@@ -380,14 +257,6 @@ def _set_lang(chat_id: int, from_user) -> None:
 def _lang(chat_id: int) -> str:
     """Return stored language code for this chat_id, default 'en'."""
     return _user_lang.get(chat_id, "en")
-
-
-def _t(chat_id: int, key: str, **kwargs) -> str:
-    """Look up a UI string by key for the user's language."""
-    lang = _lang(chat_id)
-    strings = _STRINGS.get(lang, _STRINGS["en"])
-    text = strings.get(key) or _STRINGS["en"].get(key, key)
-    return text.format(**kwargs) if kwargs else text
 
 
 # ─────────────────────────────────────────────────────────────────────────────
