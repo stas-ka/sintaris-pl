@@ -9,6 +9,7 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - Telegram bot channel via picoclaw gateway
 - Daily Gmail digest to Telegram
 - Interactive Telegram menu bot (Mail Digest / Free Chat / System Chat modes)
+- **On-demand Voice Session via Telegram** — tap a button, mic activates, live transcription shown in chat, LLM answers with text + Piper TTS voice note
 - Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7)
 
 ---
@@ -205,6 +206,7 @@ sudo bash /tmp/setup_voice.sh
 The script installs:
 - `vosk` Python package + `vosk-model-small-ru-0.22` (48 MB STT model)
 - Piper TTS binary to `/usr/local/bin/piper` + `ru_RU-irina-medium.onnx` voice (66 MB)
+- `ffmpeg` — required for PCM→OGG Opus conversion used by the Telegram Voice Session
 - `picoclaw-voice.service` systemd unit → starts the voice assistant on boot
 
 Verify the service was installed:

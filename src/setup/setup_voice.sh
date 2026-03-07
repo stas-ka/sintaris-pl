@@ -6,8 +6,9 @@
 #   1. Vosk STT + vosk-model-small-ru (48MB) — offline Russian speech recognition
 #   2. Piper TTS + ru_RU-ruslan-medium (66MB ONNX) — offline Russian TTS on Pi 3
 #   3. sounddevice + libportaudio2 — audio capture
-#   4. RB-TalkingPI I2S driver setup (Joy-IT / Google AIY HAT)
-#   5. picoclaw-voice.service systemd unit
+#   4. ffmpeg — PCM→OGG Opus conversion for Telegram voice notes
+#   5. RB-TalkingPI I2S driver setup (Joy-IT / Google AIY HAT)
+#   6. picoclaw-voice.service systemd unit
 #
 # Based on KIM-ASSISTANT analysis:
 #   - KIM uses Silero/PyTorch TTS (requires ~2GB RAM, unusable on Pi 3)
@@ -50,7 +51,8 @@ apt-get install -y --no-install-recommends \
     python3-pip \
     wget \
     unzip \
-    tar
+    tar \
+    ffmpeg
 
 # ------------------------------------------------------------------------------
 # 2. Python packages (Vosk + sounddevice)
