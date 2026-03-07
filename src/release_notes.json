@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.11",
+    "date": "2026-03-07",
+    "title": "Increase TTS audio length (200 → 600 chars)",
+    "notes": "- TTS_MAX_CHARS raised from 200 to 600 (~25 words → ~75 words, ~7 s → ~25 s audio)\n- Constant promoted to top-level config\n- LLM prompt updated to allow 3-6 sentences (was 2-4)"
+  },
+  {
     "version": "2026.3.10",
     "date": "2026-03-07",
     "title": "Auto-detect question language for replies",

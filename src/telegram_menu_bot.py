@@ -119,7 +119,7 @@ LAST_DIGEST_FILE = os.environ.get("LAST_DIGEST_FILE",
                                    os.path.expanduser("~/.picoclaw/last_digest.txt"))
 
 # Bot version — bump this string with every deployment so admins get notified
-BOT_VERSION           = "2026.3.10"
+BOT_VERSION           = "2026.3.11"
 RELEASE_NOTES_FILE    = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
@@ -164,6 +164,7 @@ VOICE_SAMPLE_RATE     = 16000
 VOICE_CHUNK_SIZE      = 4000      # 250 ms at 16 kHz
 VOICE_SILENCE_TIMEOUT = 4.0       # seconds of silence → auto-stop
 VOICE_MAX_DURATION    = 30.0      # hard session cap (seconds)
+TTS_MAX_CHARS         = 600       # ~75 words / ~25 s of audio on Pi 3
 # When True, appends per-step timing footer to voice replies (test mode only)
 VOICE_TIMING_DEBUG    = os.environ.get("VOICE_TIMING_DEBUG", "0").lower() in ("1", "true", "yes")
 
@@ -501,13 +502,13 @@ def _clean_picoclaw_output(text: str) -> str:
 _LANG_INSTRUCTION: dict[str, str] = {
     "ru": (
         "Отвечай строго на русском языке. "
-        "Не используй эмодзи, смайлики и символы. "
-        "Ответ краткий, по существу (2–4 предложения).\n\n"
+        "Не используй эмоджи, смайлики и символы. "
+        "Отвечай по существу (3–6 предложений).\n\n"
     ),
     "en": (
         "Reply in English only. "
         "Do not use emoji or emoticons. "
-        "Keep the answer brief (2–4 sentences).\n\n"
+        "Keep the answer informative (3–6 sentences).\n\n"
     ),
 }
 
@@ -1278,10 +1279,8 @@ def _tts_to_ogg(text: str) -> Optional[bytes]:
     The Popen approach caused a deadlock: the parent process held piper.stdout
     open, so ffmpeg never received EOF on its stdin and blocked forever.
     Sequential approach: piper → raw PCM bytes → ffmpeg → OGG bytes.
-    Text is truncated to TTS_MAX_CHARS to keep synthesis fast on Pi 3.
+    Text is truncated to TTS_MAX_CHARS (top-level constant) before synthesis.
     """
-    TTS_MAX_CHARS = 200   # ~25 words — reduces piper synthesis time on Pi 3
-
     # Clean text: strip emoji (Piper reads them as words) + Markdown syntax
     tts_text = _escape_tts(text)
 
