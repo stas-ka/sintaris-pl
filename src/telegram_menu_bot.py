@@ -263,6 +263,13 @@ def _lang(chat_id: int) -> str:
     return _user_lang.get(chat_id, "en")
 
 
+def _t(chat_id: int, key: str, **kwargs) -> str:
+    """Look up a localised string by key for the given chat_id."""
+    lang = _lang(chat_id)
+    text = _STRINGS.get(lang, _STRINGS.get("en", {})).get(key, key)
+    return text.format(**kwargs) if kwargs else text
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
