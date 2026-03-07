@@ -792,4 +792,214 @@ With the full optimisation stack (SSD + `tmpfs_model` + `warm_piper` + `gpu_mem=
 
 ---
 
+### 8.9 Using the SSD to Store a Local LLM — Fallback to Remote Analysis
+
+This section analyses whether the Samsung 840 SSD (mounted via USB) could host a local LLM (via `llama.cpp`) that the bot falls back to when OpenRouter is unavailable or rate-limited.
+
+TL;DR: **the SSD is a fine storage medium for LLM weights; the bottleneck is Pi 3 B+ CPU and RAM, not the disk.**
+
+---
+
+#### 8.9.1 Storage Capacity — Not the Problem
+
+The 256 GB SSD easily fits a wide range of quantised models alongside OS and Piper/Vosk files:
+
+| Model | GGUF Q4_K_M size | Fits on 256 GB SSD? |
+|---|---|---|
+| Qwen2-0.5B | ~350 MB | ✅ (many copies) |
+| TinyLlama-1.1B | ~660 MB | ✅ |
+| Phi-3-mini-3.8B | ~2.5 GB | ✅ |
+| Llama-3.2-3B | ~2 GB | ✅ |
+| Llama-3.1-8B | ~5 GB | ✅ |
+| Mistral-7B | ~4.5 GB | ✅ |
+| Llama-3-70B | ~42 GB | ✅ (fits, but Pi 3 cannot run it) |
+
+The SSD has more than enough capacity. The practical question is whether the Pi can actually _run_ the model.
+
+---
+
+#### 8.9.2 The Real Constraint: RAM, Not Disk Speed
+
+`llama.cpp` uses `mmap()` by default — model weights live on disk and the OS loads pages into RAM on demand. This means the model does **not** need to fit entirely in RAM upfront. However, during inference every transformer layer's weight matrices must be read for every token generated. On a model with 32 layers and 1.1B parameters (TinyLlama), approximately **all 660 MB of weights are touched per token pass**.
+
+On Pi 3 B+ with 1 GB RAM the situation is:
+
+| Consumer | RAM held |
+|---|---|
+| OS + kernel | ~250 MB |
+| Python bot + Vosk model | ~240 MB |
+| Piper ONNX (when TTS active) | ~150 MB |
+| OS page cache available for LLM weights | **~360 MB** |
+
+A 660 MB model (TinyLlama) exceeds the available page cache by ~300 MB. The OS must constantly evict and re-load pages from USB during inference, meaning every token causes additional USB reads — **most tokens are effectively disk-speed tokens**, not RAM-speed.
+
+| Scenario | Token generation rate |
+|---|---|
+| Model fully in page cache (Pi 4, 2 GB) | ~2–4 tok/s |
+| Model partially cached, rest from USB SSD (Pi 3, USB 2.0) | **~0.1–0.4 tok/s** |
+| Model fully in page cache on Pi 3 (only possible for ≤350 MB model) | ~0.5–1 tok/s |
+
+At 0.1–0.4 tok/s, a 60-token Russian answer takes **2.5–10 minutes**. This is not usable for interactive conversation.
+
+---
+
+#### 8.9.3 The One Viable Path on Pi 3 B+: Ultra-Tiny Models
+
+The only model that can realistically fit in the Pi 3's page cache alongside the bot is **Qwen2-0.5B-Instruct Q4_K_M**, at ~350 MB.
+
+| Property | Value |
+|---|---|
+| Model | Qwen2-0.5B-Instruct (GGUF Q4_K_M) |
+| Size on disk | ~350 MB |
+| RAM needed (fits in page cache) | ~360 MB available ✅ |
+| Parameters | 494 M |
+| Context window | 32k |
+| Russian language | ✅ Good (Qwen2 is multilingual) |
+| llama.cpp tok/s on Pi 3 B+ (A53 @ 1.4 GHz) | **~0.8–1.5 tok/s** |
+| Time for 80-token answer | **~55–100 s** |
+| Time for 20-token answer ("Не знаю") | **~15–25 s** |
+
+This is marginal — usable only if the user accepts a ~1 minute wait. For a fallback scenario (OpenRouter is down), a 1-minute response is better than no response.
+
+> **Critically:** when Qwen2-0.5B is in use, both Vosk STT and TTS must still run. They add ~35–40 s on top. Total end-to-end for a voice query on Pi 3 with local fallback LLM: **~90–140 s**. Text-only fallback (skip TTS) reduces this to ~70 s.
+
+---
+
+#### 8.9.4 Performance on Pi 4 B and Pi 5
+
+| Board | RAM | Model | tok/s | 80-tok answer | Usable? |
+|---|---|---|---|---|---|
+| Pi 3 B+ | 1 GB | Qwen2-0.5B Q4 | ~1 tok/s | ~80 s | ⚠️ Emergency fallback only |
+| Pi 3 B+ | 1 GB | TinyLlama-1.1B Q4 | ~0.2 tok/s | ~400 s | ❌ |
+| Pi 4 B | 2 GB | Phi-3-mini-3.8B Q4 | ~1.5 tok/s | ~55 s | ⚠️ Slow but functional |
+| Pi 4 B | 4 GB | Phi-3-mini-3.8B Q4 | ~2 tok/s | ~40 s | ✅ Acceptable fallback |
+| Pi 5 | 4 GB | Phi-3-mini-3.8B Q4 | ~5 tok/s | ~16 s | ✅ Good |
+| Pi 5 | 8 GB | Llama-3.2-3B Q4 | ~5 tok/s | ~16 s | ✅ Good |
+
+The Samsung 840 SSD plays a supporting role on all boards: the model is loaded from SSD into page cache once at startup, then inference runs from RAM. On Pi 4 B (USB 3.0 @350 MB/s), a 2.5 GB model loads in **~7 s** — very fast. On Pi 3 B+ (USB 2.0 @40 MB/s), 350 MB loads in **~9 s**.
+
+---
+
+#### 8.9.5 llama.cpp Setup on the Pi
+
+```bash
+# Install build dependencies
+sudo apt install -y cmake libblas-dev libopenblas-dev
+
+# Clone and build llama.cpp (ARM Neon optimisations enabled automatically)
+git clone https://github.com/ggerganov/llama.cpp /mnt/ssd/llama.cpp
+cd /mnt/ssd/llama.cpp
+cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j4   # ~10 min on Pi 3 B+
+
+# Download Qwen2-0.5B for Pi 3 B+ (or Phi-3-mini for Pi 4 B+)
+mkdir -p /mnt/ssd/models
+# Qwen2-0.5B (Pi 3):
+wget -q "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct-GGUF/resolve/main/qwen2-0_5b-instruct-q4_k_m.gguf" \
+     -O /mnt/ssd/models/qwen2-0.5b-q4.gguf
+
+# Phi-3-mini (Pi 4 B+):
+wget -q "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf" \
+     -O /mnt/ssd/models/phi3-mini-q4.gguf
+
+# Start llama.cpp HTTP server (OpenAI-compatible, port 8080)
+/mnt/ssd/llama.cpp/build/bin/llama-server \
+    --model /mnt/ssd/models/qwen2-0.5b-q4.gguf \
+    --port 8080 \
+    --host 127.0.0.1 \
+    --n-predict 200 \
+    --threads 4 \
+    --ctx-size 2048 \
+    --log-disable
+```
+
+#### Systemd service for the local LLM server
+
+```ini
+# /etc/systemd/system/picoclaw-llm.service
+[Unit]
+Description=Picoclaw Local LLM Fallback (llama.cpp)
+After=network.target
+
+[Service]
+Type=simple
+User=stas
+ExecStart=/mnt/ssd/llama.cpp/build/bin/llama-server \
+    --model /mnt/ssd/models/qwen2-0.5b-q4.gguf \
+    --port 8080 --host 127.0.0.1 \
+    --n-predict 200 --threads 4 --ctx-size 2048 --log-disable
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable picoclaw-llm
+sudo systemctl start picoclaw-llm
+```
+
+---
+
+#### 8.9.6 Fallback Integration in the Bot
+
+The current bot calls `picoclaw agent -m "..."` which routes through OpenRouter. A minimal fallback can intercept the subprocess failure and redirect to the local `llama.cpp` server:
+
+```python
+import requests
+
+LOCAL_LLM_URL = "http://127.0.0.1:8080/v1/chat/completions"
+LOCAL_LLM_TIMEOUT = 180   # 3 min — generous for Pi 3 slow inference
+
+def _call_picoclaw(prompt: str) -> str:
+    """Try picoclaw (OpenRouter). On failure, fall back to local llama.cpp."""
+    try:
+        result = subprocess.run(
+            [PICOCLAW_BIN, "agent", "-m", prompt],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return _clean_picoclaw_output(result.stdout)
+        raise RuntimeError(f"picoclaw rc={result.returncode}")
+    except Exception as primary_err:
+        log.warning(f"[LLM] picoclaw failed: {primary_err}; trying local fallback")
+        try:
+            resp = requests.post(LOCAL_LLM_URL,
+                json={
+                    "model": "local",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 200,
+                    "temperature": 0.7,
+                },
+                timeout=LOCAL_LLM_TIMEOUT,
+            )
+            resp.raise_for_status()
+            answer = resp.json()["choices"][0]["message"]["content"].strip()
+            return f"⚠️ _[local fallback]_\n{answer}"
+        except Exception as local_err:
+            log.error(f"[LLM] local fallback also failed: {local_err}")
+            return "❌ Нет связи с LLM (OpenRouter недоступен, локальный сервер не отвечает)."
+```
+
+The `⚠️ [local fallback]` prefix lets the user know they got a degraded response. The local model quality on Qwen2-0.5B is noticeably weaker than GPT-4o-mini, but sufficient for simple factual questions.
+
+---
+
+#### 8.9.7 Conclusion: Is It Worth It on Pi 3 B+?
+
+| Question | Answer |
+|---|---|
+| Can the SSD store the LLM? | ✅ Yes — 256 GB fits any model |
+| Can Pi 3 B+ actually run a local LLM? | ⚠️ Yes, but only Qwen2-0.5B; ~80–100 s per answer |
+| Is it viable for interactive conversation? | ❌ No — too slow |
+| Is it viable as emergency offline fallback? | ✅ Yes — "slow answer" beats "no answer" |
+| Does USB 2.0 bandwidth matter? | Only for the initial model load (~9 s). Inference is CPU/RAM bound. |
+| Is it worth setting up on Pi 3 B+? | ⚠️ Only if offline resilience matters. Significant effort, poor UX. |
+| **Recommended for Pi 4 B / Pi 5?** | **✅ Yes — Phi-3-mini at 2–5 tok/s gives a usable fallback** |
+
+**Bottom line:** The Samsung 840 SSD is an appropriate home for LLM weights on any Pi. On Pi 3 B+ the CPU+RAM wall makes local LLM inference impractical for real-time use, but technically functional as a slow emergency fallback (Qwen2-0.5B only). The same SSD on a **Pi 4 B** with USB 3.0 and 4 GB RAM enables a genuinely useful Phi-3-mini fallback at ~2 tok/s.
+
+---
+
 *Generated from real timing measurements on Pi 3 B+ (March 2026) and benchmark data from the Pi Foundation, llama.cpp ARM benchmarks, and RKNN community reports.*
