@@ -42,6 +42,10 @@ _pending_note: dict[int, dict] = {}
 # Admin is waiting to paste an LLM API key into chat
 _pending_llm_key: dict[int, str] = {}
 
+# Non-allowed user's Telegram info stored while awaiting their name input
+# Format: {"username": str, "first_name": str, "last_name": str}
+_pending_registration: dict[int, dict] = {}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Singleton caches
 # ─────────────────────────────────────────────────────────────────────────────

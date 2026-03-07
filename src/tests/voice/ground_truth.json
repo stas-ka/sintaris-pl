@@ -13,6 +13,15 @@
       "raw_vosk_ref": null,
       "clean_ref": null,
       "max_wer": null
+    },
+    "audio_2026-03-07_21-20-14.ogg": {
+      "description": "Russian speech — calendar event: work on 9th, start 7am, return 18:00, ~12s",
+      "raw_vosk_ref": null,
+      "clean_ref": null,
+      "max_wer": null,
+      "_vosk_note": "Vosk small model fails completely on this audio — timing-only",
+      "whisper_ref": "к наработу девятого на открытия 7 часов утра и возвращение с работы восемнадцать часов.",
+      "_wer_note": "Whisper tiny baseline — what tiny model actually outputs. Vosk fails completely on this audio."
     }
   },
   "latency_thresholds": {

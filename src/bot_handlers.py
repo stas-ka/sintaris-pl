@@ -186,48 +186,15 @@ def _handle_note_delete(chat_id: int, slug: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_digest(chat_id: int) -> None:
-    """Show last saved digest instantly, then offer to refresh."""
-    last = Path(LAST_DIGEST_FILE)
-    if last.exists() and last.stat().st_size > 0:
-        text  = last.read_text(encoding="utf-8", errors="replace").strip()
-        age_h = (time.time() - last.stat().st_mtime) / 3600
-        header = _t(chat_id, "digest_header", age=age_h)
-        bot.send_message(chat_id, header + _truncate(text), parse_mode="Markdown")
-    else:
-        bot.send_message(chat_id, _t(chat_id, "digest_none"))
-        _refresh_digest(chat_id)
-        return
-
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton(_t(chat_id, "btn_refresh_now"), callback_data="digest_refresh"),
-        InlineKeyboardButton("🔙  Menu",                     callback_data="menu"),
-    )
-    bot.send_message(chat_id, _t(chat_id, "digest_hint"),
-                     parse_mode="Markdown", reply_markup=kb)
+    """Delegate to per-user credential-aware digest handler."""
+    from bot_mail_creds import handle_digest_auth   # deferred — no circular at runtime
+    handle_digest_auth(chat_id)
 
 
 def _refresh_digest(chat_id: int) -> None:
-    """Run gmail_digest.py in a background thread and report the result."""
-    msg = bot.send_message(chat_id, _t(chat_id, "fetching"))
-
-    def _run():
-        rc, out = _run_subprocess(["python3", DIGEST_SCRIPT, "--stdout"], timeout=120)
-        text = out.strip() if (rc == 0 and out) else (out or _t(chat_id, "digest_no_out"))
-        try:
-            bot.edit_message_text(
-                _t(chat_id, "digest_fresh") + _truncate(text),
-                chat_id, msg.message_id,
-                parse_mode="Markdown",
-                reply_markup=_back_keyboard(),
-            )
-        except Exception:
-            bot.send_message(chat_id,
-                             _t(chat_id, "digest_fresh") + _truncate(text),
-                             parse_mode="Markdown",
-                             reply_markup=_back_keyboard())
-
-    threading.Thread(target=_run, daemon=True).start()
+    """Delegate to per-user credential-aware refresh."""
+    from bot_mail_creds import handle_digest_refresh  # deferred — no circular at runtime
+    handle_digest_refresh(chat_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

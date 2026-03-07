@@ -74,6 +74,46 @@ from bot_handlers import (
     _notes_menu_keyboard,
 )
 
+# ─── Calendar ─────────────────────────────────────────────────────────────────
+from bot_calendar import (
+    _handle_calendar_menu, _handle_cal_event_detail,
+    _start_cal_add, _finish_cal_add, _handle_cal_cancel_event,    _cal_do_confirm_save, _show_cal_confirm,
+    _cal_prompt_edit_field, _cal_handle_edit_input,    _cal_reschedule_all, _cal_morning_briefing_loop,
+    _pending_cal,
+)
+
+# ─── Mail credentials ──────────────────────────────────────────────────────────
+from bot_mail_creds import (
+    handle_mail_consent, handle_mail_consent_agree,
+    handle_mail_provider, finish_mail_setup,
+    handle_mail_settings, handle_mail_del_creds,
+    _pending_mail_setup,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Registration helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _finish_registration(cid: int, display_name: str) -> None:
+    """Complete new-user registration after the user has typed their display name."""
+    info         = _st._pending_registration.pop(cid, {})
+    _st._user_mode.pop(cid, None)
+    display_name = display_name.strip()[:100]
+    if not display_name:
+        _st._pending_registration[cid] = info
+        _st._user_mode[cid] = "reg_name"
+        bot.send_message(cid, _t(cid, "reg_ask_name"), parse_mode="Markdown")
+        return
+    username   = info.get("username", "")
+    first_name = info.get("first_name", "")
+    last_name  = info.get("last_name", "")
+    _upsert_registration(cid, username, display_name, "pending",
+                         first_name=first_name, last_name=last_name)
+    bot.send_message(cid, _t(cid, "reg_waiting"), parse_mode="Markdown")
+    log.info(f"[Reg] New request: id={cid} username={username!r} name={display_name!r}")
+    _notify_admins_new_registration(cid, username, display_name, first_name, last_name)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # /start — welcome or registration flow
@@ -88,17 +128,21 @@ def cmd_start(message):
         username = getattr(message.from_user, "username", "") or ""
         first    = getattr(message.from_user, "first_name", "") or ""
         last     = getattr(message.from_user, "last_name", "") or ""
-        name     = f"{first} {last}".strip()
 
         if _is_blocked_reg(cid):
             bot.send_message(cid, _t(cid, "reg_blocked"))
         elif _is_pending_reg(cid):
             bot.send_message(cid, _t(cid, "reg_pending_exists"))
+        elif _st._user_mode.get(cid) == "reg_name":
+            bot.send_message(cid, _t(cid, "reg_ask_name"), parse_mode="Markdown")
         else:
-            _upsert_registration(cid, username, name, "pending")
-            bot.send_message(cid, _t(cid, "reg_waiting"))
-            log.info(f"[Reg] New request: chat_id={cid} username={username!r} name={name!r}")
-            _notify_admins_new_registration(cid, username, name)
+            _st._pending_registration[cid] = {
+                "username":   username,
+                "first_name": first,
+                "last_name":  last,
+            }
+            _st._user_mode[cid] = "reg_name"
+            bot.send_message(cid, _t(cid, "reg_ask_name"), parse_mode="Markdown")
         return
 
     bot.send_message(cid, _t(cid, "welcome"), parse_mode="Markdown",
@@ -351,10 +395,79 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── Mail credentials setup ────────────────────────────────────────────
+    elif data == "mail_consent":
+        handle_mail_consent(cid)
+    elif data == "mail_consent_agree":
+        handle_mail_consent_agree(cid)
+    elif data.startswith("mail_provider:"):
+        handle_mail_provider(cid, data[len("mail_provider:"):])
+    elif data == "mail_settings":
+        handle_mail_settings(cid)
+    elif data == "mail_del_creds":
+        handle_mail_del_creds(cid)
+
+    # ── Calendar ───────────────────────────────────────────────────────────
+    elif data == "menu_calendar":
+        if not _is_guest(cid):
+            _handle_calendar_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "cal_add":
+        if not _is_guest(cid):
+            _start_cal_add(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("cal_event:"):
+        if not _is_guest(cid):
+            _handle_cal_event_detail(cid, data[len("cal_event:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("cal_del:"):
+        if not _is_guest(cid):
+            _handle_cal_cancel_event(cid, data[len("cal_del:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "cal_confirm_save":
+        if not _is_guest(cid) and cid in _pending_cal:
+            _cal_do_confirm_save(cid)
+        else:
+            _handle_calendar_menu(cid)
+
+    elif data == "cal_confirm_edit_title":
+        if not _is_guest(cid):
+            _cal_prompt_edit_field(cid, "title")
+
+    elif data == "cal_confirm_edit_dt":
+        if not _is_guest(cid):
+            _cal_prompt_edit_field(cid, "dt")
+
+    elif data == "cal_confirm_edit_remind":
+        if not _is_guest(cid):
+            _cal_prompt_edit_field(cid, "remind")
+
+    elif data.startswith("cal_edit_title:"):
+        if not _is_guest(cid):
+            _cal_prompt_edit_field(cid, "title", ev_id=data[len("cal_edit_title:"):])
+
+    elif data.startswith("cal_edit_dt:"):
+        if not _is_guest(cid):
+            _cal_prompt_edit_field(cid, "dt", ev_id=data[len("cal_edit_dt:"):])
+
+    elif data.startswith("cal_edit_remind:"):
+        if not _is_guest(cid):
+            _cal_prompt_edit_field(cid, "remind", ev_id=data[len("cal_edit_remind:"):])
+
     # ── Confirm / cancel system command ────────────────────────────────────
     elif data == "cancel":
         _st._pending_cmd.pop(cid, None)
         _st._pending_note.pop(cid, None)
+        _pending_cal.pop(cid, None)
+        _pending_mail_setup.pop(cid, None)
         _st._user_mode.pop(cid, None)
         bot.send_message(cid, _t(cid, "cancelled"), reply_markup=_back_keyboard())
 
@@ -369,6 +482,13 @@ def callback_handler(call):
 @bot.message_handler(content_types=["text"])
 def text_handler(message):
     cid = message.chat.id
+
+    # ── Registration: non-allowed user entering their display name ─────────────
+    if _st._user_mode.get(cid) == "reg_name" and cid in _st._pending_registration:
+        _set_lang(cid, message.from_user)
+        _finish_registration(cid, message.text)
+        return
+
     if not _is_allowed(cid):
         _deny(cid)
         return
@@ -464,6 +584,43 @@ def text_handler(message):
                          reply_markup=_notes_menu_keyboard(cid))
         return
 
+    # ── Mail credential setup flow ────────────────────────────────────────
+    if mode == "mail_setup":
+        finish_mail_setup(cid, message.text)
+        return
+
+    # ── Calendar add flow ──────────────────────────────────────────────────
+    if mode == "calendar":
+        if not _is_guest(cid):
+            _finish_cal_add(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            _pending_cal.pop(cid, None)
+        return
+    # ── Calendar field edit flows ────────────────────────────────────────────
+    if mode == "cal_edit_title":
+        if not _is_guest(cid):
+            _cal_handle_edit_input(cid, message.text, "title")
+        else:
+            _st._user_mode.pop(cid, None)
+            _pending_cal.pop(cid, None)
+        return
+
+    if mode == "cal_edit_dt":
+        if not _is_guest(cid):
+            _cal_handle_edit_input(cid, message.text, "dt")
+        else:
+            _st._user_mode.pop(cid, None)
+            _pending_cal.pop(cid, None)
+        return
+
+    if mode == "cal_edit_remind":
+        if not _is_guest(cid):
+            _cal_handle_edit_input(cid, message.text, "remind")
+        else:
+            _st._user_mode.pop(cid, None)
+            _pending_cal.pop(cid, None)
+        return
     # ── Chat modes ─────────────────────────────────────────────────────────
     if mode == "chat":
         _handle_chat_message(cid, message.text)
@@ -528,6 +685,8 @@ def main() -> None:
     # ── Startup tasks ─────────────────────────────────────────────────────
     _cleanup_orphaned_tts()
     _notify_admins_new_version()
+    _cal_reschedule_all()
+    threading.Thread(target=_cal_morning_briefing_loop, daemon=True).start()
 
     log.info("Polling Telegram…")
     bot.infinity_polling(timeout=30, long_polling_timeout=20)

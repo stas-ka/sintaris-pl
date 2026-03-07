@@ -32,6 +32,7 @@
     "audio_na":        "_(Аудио недоступно — ошибка TTS)_",
     "audio_interrupted": "_(Генерация аудио прервана — бот был перезапущен)_",
 
+    "reg_ask_name":     "👋 *Добро пожаловать!* Пожалуйста, введите своё *имя* — оно будет показано администратору при рассмотрении заявки:",
     "reg_waiting":      "⏳ *Заявка отправлена.*\n\nВаш запрос на доступ передан администратору. Как только вас одобрят, вы получите уведомление.",
     "reg_pending_exists": "⏳ *Заявка уже отправлена.* Пожалуйста, подождите рассмотрения администратором.",
     "reg_blocked":      "⛔ *Доступ отклонён.* Ваш запрос на доступ отклонён администратором.",
@@ -79,7 +80,29 @@
     "note_deleted":                 "🗑 Заметка удалена.",
     "note_voice_saved":             "Заметка «{title}» записана.",
     "note_voice_read_notfound":     "Заметка не найдена. Скажите «запиши заметку» или «прочитай заметку название».",
-    "note_voice_default_title":     "голосовая заметка"
+    "note_voice_default_title":     "голосовая заметка",
+
+    "btn_calendar":                 "🗓  Календарь",
+
+    "mail_nocreds_msg":    "📧 *Дайджест почты*\n\n⛔ Доступ к почте не настроен.\n\nЧтобы получать дайджест вашей личной почты, настройте доступ к почтовому ящику. Каждый пользователь управляет собственными данными — ваш ящик доступен только вам.",
+    "mail_btn_setup":      "⚙️  Настроить доступ к почте",
+    "mail_consent_text":   "📋 *Обработка персональных данных*\n\nДля получения дайджеста почты бот хранит учётные данные вашего ящика на устройстве Raspberry Pi, которым вы владеете.\n\n*Что хранится:*\n• Адрес электронной почты\n• Пароль приложения (App Password)\n\n*Где хранится:*\nТолько на вашем Raspberry Pi. Данные не передаются на серверы третьих сторон — только вашему почтовому провайдеру для получения писем через IMAP.\n\n*Правовое основание:*\n• Регламент ЕС 2016/679 (GDPR), ст. 6(1)(a) — на основании вашего согласия\n• Федеральный закон «О персональных данных» №152-ФЗ, ст. 6 ч.1 п.1 — на основании согласия субъекта\n\n*Ваши права:*\n• Удаление данных — кнопка «Удалить данные» в настройках дайджеста\n• Отзыв согласия — удаление данных является отзывом согласия\n\nНажмите *«✅ Согласен»* для продолжения.",
+    "mail_consent_agree":  "✅  Согласен",
+    "mail_consent_decline":"❌  Отказать",
+    "mail_choose_provider":"📬 *Выберите почтового провайдера:*\n\n_Для Gmail используйте Пароль приложения (не основной пароль Google). Для Яндекса и Mail.ru рекомендуется пароль приложения._",
+    "mail_enter_imap_host":"🖥 *Custom IMAP*\n\nВведите адрес IMAP-сервера:\n_(например: mail.example.com)_",
+    "mail_enter_email":    "📧 Введите ваш *адрес электронной почты*:",
+    "mail_enter_password": "🔑 Введите *пароль приложения* (App Password):\n\n⚠️ _Пароль нигде не отображается и не пересылается. После отправки удалите сообщение из истории чата._",
+    "mail_bad_email":      "❌ Некорректный формат адреса. Повторите ввод:",
+    "mail_testing":        "🔌 _Проверяю подключение к почтовому серверу…_",
+    "mail_setup_ok":       "✅ *Подключение установлено!*\n\nПочтовый ящик: `{masked}`\n\nДайджест почты готов к работе. Нажмите «🔄 Обновить» чтобы получить письма за последние 24ч.",
+    "mail_login_failed":   "❌ *Ошибка авторизации*\n\n_{err}_\n\nПроверьте адрес и пароль приложения. Для Gmail убедитесь, что IMAP включён и используется App Password.",
+    "mail_connect_failed": "❌ *Ошибка подключения*\n\n_{err}_\n\nПроверьте адрес IMAP-сервера и доступность сети.",
+    "mail_fetch_error":    "❌ Ошибка получения дайджеста: _{err}_",
+    "mail_btn_settings":   "⚙️  Настройки почты",
+    "mail_btn_delete":     "🗑  Удалить данные доступа",
+    "mail_settings_msg":   "⚙️ *Настройки почты*\n\nПровайдер: *{provider}*\nАккаунт: `{masked}`\nНастроено: {date}\nСогласие: {consent}\n\n_Учётные данные хранятся только на этом устройстве (Raspberry Pi) и не передаются третьим сторонам._",
+    "mail_creds_deleted":  "🗑 *Данные доступа удалены.*\n\nДайджест почты отключён. Вы можете настроить новый доступ в любое время. Ваше согласие на обработку персональных данных отозвано (основание: Регламент ЕС 2016/679 (GDPR) ст. 7(3), Федеральный закон №152-ФЗ ст. 9 ч.2)."
   },
 
   "en": {
@@ -115,6 +138,7 @@
     "audio_na":        "_(Audio unavailable — TTS error)_",
     "audio_interrupted": "_(Audio generation interrupted — bot was restarted)_",
 
+    "reg_ask_name":     "👋 *Welcome!* Please enter your *name* — it will be shown to the admin when reviewing your registration request:",
     "reg_waiting":      "⏳ *Registration request sent.*\n\nYour request has been forwarded to the admin. You will be notified as soon as it is approved.",
     "reg_pending_exists": "⏳ *Request already pending.* Please wait for the admin to review it.",
     "reg_blocked":      "⛔ *Access denied.* Your registration request was declined by the admin.",
@@ -162,6 +186,28 @@
     "note_deleted":                 "🗑 Note deleted.",
     "note_voice_saved":             "Note \"{title}\" saved.",
     "note_voice_read_notfound":     "Note not found. Say \"create note\" or \"read note <name>\".",
-    "note_voice_default_title":     "voice note"
+    "note_voice_default_title":     "voice note",
+
+    "btn_calendar":                 "🗓  Calendar",
+
+    "mail_nocreds_msg":    "📧 *Mail Digest*\n\n⛔ Mail access not configured.\n\nTo receive your personal mail digest, set up access to your mailbox. Each user manages their own credentials — your mailbox is only accessible to you.",
+    "mail_btn_setup":      "⚙️  Set up mail access",
+    "mail_consent_text":   "📋 *Personal Data Processing*\n\nTo provide the mail digest, the bot stores your mailbox credentials on the Raspberry Pi device you own.\n\n*What is stored:*\n• Email address\n• App Password\n\n*Where it is stored:*\nOnly on your Raspberry Pi. Data is never sent to third-party servers — only to your mail provider's IMAP server to fetch emails.\n\n*Legal basis:*\n• EU Regulation 2016/679 (GDPR), Art. 6(1)(a) — based on your explicit consent\n• Russian Federal Law No. 152-FZ «On Personal Data», Art. 6 §1(1) — based on data subject consent\n\n*Your rights:*\n• Deletion: tap «Delete credentials» in mail settings\n• Withdrawal of consent: deleting credentials withdraws your consent\n\nTap *«✅ I agree»* to continue.",
+    "mail_consent_agree":  "✅  I agree",
+    "mail_consent_decline":"❌  Decline",
+    "mail_choose_provider":"📬 *Choose your mail provider:*\n\n_For Gmail use an App Password — not your main Google password. For Yandex and Mail.ru an app password is also recommended._",
+    "mail_enter_imap_host":"🖥 *Custom IMAP*\n\nEnter your IMAP server address:\n_(e.g. mail.example.com)_",
+    "mail_enter_email":    "📧 Enter your *email address*:",
+    "mail_enter_password": "🔑 Enter your *app password* (App Password):\n\n⚠️ _The password is never displayed or forwarded. Delete the message from chat history after sending for safety._",
+    "mail_bad_email":      "❌ Invalid email format. Please try again:",
+    "mail_testing":        "🔌 _Testing connection to mail server…_",
+    "mail_setup_ok":       "✅ *Connected!*\n\nMailbox: `{masked}`\n\nMail digest is ready. Tap «🔄 Refresh» to fetch emails from the last 24h.",
+    "mail_login_failed":   "❌ *Login failed*\n\n_{err}_\n\nCheck your email and app password. For Gmail, make sure IMAP is enabled and you are using an App Password.",
+    "mail_connect_failed": "❌ *Connection error*\n\n_{err}_\n\nCheck the IMAP server address and network connectivity.",
+    "mail_fetch_error":    "❌ Digest error: _{err}_",
+    "mail_btn_settings":   "⚙️  Mail settings",
+    "mail_btn_delete":     "🗑  Delete credentials",
+    "mail_settings_msg":   "⚙️ *Mail Settings*\n\nProvider: *{provider}*\nAccount: `{masked}`\nConfigured: {date}\nConsent: {consent}\n\n_Your credentials are stored only on this device (Raspberry Pi) and are never shared with third parties._",
+    "mail_creds_deleted":  "🗑 *Credentials deleted.*\n\nMail digest disabled. You can set up access again at any time. Your consent to personal data processing has been withdrawn (GDPR Art. 7(3); Federal Law No. 152-FZ Art. 9 §2)."
   }
 }

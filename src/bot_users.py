@@ -46,22 +46,27 @@ def _find_registration(chat_id: int) -> Optional[dict]:
 
 
 def _upsert_registration(chat_id: int, username: str, name: str,
-                         status: str = "pending") -> None:
+                         status: str = "pending",
+                         first_name: str = "", last_name: str = "") -> None:
     """Add a new registration record, or update status/name if one exists."""
     regs = _load_registrations()
     for r in regs:
         if r.get("chat_id") == chat_id:
-            r["status"]   = status
-            r["username"] = username
-            r["name"]     = name
+            r["status"]     = status
+            r["username"]   = username
+            r["first_name"] = first_name
+            r["last_name"]  = last_name
+            r["name"]       = name
             _save_registrations(regs)
             return
     regs.append({
-        "chat_id":   chat_id,
-        "username":  username,
-        "name":      name,
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
-        "status":    status,
+        "chat_id":    chat_id,
+        "username":   username,
+        "first_name": first_name,
+        "last_name":  last_name,
+        "name":       name,
+        "timestamp":  datetime.datetime.now().isoformat(timespec="seconds"),
+        "status":     status,
     })
     _save_registrations(regs)
 

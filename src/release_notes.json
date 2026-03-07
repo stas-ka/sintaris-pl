@@ -1,5 +1,17 @@
 [
   {
+    "version": "2026.3.22",
+    "date": "2026-03-07",
+    "title": "Calendar: confirmation step + full event editing",
+    "notes": "- Confirmation card shown before saving a new event: review title, date/time and reminder offset\n- From confirmation: edit title, date/time (re-parsed via LLM) or reminder minutes\n- Event detail view: Edit title / Reschedule (new date/time) / Edit reminder\n- Reminder timer is automatically rescheduled when an event is edited\n- reminded flag reset on edit so the reminder fires again at the new time"
+  },
+  {
+    "version": "2026.3.21",
+    "date": "2026-03-07",
+    "title": "Enhanced user registration: name input + full identity in admin",
+    "notes": "- New users are asked to enter their name before registration is submitted\n- Admin approval notification shows Telegram first/last name, @username, and user-entered name\n- All admin user panels (list, pending, remove) show full identity info for each user\n- Approve/block confirmations include the user's entered name\n- registrations.json now stores first_name and last_name alongside username and name"
+  },
+  {
     "version": "2026.3.20",
     "date": "2026-03-07",
     "title": "Notes UX: in-place edit, raw text view, read aloud",

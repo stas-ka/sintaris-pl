@@ -70,12 +70,16 @@ LAST_DIGEST_FILE    = os.environ.get("LAST_DIGEST_FILE",
                           os.path.expanduser("~/.picoclaw/last_digest.txt"))
 NOTES_DIR           = os.environ.get("NOTES_DIR",
                           os.path.expanduser("~/.picoclaw/notes"))
+CALENDAR_DIR        = os.environ.get("CALENDAR_DIR",
+                          os.path.expanduser("~/.picoclaw/calendar"))
+MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
+                          os.path.expanduser("~/.picoclaw/mail_creds"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.20"
+BOT_VERSION        = "2026.3.22"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
@@ -98,7 +102,7 @@ PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
                          os.path.expanduser("~/.picoclaw/ru_RU-irina-low.onnx"))
 WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
 WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
-                         os.path.expanduser("~/.picoclaw/ggml-tiny.bin"))
+                         os.path.expanduser("~/.picoclaw/ggml-base.bin"))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
 
 VOICE_SAMPLE_RATE     = 16000

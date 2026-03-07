@@ -59,6 +59,24 @@ def _save_dynamic_users() -> None:
     _sdyn()
 
 
+def _user_info_block(uid: int, reg) -> str:
+    """Compact Markdown block with all available identity info for a user."""
+    if not reg:
+        return f"\U0001f464 `{uid}` _(no registration record)_"
+    first   = _escape_md(reg.get("first_name", ""))
+    last    = _escape_md(reg.get("last_name", ""))
+    uname   = reg.get("username", "")
+    name    = _escape_md(reg.get("name", ""))
+    tg_full = f"{first} {last}".strip()
+    udisp   = f"@{_escape_md(uname)}" if uname else "_no username_"
+    tdisp   = f"{tg_full} ({udisp})" if tg_full else udisp
+    return (
+        f"\U0001f464 `{uid}`\n"
+        f"  \u2022 Telegram: {tdisp}\n"
+        f"  \u2022 Name: {name or '\u2014'}"
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Admin keyboard
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,10 +118,10 @@ def _handle_admin_list_users(chat_id: int) -> None:
         bot.send_message(chat_id, _t(chat_id, "no_guests"),
                          parse_mode="Markdown", reply_markup=_admin_keyboard())
         return
-    lines = [f"• `{uid}`" for uid in sorted(dyn)]
+    blocks = [_user_info_block(uid, _find_registration(uid)) for uid in sorted(dyn)]
     bot.send_message(
         chat_id,
-        _t(chat_id, "guest_header") + "\n" + "\n".join(lines),
+        _t(chat_id, "guest_header") + "\n\n" + "\n\n".join(blocks),
         parse_mode="Markdown",
         reply_markup=_admin_keyboard(),
     )
@@ -143,7 +161,7 @@ def _start_admin_remove_user(chat_id: int) -> None:
                          parse_mode="Markdown", reply_markup=_admin_keyboard())
         return
     _st._user_mode[chat_id] = "admin_remove_user"
-    lst = "\n".join(f"• `{uid}`" for uid in sorted(dyn))
+    lst = "\n\n".join(_user_info_block(uid, _find_registration(uid)) for uid in sorted(dyn))
     bot.send_message(chat_id, _t(chat_id, "remove_prompt", lst=lst), parse_mode="Markdown")
 
 
@@ -178,23 +196,27 @@ def _handle_admin_pending_users(chat_id: int) -> None:
                          reply_markup=_admin_keyboard())
         return
     for reg in pending:
-        uid       = reg.get("chat_id")
-        uname     = reg.get("username", "")
-        name      = reg.get("name", "")
-        ts        = reg.get("timestamp", "")[:16].replace("T", " ")
-        uname_esc = f"@{_escape_md(uname)}" if uname else "(no username)"
-        name_esc  = _escape_md(name) if name else "(not set)"
+        uid      = reg.get("chat_id")
+        uname    = reg.get("username", "")
+        first    = reg.get("first_name", "")
+        last     = reg.get("last_name", "")
+        name     = reg.get("name", "")
+        ts       = reg.get("timestamp", "")[:16].replace("T", " ")
+        tg_full  = f"{first} {last}".strip()
+        uesc     = f"@{_escape_md(uname)}" if uname else "_no username_"
+        tdisp    = f"{_escape_md(tg_full)} ({uesc})" if tg_full else uesc
+        name_esc = _escape_md(name) if name else "_(not set)_"
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(
-            InlineKeyboardButton("✅  Approve", callback_data=f"reg_approve:{uid}"),
-            InlineKeyboardButton("🚫  Block",   callback_data=f"reg_block:{uid}"),
+            InlineKeyboardButton("\u2705  Approve", callback_data=f"reg_approve:{uid}"),
+            InlineKeyboardButton("\U0001f6ab  Block",   callback_data=f"reg_block:{uid}"),
         )
         text = (
-            f"👤 *Pending registration*\n\n"
+            f"\U0001f464 *Pending registration*\n\n"
             f"ID: `{uid}`\n"
-            f"Username: {uname_esc}\n"
-            f"Name: {name_esc}\n"
-            f"Time: {ts}"
+            f"Telegram: {tdisp}\n"
+            f"Name entered: {name_esc}\n"
+            f"Requested: {ts}"
         )
         try:
             bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
@@ -218,8 +240,9 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     _set_reg_status(target_id, "approved")
     _dynamic_users().add(target_id)
     _save_dynamic_users()
+    name_disp = f" \u2014 {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id}")
-    bot.send_message(admin_id, f"✅ User `{target_id}` approved and added as guest.",
+    bot.send_message(admin_id, f"\u2705 User `{target_id}`{name_disp} approved and added as guest.",
                      parse_mode="Markdown", reply_markup=_admin_keyboard())
     try:
         bot.send_message(target_id, _t(target_id, "reg_approved"),
@@ -231,11 +254,13 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
 
 def _do_block_registration(admin_id: int, target_id: int) -> None:
     """Block a registration: mark blocked and notify user."""
+    reg       = _find_registration(target_id)
+    name_disp = f" \u2014 {reg.get('name')}" if reg and reg.get("name") else ""
     _set_reg_status(target_id, "blocked")
     _dynamic_users().discard(target_id)
     _save_dynamic_users()
     log.info(f"[Reg] Admin {admin_id} blocked user {target_id}")
-    bot.send_message(admin_id, f"🚫 User `{target_id}` blocked.",
+    bot.send_message(admin_id, f"\U0001f6ab User `{target_id}`{name_disp} blocked.",
                      parse_mode="Markdown", reply_markup=_admin_keyboard())
     try:
         bot.send_message(target_id, _t(target_id, "reg_declined"))
@@ -243,9 +268,12 @@ def _do_block_registration(admin_id: int, target_id: int) -> None:
         log.warning(f"[Reg] Cannot notify blocked user {target_id}: {e}")
 
 
-def _notify_admins_new_registration(chat_id: int, username: str, name: str) -> None:
+def _notify_admins_new_registration(chat_id: int, username: str, name: str,
+                                    first_name: str = "", last_name: str = "") -> None:
     """Send approve/block buttons to all admins when a new user registers."""
-    uname_disp = f"@{username}" if username else "_(no username)_"
+    tg_full    = f"{first_name} {last_name}".strip()
+    udisp      = f"@{_escape_md(username)}" if username else "_no username_"
+    tdisp      = f"{_escape_md(tg_full)} ({udisp})" if tg_full else udisp
     for admin_id in ADMIN_USERS:
         try:
             kb = InlineKeyboardMarkup(row_width=2)
@@ -257,8 +285,8 @@ def _notify_admins_new_registration(chat_id: int, username: str, name: str) -> N
                 admin_id,
                 f"👤 *New registration request*\n\n"
                 f"ID: `{chat_id}`\n"
-                f"Username: {uname_disp}\n"
-                f"Name: {name or '_(not set)_'}",
+                f"Telegram: {tdisp}\n"
+                f"Name entered: {_escape_md(name) or '_(not set)_'}",
                 parse_mode="Markdown",
                 reply_markup=kb,
             )

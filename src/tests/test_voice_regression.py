@@ -602,7 +602,7 @@ def t_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResult]:
                     text = result.stdout.strip()
                 text = re.sub(r'\[[\d:.]+ --> [\d:.]+\]\s*', '', text).strip()
 
-                ref_clean = info.get("clean_ref")
+                ref_clean = info.get("whisper_ref") or info.get("clean_ref")
                 if ref_clean and text:
                     wer_val = _wer(ref_clean, text)
                     detail = f"STT {dur:.1f}s | WER={wer_val:.2f} | {text[:80]}"

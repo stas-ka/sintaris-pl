@@ -282,7 +282,9 @@ def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
 
         result = subprocess.run(
             [WHISPER_BIN, "-m", WHISPER_MODEL, "-f", tmp_path,
-             "-l", "ru", "--no-timestamps", "-otxt"],
+             "-l", "ru", "--no-timestamps", "-otxt",
+             "--entropy-thold", "1.8",   # reject hallucinated output
+             "--no-speech-thold", "0.6"],  # reject silence/noise segments
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=60,
@@ -628,6 +630,16 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                                  _t(chat_id, "note_updated", title=_escape_md(edit_title)),
                                  parse_mode="Markdown",
                                  reply_markup=_notes_menu_keyboard(chat_id))
+            return
+
+        # ── Voice input during calendar-add flow ──────────────────────────────
+        if _cur_mode == "calendar" and not _is_guest(chat_id):
+            _clean_text = re.sub(r'\[\?([^\]]*)\]', r'\1', text).strip()
+            _safe_edit(chat_id, msg.message_id,
+                       f"🎤 _{_escape_md(_clean_text)}_",
+                       parse_mode="Markdown")
+            from bot_calendar import _finish_cal_add  # noqa: PLC0415  deferred — no circular at runtime
+            _finish_cal_add(chat_id, _clean_text)
             return
 
         # ── Voice note commands (intercept before LLM) ────────────────────────
