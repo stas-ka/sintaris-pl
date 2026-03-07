@@ -4,10 +4,11 @@
 
 ```
 picoclaw/
-  src/                   ← Python application source files
-  setup/                 ← installation & fix shell scripts
+  src/                   ← ALL target-side sources (Python, shell, services, tests)
+    setup/               ← installation & fix shell scripts (run on Pi)
     services/            ← systemd .service unit files
-  tests/hw/              ← hardware test & diagnostic scripts
+    tests/               ← hardware test & diagnostic scripts
+  backup/device/         ← sanitized Pi config snapshot
   doc/                   ← architecture and design documentation
   .credentials/          ← secrets ONLY (never scripts or code)
   .env                   ← remote host connection vars (gitignored)
@@ -23,7 +24,7 @@ picoclaw/
 | `client_secret_*.json` | OAuth2 client secret |
 
 **Never place scripts, Python files, `.sh` files, or service units in `.credentials/`.**  
-Python app source goes in `src/`. Shell scripts go in `setup/`. Systemd units go in `setup/services/`.
+All target-side sources go in `src/`. Shell scripts go in `src/setup/`. Systemd units go in `src/services/`. Hardware tests go in `src/tests/`.
 
 ---
 
@@ -229,8 +230,8 @@ RB-TalkingPI mic
 | Local file | Location on Pi | Description |
 |---|---|---|
 | `src/voice_assistant.py` | `~/.picoclaw/voice_assistant.py` | Main daemon |
-| `setup/setup_voice.sh` | run via `/tmp/` | Full install script |
-| `setup/services/picoclaw-voice.service` | `/etc/systemd/system/` | systemd unit |
+| `src/setup/setup_voice.sh` | run via `/tmp/` | Full install script |
+| `src/services/picoclaw-voice.service` | `/etc/systemd/system/` | systemd unit |
 | _(downloaded)_ | `~/.picoclaw/vosk-model-small-ru/` | 48MB Russian STT model |
 | _(downloaded)_ | `/usr/local/bin/piper` | TTS engine |
 | _(downloaded)_ | `~/.picoclaw/ru_RU-irina-medium.onnx` | 66MB Russian voice |
@@ -240,7 +241,7 @@ RB-TalkingPI mic
 1. Copy files and run software install:
 ```bat
 pscp -pw "$HOSTPWD" src\voice_assistant.py stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "$HOSTPWD" setup\setup_voice.sh stas@OpenClawPI:/tmp/setup_voice.sh
+pscp -pw "$HOSTPWD" src\setup\setup_voice.sh stas@OpenClawPI:/tmp/setup_voice.sh
 plink -pw "$HOSTPWD" -batch stas@OpenClawPI "echo $HOSTPWD | sudo -S bash /tmp/setup_voice.sh"
 ```
 
@@ -334,7 +335,7 @@ plink -pw "$HOSTPWD" -batch stas@OpenClawPI "node /path/to/your/script.js"
 - Remote host credentials (host/user/pwd) are also in `.env`.
 - The `.credentials/` directory and `.env` are in `.gitignore`.
 - `.credentials/` contains **only** secret/credential files — never scripts, `.py`, `.sh`, or `.service` files.
-- Python source files belong in `src/`. Shell setup scripts belong in `setup/`. Systemd units belong in `setup/services/`.
+- All target-side sources belong in `src/`. Shell setup scripts go in `src/setup/`. Systemd units go in `src/services/`. Hardware tests go in `src/tests/`.
 - The remote OS is Linux (Raspberry Pi 3 B+ — hostname `openclawpi`, arm64 / aarch64 architecture).
 - `python3`, `npm`, `node`, and `curl` are available on the remote host.
 - `node_modules` path for picoclaw: `/home/stas/.npm-global/lib/node_modules/picoclaw`
