@@ -1,0 +1,6 @@
+# Voice regression test results are saved here as timestamped JSON files.
+# Each run generates: YYYY-MM-DD_HH-MM-SS.json
+# The baseline: baseline.json  (set with --set-baseline flag)
+#
+# These files are gitignored so local Pi results don't pollute the repo.
+# Check in baseline.json manually when you establish a known-good reference.

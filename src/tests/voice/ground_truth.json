@@ -1,0 +1,28 @@
+{
+  "_note": "Ground truth for voice regression tests. raw_vosk_ref = Vosk output with [?word] confidence markers. clean_ref = after stripping markers (what the user sees).",
+  "fixtures": {
+    "audio_2026-03-07_15-59-36.ogg": {
+      "description": "Russian speech — question about stomach discomfort, ~7s, mono 48 kHz Opus",
+      "raw_vosk_ref": "[?неё] желудок полно знаю чем помочь мне в этом [?может] ты знаешь как мне решить эту проблему есть какая-то [?возможность] легко [?освободите] желудок без всяких больших усилий",
+      "clean_ref": "неё желудок полно знаю чем помочь мне в этом может ты знаешь как мне решить эту проблему есть какая-то возможность легко освободите желудок без всяких больших усилий",
+      "max_wer": 0.30,
+      "_wer_note": "30% WER tolerance — enough to catch model swap or severe decode regression, lenient enough for normal Vosk variance"
+    },
+    "audio_2026-03-07_10-31-29.ogg": {
+      "description": "Russian speech — unknown content, timing-only fixture",
+      "raw_vosk_ref": null,
+      "clean_ref": null,
+      "max_wer": null
+    }
+  },
+  "latency_thresholds": {
+    "_note": "Absolute upper bounds on Pi 3 B+ (pessimistic). Regression baseline (relative) is stored in results/baseline.json.",
+    "decode_max_s": 5.0,
+    "vad_max_s": 2.0,
+    "stt_vosk_max_s": 40.0,
+    "tts_short_max_s": 80.0,
+    "tts_must_produce_bytes": true
+  },
+  "regression_tolerance_pct": 30,
+  "test_tts_text": "Привет! Это тест синтеза речи. Всё работает."
+}

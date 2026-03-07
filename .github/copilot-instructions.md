@@ -32,6 +32,69 @@ Do **not** ask if there is nothing to commit (e.g. commit was already done in th
 
 ---
 
+### Voice regression tests — MANDATORY before committing voice changes
+
+**Run `test_voice_regression.py` on the Pi whenever any of these files change:**
+
+| File / module | Why |
+|---|---|
+| `src/bot_voice.py` | Core voice pipeline — STT, TTS, VAD, confidence stripping |
+| `src/bot_config.py` | Voice constants: `VOICE_SAMPLE_RATE`, `TTS_MAX_CHARS`, `STT_CONF_THRESHOLD`, model paths |
+| `src/bot_access.py` | `_escape_tts()` — text cleaning before Piper synthesis |
+| `src/setup/setup_voice.sh` | Installs models/binaries — model change affects WER + latency |
+
+**Deploy test assets once** (only needed when fixtures change):
+```bat
+pscp -pw "%HOSTPWD%" src\tests\test_voice_regression.py stas@OpenClawPI:/home/stas/.picoclaw/tests/
+pscp -pw "%HOSTPWD%" src\tests\voice\ground_truth.json  stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
+pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
+```
+
+**Run tests on Pi:**
+```bat
+rem Standard run (after any voice-related change)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+
+rem Verbose (print per-test detail)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --verbose"
+
+rem Save as new baseline (run this after a confirmed-good deployment)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --set-baseline"
+
+rem Run a single test group by name (e.g. only TTS tests)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test tts"
+
+rem Compare two saved result files
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --compare 2026-03-07_17-00-00.json 2026-03-10_10-00-00.json"
+```
+
+**Rules:**
+- If tests show `FAIL` → fix before committing.  
+- If tests show `WARN` (regression >30% slower than baseline) → investigate; if intentional, update baseline with `--set-baseline`.  
+- `SKIP` is acceptable only for optional features (Whisper, VAD) not yet installed.  
+- After fixing a voice bug, always run tests + paste the summary table in the commit message.
+- The baseline (`tests/voice/results/baseline.json`) lives on the Pi, not in git. Re-establish it after each Pi re-image or hardware upgrade.
+
+**Tests covered:**
+
+| ID | Test | What it checks |
+|---|---|---|
+| T01 | `model_files_required` | Vosk model, Piper binary, .onnx, .onnx.json, ffmpeg all present |
+| T02 | `model_files_optional` | Whisper binary, whisper model, piper-low present (SKIP if absent) |
+| T03 | `piper_json_present` | `.onnx.json` config alongside every `.onnx` in use |
+| T04 | `tmpfs_model_complete` | Both `.onnx` + `.onnx.json` in `/dev/shm/piper/` when tmpfs_model enabled |
+| T05 | `ogg_decode` | ffmpeg decodes OGG fixtures to S16LE PCM; measures latency |
+| T06 | `vad_filter` | WebRTC VAD strips non-speech frames; measures retained fraction + latency |
+| T07 | `vosk_stt` | Vosk transcribes fixture audio; WER ≤ 30% vs ground truth; measures latency |
+| T08 | `confidence_strip` | `[?word] → word` regex is exact (7 test cases) |
+| T09 | `tts_escape` | `_escape_tts()` removes emoji + Markdown before Piper (6 cases) |
+| T10 | `tts_piper` | Piper synthesizes Russian test text; measures latency |
+| T11 | `tts_ffmpeg_encode` | ffmpeg encodes PCM → OGG Opus; non-empty output |
+| T12 | `whisper_stt` | whisper.cpp transcribes; WER ≤ 40% vs ground truth (SKIP if binary absent) |
+| T13 | `regression_check` | All timings within 30% of saved baseline |
+
+---
+
 ## Workspace Layout
 
 ```
