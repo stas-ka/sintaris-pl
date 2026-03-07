@@ -121,7 +121,7 @@ LAST_DIGEST_FILE = os.environ.get("LAST_DIGEST_FILE",
                                    os.path.expanduser("~/.picoclaw/last_digest.txt"))
 
 # Bot version — bump this string with every deployment so admins get notified
-BOT_VERSION           = "2026.3.15"
+BOT_VERSION           = "2026.3.15-rc1"
 RELEASE_NOTES_FILE    = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
