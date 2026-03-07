@@ -271,13 +271,27 @@ Never use class instances — the bot is single-threaded sequential handlers.
 
 ## 10. Deploying After Changes
 
-```bat
-rem Copy bot + companion files
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\release_notes.json   stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\strings.json         stas@OpenClawPI:/home/stas/.picoclaw/
+### Full deploy (all bot modules — required for first-time or major refactor)
 
-rem Restart and verify
+```bat
+pscp -pw "%HOSTPWD%" src\bot_config.py src\bot_state.py src\bot_instance.py stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_access.py src\bot_users.py src\bot_voice.py    stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_admin.py  src\bot_handlers.py                  stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py                                stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\release_notes.json  src\strings.json                stas@OpenClawPI:/home/stas/.picoclaw/
+```
+
+### Incremental deploy (only changed files)
+
+```bat
+rem Example: only bot_admin.py + release notes changed
+pscp -pw "%HOSTPWD%" src\bot_admin.py stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\release_notes.json stas@OpenClawPI:/home/stas/.picoclaw/
+```
+
+### Restart and verify
+
+```bat
 plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
 ```
 

@@ -1,14 +1,403 @@
 # Telegram Menu Bot — Code Map
 
-**File:** `src/telegram_menu_bot.py`  
-**Version:** 2026.3.19  
-**Total lines:** ~2734
+**Architecture:** 9-module split (refactored from monolith v2026.3.19)  
+**Entry point:** `src/telegram_menu_bot.py` (~250 lines — handlers + `main()` only)  
+**Version:** 2026.3.19
 
-Use this map to jump directly to any function without searching.
+Use this map to locate any function by module. All `bot_*.py` files live in `src/`.
+
+## Module Dependency Chain (no circular imports)
+
+```
+bot_config → bot_state → bot_instance → bot_access → bot_users
+    → bot_voice → bot_admin → bot_handlers → telegram_menu_bot
+```
 
 ---
 
-## Constants & Globals (lines 1–322)
+## Module Overview
+
+| Module | Lines | Responsibility |
+|---|---|---|
+| `bot_config.py` | ~120 | Constants, env loading, logging setup — no deps |
+| `bot_state.py` | ~110 | Mutable runtime dicts, voice_opts/dynamic_users I/O |
+| `bot_instance.py` | ~12 | `bot = TeleBot(...)` singleton |
+| `bot_access.py` | ~375 | Access control, i18n, keyboards, text utils, picoclaw LLM |
+| `bot_users.py` | ~160 | Registration + notes file I/O (pure, no Telegram API) |
+| `bot_voice.py` | ~280 | Full voice pipeline: STT/TTS/VAD + pending TTS tracker |
+| `bot_admin.py` | ~310 | Admin panel: guests, reg, voice opts, release notes, LLM |
+| `bot_handlers.py` | ~160 | User handlers: digest, chat, system, notes UI |
+| `telegram_menu_bot.py` | ~250 | Entry point: handlers + `main()` |
+
+## bot_config.py — Constants & Configuration
+
+No imports from other `bot_*` modules. Root of the dependency tree.
+
+| Symbol / Function | Purpose |
+|---|---|
+| `BOT_VERSION` | `"YYYY.M.D"` — bump on every user-visible change |
+| `BOT_TOKEN` | Telegram bot token from `bot.env` |
+| `ALLOWED_USERS` | `set[int]` — full-access chat IDs |
+| `ADMIN_USERS` | `set[int]` — admin chat IDs |
+| `PICOCLAW_BIN` | `/usr/bin/picoclaw` |
+| `PICOCLAW_CONFIG` | `~/.picoclaw/config.json` |
+| `ACTIVE_MODEL_FILE` | `~/.picoclaw/active_model.txt` |
+| `PIPER_BIN` | `/usr/local/bin/piper` |
+| `PIPER_MODEL` | `~/.picoclaw/ru_RU-irina-medium.onnx` |
+| `PIPER_MODEL_TMPFS` | `/dev/shm/piper/...` (RAM-disk copy) |
+| `PIPER_MODEL_LOW` | `~/.picoclaw/ru_RU-irina-low.onnx` |
+| `WHISPER_BIN` | `/usr/local/bin/whisper-cpp` |
+| `WHISPER_MODEL` | `~/.picoclaw/ggml-tiny.bin` |
+| `VOSK_MODEL_PATH` | `~/.picoclaw/vosk-model-small-ru/` |
+| `NOTES_DIR` | `~/.picoclaw/notes/` |
+| `_PENDING_TTS_FILE` | `~/.picoclaw/pending_tts.json` |
+| `_VOICE_OPTS_DEFAULTS` | All 10 voice-opt flags (all `False`) |
+| `_load_env_file(path)` | Parse `KEY=VALUE` file → `os.environ` |
+| `log` | `logging.getLogger("pico-tgbot")` |
+
+---
+
+## bot_state.py — Mutable Runtime State
+
+Imports: `bot_config` only.
+
+| Symbol / Function | Purpose |
+|---|---|
+| `_user_mode` | `dict[int, str]` — `None` / `'chat'` / `'system'` / `'voice'` / … |
+| `_pending_cmd` | `dict[int, str]` — confirmed bash command awaiting `run:` |
+| `_user_lang` | `dict[int, str]` — `'ru'` / `'en'` per chat_id |
+| `_user_audio` | `dict[int, bool]` — audio on/off per user (opt `user_audio_toggle`) |
+| `_pending_note` | `dict[int, dict]` — multi-step note creation state |
+| `_pending_llm_key` | `dict[int, str]` — waiting for LLM API key input |
+| `_vosk_model_cache` | `None` or loaded `vosk.Model` singleton |
+| `_persistent_piper_proc` | `None` or keepalive `subprocess.Popen` |
+| `_voice_opts` | Live `dict` loaded from `voice_opts.json` |
+| `_dynamic_users` | `set[int]` — runtime-approved guest users |
+| `_load_voice_opts()` | Load `voice_opts.json` → merge with defaults |
+| `_save_voice_opts()` | Persist `_voice_opts` to disk |
+| `_load_dynamic_users()` | Load `users.json` |
+| `_save_dynamic_users()` | Persist `_dynamic_users` to disk |
+
+---
+
+## bot_instance.py — Bot Singleton
+
+Imports: `bot_config` only.
+
+| Symbol | Purpose |
+|---|---|
+| `bot` | `telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")` — shared by all modules |
+
+---
+
+## bot_access.py — Core Utilities
+
+Imports: `bot_config`, `bot_state`, `bot_instance`.
+
+### Access control
+
+| Function | Purpose |
+|---|---|
+| `_is_allowed(chat_id)` | True if admin, full user, or approved guest |
+| `_is_admin(chat_id)` | True if in `ADMIN_USERS` |
+| `_is_guest(chat_id)` | True if runtime-added (not in static lists) |
+| `_deny(chat_id)` | Send "⛔ Access denied" message |
+
+### i18n
+
+| Function | Purpose |
+|---|---|
+| `_load_strings(path)` | Load `strings.json` |
+| `_set_lang(chat_id, from_user)` | Cache best-supported language (`ru` / `en`) |
+| `_lang(chat_id)` | Get cached language for chat_id |
+| `_t(chat_id, key, **kwargs)` | Get translated string by key |
+
+### Language detection
+
+| Function | Purpose |
+|---|---|
+| `_detect_text_lang(text)` | Heuristic: Cyrillic ratio → `'ru'` / `'en'` / `None` |
+| `_resolve_lang(chat_id, user_text)` | Priority chain: detected → TG lang → Russian |
+| `_with_lang(chat_id, user_text)` | Prepend LLM language instruction |
+| `_with_lang_voice(chat_id, stt_text)` | Same + hint for low-confidence words `[?word]` |
+
+### Text utilities
+
+| Function | Purpose |
+|---|---|
+| `_escape_tts(text)` | Strip emoji + Markdown before Piper TTS |
+| `_escape_md(text)` | Escape `*_`[`` for Telegram Markdown v1 |
+| `_truncate(text, limit=3800)` | Truncate to Telegram message limit |
+| `_safe_edit(chat_id, msg_id, text, ...)` | Edit message, ignore "not modified" errors |
+| `_run_subprocess(cmd, timeout, env)` | Run command, return `(rc, output)` |
+
+### LLM integration
+
+| Function | Purpose |
+|---|---|
+| `_get_active_model()` | Read active model name from `active_model.txt` |
+| `_clean_picoclaw_output(text)` | Strip log lines, printf wrappers, timestamps |
+| `_ask_picoclaw(prompt, timeout)` | Call `picoclaw agent -m "..."`, return clean text |
+
+### Keyboards / UI
+
+| Function | Purpose |
+|---|---|
+| `_menu_keyboard(chat_id)` | Main menu — filtered by role |
+| `_back_keyboard()` | Single `🔙 Menu` button |
+| `_voice_back_keyboard(chat_id)` | Back + optional 🔊/🔇 audio toggle |
+| `_confirm_keyboard(cmd_hash)` | ✅ Run / ❌ Cancel for system commands |
+| `_send_menu(chat_id, greeting)` | Reset mode and send the main menu |
+
+---
+
+## bot_users.py — Data Layer
+
+Pure functions — no Telegram API calls. Imports: `bot_config` only.
+
+### Registration
+
+| Function | Purpose |
+|---|---|
+| `_load_registrations()` | Load `registrations.json` |
+| `_save_registrations(regs)` | Persist registrations |
+| `_find_registration(chat_id)` | Return reg dict or `None` |
+| `_upsert_registration(chat_id, username, name, status)` | Create or update registration |
+| `_set_reg_status(chat_id, status)` | Set `pending` / `approved` / `blocked` |
+| `_get_pending_registrations()` | Return list of pending regs |
+| `_is_blocked_reg(chat_id)` | True if blocked |
+| `_is_pending_reg(chat_id)` | True if pending |
+
+### Notes file I/O
+
+| Function | Purpose |
+|---|---|
+| `_slug(title)` | `"My Title"` → `"my_title"` (safe filename) |
+| `_notes_user_dir(chat_id)` | `~/.picoclaw/notes/<chat_id>/` — created if missing |
+| `_list_notes_for(chat_id)` | `[{slug, title, mtime}]` sorted newest-first |
+| `_load_note_text(chat_id, slug)` | Return note content or `None` |
+| `_save_note_file(chat_id, slug, content)` | Write note `.md` file |
+| `_delete_note_file(chat_id, slug)` | Delete note, return `True` if existed |
+
+---
+
+## bot_voice.py — Voice Pipeline
+
+Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
+
+### Orphaned TTS tracker
+
+| Function | Purpose |
+|---|---|
+| `_save_pending_tts(chat_id, msg_id)` | Record "Generating audio…" msg for restart cleanup |
+| `_clear_pending_tts(chat_id)` | Remove after msg is handled |
+| `_cleanup_orphaned_tts()` | On startup: edit orphaned msgs left by previous restart |
+
+### Vosk STT
+
+| Function | Purpose |
+|---|---|
+| `_get_vosk_model()` | Lazy-load Vosk Russian model singleton |
+
+### Piper TTS
+
+| Function | Purpose |
+|---|---|
+| `_piper_model_path()` | Priority: tmpfs → low model → medium (default) |
+| `_setup_tmpfs_model(enable)` | Copy / remove ONNX to/from `/dev/shm/piper/` |
+| `_warm_piper_cache()` | Pre-run Piper with `"."` input to warm ONNX page cache |
+| `_start_persistent_piper()` | Launch keepalive Piper subprocess (§5.3) |
+| `_stop_persistent_piper()` | Terminate keepalive subprocess |
+| `_tts_to_ogg(text)` | Piper → raw PCM → ffmpeg → OGG Opus bytes |
+
+### Before STT
+
+| Function | Purpose |
+|---|---|
+| `_vad_filter_pcm(raw_pcm, sample_rate)` | WebRTC VAD: strip non-speech frames (§5.3) |
+| `_stt_whisper(raw_pcm, sample_rate)` | whisper.cpp STT, returns transcript or `None` (§5.3) |
+
+### Session + pipeline
+
+| Function | Purpose |
+|---|---|
+| `_start_voice_session(chat_id)` | Set mode `'voice'`, show instructions |
+| `_handle_voice_message(chat_id, voice_obj)` | Full pipeline: OGG→PCM→[VAD]→[Whisper\|Vosk]→[NoteCmd\|LLM]→TTS→send |
+
+---
+
+## bot_admin.py — Admin Panel
+
+Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`, `bot_voice`.
+
+### Admin keyboard / entry
+
+| Function | Purpose |
+|---|---|
+| `_admin_keyboard()` | Admin inline keyboard (shows pending-reg count) |
+| `_handle_admin_menu(chat_id)` | Show admin panel |
+
+### Guest-user management
+
+| Function | Purpose |
+|---|---|
+| `_handle_admin_list_users(chat_id)` | List current dynamic guests |
+| `_start_admin_add_user(chat_id)` | Prompt for user ID to add |
+| `_finish_admin_add_user(admin_id, text)` | Validate + add to `_dynamic_users` |
+| `_start_admin_remove_user(chat_id)` | Prompt for user ID to remove |
+| `_finish_admin_remove_user(admin_id, text)` | Validate + remove from `_dynamic_users` |
+
+### Registration approval
+
+| Function | Purpose |
+|---|---|
+| `_handle_admin_pending_users(chat_id)` | Show pending regs with approve/block buttons |
+| `_do_approve_registration(admin_id, target_id)` | Approve + notify user |
+| `_do_block_registration(admin_id, target_id)` | Block + notify user |
+| `_notify_admins_new_registration(chat_id, username, name)` | Alert all admins with inline approve/block |
+
+### Voice-optimization menu
+
+| Function | Purpose |
+|---|---|
+| `_handle_voice_opts_menu(chat_id)` | Show all 10 toggles with current state |
+| `_handle_voice_opt_toggle(chat_id, key)` | Flip flag + save; side-effects: warm/persistent piper |
+
+### Release notes
+
+| Function | Purpose |
+|---|---|
+| `_load_release_notes()` | Load `release_notes.json` |
+| `_format_release_entry(entry, header)` | Format one entry as Telegram Markdown |
+| `_get_changelog_text(max_entries)` | Full or truncated changelog |
+| `_notify_admins_new_version()` | Notify once per `BOT_VERSION` on startup |
+| `_handle_admin_changelog(chat_id)` | Show full changelog in admin panel |
+
+### LLM switcher
+
+| Function | Purpose |
+|---|---|
+| `_set_active_model(model_name)` | Write chosen model to `active_model.txt` |
+| `_get_picoclaw_models()` | Read `model_list` from `config.json` |
+| `_handle_admin_llm_menu(chat_id)` | LLM selection keyboard |
+| `_handle_set_llm(chat_id, model_name)` | Apply selection + confirm |
+| `_get_shared_openai_key()` | First OpenAI `api_key` in `config.json` |
+| `_save_openai_apikey(api_key)` | Write key to all OpenAI entries + add catalog |
+| `_handle_openai_llm_menu(chat_id)` | OpenAI ChatGPT model submenu |
+| `_handle_llm_setkey_prompt(chat_id)` | Ask admin to paste API key |
+| `_handle_save_llm_key(chat_id, raw_key)` | Validate `sk-…` + save |
+
+---
+
+## bot_handlers.py — User Handlers
+
+Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
+
+### Notes UI
+
+| Function | Purpose |
+|---|---|
+| `_notes_menu_keyboard(chat_id)` | Notes submenu: Create / List / Back |
+| `_notes_list_keyboard(chat_id, notes)` | Per-note open/edit/delete buttons |
+| `_handle_notes_menu(chat_id)` | Show notes submenu |
+| `_handle_note_list(chat_id)` | List all notes |
+| `_start_note_create(chat_id)` | Begin creation — prompt for title |
+| `_handle_note_open(chat_id, slug)` | Show note read view |
+| `_start_note_edit(chat_id, slug)` | Begin edit — prompt for new content |
+| `_handle_note_delete(chat_id, slug)` | Delete + confirm |
+
+### Mail digest
+
+| Function | Purpose |
+|---|---|
+| `_handle_digest(chat_id)` | Show last digest + offer refresh |
+| `_refresh_digest(chat_id)` | Run `gmail_digest.py --stdout` in background |
+
+### System chat
+
+| Function | Purpose |
+|---|---|
+| `_handle_system_message(chat_id, user_text)` | NL → bash command via LLM → confirm gate |
+| `_execute_pending_cmd(chat_id)` | Run confirmed bash command on Pi |
+
+### Free chat
+
+| Function | Purpose |
+|---|---|
+| `_handle_chat_message(chat_id, user_text)` | Forward to picoclaw LLM, return reply |
+
+---
+
+## telegram_menu_bot.py — Entry Point
+
+Registers handlers and starts polling. All logic is imported from the modules above.
+
+| Handler | Telegram trigger | Purpose |
+|---|---|---|
+| `cmd_start(message)` | `/start` | Welcome or registration flow |
+| `cmd_menu(message)` | `/menu` | Show main menu |
+| `cmd_status(message)` | `/status` | Show bot/service status |
+| `callback_handler(call)` | Any inline button | Dispatcher for all `data=` keys |
+| `text_handler(message)` | Any text message | Route by `_user_mode` |
+| `voice_handler(message)` | Any voice note | Call `_handle_voice_message` |
+| `main()` | `__main__` | Startup side-effects + `bot.infinity_polling()` |
+
+---
+
+## Callback Data Key Reference
+
+All `data=` keys handled in `callback_handler()`:
+
+| Key / Prefix | Handler called |
+|---|---|
+| `menu` | `_send_menu` |
+| `digest` | `_handle_digest` |
+| `digest_refresh` | `_refresh_digest` |
+| `mode_chat` | set `_user_mode='chat'` |
+| `mode_system` | set `_user_mode='system'` |
+| `voice_session` | `_start_voice_session` |
+| `voice_audio_toggle` | toggle `_user_audio[cid]` |
+| `help` | send `help_text` / `help_text_admin` / `help_text_guest` |
+| `admin_menu` | `_handle_admin_menu` |
+| `admin_add_user` | `_start_admin_add_user` |
+| `admin_list_users` | `_handle_admin_list_users` |
+| `admin_remove_user` | `_start_admin_remove_user` |
+| `admin_pending_users` | `_handle_admin_pending_users` |
+| `reg_approve:<id>` | `_do_approve_registration` |
+| `reg_block:<id>` | `_do_block_registration` |
+| `admin_llm_menu` | `_handle_admin_llm_menu` |
+| `llm_select:<model>` | `_handle_set_llm` |
+| `openai_llm_menu` | `_handle_openai_llm_menu` |
+| `llm_setkey_openai` | `_handle_llm_setkey_prompt` |
+| `voice_opts_menu` | `_handle_voice_opts_menu` |
+| `voice_opt_toggle:<key>` | `_handle_voice_opt_toggle` |
+| `admin_changelog` | `_handle_admin_changelog` |
+| `menu_notes` | `_handle_notes_menu` |
+| `note_create` | `_start_note_create` |
+| `note_list` | `_handle_note_list` |
+| `note_open:<slug>` | `_handle_note_open` |
+| `note_edit:<slug>` | `_start_note_edit` |
+| `note_delete:<slug>` | `_handle_note_delete` |
+| `cancel` | clear pending cmd/note/mode |
+| `run:<hash>` | `_execute_pending_cmd` |
+
+---
+
+## Key Files on Pi (runtime)
+
+| File | Purpose |
+|---|---|
+| `~/.picoclaw/bot.env` | Secrets: `BOT_TOKEN`, `ALLOWED_USERS`, `ADMIN_USERS` |
+| `~/.picoclaw/voice_opts.json` | Persisted voice-opt flags |
+| `~/.picoclaw/pending_tts.json` | TTS orphan-cleanup tracker |
+| `~/.picoclaw/users.json` | Dynamically approved guest users |
+| `~/.picoclaw/registrations.json` | User registration records (pending/approved/blocked) |
+| `~/.picoclaw/active_model.txt` | Admin-selected LLM model name |
+| `~/.picoclaw/last_notified_version.txt` | Last `BOT_VERSION` admin was notified about |
+| `~/.picoclaw/notes/<chat_id>/<slug>.md` | Per-user note files |
+| `~/.picoclaw/config.json` | picoclaw config (model_list, agents) |
+| `~/.picoclaw/telegram_bot.log` | Bot log file |
+
 
 | Symbol | Line | Purpose |
 |---|---|---|
