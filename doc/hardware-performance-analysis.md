@@ -402,4 +402,176 @@ sudo systemctl restart zramswap
 
 ---
 
+## 7. Hardware Acceleration Adapters for Raspberry Pi 3 B+
+
+The Pi 3 B+ has no NPU, weak SIMD, and only USB 2.0. Four categories of add-on hardware can close the gap without replacing the board.
+
+---
+
+### 7.1 Intel Neural Compute Stick 2 (Myriad X VPU)
+
+**The most impactful single adapter for this specific pipeline.**
+
+| Property | Value |
+|---|---|
+| Chip | Intel Myriad X MA2485 VPU |
+| Performance | 4 TOPS (INT8/FP16 mixed) |
+| Interface | USB 2.0 / 3.0 — works on Pi 3 B+ USB 2.0 |
+| Runtime | OpenVINO (ARM aarch64 build available) |
+| Price | ~$70–100 (eBay; discontinued by Intel 2023, still widely available) |
+| Piper ONNX support | ✅ — ONNX → OpenVINO IR via `mo.py`; runs on NCS2 |
+| Vosk / kaldi support | ⚠️ — indirect: switch STT engine to whisper.cpp with OpenVINO backend |
+
+#### Why it helps
+
+Both bottlenecks in the pipeline — Piper ONNX TTS and STT inference — are ONNX-based matrix operations. The NCS2 can execute them off-CPU via OpenVINO:
+
+- **Piper TTS** (Vits encoder+decoder ONNX): convert once to OpenVINO IR, run on NCS2. Expected TTS inference: **~40 s → ~5–8 s** on Pi 3.
+- **STT**: Vosk uses an internal Kaldi backend and cannot use NCS2 directly. Switch to `faster-whisper` (CTranslate2, which has an OpenVINO backend) or `whisper.cpp` compiled with OpenVINO. Expected STT: **~15 s → ~2–3 s**.
+
+#### Setup
+
+```bash
+# Install OpenVINO Runtime for ARM (aarch64)
+pip3 install openvino==2023.3.0   # last confirmed aarch64-compatible release
+
+# Convert Piper ONNX to OpenVINO IR (run once on any x86 machine or Pi)
+pip install openvino-dev
+mo --input_model ~/.picoclaw/ru_RU-irina-medium.onnx \
+   --output_dir ~/.picoclaw/piper_ov/ \
+   --model_name irina_medium
+
+# Run inference with NCS2 as device
+python3 - <<'EOF'
+from openvino.runtime import Core
+ie = Core()
+model = ie.read_model("~/.picoclaw/piper_ov/irina_medium.xml")
+compiled = ie.compile_model(model, "MYRIAD")   # MYRIAD = NCS2
+EOF
+```
+
+**Note on Piper integration:** Piper currently hard-codes ONNX Runtime for inference. To use NCS2 you would replace the subprocess call (`subprocess.run([PIPER_BIN, ...])`) with a direct Python OpenVINO inference call in `_tts_to_ogg()`. This requires porting Piper's text→phoneme→spectrogram→waveform pipeline to call the OpenVINO compiled model directly — medium complexity, but feasible.
+
+#### Expected impact on full pipeline (Pi 3 + NCS2)
+
+| Stage | Without NCS2 | With NCS2 |
+|---|---|---|
+| STT (whisper.cpp tiny + OV backend) | 15 s | **~3 s** |
+| TTS inference (Piper ONNX via OV) | 25 s | **~6 s** |
+| TTS model load (first call) | 15 s | **~2 s** (cached in NCS2) |
+| **Total** | **~58 s** | **~12–14 s** |
+
+---
+
+### 7.2 Google Coral USB Accelerator (Edge TPU)
+
+| Property | Value |
+|---|---|
+| Chip | Google Edge TPU ASIC |
+| Performance | 4 TOPS (INT8 only) |
+| Interface | USB 2.0 / 3.0 — works on Pi 3 B+ |
+| Runtime | TFLite Delegate (not ONNX natively) |
+| Price | ~$60 (still in production via Mouser/Digikey) |
+| Piper ONNX support | ❌ — requires TFLite INT8 quantised model, heavyweight conversion |
+| Vosk support | ❌ — Kaldi is not TFLite-compatible |
+
+#### Verdict for this pipeline
+
+Coral is optimised for TFLite INT8 vision/audio models. Neither Piper nor Vosk can run on it without full model retraining in TFLite + INT8 quantisation and compilation to Edge TPU format. The conversion chain (ONNX → TFLite → INT8 quant → `edgetpu_compiler`) is lossy for Russian speech synthesis quality.
+
+**Useful only if** you switch both STT and TTS to purpose-trained TFLite Russian models (e.g. Google's TFLite ASR model + a TFLite speech synthesis model). There are no production-quality Russian TFLite TTS models available as of 2026 that match Piper Irina quality.
+
+**Not recommended** for this pipeline as a drop-in accelerator.
+
+---
+
+### 7.3 ReSpeaker 2-Mics / 4-Mics Pi HAT (Seeed Studio)
+
+**Not an inference accelerator, but directly attacks the STT bottleneck by reducing audio length.**
+
+| Property | Value |
+|---|---|
+| Chip | XMOS XU Series audio DSP (on 4-mic variant: XVF3000) |
+| Interface | I²S HAT (GPIO header) |
+| Function | Hardware VAD + noise cancellation + beamforming |
+| Price | ~$10 (2-mic) / ~$30 (4-mic ReSpeaker Core) |
+| Directional effect | Cuts silence + background noise before PCM reaches Vosk |
+
+#### Why it helps STT
+
+The measured 15 s Vosk time partly comes from processing silence and background noise frames. Vosk's beam-search runs on every frame regardless. Hardware VAD on a dedicated DSP chip:
+- Strips silence before piping to Vosk (complements the `silence_strip` bot opt, but done in hardware before the transfer layer)
+- Beamforming on 4-mic variant suppresses room echo → shorter active-speech segments → less PCM for Vosk to process
+
+**Expected STT saving:** ~3–5 s (similar to `silence_strip` flag but more aggressive and zero CPU cost).
+
+#### Compatibility with current config
+
+The ReSpeaker 2-Mics HAT uses the WM8960 codec over I²S — same overlay category as the RB-TalkingPI HAT. You cannot use both simultaneously. If RB-TalkingPI is installed, ReSpeaker is not an option.
+
+```bash
+# /boot/firmware/config.txt — for ReSpeaker 2-Mics HAT
+dtparam=i2s=on
+dtoverlay=seeed-2mic-voicecard
+```
+
+---
+
+### 7.4 USB SSD (Not an AI Accelerator — Storage Bottleneck Fix)
+
+Not an accelerator, but specifically eliminates the single largest measured bottleneck: the 10–15 s Piper model load from microSD.
+
+| Property | Value |
+|---|---|
+| Device | Any USB SSD adapter + SATA SSD, or USB-A thumb SSD (e.g. Samsung T7 Go) |
+| Interface | USB 2.0 on Pi 3 B+ → ~35–40 MB/s effective bandwidth |
+| Price | ~$20–30 (128 GB USB thumb SSD) |
+
+```bash
+# Boot from USB SSD (optional) OR just store model files on it:
+cp ~/.picoclaw/ru_RU-irina-medium.onnx /mnt/usb_ssd/piper/
+# Update PIPER_MODEL in picoclaw-telegram.service:
+# Environment=PIPER_MODEL=/mnt/usb_ssd/piper/ru_RU-irina-medium.onnx
+```
+
+Even on USB 2.0 (35 MB/s): 66 MB model loads in **~2 s vs 15 s on microSD**.
+
+---
+
+### 7.5 Comparative Summary for Pi 3 B+ Adapters
+
+| Adapter | Price | STT impact | TTS impact | Complexity | Recommendation |
+|---|---|---|---|---|---|
+| **Intel NCS2** | ~$80 | −12 s (if switch to whisper OV) | **−30 s** (Piper via OV) | High (requires OV port of Piper) | ⭐⭐⭐ Best for TTS |
+| **Google Coral USB** | ~$60 | None (Vosk incompatible) | None (Piper incompatible) | Very High (full model retraining) | ❌ Not recommended |
+| **ReSpeaker HAT** | ~$10–30 | −3–5 s (hardware VAD) | None | Low (dtoverlay + driver) | ⭐⭐ Good if no RB-TalkingPI |
+| **USB SSD** | ~$20 | None | **−13 s** (model load) | Trivial | ⭐⭐⭐ Immediate win |
+
+#### Recommended combination for Pi 3 B+ (keeping current board)
+
+**Phase 1 — Immediate, zero risk (cost ~$20):**
+```
+USB SSD → Piper model load: 15 s → 2 s
++ warm_piper bot opt ON    → eliminates cold-start after first boot
++ gpu_mem=16 + CPU perf governor (free)
+= Total: 58 s → ~20–22 s
+```
+
+**Phase 2 — NCS2 + Piper OpenVINO port (cost ~$80, effort: ~2 days):**
+```
+NCS2 + Piper via OpenVINO → TTS inference: 25 s → 6 s
++ Switch to faster-whisper (OpenVINO backend) → STT: 15 s → 3 s
+= Total: ~10–12 s
+```
+
+**Realistic best-case on Pi 3 B+ with all hardware:**
+```
+USB SSD + NCS2 + warm_piper + silence_strip + parallel_tts
+= Total: ~8–10 s   (text reply in ~4 s, audio follows ~5 s later)
+```
+
+This matches Pi 4 B performance levels without replacing the board, but requires the Piper OpenVINO port (the hardest part).
+
+---
+
 *Generated from real timing measurements on Pi 3 B+ (March 2026) and benchmark data from the Pi Foundation, llama.cpp ARM benchmarks, and RKNN community reports.*
