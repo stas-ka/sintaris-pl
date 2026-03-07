@@ -1,5 +1,27 @@
 # Copilot Instructions — picoclaw workspace
 
+## Developer Reference Documents — READ FIRST
+
+Before writing any code for this project, consult these documents in `doc/`:
+
+| Document | When to use |
+|---|---|
+| [`doc/bot-code-map.md`](../doc/bot-code-map.md) | **Always** — find any function by name/line before searching the file. Maps every function in `telegram_menu_bot.py` with its line number and purpose. Also lists all callback `data=` keys and all runtime files on the Pi. |
+| [`doc/dev-patterns.md`](../doc/dev-patterns.md) | **Before adding any feature** — exact copy-paste patterns for: voice opts, callbacks, multi-step input flows, i18n strings, access guards, versioning, subprocess calls, session state, deployment, service files. |
+| [`doc/architecture.md`](../doc/architecture.md) | When adding components, services, or changing the pipeline. Keep it in sync. |
+| [`doc/hardware-performance-analysis.md`](../doc/hardware-performance-analysis.md) | Before choosing algorithms, models, or suggesting hardware upgrades. |
+| [`TODO.md`](../TODO.md) | **Session start** — check what is planned/in-progress/done before proposing work. |
+
+### Quick rules from the patterns doc
+
+- Voice opts: 6-step pattern — defaults `False`, toggle row, opt-in side-effect in `_handle_voice_opt_toggle()` and `main()`
+- New callback: handler function + button in keyboard + dispatch branch in `handle_callback()`
+- Version bump: always `BOT_VERSION = "YYYY.M.D"` + prepend entry in `release_notes.json` (never use `\_` in JSON — invalid escape)
+- Deploy: pscp all changed files → plink restart → verify `Version : X.Y.Z` in journal
+- Strings: always add to both `"ru"` and `"en"` in `src/strings.json`
+
+---
+
 ## Workspace Layout
 
 ```
@@ -9,7 +31,7 @@ picoclaw/
     services/            ← systemd .service unit files
     tests/               ← hardware test & diagnostic scripts
   backup/device/         ← sanitized Pi config snapshot
-  doc/                   ← architecture and design documentation
+  doc/                   ← architecture, design, code map, and dev patterns
   .credentials/          ← secrets ONLY (never scripts or code)
   .env                   ← remote host connection vars (gitignored)
 ```
