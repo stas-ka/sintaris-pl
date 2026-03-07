@@ -1,0 +1,76 @@
+{
+  "session": {
+    "dm_scope": "per-channel-peer"
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "~/.picoclaw/workspace",
+      "restrict_to_workspace": true,
+      "provider": "",
+      "model": "openrouter-auto",
+      "max_tokens": 32768,
+      "max_tool_iterations": 50
+    }
+  },
+  "channels": {
+    "whatsapp": { "enabled": false, "bridge_url": "ws://localhost:3001", "use_native": false, "session_store_path": "", "allow_from": [], "reasoning_channel_id": "" },
+    "telegram": {
+      "enabled": false,
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "proxy": "",
+      "allow_from": ["${TELEGRAM_CHAT_ID}"],
+      "group_trigger": {},
+      "typing": { "enabled": true },
+      "placeholder": { "enabled": true, "text": "Thinking... 💭" },
+      "reasoning_channel_id": ""
+    },
+    "feishu":   { "enabled": false, "app_id": "", "app_secret": "", "encrypt_key": "", "verification_token": "", "allow_from": [], "group_trigger": {}, "reasoning_channel_id": "" },
+    "discord":  { "enabled": false, "token": "", "allow_from": [], "mention_only": false, "group_trigger": {}, "typing": {}, "placeholder": {}, "reasoning_channel_id": "" },
+    "maixcam":  { "enabled": false, "host": "0.0.0.0", "port": 18790, "allow_from": [], "reasoning_channel_id": "" },
+    "slack":    { "enabled": false, "bot_token": "", "app_token": "", "allow_from": [], "group_trigger": {}, "typing": {}, "placeholder": {}, "reasoning_channel_id": "" },
+    "pico":     { "enabled": false, "token": "", "ping_interval": 30, "read_timeout": 60, "write_timeout": 10, "max_connections": 100, "allow_from": [], "placeholder": {} }
+  },
+  "model_list": [
+    { "model_name": "openrouter-auto",     "model": "openrouter/auto",                     "api_base": "https://openrouter.ai/api/v1",                          "api_key": "${OPENROUTER_API_KEY}" },
+    { "model_name": "glm-4.7",             "model": "zhipu/glm-4.7",                       "api_base": "https://open.bigmodel.cn/api/paas/v4",                  "api_key": "" },
+    { "model_name": "gpt-5.2",             "model": "openai/gpt-5.2",                      "api_base": "https://api.openai.com/v1",                             "api_key": "" },
+    { "model_name": "claude-sonnet-4.6",   "model": "anthropic/claude-sonnet-4.6",         "api_base": "https://api.anthropic.com/v1",                          "api_key": "" },
+    { "model_name": "deepseek-chat",       "model": "deepseek/deepseek-chat",              "api_base": "https://api.deepseek.com/v1",                           "api_key": "" },
+    { "model_name": "gemini-2.0-flash",    "model": "gemini/gemini-2.0-flash-exp",         "api_base": "https://generativelanguage.googleapis.com/v1beta",      "api_key": "" },
+    { "model_name": "qwen-plus",           "model": "qwen/qwen-plus",                      "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",     "api_key": "" },
+    { "model_name": "moonshot-v1-8k",      "model": "moonshot/moonshot-v1-8k",             "api_base": "https://api.moonshot.cn/v1",                            "api_key": "" },
+    { "model_name": "llama-3.3-70b",       "model": "groq/llama-3.3-70b-versatile",        "api_base": "https://api.groq.com/openai/v1",                        "api_key": "" },
+    { "model_name": "openrouter-gpt-5.2",  "model": "openrouter/openai/gpt-5.2",           "api_base": "https://openrouter.ai/api/v1",                          "api_key": "" },
+    { "model_name": "nemotron-4-340b",     "model": "nvidia/nemotron-4-340b-instruct",     "api_base": "https://integrate.api.nvidia.com/v1",                   "api_key": "" },
+    { "model_name": "cerebras-llama-3.3-70b", "model": "cerebras/llama-3.3-70b",          "api_base": "https://api.cerebras.ai/v1",                            "api_key": "" },
+    { "model_name": "doubao-pro",          "model": "volcengine/doubao-pro-32k",           "api_base": "https://ark.cn-beijing.volces.com/api/v3",              "api_key": "" },
+    { "model_name": "deepseek-v3",         "model": "shengsuanyun/deepseek-v3",            "api_base": "https://api.shengsuanyun.com/v1",                       "api_key": "" },
+    { "model_name": "llama3",              "model": "ollama/llama3",                       "api_base": "http://localhost:11434/v1",                              "api_key": "ollama" },
+    { "model_name": "mistral-small",       "model": "mistral/mistral-small-latest",        "api_base": "https://api.mistral.ai/v1",                             "api_key": "" },
+    { "model_name": "local-model",         "model": "vllm/custom-model",                  "api_base": "http://localhost:8000/v1",                              "api_key": "" }
+  ],
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790
+  },
+  "tools": {
+    "web": {
+      "brave":     { "enabled": false, "api_key": "", "max_results": 5 },
+      "tavily":    { "enabled": false, "api_key": "", "base_url": "", "max_results": 0 },
+      "duckduckgo":{ "enabled": true,  "max_results": 5 },
+      "perplexity":{ "enabled": false, "api_key": "", "max_results": 5 }
+    },
+    "cron":  { "exec_timeout_minutes": 5 },
+    "exec":  { "enable_deny_patterns": true, "custom_deny_patterns": null },
+    "skills": {
+      "registries": {
+        "clawhub": { "enabled": true, "base_url": "https://clawhub.ai", "auth_token": "", "search_path": "", "skills_path": "", "download_path": "", "timeout": 0, "max_zip_size": 0, "max_response_size": 0 }
+      },
+      "max_concurrent_searches": 2,
+      "search_cache": { "max_size": 50, "ttl_seconds": 300 }
+    },
+    "media_cleanup": { "enabled": true, "max_age_minutes": 30, "interval_minutes": 5 }
+  },
+  "heartbeat": { "enabled": true, "interval": 30 },
+  "devices":   { "enabled": false, "monitor_usb": true }
+}

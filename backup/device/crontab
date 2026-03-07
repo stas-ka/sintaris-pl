@@ -1,0 +1,5 @@
+# Crontab — user: stas
+# Captured: 2026-03-07
+
+# Daily Gmail digest at 19:00 Pi local time
+0 19 * * * python3 /home/stas/.picoclaw/gmail_digest.py >> /home/stas/.picoclaw/digest.log 2>&1

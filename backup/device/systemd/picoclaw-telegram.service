@@ -1,0 +1,21 @@
+[Unit]
+Description=Picoclaw Telegram Menu Bot
+After=network-online.target picoclaw-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stas
+WorkingDirectory=/home/stas/.picoclaw
+ExecStart=/usr/bin/python3 /home/stas/.picoclaw/telegram_menu_bot.py
+Restart=on-failure
+RestartSec=15
+Environment=PYTHONUNBUFFERED=1
+Environment=BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+Environment=ALLOWED_USER=${TELEGRAM_CHAT_ID}
+Environment=PICOCLAW_BIN=/usr/bin/picoclaw
+Environment=DIGEST_SCRIPT=/home/stas/.picoclaw/gmail_digest.py
+Environment=LAST_DIGEST_FILE=/home/stas/.picoclaw/last_digest.txt
+
+[Install]
+WantedBy=multi-user.target
