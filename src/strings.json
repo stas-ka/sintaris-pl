@@ -29,7 +29,7 @@
     "gen_audio":       "🔊 _Генерирую аудио…_",
     "audio_caption":   "🔊 Аудио ответ",
     "audio_error":     "_Аудио не отправлено: {e}_",
-    "audio_na":        "_(Аудио недоступно — piper не установлен)_",
+    "audio_na":        "_(Аудио недоступно — ошибка TTS)_",
     "audio_interrupted": "_(Генерация аудио прервана — бот был перезапущен)_",
 
     "reg_waiting":      "⏳ *Заявка отправлена.*\n\nВаш запрос на доступ передан администратору. Как только вас одобрят, вы получите уведомление.",
@@ -112,7 +112,7 @@
     "gen_audio":       "🔊 _Generating audio…_",
     "audio_caption":   "🔊 Audio reply",
     "audio_error":     "_Audio not sent: {e}_",
-    "audio_na":        "_(Audio unavailable — piper not installed)_",
+    "audio_na":        "_(Audio unavailable — TTS error)_",
     "audio_interrupted": "_(Audio generation interrupted — bot was restarted)_",
 
     "reg_waiting":      "⏳ *Registration request sent.*\n\nYour request has been forwarded to the admin. You will be notified as soon as it is approved.",

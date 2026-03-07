@@ -13,6 +13,7 @@ Responsibilities:
 import io
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -142,6 +143,14 @@ def _setup_tmpfs_model(enable: bool) -> None:
             os.makedirs("/dev/shm/piper", exist_ok=True)
             log.info(f"[VoiceOpt] tmpfs_model: copying {PIPER_MODEL} → {PIPER_MODEL_TMPFS}…")
             shutil.copy2(PIPER_MODEL, PIPER_MODEL_TMPFS)
+            # Piper also requires the .onnx.json config file in the same directory
+            _json_src = PIPER_MODEL + ".json"
+            _json_dst = PIPER_MODEL_TMPFS + ".json"
+            if os.path.exists(_json_src):
+                shutil.copy2(_json_src, _json_dst)
+                log.info(f"[VoiceOpt] tmpfs_model: also copied {_json_src}")
+            else:
+                log.warning(f"[VoiceOpt] tmpfs_model: model config not found: {_json_src}")
             size_mb = os.path.getsize(PIPER_MODEL_TMPFS) / 1024 / 1024
             log.info(f"[VoiceOpt] tmpfs_model: done ({size_mb:.0f} MB in RAM, ~10× faster reads)")
         except Exception as e:
@@ -154,6 +163,9 @@ def _setup_tmpfs_model(enable: bool) -> None:
             if os.path.exists(PIPER_MODEL_TMPFS):
                 os.unlink(PIPER_MODEL_TMPFS)
                 log.info(f"[VoiceOpt] tmpfs_model: removed {PIPER_MODEL_TMPFS}")
+            _json_dst = PIPER_MODEL_TMPFS + ".json"
+            if os.path.exists(_json_dst):
+                os.unlink(_json_dst)
         except Exception as e:
             log.warning(f"[VoiceOpt] tmpfs_model: remove failed: {e}")
 
@@ -588,8 +600,11 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             return
 
         # ── Show transcript, call picoclaw ─────────────────────────────────────
+        # Strip [?word] markers for display — clean text shown to user,
+        # but full text with markers is sent to LLM so it can fill gaps.
+        _clean_text = re.sub(r'\[\?([^\]]*)\]', r'\1', text).strip()
         _safe_edit(chat_id, msg.message_id,
-                   _t(chat_id, "you_said", text=text),
+                   _t(chat_id, "you_said", text=_clean_text),
                    parse_mode="Markdown")
 
         _ts = time.time()
