@@ -109,6 +109,10 @@ ADMIN_USERS: set[int] = _parse_admin_users()
 USERS_FILE       = os.environ.get("USERS_FILE",
                        os.path.expanduser("~/.picoclaw/users.json"))
 PICOCLAW_BIN     = os.environ.get("PICOCLAW_BIN", "/usr/bin/picoclaw")
+PICOCLAW_CONFIG  = os.environ.get("PICOCLAW_CONFIG",
+                       os.path.expanduser("~/.picoclaw/config.json"))
+ACTIVE_MODEL_FILE = os.environ.get("ACTIVE_MODEL_FILE",
+                       os.path.expanduser("~/.picoclaw/active_model.txt"))
 DIGEST_SCRIPT    = os.environ.get("DIGEST_SCRIPT",
                                    os.path.expanduser("~/.picoclaw/gmail_digest.py"))
 LAST_DIGEST_FILE = os.environ.get("LAST_DIGEST_FILE",
@@ -339,8 +343,13 @@ def _run_subprocess(cmd: list[str], timeout: int = 60,
 def _ask_picoclaw(prompt: str, timeout: int = 60) -> Optional[str]:
     """Call picoclaw agent -m and return clean response text (no log lines)."""
     try:
+        cmd = [PICOCLAW_BIN, "agent"]
+        active_model = _get_active_model()
+        if active_model:
+            cmd += ["--model", active_model]
+        cmd += ["-m", prompt]
         result = subprocess.run(
-            [PICOCLAW_BIN, "agent", "-m", prompt],
+            cmd,
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=timeout,
@@ -397,6 +406,7 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton("➕  Add user",     callback_data="admin_add_user"),
         InlineKeyboardButton("📋  List users",   callback_data="admin_list_users"),
         InlineKeyboardButton("🗑   Remove user",  callback_data="admin_remove_user"),
+        InlineKeyboardButton("🤖  Switch LLM",   callback_data="admin_llm_menu"),
         InlineKeyboardButton("🔙  Menu",          callback_data="menu"),
     )
     return kb
@@ -492,7 +502,79 @@ def _finish_admin_remove_user(admin_id: int, text: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Digest
+# LLM model switcher
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_active_model() -> str:
+    """Return the admin-selected model name, or '' to use config.json default."""
+    try:
+        return Path(ACTIVE_MODEL_FILE).read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+def _set_active_model(model_name: str) -> None:
+    """Persist the chosen model name (empty string = reset to config default)."""
+    try:
+        Path(ACTIVE_MODEL_FILE).write_text(model_name, encoding="utf-8")
+        log.info(f"[LLM] Active model set to: '{model_name or '(config default)'}'")
+    except Exception as e:
+        log.error(f"[LLM] Failed to write {ACTIVE_MODEL_FILE}: {e}")
+
+
+def _get_picoclaw_models() -> list[dict]:
+    """Read model_list from picoclaw config.json."""
+    try:
+        cfg = json.loads(Path(PICOCLAW_CONFIG).read_text(encoding="utf-8"))
+        return cfg.get("model_list", [])
+    except Exception as e:
+        log.warning(f"[LLM] Cannot read picoclaw config: {e}")
+        return []
+
+
+def _handle_admin_llm_menu(chat_id: int) -> None:
+    """Show LLM selection keyboard with available models from picoclaw config."""
+    models = _get_picoclaw_models()
+    current = _get_active_model()
+
+    if not models:
+        bot.send_message(chat_id, "⚠️ Cannot read picoclaw config.json.",
+                         reply_markup=_admin_keyboard())
+        return
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    for m in models:
+        name = m.get("model_name", "")
+        if not name:
+            continue
+        has_key = bool(m.get("api_key", "").strip())
+        is_current = (name == current) or (not current and name == "openrouter-auto")
+        prefix = "✅" if is_current else ("✔️" if has_key else "⚠️")
+        kb.add(InlineKeyboardButton(f"{prefix}  {name}", callback_data=f"llm_select:{name}"))
+
+    kb.add(InlineKeyboardButton("\u21a9️  Reset to default", callback_data="llm_select:"))
+    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+
+    current_label = current or "(config default: openrouter-auto)"
+    bot.send_message(
+        chat_id,
+        f"🤖 *Switch LLM*\n\nCurrent: `{current_label}`\n\n"
+        f"✅ = currently active\n✔️ = API key configured\n⚠️ = API key missing in config.json\n\n"
+        f"_To use ChatGPT directly, add your OpenAI API key to the `gpt-5.2` entry in `~/.picoclaw/config.json`._\n"
+        f"_`openrouter-auto` already works and can route to GPT via your OpenRouter key._",
+        parse_mode="Markdown",
+        reply_markup=kb,
+    )
+
+
+def _handle_set_llm(chat_id: int, model_name: str) -> None:
+    """Apply LLM model selection and confirm to user."""
+    _set_active_model(model_name)
+    if model_name:
+        msg = f"✅ *LLM switched to:* `{model_name}`\n\n_All subsequent chat, system, and voice requests will use this model._"
+    else:
+        msg = f"↩️ *LLM reset to config default* (`openrouter-auto`)."
+    bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard())
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_digest(chat_id: int) -> None:
@@ -1003,6 +1085,19 @@ def callback_handler(call):
             bot.send_message(cid, _t(cid, "admin_only"))
         else:
             _start_admin_remove_user(cid)
+
+    elif data == "admin_llm_menu":
+        if not _is_admin(cid):
+            bot.send_message(cid, _t(cid, "admin_only"))
+        else:
+            _handle_admin_llm_menu(cid)
+
+    elif data.startswith("llm_select:"):
+        if not _is_admin(cid):
+            bot.send_message(cid, _t(cid, "admin_only"))
+        else:
+            model_name = data[len("llm_select:"):]
+            _handle_set_llm(cid, model_name)
 
     elif data == "cancel":
         _pending_cmd.pop(cid, None)
