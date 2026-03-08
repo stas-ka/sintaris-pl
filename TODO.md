@@ -210,6 +210,10 @@ With `persistent_piper` + `tmpfs_model` + `piper_low_model` all ON: estimated **
 - [ ] Pi 5 + NVMe upgrade — ~8 s total; full local LLM viable
 - [ ] USB SSD — eliminates Piper model cold-start (15 s → 2 s), zero code changes
 
+### 6.5 Recovery Testing 🔲
+
+- [ ] Test full recovery on a different hardware device — flash image backup, restore all services, verify bot + voice + calendar come up cleanly on fresh Pi
+
 ---
 
 ## 7. Demo Features for Client Presentations 🔲
