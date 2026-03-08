@@ -4,6 +4,26 @@
 
 ---
 
+## 0. Known Bugs 🐛
+
+### 0.1 Profile menu button does nothing 🔲
+
+**Observed (2026-03-08):** Tapping 👤 Profile sends no reply — the button silently fails.
+
+**Code location:** `src/bot_handlers.py` `_handle_profile()`, dispatched in `telegram_menu_bot.py` line ~269.
+
+**Likely cause:** The handler does a deferred import `from bot_mail_creds import _load_creds` inside
+the function body. If `bot_mail_creds` raises an import-time error (e.g. missing dependency or module
+path issue on the Pi), the entire function throws and `telebot` swallows the exception silently.
+
+**Fix steps:**
+- [ ] Wrap the deferred import + `_load_creds()` call in a `try/except` so a failed mail-creds load
+      degrades gracefully (show profile without email line, not silence)
+- [ ] Add fallback: if import fails, set `email_line = _t(chat_id, "profile_no_email")` and log warning
+- [ ] Verify on Pi: `journalctl -u picoclaw-telegram -n 50 | grep -i profile` to see actual exception
+
+---
+
 ## 1. Access & Security
 
 ### 1.1 Telegram User Registration Workflow ✅
