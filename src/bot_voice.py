@@ -473,11 +473,17 @@ def _handle_note_read_aloud(chat_id: int, slug: str) -> None:
 
             for i, chunk in enumerate(chunks):
                 ogg = _tts_to_ogg(chunk, _trim=False)
-                if ogg:
-                    label = (f"🔊 {note_title} ({i + 1}/{total})"
-                             if total > 1 else f"🔊 {note_title}")
+                if not ogg:
+                    log.warning(f"[NotesTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
+                    continue
+                sent += 1
+                label = (f"🔊 {note_title} ({sent}/{total})"
+                         if total > 1 else f"🔊 {note_title}")
+                try:
                     bot.send_voice(chat_id, _io.BytesIO(ogg), caption=label)
-                    sent += 1
+                except Exception as _send_err:
+                    log.warning(f"[NotesTTS] send_voice chunk {i + 1}/{total} failed: {_send_err}")
+                    sent -= 1  # was not actually delivered
 
             if sent:
                 bot.delete_message(chat_id, msg.message_id)
@@ -532,11 +538,17 @@ def _handle_digest_tts(chat_id: int) -> None:
 
             for i, chunk in enumerate(chunks):
                 ogg = _tts_to_ogg(chunk, _trim=False)
-                if ogg:
-                    label = (f"{caption} ({i + 1}/{total})"
-                             if total > 1 else caption)
+                if not ogg:
+                    log.warning(f"[DigestTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
+                    continue
+                sent += 1
+                label = (f"{caption} ({sent}/{total})"
+                         if total > 1 else caption)
+                try:
                     bot.send_voice(chat_id, _io.BytesIO(ogg), caption=label)
-                    sent += 1
+                except Exception as _send_err:
+                    log.warning(f"[DigestTTS] send_voice chunk {i + 1}/{total} failed: {_send_err}")
+                    sent -= 1  # was not actually delivered
 
             if sent:
                 bot.delete_message(chat_id, msg.message_id)
@@ -589,7 +601,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         _timing: dict[str, float] = {}
 
         def _fmt_timing() -> str:
-            if not VOICE_TIMING_DEBUG or not _timing:
+            if not (VOICE_TIMING_DEBUG or opts.get("voice_timing_debug")) or not _timing:
                 return ""
             return "\n\n⏱ " + " · ".join(f"{k} {v:.0f}s" for k, v in _timing.items())
 

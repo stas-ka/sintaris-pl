@@ -9,8 +9,10 @@ Responsibilities:
 """
 
 import hashlib
+import re
 import threading
 import time
+import unicodedata
 from pathlib import Path
 from typing import Optional
 
@@ -270,8 +272,97 @@ _SYSTEM_PROMPT = (
     "You are a Linux system assistant running on a Raspberry Pi 3 B+ "
     "(aarch64, Raspberry Pi OS Bookworm). The user will describe a task. "
     "Respond with ONLY a single safe bash command that accomplishes the task. "
-    "No explanation, no markdown fences, no commentary — just the bare command."
+    "No explanation, no markdown fences, no commentary — just the bare command. "
+    "Do NOT use emojis, icons, bullet points, or any decorative characters."
 )
+
+# Broad emoji / pictograph regex — matches everything the Unicode Standard
+# classifies as emoji / symbol characters.
+# NOTE: \u requires 4 hex digits, \U requires exactly 8 hex digits.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F000-\U0002BFFF"   # All supplementary symbol/emoji blocks (SMP+SIP)
+    "\U00002300-\U000027FF"   # Misc technical, Dingbats, weather symbols
+    "\U00002B00-\U00002BFF"   # Misc symbols and arrows
+    "\U0000FE00-\U0000FE0F"   # Variation selectors (VS1-VS16)
+    "\U0000FE0F"               # Variation selector-16 (emoji style)
+    "\U0000200D"               # Zero-width joiner
+    "\U0000200B"               # Zero-width space
+    "\U000020D0-\U000020FF"   # Combining diacritical marks for symbols
+    "]",
+    re.UNICODE,
+)
+
+# Unicode categories to treat as non-printable/symbol — extend beyond So/Sk
+_SYMBOL_CATEGORIES = frozenset(("So", "Sk", "Sm", "Cf", "Cs", "Co", "Mn", "Me"))
+
+
+def _strip_symbols(text: str) -> str:
+    """Remove emoji and Unicode symbol chars from *text* using regex + category."""
+    text = _EMOJI_RE.sub("", text)
+    return "".join(ch for ch in text if unicodedata.category(ch) not in _SYMBOL_CATEGORIES)
+
+
+def _extract_bash_cmd(raw: str) -> str:
+    """
+    Robustly extract a bare bash command from LLM output that may include:
+      - markdown code fences (```bash ... ``` or plain ``` ... ```)
+      - single surrounding backticks
+      - emoji/pictograph prefixes  (e.g. '🦞 ls /home')
+      - bracket-wrapped decoration (e.g. '[🦞] ls /home' → '[] ls' → 'ls')
+      - explanatory prose before/after the actual command
+
+    Strategy:
+      1. Strip triple-backtick fences.
+      2. Strip single surrounding backticks.
+      3. Remove all emoji / symbol characters (_strip_symbols).
+      4. Strip residual leading bracket-decoration (e.g. '[] ', '[*] ').
+      5. Walk lines: return the first non-empty line whose first word is
+         plain ASCII and passes the bash-command heuristic.
+      6. Fallback: return the symbol-stripped text.
+    """
+    text = raw.strip()
+
+    # 1. Extract content from code fence: ```(bash|sh|shell)?\n...\n```
+    fence_match = re.search(
+        r"```(?:bash|sh|shell|cmd|console)?\s*\n?(.*?)\n?```",
+        text, re.DOTALL | re.IGNORECASE,
+    )
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    # 2. Strip single surrounding backticks
+    if text.startswith("`") and text.endswith("`") and len(text) > 2:
+        text = text[1:-1].strip()
+
+    # 3. Remove emoji / symbol characters everywhere
+    text = _strip_symbols(text).strip()
+
+    # 4. Strip residual leading bracket decoration left after emoji removal
+    #    e.g. "[] ls -la" → "ls -la",  "[*] find ..." → "find ..."
+    text = re.sub(r'^[\[({<][^\])}>\n]{0,6}[\])}>\s]\s*', '', text).strip()
+
+    # 5. Walk lines; pick the first non-empty one that looks like a bash command.
+    #    Heuristic: starts with an allowed shell character AND first word is
+    #    plain ASCII (no embedded Unicode / emoji survivors).
+    _CMD_START    = re.compile(r'^[a-zA-Z0-9/_~.$\-\'"\\]')
+    _PROSE_REJECT = re.compile(r'^[A-Z][a-z]+ ')  # "Sure, here is…" / "Here's the…"
+    for line in text.splitlines():
+        line = _strip_symbols(line).strip()
+        # Per-line bracket decoration strip
+        line = re.sub(r'^[\[({<][^\])}>\n]{0,6}[\])}>\s]\s*', '', line).strip()
+        if not line:
+            continue
+        if _PROSE_REJECT.match(line) and len(line.split()) > 4:
+            continue
+        if _CMD_START.match(line):
+            first_word = line.split()[0]
+            # First word (the executable) must be plain ASCII
+            if all(ord(c) < 128 for c in first_word):
+                return line
+
+    # 6. Fallback: return whatever is left after symbol stripping
+    return text.strip()
 
 
 def _handle_system_message(chat_id: int, user_text: str) -> None:
@@ -305,10 +396,16 @@ def _handle_system_message(chat_id: int, user_text: str) -> None:
                                   chat_id, msg.message_id)
             return
 
-        # Strip markdown fences the model might have added
-        cmd_clean = cmd_text.strip().lstrip("`").rstrip("`").strip()
-        if cmd_clean.startswith("bash\n"):
-            cmd_clean = cmd_clean[5:].strip()
+        # Extract the bare bash command — strip code fences, emoji, prose
+        cmd_clean = _extract_bash_cmd(cmd_text)
+        if not cmd_clean:
+            bot.edit_message_text(
+                "❌ Could not extract a valid command from the LLM response.\n"
+                f"Raw output: `{cmd_text[:200]}`",
+                chat_id, msg.message_id, parse_mode="Markdown",
+            )
+            log.warning(f"[SystemChat] empty cmd after extraction. raw={cmd_text[:200]}")
+            return
 
         cmd_hash = hashlib.md5(cmd_clean.encode()).hexdigest()[:8]
         _st._pending_cmd[chat_id] = cmd_clean
@@ -342,7 +439,19 @@ def _execute_pending_cmd(chat_id: int) -> None:
                             parse_mode="Markdown")
 
     def _run():
-        rc, output = _run_subprocess(["bash", "-c", cmd], timeout=30)
+        # Final safety net: strip any residual emoji/symbols from the command
+        # before execution — defence-in-depth in case the extraction missed any.
+        safe_cmd = _extract_bash_cmd(cmd)
+        if not safe_cmd:
+            bot.edit_message_text(
+                "❌ Command sanitization failed — refusing to run.",
+                chat_id, msg.message_id, reply_markup=_back_keyboard(),
+            )
+            log.warning(f"[SystemChat] refused to execute after sanitization: {cmd!r}")
+            return
+        if safe_cmd != cmd:
+            log.info(f"[SystemChat] sanitized cmd: {cmd!r} → {safe_cmd!r}")
+        rc, output = _run_subprocess(["bash", "-c", safe_cmd], timeout=30)
         if not output:
             output = "(no output)"
         status = "✅" if rc == 0 else f"⚠️ exit {rc}"

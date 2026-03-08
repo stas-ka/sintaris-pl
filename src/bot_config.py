@@ -79,7 +79,7 @@ MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.23"
+BOT_VERSION        = "2026.3.24"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
@@ -138,6 +138,7 @@ _VOICE_OPTS_DEFAULTS: dict = {
     "whisper_stt":       False,   # §5.3: use whisper.cpp tiny instead of Vosk
     "piper_low_model":   False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
     "persistent_piper":  False,   # §5.3: keep warm Piper process alive (ONNX hot)
+    "voice_timing_debug": False,  # show per-stage ⏱ timings in voice replies
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -347,6 +347,7 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
         ("whisper_stt",       f"{_flag('whisper_stt')}  Whisper STT (whisper.cpp)  ·  +accuracy"),
         ("piper_low_model",   f"{_flag('piper_low_model')}  Piper low model  ·  −13s TTS"),
         ("persistent_piper",  f"{_flag('persistent_piper')}  Persistent Piper process  ·  ONNX hot"),
+        ("voice_timing_debug",f"{_flag('voice_timing_debug')}  Timing debug  ·  show ⏱ per stage in replies"),
     ]
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))
