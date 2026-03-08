@@ -231,6 +231,162 @@ responses that are not particularly long. This is reproduced with all `warm_pipe
       `TTS_CHUNK_CHARS` so real-time voice replies are capped at ~30 s speech (≈ 300 chars)
 - [ ] Consider auto-truncating at last sentence boundary within the char limit (avoid mid-sentence cuts)
 
+### 5.7 Voice Pipeline — Detailed Analysis & Current Implementation 🔲
+
+**Purpose:** Full audit of the STT and TTS subsystems to identify architectural weak points,
+confirm what is actually measured on Pi 3 B+, and produce a prioritised optimization backlog
+that goes beyond the surface-level timing captured in §5.6.
+
+---
+
+#### 5.7.1 STT — Current Implementation (`bot_voice.py` + `bot_config.py`)
+
+**Primary path: Vosk** (`vosk-model-small-ru-0.22`, 48 MB)
+
+| Property | Value | Source |
+|---|---|---|
+| Sample rate | `VOICE_SAMPLE_RATE = 16000` Hz | `bot_config.py:108` |
+| Chunk size | `VOICE_CHUNK_SIZE = 4000` frames (250 ms at 16 kHz) | `bot_config.py:109` |
+| Silence timeout | `VOICE_SILENCE_TIMEOUT = 4.0` s | `bot_config.py:110` |
+| Session hard cap | `VOICE_MAX_DURATION = 30.0` s | `bot_config.py:111` |
+| Confidence filter | strips `[?word]` → `word` in output | `bot_voice.py` |
+| Model loading | Lazy singleton on first voice message; ~180 MB RAM | `_get_vosk_model()` |
+| KaldiRecognizer | `SetWords(True)` for word-level timestamps | --|
+
+**Pre-processing pipeline (before Vosk):**
+
+```
+Telegram OGG Opus
+  → ffmpeg: -ar 16000 -ac 1 -f s16le         (OGG → S16LE 16 kHz mono)
+           + silenceremove filter (if silence_strip)
+           + -ar 8000 (if low_sample_rate)
+  → [VAD filter]  (if vad_prefilter opt)       ← webrtcvad aggressiveness=2, 30 ms frames
+  → Vosk KaldiRecognizer
+```
+
+**ffmpeg silence_strip filter** (opt `silence_strip`):
+```
+silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB
+             :stop_periods=-1:stop_duration=0.1:stop_threshold=-50dB
+```
+Combined with `highpass=f=200,dynaudnorm` — normalises volume before VAD/Vosk.
+
+**Optional path: whisper.cpp** (opt `whisper_stt=true`, `ggml-base.bin`, 142 MB)
+
+| Property | Value | Source |
+|---|---|---|
+| Invocation | subprocess with `--threads 4 --suppress-blank --entropy-thold 1.8 --no-speech-thold 0.6` | `_stt_whisper()` |
+| Temp file | WAV written to `/tmp/*.wav`, deleted after | `_stt_whisper()` |
+| Hallucination guard | Discards if `word_count < duration_s * 2.0` (min 2 words) | `bot_voice.py:~285` |
+| Fallback | Returns `None` → caller falls back to Vosk | `_handle_voice_message()` |
+| WER (Russian) | ~18% vs Vosk ~25% | `doc/architecture.md §5.4` |
+| Latency on Pi 3 | ~30–35 s for 5 s audio | measured |
+
+**Known STT issues:**
+- [ ] Vosk model loaded into 180 MB RAM — competes with Piper 150 MB during voice reply synthesis
+- [ ] No streaming decode to Telegram bot (full audio must arrive before STT starts)
+- [ ] `low_sample_rate` opt (8 kHz) saves ~7 s STT but degrades WER noticeably on Russian fricatives
+- [ ] Whisper temp WAV file written to SD-backed `/tmp` — ~0.5 s overhead per call; should use tmpfs
+- [ ] Hallucination threshold (2 words/s) is fixed — short commands ("да", "нет") always pass
+      regardless of content quality; needs per-length tuning
+
+---
+
+#### 5.7.2 TTS — Current Implementation (`_tts_to_ogg()` in `bot_voice.py`)
+
+**Engine: Piper TTS** (`ru_RU-irina-medium.onnx`, 66 MB ONNX Runtime)
+
+**Pipeline:**
+
+```
+text
+  → _escape_tts()           strip emoji, Markdown, ANSI codes
+  → trim to TTS_MAX_CHARS = 600 chars at sentence boundary (real-time path)
+  → subprocess.run(piper --model <path> --output-raw)
+        stdin: UTF-8 text
+        stdout: raw S16LE PCM at 22050 Hz mono
+  → subprocess.run(ffmpeg -f s16le -ar 22050 -ac 1
+                   -c:a libopus -b:a 24k -f ogg)
+        stdin: raw PCM
+        stdout: OGG Opus bytes
+  → bot.send_voice(BytesIO(ogg_bytes))
+```
+
+**Two separate subprocess.run() calls** (not a pipe) — deliberately avoids the classic
+`piper.stdout open → ffmpeg.stdin blocks on EOF` deadlock.
+
+**Model selection priority chain** (`_piper_model_path()`):
+
+| Priority | Condition | Model | Note |
+|---|---|---|---|
+| 1 | `tmpfs_model=true` AND `/dev/shm/piper/...onnx` exists | `/dev/shm/piper/...onnx` | ~10× faster reads |
+| 2 | `piper_low_model=true` AND `ru_RU-irina-low.onnx` exists | low model | ~half inference time |
+| 3 | default | `ru_RU-irina-medium.onnx` | microSD, ~15 s cold load |
+
+**Char cap constants:**
+
+| Constant | Value | Used by | Speech duration (Pi 3) |
+|---|---|---|---|
+| `TTS_MAX_CHARS` | 600 | real-time voice replies (`_trim=True`) | ~25 s |
+| `TTS_CHUNK_CHARS` | 1200 | "Read aloud" note/digest chunks (`_trim=False`) | ~55 s |
+
+**Text splitting for "Read aloud"** (`_split_for_tts()`):
+Prefers sentence boundaries `. ! ? ; \n` then whitespace fallback, then hard cut.
+Split result is delivered as N sequential `send_voice()` calls, each labelled `(1/N)`.
+
+**Keepalive option** (`persistent_piper`):
+Launches a long-running `piper --model ... --output-raw` process via `Popen` with stdin held open.
+This keeps the ONNX pages in the kernel page cache between calls.  Actual synthesis still uses fresh
+`subprocess.run()` calls — the keepalive process is never sent input.
+
+**Known TTS issues:**
+- [ ] `subprocess.run()` cold-loads ONNX from microSD every call when no warm opts are active → 15 s overhead
+- [ ] No `TTS_VOICE_MAX_CHARS` constant separate from `TTS_MAX_CHARS` — both real-time chat and voice
+      replies use the same 600-char cap (see §5.6)
+- [ ] `_trim=True` path clips at TTS_MAX_CHARS but "Read aloud" still synthesises full 1200-char chunks;
+      for the longest chunks (~1200 chars) inference time on Pi 3 is ~180–200 s
+- [ ] ffmpeg subprocess started fresh per TTS call — ~0.1 s overhead, avoidable with stdin pipe
+- [ ] OGG Opus target bitrate 24 kbit/s fixed — no voice-quality slider exposed to user
+- [ ] No SSML support — punctuation and emphasis are passed as plain text to Piper
+
+---
+
+#### 5.7.3 Measurement Plan — Items to Instrument
+
+Before optimizing further, add per-stage timing to `voice_timing_debug` output:
+
+| Stage | What to measure | How |
+|---|---|---|
+| ffmpeg OGG→PCM | wall time (currently missing from debug) | `t0 = time.monotonic()` bracket |
+| VAD filter | retained-frame % + wall time | already logged at DEBUG level |
+| Vosk decode | wall time, word count, confidence stats | `time.monotonic()` bracket |
+| Whisper decode | wall time, word count, hallucination rate | `time.monotonic()` bracket |
+| LLM call | wall time + token count estimate | already in timing debug |
+| `_escape_tts()` + char truncation | output char count, truncation applied? | add log line |
+| Piper subprocess start → first PCM byte | wall time (model load portion) | `time.monotonic()` bracket |
+| Piper inference (first byte to last byte) | wall time | `time.monotonic()` bracket |
+| ffmpeg PCM→OGG | wall time | `time.monotonic()` bracket |
+| OGG file size | bytes → kbit/s calculation | `len(ogg_bytes)` |
+
+- [ ] Add all missing timing probes to `_handle_voice_message()` under `if VOICE_TIMING_DEBUG`
+- [ ] Log char count going _into_ Piper so we can correlate input length with inference time
+- [ ] Collect 10-run timing sample on Pi 3 B+ for each STT/TTS path and populate a baseline table
+
+---
+
+#### 5.7.4 Actionable Improvements Backlog
+
+| Priority | Change | Module | Expected gain |
+|---|---|---|---|
+| 🔴 | Add `TTS_VOICE_MAX_CHARS = 300` constant; use for real-time voice path | `bot_config.py`, `_tts_to_ogg()` | TTS −50% for real-time |
+| 🔴 | Write Whisper temp WAV to `/dev/shm` (tmpfs) not `/tmp` | `_stt_whisper()` | STT −0.5 s I/O |
+| 🟡 | Unified timing debug: add missing stages (ffmpeg, Piper start vs inference) | `bot_voice.py` | Diagnosability |
+| 🟡 | Tune Whisper hallucination threshold per audio-length bracket | `_stt_whisper()` | Accuracy on short commands |
+| 🟡 | Add `STT_CONF_THRESHOLD` config constant for Vosk confidence strip (currently implicit) | `bot_config.py` | Tuneability |
+| 🟢 | Replace double subprocess.run with Popen pipe (piper→ffmpeg) | `_tts_to_ogg()` | TTS −0.1–0.3 s |
+| 🟢 | Expose OGG bitrate as voice opt (16/24/32 kbit/s) — lower = faster ffmpeg | `bot_config.py`, Voice Opts | Audio size −33% |
+| 🟢 | Re-use ffmpeg stdin pipe in persistent mode (like `persistent_piper`) | `bot_voice.py` | TTS −0.1 s |
+
 ---
 
 ## 6. Infrastructure & Operations
