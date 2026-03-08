@@ -37,15 +37,40 @@
 
 | Role | Permissions |
 |---|---|
-| **Admin** | Full system control — users, LLM providers, security policy |
-| **Developer** | Deploy/test features, bot restart; no security policy changes |
+| **Admin** | Configuration only — manage users, LLM providers, run system commands; cannot implement features |
+| **Developer** | Extend and maintain the assistant — special dev menu, LLM-assisted coding, restart, deploy, fix issues |
 | **User** | Chat, voice, notes, calendar, mail |
 | **Guest** | Limited until admin approves |
 
 - [ ] Implement role storage and enforcement
 - [ ] Admin-only commands gated by role check
-- [ ] Developer role: restart command available
 - [ ] Guest mode: only `/start` + "registration sent"
+
+### 1.3 Developer Role & Dev Menu 🔲
+
+**Concept:** Developer users get a dedicated 🛠 Developer menu that opens a specialised LLM chat session pre-primed with the bot's source code context and dev patterns. The LLM acts as a coding assistant — it can propose code changes, explain implementation options, and generate patches. The developer can then apply them and restart the bot, all from within Telegram.
+
+**Admin vs Developer distinction:**
+- **Admin** — operational control: add/remove users, switch LLM model, run a bash command, view logs. Cannot write new features.
+- **Developer** — full dev access: chat with Pico to extend/fix/implement; restart service; view and apply code patches.
+
+**Dev menu buttons:**
+| Button | Action |
+|---|---|
+| 💬 Dev Chat | LLM chat with source context injected (bot_config, bot_handlers, dev-patterns.md) |
+| 🔄 Restart Bot | `systemctl restart picoclaw-telegram` with confirmation gate |
+| 📋 View Log | Last 30 lines of `telegram_bot.log` |
+| 🐛 Last Error | Last ERROR/EXCEPTION line from journal |
+| 📂 File List | List `~/.picoclaw/*.py` with sizes + mtimes |
+
+- [ ] Add `DEVELOPER_USERS` set to `bot_config.py` (env var `DEVELOPER_USERS`)
+- [ ] Add `_is_developer(chat_id)` to `bot_access.py`
+- [ ] Add dev menu keyboard + `_handle_dev_menu()` to `bot_handlers.py`
+- [ ] Dev Chat: inject system prompt with `dev-patterns.md` + key source file snippets
+- [ ] Restart button: confirm gate → `systemctl restart picoclaw-telegram`
+- [ ] View Log / Last Error: `_run_subprocess(["journalctl", "-u", "picoclaw-telegram", "-n", "30"])`
+- [ ] File List: `os.listdir(PICOCLAW_DIR)` filtered to `*.py` with size + mtime
+- [ ] Add 🛠 Developer button to main menu (visible to developer role only)
 
 ### 1.2 Central Security Layer — MicoGuard 🔲
 
