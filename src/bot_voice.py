@@ -682,14 +682,19 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         # ── STT: whisper.cpp (§5.3) or Vosk (default / fallback) ─────────────
         _ts = time.time()
         text = ""
-        if opts.get("whisper_stt"):
+        whisper_used = opts.get("whisper_stt")
+        if whisper_used:
             text = _stt_whisper(raw_pcm, _srate) or ""
             if text:
                 log.debug(f"[WhisperSTT] transcript: {text[:80]}")
             else:
                 log.warning("[WhisperSTT] no result — falling back to Vosk")
 
-        if not text:
+        # Only load Vosk if: (a) Whisper not active, or (b) Whisper returned nothing.
+        # When whisper_stt=true, Vosk is skipped entirely if vosk_fallback opt is OFF
+        # — this saves ~180 MB RAM at the cost of no-reply on inaudible audio.
+        vosk_fallback_enabled = not whisper_used or opts.get("vosk_fallback", True)
+        if not text and vosk_fallback_enabled:
             STT_CONF_THRESHOLD = 0.65
             try:
                 import vosk as _vosk_lib

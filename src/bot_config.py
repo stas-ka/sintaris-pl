@@ -136,6 +136,7 @@ _VOICE_OPTS_DEFAULTS: dict = {
     "tmpfs_model":       False,   # #10: copy Piper ONNX to /dev/shm (RAM disk)
     "vad_prefilter":     False,   # §5.3: webrtcvad noise gate before Vosk STT
     "whisper_stt":       False,   # §5.3: use whisper.cpp tiny instead of Vosk
+    "vosk_fallback":     True,    # §5.3: fall back to Vosk when Whisper returns nothing (set False to save ~180 MB RAM)
     "piper_low_model":   False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
     "persistent_piper":  False,   # §5.3: keep warm Piper process alive (ONNX hot)
     "voice_timing_debug": False,  # show per-stage ⏱ timings in voice replies
