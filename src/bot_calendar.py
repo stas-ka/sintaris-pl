@@ -1,16 +1,20 @@
 """
-bot_calendar.py — Smart calendar with natural-language event add/cancel.
+bot_calendar.py — Smart calendar with natural-language event add/cancel/query.
 
 Dependencies: bot_config, bot_state, bot_instance, bot_access
 (bot_voice imported lazily inside functions to avoid circular imports)
 
 Features:
-  - Add events in free-form Russian or English via text or voice
+  - Add one OR multiple events from a single message (multi-event parsing)
   - LLM-based natural language date/time parsing
   - Countdown display in event list ("through 2д 3ч")
   - Reminder 15 min before event (text + optional TTS voice note)
   - Morning briefing at 08:00 with today's events (text + optional TTS)
   - Timer rescheduling on bot restart
+  - NL query: "events next week", "what's tomorrow?", "show March"
+  - Delete confirmation before removal
+  - Calendar console: free-form text commands (add/query/edit/delete)
+  - All mutations require explicit user confirmation
 """
 
 import json
@@ -148,6 +152,10 @@ def _calendar_keyboard(chat_id: int, events: list) -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton(
         "➕  " + ("Добавить событие" if lang == "ru" else "Add event"),
         callback_data="cal_add",
+    ))
+    kb.add(InlineKeyboardButton(
+        "💬  " + ("Консоль" if lang == "ru" else "Console"),
+        callback_data="cal_console",
     ))
     kb.add(InlineKeyboardButton(
         "🔙  " + ("Меню" if lang == "ru" else "Menu"),
@@ -306,7 +314,7 @@ def _start_cal_add(chat_id: int) -> None:
 
 
 def _finish_cal_add(chat_id: int, text: str) -> None:
-    """Parse user input via LLM → show confirmation card before saving."""
+    """Parse user input via LLM — extracts ONE or MULTIPLE events → confirmation."""
     lang = _st._user_lang.get(chat_id, "ru")
     _pending_cal.pop(chat_id, None)
     _st._user_mode.pop(chat_id, None)
@@ -314,22 +322,22 @@ def _finish_cal_add(chat_id: int, text: str) -> None:
     now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
     prompt = (
         f"Текущая дата и время: {now_iso}\n"
-        f"Задача: из текста ниже извлечь название события (title) и дату/время (dt).\n"
+        f"Задача: из текста извлечь ВСЕ события (может быть одно или несколько).\n"
         f"Правила:\n"
         f"- dt всегда в формате YYYY-MM-DDTHH:MM\n"
         f"- если дата не указана — используй сегодня\n"
         f"- если время не указано — используй 09:00\n"
         f"- «завтра» = следующий день, «послезавтра» = через 2 дня\n"
         f"- «через N минут/часов» = добавь N к текущему времени\n"
-        f"Если события нет — верни {{\"error\": \"no_event\"}}\n"
+        f"Если событий нет — верни {{\"events\": []}}\n"
         f"Ответь ТОЛЬКО валидным JSON без пояснений:\n"
-        f"{{\"title\": \"...\", \"dt\": \"YYYY-MM-DDTHH:MM\"}}\n\n"
+        f"{{\"events\": [{{\"title\": \"...\", \"dt\": \"YYYY-MM-DDTHH:MM\"}}, ...]}}\n\n"
         f"Текст: \"{text}\""
     )
 
     thinking_msg = bot.send_message(
         chat_id,
-        "⏳ " + ("Разбираю событие…" if lang == "ru" else "Parsing event…"),
+        "⏳ " + ("Разбираю событие(я)…" if lang == "ru" else "Parsing event(s)…"),
     )
     raw = _ask_picoclaw(prompt, timeout=30)
     try:
@@ -347,39 +355,60 @@ def _finish_cal_add(chat_id: int, text: str) -> None:
         return
 
     try:
-        json_match = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not json_match:
             raise ValueError("No JSON block found in LLM response")
         parsed = json.loads(json_match.group())
-        if "error" in parsed:
-            raise ValueError(f"LLM reported no event: {parsed}")
-        title = str(parsed.get("title", "")).strip()
-        dt_str = str(parsed.get("dt", "")).strip()
-        if not title or not dt_str:
-            raise ValueError("title or dt missing from parsed JSON")
-        dt = datetime.fromisoformat(dt_str)
+        events_raw = parsed.get("events", [])
+        if not events_raw:
+            raise ValueError("LLM returned empty events list")
+
+        drafts = []
+        for item in events_raw:
+            title = str(item.get("title", "")).strip()
+            dt_str = str(item.get("dt", "")).strip()
+            if not title or not dt_str:
+                continue
+            dt = datetime.fromisoformat(dt_str)
+            drafts.append({
+                "title":             title,
+                "dt_iso":            dt.strftime("%Y-%m-%dT%H:%M"),
+                "remind_before_min": 15,
+            })
+
+        if not drafts:
+            raise ValueError("No valid events parsed")
+
     except Exception as e:
         log.warning(f"[Cal] LLM parse failed for chat {chat_id}: {e}  raw={raw[:200]!r}")
         fail_msg = (
             "❌ Не смог разобрать дату. Напишите иначе, например:\n"
-            "_«5 апреля в 14:00 встреча с врачом»_"
+            "_«5 апреля в 14:00 встреча с врачом»_\n"
+            "_«завтра в 10 — команда, в 15 — врач»_"
             if lang == "ru" else
             "❌ Could not parse date. Try:\n"
-            "_«April 5 at 14:00 doctor appointment»_"
+            "_«April 5 at 14:00 doctor appointment»_\n"
+            "_«tomorrow 10am team, 3pm doctor»_"
         )
         bot.send_message(chat_id, fail_msg, parse_mode="Markdown",
                          reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
         return
 
-    # Store parsed data for confirmation / editing
-    _pending_cal[chat_id] = {
-        "step":              "confirm",
-        "title":             title,
-        "dt_iso":            dt.strftime("%Y-%m-%dT%H:%M"),
-        "remind_before_min": 15,
-    }
-
-    _show_cal_confirm(chat_id)
+    if len(drafts) == 1:
+        # Single event — use original confirm flow
+        _pending_cal[chat_id] = {
+            "step":              "confirm",
+            **drafts[0],
+        }
+        _show_cal_confirm(chat_id)
+    else:
+        # Multiple events — sequential confirmation
+        _pending_cal[chat_id] = {
+            "step":   "multi_confirm",
+            "events": drafts,
+            "idx":    0,
+        }
+        _show_cal_confirm_multi(chat_id)
 
 
 def _show_cal_confirm(chat_id: int) -> None:
@@ -413,6 +442,371 @@ def _show_cal_confirm(chat_id: int) -> None:
     )
     bot.send_message(chat_id, text, parse_mode="Markdown",
                      reply_markup=_cal_confirm_keyboard(chat_id))
+
+
+def _cal_confirm_keyboard_multi(chat_id: int, idx: int, total: int) -> InlineKeyboardMarkup:
+    """Keyboard for multi-event batch confirmation (N of M flow)."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(
+            "✅  " + ("Сохранить" if lang == "ru" else "Save"),
+            callback_data="cal_multi_save_one",
+        ),
+        InlineKeyboardButton(
+            "⏭  " + ("Пропустить" if lang == "ru" else "Skip"),
+            callback_data="cal_multi_skip",
+        ),
+    )
+    kb.add(InlineKeyboardButton(
+        "✅✅  " + ("Сохранить все" if lang == "ru" else "Save all"),
+        callback_data="cal_multi_save_all",
+    ))
+    kb.add(InlineKeyboardButton(
+        "❌  " + ("Отмена" if lang == "ru" else "Cancel"),
+        callback_data="cancel",
+    ))
+    return kb
+
+
+def _show_cal_confirm_multi(chat_id: int) -> None:
+    """Show confirmation card for current event in a multi-event batch."""
+    lang  = _st._user_lang.get(chat_id, "ru")
+    state = _pending_cal.get(chat_id, {})
+    events = state.get("events", [])
+    idx    = state.get("idx", 0)
+    total  = len(events)
+
+    if idx >= total:
+        _pending_cal.pop(chat_id, None)
+        _handle_calendar_menu(chat_id)
+        return
+
+    draft = events[idx]
+    title      = draft.get("title", "—")
+    dt         = datetime.fromisoformat(draft.get("dt_iso", datetime.now().strftime("%Y-%m-%dT%H:%M")))
+    remind_min = int(draft.get("remind_before_min", 15))
+    cdown      = _fmt_countdown(dt, lang)
+    dt_fmt     = dt.strftime("%d.%m.%Y %H:%M")
+
+    if lang == "ru":
+        header     = f"📋 *Событие {idx + 1} из {total} — проверьте перед сохранением:*"
+        t_label    = "📌 Название"
+        d_label    = "📅 Дата/время"
+        r_label    = "⏰ Напоминание"
+        remind_str = f"за {remind_min} мин"
+    else:
+        header     = f"📋 *Event {idx + 1} of {total} — review before saving:*"
+        t_label    = "📌 Title"
+        d_label    = "📅 Date/time"
+        r_label    = "⏰ Reminder"
+        remind_str = f"{remind_min} min before"
+
+    text = (
+        f"{header}\n\n"
+        f"{t_label}: *{_escape_md(title)}*\n"
+        f"{d_label}: {dt_fmt}  {cdown}\n"
+        f"{r_label}: {remind_str}"
+    )
+    bot.send_message(chat_id, text, parse_mode="Markdown",
+                     reply_markup=_cal_confirm_keyboard_multi(chat_id, idx, total))
+
+
+def _cal_multi_save_one(chat_id: int) -> None:
+    """Save current event in the multi-batch, advance to next."""
+    lang  = _st._user_lang.get(chat_id, "ru")
+    state = _pending_cal.get(chat_id, {})
+    events = state.get("events", [])
+    idx    = state.get("idx", 0)
+
+    if idx < len(events):
+        draft = events[idx]
+        dt    = datetime.fromisoformat(draft["dt_iso"])
+        ev    = _cal_add_event(chat_id, draft["title"], dt, draft.get("remind_before_min", 15))
+        _schedule_reminder(chat_id, ev)
+        cdown = _fmt_countdown(dt, lang)
+        bot.send_message(
+            chat_id,
+            f"✅ *{'Записал' if lang == 'ru' else 'Saved'}:* {_escape_md(draft['title'])} — {dt.strftime('%d.%m %H:%M')} {cdown}",
+            parse_mode="Markdown",
+        )
+
+    state["idx"] = idx + 1
+    if state["idx"] >= len(events):
+        _pending_cal.pop(chat_id, None)
+        _handle_calendar_menu(chat_id)
+    else:
+        _show_cal_confirm_multi(chat_id)
+
+
+def _cal_multi_skip(chat_id: int) -> None:
+    """Skip current event in the multi-batch, advance to next."""
+    lang  = _st._user_lang.get(chat_id, "ru")
+    state = _pending_cal.get(chat_id, {})
+    events = state.get("events", [])
+    idx    = state.get("idx", 0)
+    if idx < len(events):
+        skipped = events[idx].get("title", "")
+        bot.send_message(
+            chat_id,
+            f"⏭ *{'Пропущено' if lang == 'ru' else 'Skipped'}:* {_escape_md(skipped)}",
+            parse_mode="Markdown",
+        )
+    state["idx"] = idx + 1
+    if state["idx"] >= len(events):
+        _pending_cal.pop(chat_id, None)
+        _handle_calendar_menu(chat_id)
+    else:
+        _show_cal_confirm_multi(chat_id)
+
+
+def _cal_multi_save_all(chat_id: int) -> None:
+    """Save ALL remaining events in the multi-batch without further confirmation."""
+    lang  = _st._user_lang.get(chat_id, "ru")
+    state = _pending_cal.pop(chat_id, {})
+    events = state.get("events", [])
+    idx    = state.get("idx", 0)
+    saved  = 0
+    for draft in events[idx:]:
+        dt = datetime.fromisoformat(draft["dt_iso"])
+        ev = _cal_add_event(chat_id, draft["title"], dt, draft.get("remind_before_min", 15))
+        _schedule_reminder(chat_id, ev)
+        saved += 1
+
+    summary = (f"✅ *{'Сохранено событий' if lang == 'ru' else 'Saved'}: {saved}*"
+               if lang == "ru" else
+               f"✅ *Saved {saved} event(s)*")
+    bot.send_message(chat_id, summary, parse_mode="Markdown")
+    _handle_calendar_menu(chat_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Delete with confirmation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_cal_delete_request(chat_id: int, ev_id: str) -> None:
+    """Show confirmation dialog before deleting an event."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    events = _cal_load(chat_id)
+    ev = next((e for e in events if e.get("id") == ev_id), None)
+    if not ev:
+        _handle_calendar_menu(chat_id)
+        return
+
+    dt    = datetime.fromisoformat(ev["dt_iso"])
+    cdown = _fmt_countdown(dt, lang)
+    text  = (
+        f"🗑 {'Удалить событие?' if lang == 'ru' else 'Delete event?'}\n\n"
+        f"📌 *{_escape_md(ev['title'])}*\n"
+        f"📅 {dt.strftime('%d.%m.%Y %H:%M')}  {cdown}"
+    )
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(
+            "✅  " + ("Удалить" if lang == "ru" else "Delete"),
+            callback_data=f"cal_del_confirm:{ev_id}",
+        ),
+        InlineKeyboardButton(
+            "❌  " + ("Отмена" if lang == "ru" else "Cancel"),
+            callback_data="menu_calendar",
+        ),
+    )
+    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NL query — "show events next week / tomorrow / in March"
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_calendar_query(chat_id: int, text: str) -> None:
+    """Handle a natural-language query about calendar events."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    prompt = (
+        f"Текущая дата и время: {now_iso}\n"
+        f"Задача: определить временной диапазон из запроса пользователя.\n"
+        f"Правила:\n"
+        f"- Вернуть ТОЛЬКО JSON: {{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\", \"label\": \"...\"}}\n"
+        f"- «сегодня» → from=today, to=today\n"
+        f"- «завтра» → from=tomorrow, to=tomorrow\n"
+        f"- «эта неделя» → from=this Monday, to=this Sunday\n"
+        f"- «следующая неделя» → from=next Monday, to=next Sunday\n"
+        f"- «этот месяц» / «март» → from=first day of month, to=last day\n"
+        f"- «следующие N дней» → from=today, to=today+N\n"
+        f"- «ближайшие события» / «что скоро» → from=today, to=today+7\n"
+        f"Запрос: \"{text}\""
+    )
+    thinking = bot.send_message(
+        chat_id,
+        "⏳ " + ("Ищу события…" if lang == "ru" else "Searching events…"),
+    )
+    raw = _ask_picoclaw(prompt, timeout=25)
+    try:
+        bot.delete_message(chat_id, thinking.message_id)
+    except Exception:
+        pass
+
+    try:
+        m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
+        if not m:
+            raise ValueError("No JSON")
+        data      = json.loads(m.group())
+        from_date = datetime.fromisoformat(data["from"]).date()
+        to_date   = datetime.fromisoformat(data["to"]).date()
+        label     = data.get("label", f"{from_date} – {to_date}")
+    except Exception:
+        from_date = datetime.now().date()
+        to_date   = from_date + timedelta(days=7)
+        label     = ("ближайшие 7 дней" if lang == "ru" else "next 7 days")
+
+    events = _cal_load(chat_id)
+    matched = sorted(
+        [e for e in events
+         if from_date <= datetime.fromisoformat(e["dt_iso"]).date() <= to_date],
+        key=lambda e: e["dt_iso"],
+    )
+
+    if not matched:
+        msg = (f"📅 *{_escape_md(label)}*\n\n"
+               + ("_Событий не найдено._" if lang == "ru" else "_No events found._"))
+    else:
+        lines = [f"📅 *{_escape_md(label)}* — {len(matched)} "
+                 + ("событий:" if lang == "ru" else "event(s):"), ""]
+        for ev in matched:
+            dt    = datetime.fromisoformat(ev["dt_iso"])
+            cdown = _fmt_countdown(dt, lang)
+            lines.append(f"• *{_escape_md(ev['title'])}* — {dt.strftime('%d.%m %H:%M')} {cdown}")
+        msg = "\n".join(lines)
+
+    bot.send_message(chat_id, msg, parse_mode="Markdown",
+                     reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Calendar console — free-form command interface
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _start_cal_console(chat_id: int) -> None:
+    """Enter calendar console mode."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    _st._user_mode[chat_id] = "cal_console"
+    if lang == "ru":
+        prompt = (
+            "💬 *Консоль календаря*\n\n"
+            "Введите команду в свободной форме:\n"
+            "• _«добавь встречу с Максом в пятницу в 14»_\n"
+            "• _«что у меня завтра?»_\n"
+            "• _«удали встречу с врачом»_\n"
+            "• _«покажи события на следующей неделе»_\n"
+            "• _«перенеси встречу с командой на 16:00»_"
+        )
+    else:
+        prompt = (
+            "💬 *Calendar Console*\n\n"
+            "Type a command freely:\n"
+            "• _«add meeting with Max on Friday at 2pm»_\n"
+            "• _«what do I have tomorrow?»_\n"
+            "• _«delete doctor appointment»_\n"
+            "• _«show events next week»_\n"
+            "• _«reschedule team meeting to 4pm»_"
+        )
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(
+        "❌  " + ("Выйти" if lang == "ru" else "Exit"),
+        callback_data="menu_calendar",
+    ))
+    bot.send_message(chat_id, prompt, parse_mode="Markdown", reply_markup=kb)
+
+
+def _handle_cal_console(chat_id: int, text: str) -> None:
+    """Process a free-form calendar console command via LLM intent classification."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    _st._user_mode.pop(chat_id, None)
+
+    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    events  = _cal_load(chat_id)
+    event_titles = [f"id={e['id']} title={e['title']!r}" for e in events[:10]]
+    events_hint  = "; ".join(event_titles) if event_titles else "none"
+
+    prompt = (
+        f"Текущая дата и время: {now_iso}\n"
+        f"Существующие события пользователя: [{events_hint}]\n"
+        f"Определи намерение команды пользователя и верни ТОЛЬКО JSON:\n"
+        f"  add    → {{\"intent\": \"add\"}}\n"
+        f"  query  → {{\"intent\": \"query\"}}\n"
+        f"  delete → {{\"intent\": \"delete\", \"ev_id\": \"<id или пусто>\"}}\n"
+        f"  edit   → {{\"intent\": \"edit\", \"ev_id\": \"<id или пусто>\"}}\n"
+        f"Команда: \"{text}\""
+    )
+
+    thinking = bot.send_message(
+        chat_id,
+        "⏳ " + ("Анализирую команду…" if lang == "ru" else "Analyzing command…"),
+    )
+    raw = _ask_picoclaw(prompt, timeout=20)
+    try:
+        bot.delete_message(chat_id, thinking.message_id)
+    except Exception:
+        pass
+
+    intent = "add"
+    ev_id  = None
+    try:
+        m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
+        if m:
+            data   = json.loads(m.group())
+            intent = data.get("intent", "add")
+            ev_id  = data.get("ev_id") or None
+    except Exception as e:
+        log.debug(f"[Cal] console intent parse failed: {e}")
+
+    if intent == "query":
+        _handle_calendar_query(chat_id, text)
+    elif intent == "delete":
+        if ev_id:
+            _handle_cal_delete_request(chat_id, ev_id)
+        else:
+            # No ev_id resolved — search by title similarity
+            ev = _cal_find_by_text(chat_id, text)
+            if ev:
+                _handle_cal_delete_request(chat_id, ev["id"])
+            else:
+                bot.send_message(
+                    chat_id,
+                    "❓ " + ("Не нашёл такого события. Откройте календарь и выберите вручную."
+                             if lang == "ru" else
+                             "Could not find that event. Open calendar and select manually."),
+                    reply_markup=_calendar_keyboard(chat_id, events),
+                )
+    elif intent == "edit":
+        if ev_id:
+            _handle_cal_event_detail(chat_id, ev_id)
+        else:
+            ev = _cal_find_by_text(chat_id, text)
+            if ev:
+                _handle_cal_event_detail(chat_id, ev["id"])
+            else:
+                bot.send_message(
+                    chat_id,
+                    "❓ " + ("Не нашёл такого события. Откройте календарь и выберите вручную."
+                             if lang == "ru" else
+                             "Could not find that event. Open calendar and select manually."),
+                    reply_markup=_calendar_keyboard(chat_id, events),
+                )
+    else:
+        # Default: treat as add
+        _st._user_mode[chat_id] = "calendar"
+        _finish_cal_add(chat_id, text)
+
+
+def _cal_find_by_text(chat_id: int, text: str) -> Optional[dict]:
+    """Find the first event whose title appears (case-insensitive) in user text."""
+    events = _cal_load(chat_id)
+    text_l = text.lower()
+    for ev in events:
+        if ev.get("title", "").lower() in text_l:
+            return ev
+    return None
 
 
 def _cal_do_confirm_save(chat_id: int) -> None:
@@ -690,7 +1084,12 @@ def _handle_cal_confirm_tts(chat_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_cal_cancel_event(chat_id: int, ev_id: str) -> None:
-    """Delete an event and cancel its reminder timer."""
+    """Show delete confirmation (keeps backward compat — routes to _handle_cal_delete_request)."""
+    _handle_cal_delete_request(chat_id, ev_id)
+
+
+def _handle_cal_delete_confirmed(chat_id: int, ev_id: str) -> None:
+    """Actually delete the event after user confirmed."""
     lang = _st._user_lang.get(chat_id, "ru")
     events = _cal_load(chat_id)
     ev = next((e for e in events if e.get("id") == ev_id), None)
@@ -700,7 +1099,7 @@ def _handle_cal_cancel_event(chat_id: int, ev_id: str) -> None:
         if old_timer:
             old_timer.cancel()
         title = ev.get("title", ev_id) if ev else ev_id
-        msg = (f"❌ {'Удалено' if lang == 'ru' else 'Removed'}: *{_escape_md(title)}*")
+        msg = f"🗑 {'Удалено' if lang == 'ru' else 'Deleted'}: *{_escape_md(title)}*"
         bot.send_message(chat_id, msg, parse_mode="Markdown",
                          reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
     else:

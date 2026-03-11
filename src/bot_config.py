@@ -79,7 +79,7 @@ MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.24"
+BOT_VERSION        = "2026.3.25"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),

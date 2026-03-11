@@ -2,7 +2,7 @@
 
 **Architecture:** 9-module split (refactored from monolith v2026.3.19)  
 **Entry point:** `src/telegram_menu_bot.py` (~250 lines — handlers + `main()` only)  
-**Version:** 2026.3.19
+**Version:** 2026.3.25
 
 Use this map to locate any function by module. All `bot_*.py` files live in `src/`.
 
@@ -336,6 +336,108 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 ---
 
+## bot_calendar.py — Smart Calendar
+
+Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_voice` lazy-imported inside functions.)
+
+### Storage helpers
+
+| Function | Purpose |
+|---|---|
+| `_cal_user_file(chat_id)` | Path: `~/.picoclaw/calendar/<chat_id>.json` |
+| `_cal_load(chat_id)` | Load events list (returns `[]` on error) |
+| `_cal_save(chat_id, events)` | Persist events list |
+| `_cal_add_event(chat_id, title, dt, remind_before_min)` | Append new event, return dict |
+| `_cal_delete_event(chat_id, ev_id)` | Remove event by id, return `True` if found |
+| `_cal_mark_reminded(chat_id, ev_id)` | Set `reminded=True` |
+| `_cal_find_by_text(chat_id, text)` | Find first event whose title appears in `text` |
+
+### Keyboards
+
+| Function | Purpose |
+|---|---|
+| `_calendar_keyboard(chat_id, events)` | Main calendar view: event buttons + ➕ Add + 💬 Console + 🔙 |
+| `_cal_confirm_keyboard(chat_id)` | Single-event confirmation: ✅ Save / ❌ Cancel / ✏️ Edit fields / 🔊 TTS |
+| `_cal_confirm_keyboard_multi(chat_id, idx, total)` | Multi-event confirmation: ✅ Save / ⏭ Skip / ✅✅ Save All / ❌ Cancel |
+| `_cal_event_keyboard(chat_id, ev_id)` | Event detail: Edit / Reschedule / Reminder / TTS / Delete / Email / Back |
+
+### Menu handlers
+
+| Function | Purpose |
+|---|---|
+| `_handle_calendar_menu(chat_id)` | Show upcoming events + action buttons |
+| `_handle_cal_event_detail(chat_id, ev_id)` | Show single event detail card |
+
+### Add event flow
+
+| Function | Purpose |
+|---|---|
+| `_start_cal_add(chat_id)` | Enter `calendar` mode, show prompt |
+| `_finish_cal_add(chat_id, text)` | LLM → extract `{"events":[...]}` → single or multi confirm |
+| `_show_cal_confirm(chat_id)` | Show confirmation card for single pending event |
+| `_show_cal_confirm_multi(chat_id)` | Show "N of M" confirmation for multi-event batch |
+| `_cal_do_confirm_save(chat_id)` | Save single confirmed event → schedule reminder |
+| `_cal_multi_save_one(chat_id)` | Save current batch event, advance to next |
+| `_cal_multi_skip(chat_id)` | Skip current batch event, advance to next |
+| `_cal_multi_save_all(chat_id)` | Save all remaining batch events at once |
+
+### Edit flow
+
+| Function | Purpose |
+|---|---|
+| `_cal_prompt_edit_field(chat_id, field, ev_id)` | Prompt for new value of `title` / `dt` / `remind` |
+| `_cal_handle_edit_input(chat_id, text, field)` | Process input, re-parse via LLM if `dt`, update state |
+
+### Delete flow (with confirmation)
+
+| Function | Purpose |
+|---|---|
+| `_handle_cal_delete_request(chat_id, ev_id)` | Show event card + ✅ Confirm / ❌ Cancel |
+| `_handle_cal_delete_confirmed(chat_id, ev_id)` | Actually delete + cancel timer |
+| `_handle_cal_cancel_event(chat_id, ev_id)` | Alias for `_handle_cal_delete_request` (backward compat) |
+
+### NL query
+
+| Function | Purpose |
+|---|---|
+| `_handle_calendar_query(chat_id, text)` | LLM → extract date range → filter events → display |
+
+### Calendar console
+
+| Function | Purpose |
+|---|---|
+| `_start_cal_console(chat_id)` | Enter `cal_console` mode, show usage hint |
+| `_handle_cal_console(chat_id, text)` | LLM intent → add / query / delete / edit |
+
+### TTS
+
+| Function | Purpose |
+|---|---|
+| `_cal_tts_text(title, dt_iso, lang)` | Build TTS string for event |
+| `_handle_cal_event_tts(chat_id, ev_id)` | Synthesise and send voice note for saved event |
+| `_handle_cal_confirm_tts(chat_id)` | TTS for pending (not yet saved) event |
+
+### Reminders & startup
+
+| Function | Purpose |
+|---|---|
+| `_send_reminder(chat_id, ev_id, title, dt_iso)` | Fire timer: send text + optional TTS |
+| `_schedule_reminder(chat_id, ev)` | Schedule `threading.Timer` for event reminder |
+| `_cal_reschedule_all()` | On startup: reload all JSON + reschedule pending timers |
+| `_cal_morning_briefing_loop()` | Daemon thread: daily 08:00 briefing to all users |
+
+### `_user_mode` values
+
+| Value | Set by | Cleared by |
+|---|---|---|
+| `"calendar"` | `_start_cal_add()` | `_finish_cal_add()` |
+| `"cal_console"` | `_start_cal_console()` | `_handle_cal_console()` |
+| `"cal_edit_title"` | `_cal_prompt_edit_field("title")` | `_cal_handle_edit_input()` |
+| `"cal_edit_dt"` | `_cal_prompt_edit_field("dt")` | `_cal_handle_edit_input()` |
+| `"cal_edit_remind"` | `_cal_prompt_edit_field("remind")` | `_cal_handle_edit_input()` |
+
+---
+
 ## telegram_menu_bot.py — Entry Point
 
 Registers handlers and starts polling. All logic is imported from the modules above.
@@ -388,6 +490,25 @@ All `data=` keys handled in `callback_handler()`:
 | `note_edit:<slug>` | `_start_note_edit` |
 | `note_delete:<slug>` | `_handle_note_delete` |
 | `note_tts:<slug>` | `_handle_note_read_aloud` |
+| `menu_calendar` | `_handle_calendar_menu` |
+| `cal_add` | `_start_cal_add` |
+| `cal_event:<id>` | `_handle_cal_event_detail` |
+| `cal_del:<id>` | `_handle_cal_delete_request` (shows confirmation) |
+| `cal_del_confirm:<id>` | `_handle_cal_delete_confirmed` (actual delete) |
+| `cal_confirm_save` | `_cal_do_confirm_save` |
+| `cal_multi_save_one` | `_cal_multi_save_one` |
+| `cal_multi_skip` | `_cal_multi_skip` |
+| `cal_multi_save_all` | `_cal_multi_save_all` |
+| `cal_confirm_edit_title` | `_cal_prompt_edit_field("title")` |
+| `cal_confirm_edit_dt` | `_cal_prompt_edit_field("dt")` |
+| `cal_confirm_edit_remind` | `_cal_prompt_edit_field("remind")` |
+| `cal_edit_title:<id>` | `_cal_prompt_edit_field("title", ev_id)` |
+| `cal_edit_dt:<id>` | `_cal_prompt_edit_field("dt", ev_id)` |
+| `cal_edit_remind:<id>` | `_cal_prompt_edit_field("remind", ev_id)` |
+| `cal_tts:<id>` | `_handle_cal_event_tts` |
+| `cal_confirm_tts` | `_handle_cal_confirm_tts` |
+| `cal_console` | `_start_cal_console` |
+| `cal_email:<id>` | `handle_send_email` (via `bot_email`) |
 | `cancel` | clear pending cmd/note/mode |
 | `run:<hash>` | `_execute_pending_cmd` |
 

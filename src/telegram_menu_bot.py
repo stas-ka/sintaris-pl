@@ -78,8 +78,16 @@ from bot_handlers import (
 # ─── Calendar ─────────────────────────────────────────────────────────────────
 from bot_calendar import (
     _handle_calendar_menu, _handle_cal_event_detail,
-    _start_cal_add, _finish_cal_add, _handle_cal_cancel_event,    _cal_do_confirm_save, _show_cal_confirm,
-    _cal_prompt_edit_field, _cal_handle_edit_input,    _cal_reschedule_all, _cal_morning_briefing_loop,    _handle_cal_event_tts, _handle_cal_confirm_tts,    _pending_cal,
+    _start_cal_add, _finish_cal_add, _handle_cal_cancel_event,
+    _cal_do_confirm_save, _show_cal_confirm,
+    _cal_prompt_edit_field, _cal_handle_edit_input,
+    _cal_reschedule_all, _cal_morning_briefing_loop,
+    _handle_cal_event_tts, _handle_cal_confirm_tts,
+    _pending_cal,
+    # New features
+    _show_cal_confirm_multi, _cal_multi_save_one, _cal_multi_skip, _cal_multi_save_all,
+    _handle_cal_delete_request, _handle_cal_delete_confirmed,
+    _handle_calendar_query, _start_cal_console, _handle_cal_console,
 )
 
 # ─── Mail credentials ──────────────────────────────────────────────────────────
@@ -475,7 +483,13 @@ def callback_handler(call):
 
     elif data.startswith("cal_del:"):
         if not _is_guest(cid):
-            _handle_cal_cancel_event(cid, data[len("cal_del:"):])
+            _handle_cal_delete_request(cid, data[len("cal_del:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("cal_del_confirm:"):
+        if not _is_guest(cid):
+            _handle_cal_delete_confirmed(cid, data[len("cal_del_confirm:"):])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -484,6 +498,30 @@ def callback_handler(call):
             _cal_do_confirm_save(cid)
         else:
             _handle_calendar_menu(cid)
+
+    elif data == "cal_multi_save_one":
+        if not _is_guest(cid) and cid in _pending_cal:
+            _cal_multi_save_one(cid)
+        else:
+            _handle_calendar_menu(cid)
+
+    elif data == "cal_multi_skip":
+        if not _is_guest(cid) and cid in _pending_cal:
+            _cal_multi_skip(cid)
+        else:
+            _handle_calendar_menu(cid)
+
+    elif data == "cal_multi_save_all":
+        if not _is_guest(cid) and cid in _pending_cal:
+            _cal_multi_save_all(cid)
+        else:
+            _handle_calendar_menu(cid)
+
+    elif data == "cal_console":
+        if not _is_guest(cid):
+            _start_cal_console(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data == "cal_confirm_edit_title":
         if not _is_guest(cid):
@@ -654,6 +692,13 @@ def text_handler(message):
         else:
             _st._user_mode.pop(cid, None)
             _pending_cal.pop(cid, None)
+        return
+    # ── Calendar console ────────────────────────────────────────────────────
+    if mode == "cal_console":
+        if not _is_guest(cid):
+            _handle_cal_console(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
         return
     # ── Calendar field edit flows ────────────────────────────────────────────
     if mode == "cal_edit_title":

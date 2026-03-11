@@ -1,9 +1,15 @@
 [
   {
+    "version": "2026.3.25",
+    "date":    "2026-03-10",
+    "title":   "Calendar: multi-event, NL query, delete confirmation, console mode",
+    "notes":   "- Multi-event parsing: one message can add multiple events — each confirmed individually with Save / Skip / Save All\n- NL query: ask \"что у меня завтра?\", \"события на следующей неделе\" — filtered results shown instantly\n- Delete confirmation: calendar events now require confirmation before deletion\n- Calendar console mode: free-form text commands (add/query/edit/delete) routed by LLM intent classification\n- All calendar mutations require explicit user confirmation"
+  },
+  {
     "version": "2026.3.24",
     "date":    "2026-03-08",
     "title":   "System chat emoji fix + TTS chunk delivery fix + timing debug opt",
-    \"notes\":   \"- Fixed critical regex typo in system chat: emoji filter was also stripping letter F from all bash commands\\n- Hardened _extract_bash_cmd: bracket-wrapped emoji, prose sentence rejection, ASCII first-word check\\n- Defense-in-depth: command is re-sanitized immediately before bash -c execution\\n- System prompt now explicitly forbids emojis and decorative characters in LLM responses\\n- Fixed TTS multi-chunk labeling: chunk label now uses actual sent counter, not raw index - failed chunks no longer produce misleading (2/2) with missing (1/2)\\n- Added voice_timing_debug toggle to Voice Opts admin menu (previously only via VOICE_TIMING_DEBUG env var)\"
+    "notes":   "- Fixed critical regex typo in system chat: emoji filter was also stripping letter F from all bash commands\n- Hardened _extract_bash_cmd: bracket-wrapped emoji, prose sentence rejection, ASCII first-word check\n- Defense-in-depth: command is re-sanitized immediately before bash -c execution\n- System prompt now explicitly forbids emojis and decorative characters in LLM responses\n- Fixed TTS multi-chunk labeling: chunk label now uses actual sent counter, not raw index - failed chunks no longer produce misleading (2/2) with missing (1/2)\n- Added voice_timing_debug toggle to Voice Opts admin menu (previously only via VOICE_TIMING_DEBUG env var)"
   },
   {
     "version": "2026.3.23",

@@ -1,6 +1,6 @@
 # Picoclaw Bot — Architecture
 
-**Version:** `2026.3.24` · **Last updated:** March 2026
+**Version:** `2026.3.25` · **Last updated:** March 2026
 
 ## 1. Overview
 
@@ -140,7 +140,7 @@ bot_config → bot_state → bot_instance → bot_security → bot_access → bo
 | `bot_access.py` | Access control, i18n `_t()`, keyboards, text utils, `_ask_picoclaw()` |
 | `bot_users.py` | Registration + notes file I/O (pure, no Telegram API calls) |
 | `bot_voice.py` | Full voice pipeline: STT/TTS/VAD, multi-part "Read aloud", orphan cleanup |
-| `bot_calendar.py` | Smart calendar: CRUD events, NL parsing, reminders, morning briefing, TTS |
+| `bot_calendar.py` | Smart calendar: multi-event add, NL query, console, reminders, morning briefing, TTS |
 | `bot_admin.py` | Admin panel: users, LLM switcher, voice opts, release notes |
 | `bot_handlers.py` | User handlers: free chat, system chat, digest, notes, profile |
 | `bot_mail_creds.py` | Per-user IMAP credentials, consent flow, digest fetch + LLM summarise |
@@ -156,7 +156,7 @@ bot_config → bot_state → bot_instance → bot_security → bot_access → bo
 | 🖥 System Chat | `mode_system` | **admin only** | NL → bash command → confirm-gate → execute on Pi |
 | 🎤 Voice | `voice_session` | all approved | Voice mode instructions (voice messages work in any mode) |
 | 📝 Notes | `menu_notes` | all approved | Personal Markdown notes manager |
-| 🗓 Calendar | `menu_calendar` | all approved | Smart calendar with NL event add |
+| 🗓 Calendar | `menu_calendar` | all approved | Smart calendar with NL add, query, console, multi-event |
 | 👤 Profile | `profile` | all approved | Show name, username, role, registration date, masked email |
 | ❓ Help | `help` | all approved | Contextual help (admin / user / guest variants) |
 | 🔐 Admin | `admin_menu` | **admin only** | Admin control panel |
@@ -205,8 +205,9 @@ Incoming text
       ├─ _user_mode == "reg_name"        → _finish_registration()
       ├─ _user_mode == "chat"             → _handle_chat_message()
       ├─ _user_mode == "system"           → _handle_system_message()  [admin only]
-      ├─ _user_mode == "cal_input"        → _finish_cal_add()
-      ├─ _user_mode == "cal_edit_*"       → _cal_handle_edit_input()
+      ├─ _user_mode == "calendar"          → _finish_cal_add()
+      ├─ _user_mode == "cal_console"       → _handle_cal_console()   ← new
+      ├─ _user_mode == "cal_edit_*"        → _cal_handle_edit_input()
       ├─ _pending_note[cid] exists        → note title / content step
       ├─ _pending_mail_setup[cid] exists  → mail setup wizard step
       ├─ _pending_llm_key[cid] exists     → _handle_save_llm_key()
@@ -475,19 +476,63 @@ Refresh runs in a background thread so the main bot thread is not blocked.
 
 ## 8. Smart Calendar (`bot_calendar.py`)
 
-### 8.1 Add Event Flow
+### 8.1 Add Event Flow (single event)
 
 ```
-User says/writes: "встреча с командой завтра в 11 утра"
+User writes: "встреча с командой завтра в 11 утра"
   → _finish_cal_add(chat_id, text)
-  → _ask_picoclaw(): extract JSON {title, dt_iso, remind_before_min}
-  → _show_cal_confirm(): show parsed data for review
-  → User taps ✅ → _cal_do_confirm_save()
-  → _cal_add_event(): save to calendar JSON
-  → _schedule_single_reminder(): threading.Timer
+  → _ask_picoclaw(): extract JSON {"events": [{title, dt}, ...]}
+  → 1 event → _show_cal_confirm(): review card
+    → User taps ✅ → _cal_do_confirm_save()
+    → _cal_add_event(): save to calendar JSON
+    → _schedule_reminder(): threading.Timer
 ```
 
-### 8.2 Background Threads
+### 8.2 Multi-Event Add Flow
+
+```
+User writes: "завтра в 10 команда, в 15 врач, в 19 ужин с Машей"
+  → _finish_cal_add() → LLM returns {"events": [{...}, {...}, {...}]}
+  → 3 events → _pending_cal = {step: "multi_confirm", events: [...], idx: 0}
+  → _show_cal_confirm_multi(): "Event 1 of 3 — review:"
+    → Save   → _cal_multi_save_one() → advance to next
+    → Skip   → _cal_multi_skip()     → advance to next
+    → Save All → _cal_multi_save_all() → save remaining without further confirmation
+    → Cancel → discard all remaining
+```
+
+### 8.3 NL Query Flow
+
+```
+User writes: "что у меня на следующей неделе?"
+  → _handle_calendar_query(chat_id, text)
+  → _ask_picoclaw(): extract {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "label": "..."}
+  → filter _cal_load() by date range
+  → display formatted list with countdown
+```
+
+### 8.4 Calendar Console
+
+```
+User taps 💬 Консоль → _start_cal_console()
+  → _user_mode = "cal_console"
+  → User types free-form command
+  → _handle_cal_console(): LLM classifies intent
+      add    → _finish_cal_add()
+      query  → _handle_calendar_query()
+      delete → _handle_cal_delete_request()  (confirmation required)
+      edit   → _handle_cal_event_detail()
+```
+
+### 8.5 Delete Confirmation
+
+```
+User taps 🗑 Delete
+  → _handle_cal_delete_request(): show event + ✅ Confirm / ❌ Cancel
+  → User taps ✅ → _handle_cal_delete_confirmed(): remove + cancel timer
+```
+
+### 8.6 Background Threads
 
 | Thread | Purpose |
 |---|---|

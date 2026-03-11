@@ -2,7 +2,7 @@
 
 **Legend:** ✅ Done · 🔄 In progress · 🔲 Planned · 💡 Idea / future
 
-**Completed:** Registration workflow (v2026.3.15) · Notes system · Per-user mail digest · Voice opts (silence_strip, VAD, whisper, piper_low, persistent_piper, tmpfs_model, warm_piper) · Smart calendar with NL input + reminders + morning briefing · Voice regression tests T01–T12 · Backup system · 3-layer prompt injection guard · Whisper hallucination guard (v2026.3.24)
+**Completed:** Registration workflow (v2026.3.15) · Notes system · Per-user mail digest · Voice opts (silence_strip, VAD, whisper, piper_low, persistent_piper, tmpfs_model, warm_piper) · Smart calendar with NL input + reminders + morning briefing · Voice regression tests T01–T12 · Backup system · 3-layer prompt injection guard · Whisper hallucination guard (v2026.3.24) · Calendar multi-event, NL query, delete confirmation, console mode (v2026.3.25)
 
 ---
 
