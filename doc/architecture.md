@@ -1,6 +1,6 @@
 # Picoclaw Bot — Architecture
 
-**Version:** `2026.3.25` · **Last updated:** March 2026
+**Version:** `2026.3.26` · **Last updated:** March 2026
 
 ## 1. Overview
 
@@ -117,7 +117,7 @@ When triggered: hotword stream killed → beep plays → fresh Vosk recognizer r
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.23"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
+**Version:** `BOT_VERSION = "2026.3.26"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
 
 The interactive Telegram bot is split into 12 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks.
 
@@ -638,7 +638,7 @@ systemd
   bot_mail_creds.py             ← per-user IMAP credentials + digest
   bot_email.py                  ← send-as-email SMTP
   voice_assistant.py            ← standalone voice daemon
-  strings.json                  ← i18n UI strings (ru/en)
+  strings.json                  ← i18n UI strings (ru / de / en — 115 keys)
   release_notes.json            ← versioned changelog
   config.json                   ← picoclaw LLM config (model_list, agents)
   bot.env                       ← BOT_TOKEN + ALLOWED_USERS + ADMIN_USERS
@@ -660,10 +660,13 @@ systemd
 
   ── voice models ──
   vosk-model-small-ru/          ← 48 MB Vosk Russian STT model
-  ru_RU-irina-medium.onnx       ← 66 MB Piper TTS voice (medium quality)
+  vosk-model-small-de/          ← 48 MB Vosk German STT model (optional, for DE users)
+  ru_RU-irina-medium.onnx       ← 66 MB Piper TTS voice (medium quality, Russian)
   ru_RU-irina-medium.onnx.json  ← Piper voice config
   ru_RU-irina-low.onnx          ← optional: low quality (faster TTS)
   ru_RU-irina-low.onnx.json     ← optional: low quality config
+  de_DE-thorsten-medium.onnx    ← 66 MB Piper TTS voice (German, optional)
+  de_DE-thorsten-medium.onnx.json ← Piper German voice config
   ggml-base.bin                 ← optional: Whisper STT model (142 MB)
 
 /dev/shm/piper/                   ← optional tmpfs model copy (voice_opt: tmpfs_model)
@@ -707,7 +710,10 @@ systemd
 | `CALENDAR_DIR` | `~/.picoclaw/calendar` | `CALENDAR_DIR` | Base dir for calendar files |
 | `MAIL_CREDS_DIR` | `~/.picoclaw/mail_creds` | `MAIL_CREDS_DIR` | Base dir for mail credentials |
 | `REGISTRATIONS_FILE` | `~/.picoclaw/registrations.json` | `REGISTRATIONS_FILE` | User registration records |
-| `STRINGS_FILE` | `strings.json` next to script | `STRINGS_FILE` | i18n UI text file (ru/en) |
+| `STRINGS_FILE` | `strings.json` next to script | `STRINGS_FILE` | i18n UI text file (ru / de / en) |
+| `VOSK_MODEL_DE_PATH` | `~/.picoclaw/vosk-model-small-de` | `VOSK_MODEL_DE_PATH` | Vosk German STT model directory |
+| `PIPER_MODEL_DE` | `~/.picoclaw/de_DE-thorsten-medium.onnx` | `PIPER_MODEL_DE` | Piper German TTS voice model |
+| `PIPER_MODEL_DE_TMPFS` | `/dev/shm/piper/de_DE-thorsten-medium.onnx` | — | RAM-disk copy of German TTS model |
 | `PICOCLAW_BIN` | `/usr/bin/picoclaw` | `PICOCLAW_BIN` | picoclaw Go binary |
 
 ### `voice_assistant.py` CONFIG
@@ -729,7 +735,131 @@ systemd
 
 ---
 
-## 14. Backup System
+## 14. Multilanguage Support
+
+> **Status (2026-03-11):** Phase 1 implemented, not yet deployed. Phase 2 (inline string refactor) in progress.
+
+### 14.1 Concept
+
+The bot automatically detects each user's language from Telegram's `language_code` field and responds consistently in that language across all surfaces: UI buttons, bot messages, LLM responses, and TTS voice output.
+
+```
+User sends message / taps button
+        │
+        ▼
+_set_lang(chat_id, from_user)
+        │   reads Telegram language_code
+        │   "ru*" → ru  |  "de*" → de  |  else → en
+        ▼
+_user_lang[chat_id] = "ru" | "de" | "en"   ← stored per session
+        │
+        ├── UI strings   → _t(chat_id, key)      ← looks up strings.json[lang][key]
+        │
+        ├── LLM replies  → _LANG_INSTRUCTION[lang]  ← prepended to every LLM prompt
+        │                    "Antworte ausschließlich auf Deutsch…"
+        │
+        └── Voice (TTS)  → _piper_model_path(lang) ← selects language-specific ONNX
+             Voice (STT)  → _get_vosk_model(lang)   ← selects language-specific Vosk
+```
+
+### 14.2 Supported Languages
+
+| Code | Language | UI strings | LLM prompt | STT model | TTS model |
+|------|----------|------------|------------|-----------|-----------|
+| `ru` | Russian | ✅ 115 keys | ✅ | `vosk-model-small-ru` | `ru_RU-irina-medium.onnx` |
+| `de` | German | ✅ 115 keys | ✅ | `vosk-model-small-de` *(optional)* | `de_DE-thorsten-medium.onnx` *(optional)* |
+| `en` | English | ✅ 115 keys | ✅ | fallback: `vosk-model-small-ru` | fallback: `ru_RU-irina-medium.onnx` |
+
+If a German/English voice model is absent, the pipeline falls back to Russian models with a warning log.
+
+### 14.3 i18n String System
+
+**`strings.json`** — flat JSON with one top-level object per language code:
+
+```json
+{
+  "ru": { "welcome": "…", "btn_chat": "💬 Чат", … },
+  "de": { "welcome": "…", "btn_chat": "💬 Chat", … },
+  "en": { "welcome": "…", "btn_chat": "💬 Chat", … }
+}
+```
+
+**`_t(chat_id, key, **kwargs)`** — the single string lookup function:
+```python
+lang = _user_lang.get(chat_id, "ru")
+text = _STRINGS.get(lang, _STRINGS.get("en", {})).get(key, key)
+return text.format(**kwargs) if kwargs else text
+```
+- Falls back: user lang → "en" → key name (never crashes)
+- Supports `{placeholder}` substitution: `_t(cid, "note_saved", title="My note")`
+
+**All 115 UI keys** are present in all three languages. Dynamic/inline strings in `bot_calendar.py`, `bot_handlers.py`, `bot_mail_creds.py` etc. are partially migrated to `_t()` (Phase 2).
+
+### 14.4 LLM Language Injection
+
+Every LLM call is prefixed with a language instruction from `_LANG_INSTRUCTION`:
+
+| Lang | Instruction |
+|------|-------------|
+| `ru` | "Отвечай строго на русском языке. Не используй эмоджи…" |
+| `de` | "Antworte ausschließlich auf Deutsch. Verwende keine Emojis…" |
+| `en` | "Reply in English only. Do not use emoji…" |
+
+For voice input with uncertain words `[?word]`, an additional STT-correction hint is injected in the user's language.
+
+### 14.5 Per-Language Voice Pipeline
+
+```
+STT: _get_vosk_model(lang)
+        lang == "de"  →  VOSK_MODEL_DE_PATH  (~/.picoclaw/vosk-model-small-de)
+        else          →  VOSK_MODEL_PATH      (~/.picoclaw/vosk-model-small-ru)
+        fallback: log warning + use Russian model
+
+TTS: _piper_model_path(lang)
+        lang == "de"
+          tmpfs_model ON  →  PIPER_MODEL_DE_TMPFS  (/dev/shm/piper/de_DE-thorsten-medium.onnx)
+          else            →  PIPER_MODEL_DE         (~/.picoclaw/de_DE-thorsten-medium.onnx)
+          not found       →  log warning + fall back to Russian model
+        else
+          → standard RU model priority chain (see §5.3)
+```
+
+Both Vosk and Piper models are loaded lazily on first use; not at startup.
+
+### 14.6 Implementation Status
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| Language detection (`_set_lang`) | ✅ Done | Detects ru/de/en from Telegram `language_code` |
+| `strings.json` DE translations | ✅ Done | All 115 keys translated |
+| LLM prompt injection | ✅ Done | German instruction in `_LANG_INSTRUCTION` |
+| STT model routing | ✅ Done | `_get_vosk_model(lang)` in `bot_voice.py` |
+| TTS model routing | ✅ Done | `_piper_model_path(lang)` in `bot_voice.py` |
+| TTS `lang=` pass-through | ✅ Done | All `_tts_to_ogg()` calls pass `lang=` |
+| Inline strings in `bot_calendar.py` | 🔄 Phase 2 | ~106 ternaries need `_t()` migration |
+| Inline strings in `bot_handlers.py` | 🔄 Phase 2 | ~35 hardcoded labels |
+| Inline strings in `bot_mail_creds.py` | 🔄 Phase 2 | ~28 hardcoded strings |
+| Inline strings in `bot_access.py` | 🔄 Phase 2 | 4 hardcoded strings |
+| `setup_voice.sh` German models | 🔄 Phase 2 | Download vosk-small-de + de_DE-thorsten |
+| **Deployed to Pi** | ❌ Not yet | Commits `0eb8f01`, `1f6764d` — local only |
+| **Tested on Pi** | ❌ Not yet | No test run performed |
+
+### 14.7 Adding a New Language
+
+To add a 4th language (e.g. French `fr`):
+
+1. Add `"fr": { … }` section to `strings.json` — 115 keys
+2. Add `"fr"` to `_SUPPORTED_LANGS` in `bot_access.py`
+3. Add `elif lc.startswith("fr"): _user_lang[chat_id] = "fr"` to `_set_lang()`
+4. Add French instruction to `_LANG_INSTRUCTION`
+5. Add French Vosk model path to `bot_config.py` + `_get_vosk_model()` branch
+6. Add French Piper voice model path to `bot_config.py` + `_piper_model_path()` branch
+7. Add French model downloads to `setup_voice.sh`
+8. Migrate all remaining inline strings to `_t()` (Phase 2 work applies to all languages)
+
+---
+
+## 15. Backup System
 
 Three-tier backup strategy:
 
@@ -750,11 +880,11 @@ Three-tier backup strategy:
 
 ---
 
-## 15. Release Notes & Version Tracking
+## 16. Release Notes & Version Tracking
 
 | Item | Value |
 |---|---|
-| Constant | `BOT_VERSION = "2026.3.23"` in `bot_config.py` |
+| Constant | `BOT_VERSION = "2026.3.26"` in `bot_config.py` |
 | Format | `YYYY.M.D` (no zero-padding) |
 | Changelog source | `release_notes.json` (deployed alongside bot) |
 | Tracking file | `~/.picoclaw/last_notified_version.txt` (auto-created) |
