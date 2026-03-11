@@ -1,5 +1,6 @@
 {
   "_note": "Ground truth for voice regression tests. raw_vosk_ref = Vosk output with [?word] confidence markers. clean_ref = after stripping markers (what the user sees).",
+  "test_tts_text_de": "Hallo! Das ist ein Test mit dem deutschen Sprachmodell.",
   "fixtures": {
     "audio_2026-03-07_15-59-36.ogg": {
       "description": "Russian speech — question about stomach discomfort, ~7s, mono 48 kHz Opus",

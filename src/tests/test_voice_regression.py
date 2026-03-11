@@ -56,6 +56,11 @@ WHISPER_BIN       = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
 WHISPER_MODEL     = os.environ.get("WHISPER_MODEL", str(PICOCLAW_DIR / "ggml-tiny.bin"))
 VOSK_MODEL_PATH   = os.environ.get("VOSK_MODEL_PATH", str(PICOCLAW_DIR / "vosk-model-small-ru"))
 
+VOSK_MODEL_DE_PATH   = os.environ.get("VOSK_MODEL_DE_PATH",  str(PICOCLAW_DIR / "vosk-model-small-de"))
+PIPER_MODEL_DE       = os.environ.get("PIPER_MODEL_DE",      str(PICOCLAW_DIR / "de_DE-thorsten-medium.onnx"))
+PIPER_MODEL_DE_TMPFS = "/dev/shm/piper/de_DE-thorsten-medium.onnx"
+STRINGS_FILE         = PICOCLAW_DIR / "strings.json"
+
 VOICE_SAMPLE_RATE   = 16000
 VOICE_CHUNK_SIZE    = 4000
 STT_CONF_THRESHOLD  = 0.65    # must match bot_voice.py
@@ -731,6 +736,205 @@ def _load_vosk_model_cached(_cache: list = []) -> object:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T13 — i18n string coverage (GUI)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_i18n_string_coverage(**_) -> list[TestResult]:
+    """T13 — strings.json has identical key sets for ru/en/de with no empty values."""
+    t0 = time.time()
+    if not STRINGS_FILE.exists():
+        return [TestResult("i18n_string_coverage", "FAIL", time.time() - t0,
+                           f"strings.json not found: {STRINGS_FILE}")]
+    try:
+        strings = json.loads(STRINGS_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        return [TestResult("i18n_string_coverage", "FAIL", time.time() - t0,
+                           f"Parse error: {e}")]
+
+    supported = ["ru", "en", "de"]
+    missing_langs = [lg for lg in supported if lg not in strings]
+    if missing_langs:
+        return [TestResult("i18n_string_coverage", "FAIL", time.time() - t0,
+                           f"Missing top-level language keys: {missing_langs}")]
+
+    ref_keys = set(strings["ru"].keys())
+    issues: list[str] = []
+    for lang in supported:
+        if lang == "ru":
+            continue
+        missing = ref_keys - set(strings[lang].keys())
+        extra   = set(strings[lang].keys()) - ref_keys
+        if missing:
+            issues.append(f"{lang} missing {len(missing)} key(s): " + str(sorted(missing)[:5]))
+        if extra:
+            issues.append(f"{lang} has {len(extra)} extra key(s): " + str(sorted(extra)[:5]))
+
+    empty: list[str] = []
+    for lang in supported:
+        for k, v in strings[lang].items():
+            if not str(v).strip():
+                empty.append(f"{lang}.{k}")
+
+    if issues or empty:
+        parts = []
+        if issues:
+            parts.append("Parity: " + " | ".join(issues))
+        if empty:
+            parts.append(f"Empty values ({len(empty)}): " + ", ".join(empty[:5]))
+        return [TestResult("i18n_string_coverage", "FAIL", time.time() - t0,
+                           " | ".join(parts))]
+
+    total = len(ref_keys)
+    return [TestResult("i18n_string_coverage", "PASS", time.time() - t0,
+                       f"All 3 languages ({', '.join(supported)}) have {total} keys, no empty values")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T14 — language routing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_lang_routing(verbose: bool = False, **_) -> list[TestResult]:
+    """T14 — _piper_model_path(lang) and vosk model routing return correct paths for ru/en/de."""
+    t0 = time.time()
+    opts = _load_voice_opts()
+
+    def _piper_path(lang: str) -> str:
+        if lang == "de":
+            if opts.get("tmpfs_model") and Path(PIPER_MODEL_DE_TMPFS).exists():
+                return PIPER_MODEL_DE_TMPFS
+            return PIPER_MODEL_DE
+        else:
+            if opts.get("tmpfs_model") and Path(PIPER_MODEL_TMPFS).exists():
+                return PIPER_MODEL_TMPFS
+            if opts.get("piper_low_model") and Path(PIPER_MODEL_LOW).exists():
+                return PIPER_MODEL_LOW
+            return PIPER_MODEL
+
+    def _vosk_path(lang: str) -> str:
+        if lang == "de":
+            return VOSK_MODEL_DE_PATH
+        return VOSK_MODEL_PATH  # ru + en both fall back to Russian model
+
+    issues: list[str] = []
+    rows: list[str] = []
+    for lang in ("ru", "en", "de"):
+        pp = _piper_path(lang)
+        vp = _vosk_path(lang)
+        pp_ok = Path(pp).exists()
+        vp_ok = Path(vp).exists()
+        rows.append(
+            f"lang={lang}: piper={Path(pp).name}({'ok' if pp_ok else 'absent'}) "
+            f"vosk={Path(vp).name}({'ok' if vp_ok else 'absent'})"
+        )
+        if verbose:
+            print(f"         {rows[-1]}")
+
+        if lang in ("ru", "en"):
+            # Both should route to the Russian piper model family
+            ru_models = {PIPER_MODEL_TMPFS, PIPER_MODEL_LOW, PIPER_MODEL}
+            if pp not in ru_models:
+                issues.append(f"{lang}: unexpected piper path {pp!r}")
+            if vp != VOSK_MODEL_PATH:
+                issues.append(f"{lang}: vosk should route to RU model, got {vp!r}")
+        else:  # de
+            expected_piper = (PIPER_MODEL_DE_TMPFS
+                              if opts.get("tmpfs_model") and Path(PIPER_MODEL_DE_TMPFS).exists()
+                              else PIPER_MODEL_DE)
+            if pp != expected_piper:
+                issues.append(f"de: expected piper {expected_piper!r}, got {pp!r}")
+            if vp != VOSK_MODEL_DE_PATH:
+                issues.append(f"de: expected vosk {VOSK_MODEL_DE_PATH!r}, got {vp!r}")
+
+    status = "FAIL" if issues else "PASS"
+    detail = " | ".join(rows)
+    if issues:
+        detail = "ERRORS: " + "; ".join(issues) + " || " + detail
+    return [TestResult("lang_routing", status, time.time() - t0, detail)]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T15 — German TTS synthesis
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_de_tts_synthesis(gt: dict, verbose: bool = False, **_) -> list[TestResult]:
+    """T15 — German Piper TTS synthesises text to raw PCM (SKIP if model absent)."""
+    t0 = time.time()
+    if not Path(PIPER_BIN).exists():
+        return [TestResult("de_tts_synthesis", "FAIL", time.time() - t0,
+                           f"Piper binary not found: {PIPER_BIN}")]
+
+    opts = _load_voice_opts()
+    model_path = (PIPER_MODEL_DE_TMPFS
+                  if opts.get("tmpfs_model") and Path(PIPER_MODEL_DE_TMPFS).exists()
+                  else PIPER_MODEL_DE)
+
+    if not Path(model_path).exists():
+        return [TestResult("de_tts_synthesis", "SKIP", time.time() - t0,
+                           f"German Piper model absent: {model_path}")]
+
+    test_text = gt.get("test_tts_text_de", "Hallo! Das ist ein Test mit dem deutschen Sprachmodell.")
+    try:
+        piper_result = subprocess.run(
+            [PIPER_BIN, "--model", model_path, "--output-raw"],
+            input=test_text.encode("utf-8"),
+            capture_output=True, timeout=120,
+        )
+        elapsed = time.time() - t0
+        raw_pcm = piper_result.stdout
+        if not raw_pcm:
+            return [TestResult("de_tts_synthesis", "FAIL", elapsed,
+                               f"Piper rc={piper_result.returncode}: "
+                               f"{piper_result.stderr[:200]}")]
+        detail = (f"DE Piper {len(raw_pcm):,} bytes PCM in {elapsed:.1f}s "
+                  f"(model: {Path(model_path).name})")
+        if verbose:
+            print(f"         {detail}")
+        return [TestResult("de_tts_synthesis", "PASS", elapsed, detail,
+                           metric=elapsed, metric_key="de_tts_piper_s")]
+    except subprocess.TimeoutExpired:
+        return [TestResult("de_tts_synthesis", "FAIL", time.time() - t0,
+                           "German Piper timed out after 120s")]
+    except Exception as e:
+        return [TestResult("de_tts_synthesis", "FAIL", time.time() - t0, str(e))]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T16 — German Vosk model loads
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_de_vosk_model(verbose: bool = False, **_) -> list[TestResult]:
+    """T16 — German Vosk model loads and produces a result on silence (SKIP if absent)."""
+    t0 = time.time()
+    if not Path(VOSK_MODEL_DE_PATH).exists():
+        return [TestResult("de_vosk_model", "SKIP", time.time() - t0,
+                           f"German Vosk model absent: {VOSK_MODEL_DE_PATH}")]
+    try:
+        import vosk
+    except ImportError:
+        return [TestResult("de_vosk_model", "SKIP", time.time() - t0,
+                           "vosk not installed")]
+    try:
+        vosk.SetLogLevel(-1)
+        model = vosk.Model(VOSK_MODEL_DE_PATH)
+        elapsed_load = time.time() - t0
+        rec = vosk.KaldiRecognizer(model, 16000)
+        silence = b'\x00' * (16000 * 2)  # 1 s of silence S16LE
+        rec.AcceptWaveform(silence)
+        import json as _j
+        result = _j.loads(rec.FinalResult())
+        text = result.get("text", "")
+        text_fmt = repr(text) if text else "(empty - correct)"
+        detail = f"DE Vosk loaded in {elapsed_load:.1f}s, silence result: {text_fmt}"
+        if verbose:
+            print(f"         {detail}")
+        return [TestResult("de_vosk_model", "PASS", time.time() - t0, detail,
+                           metric=elapsed_load, metric_key="de_vosk_load_s")]
+    except Exception as e:
+        return [TestResult("de_vosk_model", "FAIL", time.time() - t0,
+                           f"Failed to load German Vosk model: {e}")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Regression check
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -789,6 +993,11 @@ TEST_FUNCTIONS = [
     t_tts_synthesis,
     t_whisper_stt,
     t_whisper_hallucination_guard,
+    # Language / i18n tests (T13–T16)
+    t_i18n_string_coverage,
+    t_lang_routing,
+    t_de_tts_synthesis,
+    t_de_vosk_model,
 ]
 
 

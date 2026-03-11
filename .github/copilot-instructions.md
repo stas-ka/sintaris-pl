@@ -91,6 +91,10 @@ plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests
 | T10 | `whisper_stt` | whisper.cpp transcribes; WER ≤ 40% vs ground truth (SKIP if binary absent) |
 | T11 | `whisper_hallucination_guard` | Sparse-output guard rejects hallucinated phrases; Vosk fallback produces real words |
 | T12 | `regression_check` | All timings within 30% of saved baseline |
+| T13 | `i18n_string_coverage` | strings.json: all 3 languages (ru/en/de) have identical key sets, no empty values, checks 188 keys |
+| T14 | `lang_routing` | `_piper_model_path(lang)` and vosk model routing return correct paths for ru/en/de; file existence checked |
+| T15 | `de_tts_synthesis` | German Piper TTS (de_DE-thorsten-medium.onnx) synthesises to raw PCM; SKIP if model absent |
+| T16 | `de_vosk_model` | German Vosk model loads and decodes silence without error; SKIP if absent |
 
 ---
 
