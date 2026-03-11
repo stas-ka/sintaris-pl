@@ -484,18 +484,18 @@ def _handle_cal_delete_request(chat_id: int, ev_id: str) -> None:
     dt    = datetime.fromisoformat(ev["dt_iso"])
     cdown = _fmt_countdown(dt, lang)
     text  = (
-        f"🗑 {'Удалить событие?' if lang == 'ru' else 'Delete event?'}\n\n"
+        f"{_t(chat_id, 'cal_del_prompt')}\n\n"
         f"📌 *{_escape_md(ev['title'])}*\n"
         f"📅 {dt.strftime('%d.%m.%Y %H:%M')}  {cdown}"
     )
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
         InlineKeyboardButton(
-            "✅  " + ("Удалить" if lang == "ru" else "Delete"),
+            _t(chat_id, "cal_btn_confirm_delete"),
             callback_data=f"cal_del_confirm:{ev_id}",
         ),
         InlineKeyboardButton(
-            "❌  " + ("Отмена" if lang == "ru" else "Cancel"),
+            _t(chat_id, "cal_btn_cancel"),
             callback_data="menu_calendar",
         ),
     )
@@ -526,7 +526,7 @@ def _handle_calendar_query(chat_id: int, text: str) -> None:
     )
     thinking = bot.send_message(
         chat_id,
-        "⏳ " + ("Ищу события…" if lang == "ru" else "Searching events…"),
+        _t(chat_id, "cal_searching"),
     )
     raw = _ask_picoclaw(prompt, timeout=25)
     try:
@@ -545,7 +545,7 @@ def _handle_calendar_query(chat_id: int, text: str) -> None:
     except Exception:
         from_date = datetime.now().date()
         to_date   = from_date + timedelta(days=7)
-        label     = ("ближайшие 7 дней" if lang == "ru" else "next 7 days")
+        label     = _t(chat_id, "cal_default_label")
 
     events = _cal_load(chat_id)
     matched = sorted(
@@ -556,10 +556,10 @@ def _handle_calendar_query(chat_id: int, text: str) -> None:
 
     if not matched:
         msg = (f"📅 *{_escape_md(label)}*\n\n"
-               + ("_Событий не найдено._" if lang == "ru" else "_No events found._"))
+               + _t(chat_id, "cal_no_events"))
     else:
         lines = [f"📅 *{_escape_md(label)}* — {len(matched)} "
-                 + ("событий:" if lang == "ru" else "event(s):"), ""]
+                 + _t(chat_id, "cal_events_count"), ""]
         for ev in matched:
             dt    = datetime.fromisoformat(ev["dt_iso"])
             cdown = _fmt_countdown(dt, lang)
@@ -576,31 +576,11 @@ def _handle_calendar_query(chat_id: int, text: str) -> None:
 
 def _start_cal_console(chat_id: int) -> None:
     """Enter calendar console mode."""
-    lang = _st._user_lang.get(chat_id, "ru")
     _st._user_mode[chat_id] = "cal_console"
-    if lang == "ru":
-        prompt = (
-            "💬 *Консоль календаря*\n\n"
-            "Введите команду в свободной форме:\n"
-            "• _«добавь встречу с Максом в пятницу в 14»_\n"
-            "• _«что у меня завтра?»_\n"
-            "• _«удали встречу с врачом»_\n"
-            "• _«покажи события на следующей неделе»_\n"
-            "• _«перенеси встречу с командой на 16:00»_"
-        )
-    else:
-        prompt = (
-            "💬 *Calendar Console*\n\n"
-            "Type a command freely:\n"
-            "• _«add meeting with Max on Friday at 2pm»_\n"
-            "• _«what do I have tomorrow?»_\n"
-            "• _«delete doctor appointment»_\n"
-            "• _«show events next week»_\n"
-            "• _«reschedule team meeting to 4pm»_"
-        )
+    prompt = _t(chat_id, "cal_console_prompt")
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton(
-        "❌  " + ("Выйти" if lang == "ru" else "Exit"),
+        _t(chat_id, "cal_btn_exit"),
         callback_data="menu_calendar",
     ))
     bot.send_message(chat_id, prompt, parse_mode="Markdown", reply_markup=kb)
@@ -629,7 +609,7 @@ def _handle_cal_console(chat_id: int, text: str) -> None:
 
     thinking = bot.send_message(
         chat_id,
-        "⏳ " + ("Анализирую команду…" if lang == "ru" else "Analyzing command…"),
+        _t(chat_id, "cal_analyzing"),
     )
     raw = _ask_picoclaw(prompt, timeout=20)
     try:
@@ -661,9 +641,7 @@ def _handle_cal_console(chat_id: int, text: str) -> None:
             else:
                 bot.send_message(
                     chat_id,
-                    "❓ " + ("Не нашёл такого события. Откройте календарь и выберите вручную."
-                             if lang == "ru" else
-                             "Could not find that event. Open calendar and select manually."),
+                    _t(chat_id, "cal_event_not_found"),
                     reply_markup=_calendar_keyboard(chat_id, events),
                 )
     elif intent == "edit":
@@ -676,9 +654,7 @@ def _handle_cal_console(chat_id: int, text: str) -> None:
             else:
                 bot.send_message(
                     chat_id,
-                    "❓ " + ("Не нашёл такого события. Откройте календарь и выберите вручную."
-                             if lang == "ru" else
-                             "Could not find that event. Open calendar and select manually."),
+                    _t(chat_id, "cal_event_not_found"),
                     reply_markup=_calendar_keyboard(chat_id, events),
                 )
     else:
@@ -758,29 +734,16 @@ def _cal_prompt_edit_field(chat_id: int, field: str,
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton(
-        "❌  " + ("Отмена" if lang == "ru" else "Cancel"),
+        _t(chat_id, "cal_btn_cancel"),
         callback_data="cancel",
     ))
 
     if field == "title":
-        prompt = ("✏️ Введите *новое название* события:" if lang == "ru"
-                  else "✏️ Enter the *new title* for the event:")
+        prompt = _t(chat_id, "cal_edit_title_prompt")
     elif field == "dt":
-        prompt = (
-            "📅 Введите *новую дату и время* в свободной форме:\n"
-            "_«завтра в 14:30»_, _«5 апреля в 9:00»_, _«через 2 часа»_"
-            if lang == "ru" else
-            "📅 Enter *new date and time* freely:\n"
-            "_«tomorrow at 14:30»_, _«April 5 at 9:00»_, _«in 2 hours»_"
-        )
+        prompt = _t(chat_id, "cal_edit_dt_prompt")
     else:  # remind
-        prompt = (
-            "⏰ Введите *за сколько минут* напомнить (число):\n"
-            "_Например: 10, 30, 60_"
-            if lang == "ru" else
-            "⏰ Enter *how many minutes before* to remind (number):\n"
-            "_E.g.: 10, 30, 60_"
-        )
+        prompt = _t(chat_id, "cal_edit_remind_prompt")
 
     bot.send_message(chat_id, prompt, parse_mode="Markdown", reply_markup=kb)
 
@@ -799,8 +762,7 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
         if not new_title:
             bot.send_message(
                 chat_id,
-                "⚠️ " + ("Название не может быть пустым." if lang == "ru"
-                          else "Title cannot be empty."),
+                _t(chat_id, "cal_title_empty"),
             )
             _cal_prompt_edit_field(chat_id, "title", ev_id)
             return
@@ -819,7 +781,7 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
         )
         thinking = bot.send_message(
             chat_id,
-            "⏳ " + ("Разбираю дату…" if lang == "ru" else "Parsing date…"),
+            _t(chat_id, "cal_parsing_date"),
         )
         raw = _ask_picoclaw(prompt, timeout=25)
         try:
@@ -835,8 +797,7 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
             log.warning(f"[Cal] dt parse failed: {exc}  raw={raw!r}")
             bot.send_message(
                 chat_id,
-                "❌ " + ("Не смог разобрать дату. Попробуйте ещё раз." if lang == "ru"
-                         else "Could not parse date. Please try again."),
+                _t(chat_id, "cal_date_parse_fail"),
                 parse_mode="Markdown",
             )
             _cal_prompt_edit_field(chat_id, "dt", ev_id)
@@ -851,8 +812,7 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
         except Exception:
             bot.send_message(
                 chat_id,
-                "⚠️ " + ("Введите число минут, например 15." if lang == "ru"
-                          else "Enter a number of minutes, e.g. 15."),
+                _t(chat_id, "cal_remind_invalid"),
             )
             _cal_prompt_edit_field(chat_id, "remind", ev_id)
             return
