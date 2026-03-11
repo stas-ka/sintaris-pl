@@ -737,7 +737,7 @@ systemd
 
 ## 14. Multilanguage Support
 
-> **Status (2026-03-11):** Phase 1 implemented, not yet deployed. Phase 2 (inline string refactor) in progress.
+> **Status (2026-03-11):** Phase 1 and Phase 2 complete — all modules migrated to `_t()`. Deployed 2026-03-11.
 
 ### 14.1 Concept
 
@@ -793,7 +793,7 @@ return text.format(**kwargs) if kwargs else text
 - Falls back: user lang → "en" → key name (never crashes)
 - Supports `{placeholder}` substitution: `_t(cid, "note_saved", title="My note")`
 
-**All 115 UI keys** are present in all three languages. Dynamic/inline strings in `bot_calendar.py`, `bot_handlers.py`, `bot_mail_creds.py` etc. are partially migrated to `_t()` (Phase 2).
+**All 188 UI keys** are present in all three languages. All dynamic/inline strings in `bot_calendar.py`, `bot_handlers.py`, `bot_mail_creds.py`, and `bot_access.py` are fully migrated to `_t()` (Phase 2 complete).
 
 ### 14.4 LLM Language Injection
 
@@ -836,13 +836,13 @@ Both Vosk and Piper models are loaded lazily on first use; not at startup.
 | STT model routing | ✅ Done | `_get_vosk_model(lang)` in `bot_voice.py` |
 | TTS model routing | ✅ Done | `_piper_model_path(lang)` in `bot_voice.py` |
 | TTS `lang=` pass-through | ✅ Done | All `_tts_to_ogg()` calls pass `lang=` |
-| Inline strings in `bot_calendar.py` | 🔄 Phase 2 | ~106 ternaries need `_t()` migration |
-| Inline strings in `bot_handlers.py` | 🔄 Phase 2 | ~35 hardcoded labels |
-| Inline strings in `bot_mail_creds.py` | 🔄 Phase 2 | ~28 hardcoded strings |
-| Inline strings in `bot_access.py` | 🔄 Phase 2 | 4 hardcoded strings |
-| `setup_voice.sh` German models | 🔄 Phase 2 | Download vosk-small-de + de_DE-thorsten |
-| **Deployed to Pi** | ❌ Not yet | Commits `0eb8f01`, `1f6764d` — local only |
-| **Tested on Pi** | ❌ Not yet | No test run performed |
+| Inline strings in `bot_calendar.py` | ✅ Done | All ternaries replaced with `_t()` — commit `143000d` |
+| Inline strings in `bot_handlers.py` | ✅ Done | All labels migrated — commit `8b0db9a` |
+| Inline strings in `bot_mail_creds.py` | ✅ Done | All strings + DE provider hints — commit `8b0db9a` |
+| Inline strings in `bot_access.py` | ✅ Done | deny, back, mute labels — commit `8b0db9a` |
+| `setup_voice.sh` German models | ✅ Done | vosk-small-de + de_DE-thorsten-medium downloads |
+| **Deployed to Pi** | ✅ Done | Deployed 2026-03-11, v2026.3.26 |
+| **Tested on Pi** | ✅ Done | Service start verified, journal clean |
 
 ### 14.7 Adding a New Language
 
