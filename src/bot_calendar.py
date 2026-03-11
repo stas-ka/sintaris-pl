@@ -1025,7 +1025,7 @@ def _handle_cal_event_tts(chat_id: int, ev_id: str) -> None:
     )
     try:
         from bot_voice import _tts_to_ogg  # noqa: PLC0415
-        ogg = _tts_to_ogg(tts_text)
+        ogg = _tts_to_ogg(tts_text, lang=lang)
         if ogg:
             bot.delete_message(chat_id, placeholder.message_id)
             dt = datetime.fromisoformat(ev["dt_iso"])
@@ -1059,7 +1059,7 @@ def _handle_cal_confirm_tts(chat_id: int) -> None:
     )
     try:
         from bot_voice import _tts_to_ogg  # noqa: PLC0415
-        ogg = _tts_to_ogg(tts_text)
+        ogg = _tts_to_ogg(tts_text, lang=lang)
         if ogg:
             bot.delete_message(chat_id, placeholder.message_id)
             dt = datetime.fromisoformat(dt_iso)
@@ -1126,7 +1126,7 @@ def _send_reminder(chat_id: int, ev_id: str, title: str, dt_iso: str) -> None:
         # Optional TTS voice note (deferred import to avoid circular at module load)
         try:
             from bot_voice import _tts_to_ogg  # noqa: PLC0415  deferred on purpose
-            ogg = _tts_to_ogg(tts_text)
+            ogg = _tts_to_ogg(tts_text, lang=lang)
             if ogg:
                 bot.send_voice(chat_id, ogg)
         except Exception as tts_err:
@@ -1246,7 +1246,7 @@ def _cal_morning_briefing_loop() -> None:
                     for ev in today_evs:
                         dt = datetime.fromisoformat(ev["dt_iso"])
                         tts_text += f"{ev['title']} в {dt.strftime('%H:%M')}. "
-                    ogg = _tts_to_ogg(tts_text[:300])
+                    ogg = _tts_to_ogg(tts_text[:300], lang=lang)
                     if ogg:
                         bot.send_voice(chat_id, ogg)
                 except Exception as tts_err:
