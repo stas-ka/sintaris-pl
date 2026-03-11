@@ -57,7 +57,7 @@ def _deny(chat_id: int) -> None:
 # i18n — string loading and lookup
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SUPPORTED_LANGS: frozenset[str] = frozenset({"ru", "en"})
+_SUPPORTED_LANGS: frozenset[str] = frozenset({"ru", "de", "en"})
 _DEFAULT_LANG  = "ru"
 _FALLBACK_LANG = "en"
 
@@ -77,9 +77,14 @@ _STRINGS: dict[str, dict[str, str]] = _load_strings(_STRINGS_FILE)
 
 
 def _set_lang(chat_id: int, from_user) -> None:
-    """Store the best-supported UI language for this user ('ru' | 'en')."""
+    """Store the best-supported UI language for this user ('ru' | 'de' | 'en')."""
     lc = (getattr(from_user, "language_code", "") or "").lower()
-    _user_lang[chat_id] = "ru" if lc.startswith("ru") else "en"
+    if lc.startswith("ru"):
+        _user_lang[chat_id] = "ru"
+    elif lc.startswith("de"):
+        _user_lang[chat_id] = "de"
+    else:
+        _user_lang[chat_id] = "en"
 
 
 def _lang(chat_id: int) -> str:
@@ -102,6 +107,11 @@ _LANG_INSTRUCTION: dict[str, str] = {
         "Отвечай строго на русском языке. "
         "Не используй эмоджи, смайлики и символы. "
         "Отвечай по существу (3–6 предложений).\n\n"
+    ),
+    "de": (
+        "Antworte ausschließlich auf Deutsch. "
+        "Verwende keine Emojis oder Emoticons. "
+        "Halte die Antwort informativ (3–6 Sätze).\n\n"
     ),
     "en": (
         "Reply in English only. "
@@ -163,6 +173,11 @@ def _with_lang_voice(chat_id: int, stt_text: str) -> str:
             "исправь их по контексту и ответь на исходный вопрос. "
             "Не упоминай исправления явно.\n\n"
         ) if lang == "ru" else (
+            "Der folgende Text ist das Ergebnis der automatischen Spracherkennung "
+            "und kann Fehler enthalten. Wörter in eckigen Klammern [?Wort] wurden "
+            "mit geringer Sicherheit erkannt — korrigiere sie anhand des Kontexts "
+            "und beantworte die ursprüngliche Frage. Erwähne die Korrekturen nicht.\n\n"
+        ) if lang == "de" else (
             "The following text was produced by automatic speech recognition. "
             "Words marked [?word] were recognized with low confidence — "
             "correct them using context and answer the original question. "

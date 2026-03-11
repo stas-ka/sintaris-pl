@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.26",
+    "date":    "2026-03-11",
+    "title":   "Multilingual support: Russian, English, German (DE)",
+    "notes":   "- German (de) language support added for all bot functions\n- Language auto-detected from Telegram user language_code\n- German TTS: Piper de_DE-thorsten-medium.onnx\n- German STT: Vosk vosk-model-small-de\n- All 115 UI strings translated to German\n- Calendar, voice, notes, mail — all support German"
+  },
+  {
     "version": "2026.3.25",
     "date":    "2026-03-10",
     "title":   "Calendar: multi-event, NL query, delete confirmation, console mode",

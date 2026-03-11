@@ -79,7 +79,7 @@ MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.25"
+BOT_VERSION        = "2026.3.26"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),
@@ -92,6 +92,8 @@ LAST_NOTIFIED_FILE = os.path.expanduser("~/.picoclaw/last_notified_version.txt")
 
 VOSK_MODEL_PATH    = os.environ.get("VOSK_MODEL_PATH",
                          os.path.expanduser("~/.picoclaw/vosk-model-small-ru"))
+VOSK_MODEL_DE_PATH = os.environ.get("VOSK_MODEL_DE_PATH",
+                         os.path.expanduser("~/.picoclaw/vosk-model-small-de"))
 PIPER_BIN          = os.environ.get("PIPER_BIN",  "/usr/local/bin/piper")
 PIPER_MODEL        = os.environ.get("PIPER_MODEL",
                          os.path.expanduser("~/.picoclaw/ru_RU-irina-medium.onnx"))
@@ -100,6 +102,11 @@ PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
                              "~/.picoclaw/ru_RU-irina-medium.onnx")))
 PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
                          os.path.expanduser("~/.picoclaw/ru_RU-irina-low.onnx"))
+PIPER_MODEL_DE     = os.environ.get("PIPER_MODEL_DE",
+                         os.path.expanduser("~/.picoclaw/de_DE-thorsten-medium.onnx"))
+PIPER_MODEL_DE_TMPFS = os.path.join("/dev/shm/piper",
+                         os.path.basename(os.path.expanduser(
+                             "~/.picoclaw/de_DE-thorsten-medium.onnx")))
 WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
 WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
                          os.path.expanduser("~/.picoclaw/ggml-base.bin"))

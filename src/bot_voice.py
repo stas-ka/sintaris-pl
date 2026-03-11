@@ -23,14 +23,15 @@ from typing import Optional
 import bot_state as _st
 from bot_config import (
     PIPER_BIN, PIPER_MODEL, PIPER_MODEL_TMPFS, PIPER_MODEL_LOW,
-    VOSK_MODEL_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
+    PIPER_MODEL_DE, PIPER_MODEL_DE_TMPFS,
+    VOSK_MODEL_PATH, VOSK_MODEL_DE_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
     WHISPER_BIN, WHISPER_MODEL,
     _PENDING_TTS_FILE, log,
 )
 from bot_instance import bot
 from bot_access import (
-    _t, _safe_edit, _back_keyboard, _voice_back_keyboard,
+    _t, _lang, _safe_edit, _back_keyboard, _voice_back_keyboard,
     _escape_tts, _escape_md, _truncate, _with_lang_voice, _ask_picoclaw,
     _is_guest,
 )
@@ -106,24 +107,40 @@ def _cleanup_orphaned_tts() -> None:
 # Vosk — lazy singleton
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_vosk_model():
-    """Lazy-load the Vosk Russian model (singleton)."""
-    if _st._vosk_model_cache is None:
+def _get_vosk_model(lang: str = "ru"):
+    """Lazy-load the Vosk STT model for the given language (cached per language)."""
+    if not hasattr(_st, "_vosk_model_cache_map"):
+        _st._vosk_model_cache_map = {}
+    if lang not in _st._vosk_model_cache_map:
         import vosk as _vosk_lib
         _vosk_lib.SetLogLevel(-1)
-        _st._vosk_model_cache = _vosk_lib.Model(VOSK_MODEL_PATH)
-    return _st._vosk_model_cache
+        model_path = VOSK_MODEL_DE_PATH if lang == "de" else VOSK_MODEL_PATH
+        if not os.path.isdir(model_path):
+            log.warning(f"[STT] Vosk model not found for lang={lang}: {model_path}, falling back to ru")
+            model_path = VOSK_MODEL_PATH
+        _st._vosk_model_cache_map[lang] = _vosk_lib.Model(model_path)
+        # Keep legacy singleton in sync for first loaded model
+        if _st._vosk_model_cache is None:
+            _st._vosk_model_cache = _st._vosk_model_cache_map[lang]
+    return _st._vosk_model_cache_map[lang]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Piper — model selection and warmup
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _piper_model_path() -> str:
+def _piper_model_path(lang: str = "ru") -> str:
     """
-    Return the effective Piper ONNX model path.
+    Return the effective Piper ONNX model path for the given language.
     Priority: tmpfs (RAM disk) → low model → medium (default).
+    German users always get the German model (no low/tmpfs variants yet).
     """
+    if lang == "de":
+        if _st._voice_opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_DE_TMPFS):
+            return PIPER_MODEL_DE_TMPFS
+        if os.path.exists(PIPER_MODEL_DE):
+            return PIPER_MODEL_DE
+        log.warning("[TTS] German Piper model not found, falling back to Russian model")
     opts = _st._voice_opts
     if opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_TMPFS):
         return PIPER_MODEL_TMPFS
@@ -385,7 +402,7 @@ def _split_for_tts(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def _tts_to_ogg(text: str, _trim: bool = True) -> Optional[bytes]:
+def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru") -> Optional[bytes]:
     """
     Synthesise text with Piper TTS, encode with ffmpeg as OGG Opus.
     Returns bytes for bot.send_voice(), or None on failure.
@@ -414,7 +431,7 @@ def _tts_to_ogg(text: str, _trim: bool = True) -> Optional[bytes]:
     try:
         # Step 1: Piper TTS → raw S16LE PCM at 22050 Hz
         piper_result = subprocess.run(
-            [PIPER_BIN, "--model", _piper_model_path(), "--output-raw"],
+            [PIPER_BIN, "--model", _piper_model_path(lang), "--output-raw"],
             input=tts_text.encode("utf-8"),
             capture_output=True,
             timeout=120,
@@ -491,7 +508,7 @@ def _handle_note_read_aloud(chat_id: int, slug: str) -> None:
             sent       = 0
 
             for i, chunk in enumerate(chunks):
-                ogg = _tts_to_ogg(chunk, _trim=False)
+                ogg = _tts_to_ogg(chunk, _trim=False, lang=_lang(chat_id))
                 if not ogg:
                     log.warning(f"[NotesTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
                     continue
@@ -556,7 +573,7 @@ def _handle_digest_tts(chat_id: int) -> None:
             sent    = 0
 
             for i, chunk in enumerate(chunks):
-                ogg = _tts_to_ogg(chunk, _trim=False)
+                ogg = _tts_to_ogg(chunk, _trim=False, lang=_lang(chat_id))
                 if not ogg:
                     log.warning(f"[DigestTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
                     continue
@@ -699,7 +716,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             try:
                 import vosk as _vosk_lib
                 import json as _json
-                model = _get_vosk_model()
+                model = _get_vosk_model(_lang(chat_id))
                 rec = _vosk_lib.KaldiRecognizer(model, _srate)
                 rec.SetWords(True)
                 chunk = VOICE_CHUNK_SIZE * 2 * _srate // VOICE_SAMPLE_RATE
@@ -830,7 +847,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             audio_on = (not opts.get("user_audio_toggle")
                         or _st._user_audio.get(chat_id, True))
             if audio_on:
-                ogg = _tts_to_ogg(reply)
+                ogg = _tts_to_ogg(reply, lang=_lang(chat_id))
                 if ogg:
                     bot.send_voice(chat_id, io.BytesIO(ogg))
             return
@@ -862,7 +879,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             if audio_on3:
                 tts3 = bot.send_message(chat_id, _t(chat_id, "gen_audio"),
                                         parse_mode="Markdown")
-                ogg3 = _tts_to_ogg(note_plain)
+                ogg3 = _tts_to_ogg(note_plain, lang=_lang(chat_id))
                 if ogg3:
                     bot.send_voice(chat_id, io.BytesIO(ogg3),
                                    caption=_t(chat_id, "audio_caption"))
@@ -905,7 +922,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         _tts_thread = None
         if audio_on and opts.get("parallel_tts"):
             def _bg_tts():
-                _tts_result[0] = _tts_to_ogg(response)
+                _tts_result[0] = _tts_to_ogg(response, lang=_lang(chat_id))
             _tts_thread = threading.Thread(target=_bg_tts, daemon=True)
             _tts_thread.start()
 
@@ -934,7 +951,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                     _tts_thread.join(timeout=160)   # piper 120s + ffmpeg 30s + slack
                     ogg = _tts_result[0]
                 else:
-                    ogg = _tts_to_ogg(response)
+                    ogg = _tts_to_ogg(response, lang=_lang(chat_id))
                 _timing["TTS"] = time.time() - _ts
 
                 if ogg:
