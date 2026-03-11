@@ -118,8 +118,9 @@ Each session block contains a table with one row per completed request:
 | 07:12 | Audit German language completeness across all files | 2 | 2 | claude-sonnet-4.6 | — | done |
 | 07:18 | Complete German language implementation (Phase 2) | 5 | wip | claude-sonnet-4.6 | bot_calendar.py, bot_handlers.py, bot_mail_creds.py, telegram_menu_bot.py, bot_access.py, strings.json, setup_voice.sh | wip |
 | 07:22 | Add vibe coding protocol rule to AGENTS.md + reformat protocol | 2 | 2 | claude-sonnet-4.6 | AGENTS.md, doc/vibe-coding-protocol.md | done |
+| 07:35 | Add §14 Multilanguage Support to architecture.md; deploy/test status check | 2 | 4 | claude-sonnet-4.6 | doc/architecture.md | done |
 
-**Session 5 total (so far): 8 items, ~18 requests**
+**Session 5 total (so far): 9 items, ~22 requests**
 
 ---
 
@@ -131,7 +132,7 @@ Each session block contains a table with one row per completed request:
 | 2 | 2026-03-08 | 13 | ~18 | 1.5 | unknown (pre-protocol) |
 | 3 | 2026-03-09 | 2 | ~5 | 3.0 | unknown (pre-protocol) |
 | 4 | 2026-03-11 AM | 5 | ~16 | 3.8 | unknown (pre-protocol) |
-| 5 | 2026-03-11 | 8 | ~18 | 2.4 | claude-sonnet-4.6 |
+| 5 | 2026-03-11 | 9 | ~22 | 2.4 | claude-sonnet-4.6 |
 | **Total** | | **39** | **~80** | | |
 
 ---
