@@ -16,3 +16,19 @@ src/tests/voice/*.pcm
 # Backup snapshots — exclude large binary archives (100 MB+), keep manifests + checksums
 backup/snapshots/**/picoclaw-full-*.tar.gz
 backup/snapshots/**/picoclaw-scripts-*.tar.gz
+backup/*.tar.gz
+
+# Temp scratch files
+temp/
+nul
+%TEMP%*
+d?Temp*
+
+# IDE agents
+.github/agents/
+
+# Large binary resources
+src/res/
+
+# You (scratch)
+You
