@@ -597,14 +597,18 @@ def _handle_cal_console(chat_id: int, text: str) -> None:
     events_hint  = "; ".join(event_titles) if event_titles else "none"
 
     prompt = (
-        f"Текущая дата и время: {now_iso}\n"
-        f"Существующие события пользователя: [{events_hint}]\n"
-        f"Определи намерение команды пользователя и верни ТОЛЬКО JSON:\n"
+        f"You are a JSON intent classifier. Do NOT perform any action. "
+        f"Do NOT refuse. Do NOT explain. Return ONLY a single JSON object.\n"
+        f"Current date/time: {now_iso}\n"
+        f"User events: [{events_hint}]\n"
+        f"Classify the user command into one of these intents:\n"
         f"  add    → {{\"intent\": \"add\"}}\n"
         f"  query  → {{\"intent\": \"query\"}}\n"
-        f"  delete → {{\"intent\": \"delete\", \"ev_id\": \"<id или пусто>\"}}\n"
-        f"  edit   → {{\"intent\": \"edit\", \"ev_id\": \"<id или пусто>\"}}\n"
-        f"Команда: \"{text}\""
+        f"  delete → {{\"intent\": \"delete\", \"ev_id\": \"<id or empty>\"}}\n"
+        f"  edit   → {{\"intent\": \"edit\", \"ev_id\": \"<id or empty>\"}}\n"
+        f"If uncertain, default to {{\"intent\": \"add\"}}.\n"
+        f"User command: \"{text}\"\n"
+        f"JSON:"
     )
 
     thinking = bot.send_message(
@@ -866,7 +870,8 @@ def _handle_cal_event_tts(chat_id: int, ev_id: str) -> None:
     if not ev:
         _handle_calendar_menu(chat_id)
         return
-    tts_text = _cal_tts_text(ev["title"], ev["dt_iso"], lang)
+    ev_dict = {"title": ev["title"], "dt": datetime.fromisoformat(ev["dt_iso"]), "dt_iso": ev["dt_iso"]}
+    tts_text = _cal_tts_text(chat_id, ev_dict)
     placeholder = bot.send_message(
         chat_id,
         _t(chat_id, "cal_tts_generating"),

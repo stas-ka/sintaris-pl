@@ -55,6 +55,8 @@ def _parse_admin_users() -> set[int]:
 ALLOWED_USERS: set[int] = _parse_allowed_users()
 ADMIN_USERS:   set[int] = _parse_admin_users()
 
+BOT_NAME = os.environ.get("BOT_NAME", "Pico")
+
 USERS_FILE          = os.environ.get("USERS_FILE",
                           os.path.expanduser("~/.picoclaw/users.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
@@ -74,6 +76,8 @@ CALENDAR_DIR        = os.environ.get("CALENDAR_DIR",
                           os.path.expanduser("~/.picoclaw/calendar"))
 MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
                           os.path.expanduser("~/.picoclaw/mail_creds"))
+ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
+                          os.path.expanduser("~/.picoclaw/error_protocols"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment

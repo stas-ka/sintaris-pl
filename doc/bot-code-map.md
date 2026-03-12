@@ -10,7 +10,8 @@ Use this map to locate any function by module. All `bot_*.py` files live in `src
 
 ```
 bot_config → bot_state → bot_instance → bot_access → bot_users
-    → bot_voice → bot_admin → bot_handlers → telegram_menu_bot
+    → bot_voice → bot_admin → bot_handlers
+    → bot_error_protocol → telegram_menu_bot
 ```
 
 ---
@@ -20,14 +21,15 @@ bot_config → bot_state → bot_instance → bot_access → bot_users
 | Module | Lines | Responsibility |
 |---|---|---|
 | `bot_config.py` | ~120 | Constants, env loading, logging setup — no deps |
-| `bot_state.py` | ~110 | Mutable runtime dicts, voice_opts/dynamic_users I/O |
+| `bot_state.py` | ~115 | Mutable runtime dicts, voice_opts/dynamic_users I/O |
 | `bot_instance.py` | ~12 | `bot = TeleBot(...)` singleton |
-| `bot_access.py` | ~375 | Access control, i18n, keyboards, text utils, picoclaw LLM |
+| `bot_access.py` | ~380 | Access control, i18n, keyboards, text utils, picoclaw LLM |
 | `bot_users.py` | ~160 | Registration + notes file I/O (pure, no Telegram API) |
 | `bot_voice.py` | ~280 | Full voice pipeline: STT/TTS/VAD + pending TTS tracker |
 | `bot_admin.py` | ~310 | Admin panel: guests, reg, voice opts, release notes, LLM |
 | `bot_handlers.py` | ~160 | User handlers: digest, chat, system, notes UI |
-| `telegram_menu_bot.py` | ~250 | Entry point: handlers + `main()` |
+| `bot_error_protocol.py` | ~260 | Error protocol: collect text/voice/photo → save dir → email |
+| `telegram_menu_bot.py` | ~280 | Entry point: handlers + `main()` |
 
 ## bot_config.py — Constants & Configuration
 
@@ -438,6 +440,58 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_voice` l
 
 ---
 
+## bot_error_protocol.py — Error Protocol
+
+Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_mail_creds`, `bot_email` lazy-imported inside `_errp_send_email()`.)
+
+### Helpers
+
+| Function | Purpose |
+|---|---|
+| `_safe_dirname(name)` | Strip unsafe chars → `SAFE_NAME_RE`, clamp to 60 chars |
+| `_errp_keyboard(chat_id)` | InlineKeyboard: ✅ Send / ❌ Cancel |
+| `_summary_text(state)` | One-line count: "2 text, 1 voice, 3 photo" |
+
+### Start / collect / send flow
+
+| Function | Purpose |
+|---|---|
+| `_start_error_protocol(chat_id)` | Enter `errp_name` mode, prompt for error name |
+| `_finish_errp_name(chat_id, text)` | Create timestamped dir `YYYYMMDD-HHMMSS_safename`, enter `errp_collect` mode |
+| `_errp_collect_text(chat_id, text)` | Save text to `text_NN.txt`, show summary |
+| `_errp_collect_voice(chat_id, voice_obj)` | Download OGG via bot API, save as `voice_NN.ogg` |
+| `_errp_collect_photo(chat_id, photo_list)` | Download largest resolution, save as `photo_NN.ext` |
+| `_errp_send(chat_id)` | Write `manifest.json`, confirm save, spawn email thread |
+| `_errp_cancel(chat_id)` | Pop state, exit mode (saved files remain on disk) |
+
+### Email
+
+| Function | Purpose |
+|---|---|
+| `_errp_send_email(chat_id, state)` | Background thread: MIMEMultipart with all attachments via SMTP SSL; on failure notify user data is saved locally |
+
+### `_user_mode` values
+
+| Value | Set by | Cleared by |
+|---|---|---|
+| `"errp_name"` | `_start_error_protocol()` | `_finish_errp_name()` |
+| `"errp_collect"` | `_finish_errp_name()` | `_errp_send()` / `_errp_cancel()` |
+
+### Directory structure
+
+```
+~/.picoclaw/error_protocols/
+  └── 20260312-143022_crash_report/
+        ├── manifest.json
+        ├── text_01.txt
+        ├── text_02.txt
+        ├── voice_01.ogg
+        ├── photo_01.jpg
+        └── photo_02.jpg
+```
+
+---
+
 ## telegram_menu_bot.py — Entry Point
 
 Registers handlers and starts polling. All logic is imported from the modules above.
@@ -450,6 +504,7 @@ Registers handlers and starts polling. All logic is imported from the modules ab
 | `callback_handler(call)` | Any inline button | Dispatcher for all `data=` keys |
 | `text_handler(message)` | Any text message | Route by `_user_mode` |
 | `voice_handler(message)` | Any voice note | Call `_handle_voice_message` |
+| `photo_handler(message)` | Any photo | Route to error protocol collection |
 | `main()` | `__main__` | Startup side-effects + `bot.infinity_polling()` |
 
 ---
@@ -509,6 +564,9 @@ All `data=` keys handled in `callback_handler()`:
 | `cal_confirm_tts` | `_handle_cal_confirm_tts` |
 | `cal_console` | `_start_cal_console` |
 | `cal_email:<id>` | `handle_send_email` (via `bot_email`) |
+| `errp_start` | `_start_error_protocol` |
+| `errp_send` | `_errp_send` |
+| `errp_cancel` | `_errp_cancel` |
 | `cancel` | clear pending cmd/note/mode |
 | `run:<hash>` | `_execute_pending_cmd` |
 
@@ -524,9 +582,11 @@ All `data=` keys handled in `callback_handler()`:
 | `~/.picoclaw/users.json` | Dynamically approved guest users |
 | `~/.picoclaw/registrations.json` | User registration records (pending/approved/blocked) |
 | `~/.picoclaw/active_model.txt` | Admin-selected LLM model name |
+| `~/.picoclaw/error_protocols/` | Error protocol reports (YYYYMMDD-HHMMSS_name/) |
 | `~/.picoclaw/last_notified_version.txt` | Last `BOT_VERSION` admin was notified about |
 | `~/.picoclaw/notes/<chat_id>/<slug>.md` | Per-user note files |
 | `~/.picoclaw/config.json` | picoclaw config (model_list, agents) |
+| `~/.picoclaw/error_protocols/` | Error protocol reports (YYYYMMDD-HHMMSS_name/) |
 | `~/.picoclaw/telegram_bot.log` | Bot log file |
 
 
@@ -780,6 +840,9 @@ All inline button `data=` strings routed through `handle_callback()`:
 | `chat` | set `_user_mode[id]='chat'` |
 | `system` | set `_user_mode[id]='system'` |
 | `confirm_<hash>` | `_execute_pending_cmd` |
+| `errp_start` | `_start_error_protocol` |
+| `errp_send` | `_errp_send` |
+| `errp_cancel` | `_errp_cancel` |
 | `cancel_confirm` | clear pending cmd |
 | `voice_toggle` | toggle `_user_audio[id]` |
 
@@ -797,4 +860,5 @@ All inline button `data=` strings routed through `handle_callback()`:
 | `~/.picoclaw/last_notified_version.txt` | Last `BOT_VERSION` admin was notified about |
 | `~/.picoclaw/notes/<chat_id>/<slug>.md` | Per-user note files |
 | `~/.picoclaw/config.json` | picoclaw LLM config (model_list, agents) |
+| `~/.picoclaw/error_protocols/` | Error protocol reports (YYYYMMDD-HHMMSS_name/) |
 | `~/.picoclaw/telegram_bot.log` | Bot log file |

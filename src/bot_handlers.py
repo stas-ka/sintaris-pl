@@ -154,23 +154,60 @@ def _start_note_edit(chat_id: int, slug: str) -> None:
         bot.send_message(chat_id, _t(chat_id, "note_not_found"),
                          reply_markup=_notes_menu_keyboard(chat_id))
         return
+    lines = text.splitlines()
+    note_title = lines[0].lstrip("# ").strip()
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "btn_note_append"),
+                             callback_data=f"note_append:{slug}"),
+        InlineKeyboardButton(_t(chat_id, "btn_note_replace"),
+                             callback_data=f"note_replace:{slug}"),
+    )
+    kb.row(InlineKeyboardButton(_t(chat_id, "btn_back_short"),
+                                callback_data=f"note_open:{slug}"))
+    bot.send_message(chat_id,
+                     _t(chat_id, "note_edit_choice", title=_escape_md(note_title)),
+                     parse_mode="Markdown", reply_markup=kb)
+
+
+def _start_note_append(chat_id: int, slug: str) -> None:
+    """Prompt user for text to append to an existing note."""
+    text = _load_note_text(chat_id, slug)
+    if text is None:
+        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
+    _st._user_mode[chat_id]    = "note_append_content"
+    _st._pending_note[chat_id] = {"step": "append_content", "slug": slug}
+    lines = text.splitlines()
+    note_title = lines[0].lstrip("# ").strip()
+    from telebot.types import ForceReply
+    bot.send_message(chat_id,
+                     _t(chat_id, "note_append_prompt", title=_escape_md(note_title)),
+                     parse_mode="Markdown",
+                     reply_markup=ForceReply(selective=False))
+
+
+def _start_note_replace(chat_id: int, slug: str) -> None:
+    """Prompt user to type replacement text (original Replace flow)."""
+    text = _load_note_text(chat_id, slug)
+    if text is None:
+        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
     _st._user_mode[chat_id]    = "note_edit_content"
     _st._pending_note[chat_id] = {"step": "edit_content", "slug": slug}
 
     lines = text.splitlines()
     note_title = lines[0].lstrip("# ").strip()
-    # Body = everything after the "# Title" header line (skip blank separator)
     body_lines = lines[2:] if len(lines) > 2 else (lines[1:] if len(lines) > 1 else [])
     note_body  = "\n".join(body_lines).strip() or text
 
-    # Step 1 — tell the user what to do
     bot.send_message(
         chat_id,
         _t(chat_id, "note_edit_prompt", title=_escape_md(note_title)),
         parse_mode="Markdown",
     )
-    # Step 2 — send current content as copyable plain text with ForceReply
-    # Telegram opens the reply box automatically; user can copy/edit the body above
     from telebot.types import ForceReply
     bot.send_message(chat_id, note_body, reply_markup=ForceReply(selective=False))
 
@@ -192,7 +229,11 @@ def _handle_note_delete(chat_id: int, slug: str) -> None:
 
 def _handle_profile(chat_id: int) -> None:
     """Show the user's own profile: name, username, chat ID, role, registration date, mail."""
-    from bot_mail_creds import _load_creds  # deferred — avoids circular import at module level
+    try:
+        from bot_mail_creds import _load_creds  # deferred — avoids circular import at module level
+    except Exception as _imp_err:
+        log.warning(f"[Profile] cannot import bot_mail_creds: {_imp_err}")
+        _load_creds = lambda _cid: None  # noqa: E731 — degrade gracefully
 
     reg = _find_registration(chat_id)
 
@@ -227,7 +268,11 @@ def _handle_profile(chat_id: int) -> None:
         reg_date = _t(chat_id, "profile_not_registered")
 
     # — Email (masked) ——————————————————————————————————————————————
-    creds = _load_creds(chat_id)
+    try:
+        creds = _load_creds(chat_id)
+    except Exception as _creds_err:
+        log.warning(f"[Profile] _load_creds failed for {chat_id}: {_creds_err}")
+        creds = None
     if creds and creds.get("email"):
         addr   = creds["email"]
         parts  = addr.split("@", 1)

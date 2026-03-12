@@ -71,6 +71,7 @@ from bot_handlers import (
     _handle_system_message, _execute_pending_cmd,
     _handle_notes_menu, _handle_note_list, _start_note_create,
     _handle_note_open, _handle_note_raw, _start_note_edit, _handle_note_delete,
+    _start_note_append, _start_note_replace,
     _notes_menu_keyboard,
     _handle_profile,
 )
@@ -100,6 +101,13 @@ from bot_mail_creds import (
 # ─── Email send ────────────────────────────────────────────────────────────
 from bot_email import (
     handle_send_email, handle_email_change_target, finish_email_set_target,
+)
+
+# ─── Error protocol ────────────────────────────────────────────────────────
+from bot_error_protocol import (
+    _start_error_protocol, _finish_errp_name,
+    _errp_collect_text, _errp_collect_voice, _errp_collect_photo,
+    _errp_send, _errp_cancel,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -408,6 +416,18 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    elif data.startswith("note_append:"):
+        if not _is_guest(cid):
+            _start_note_append(cid, data[len("note_append:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_replace:"):
+        if not _is_guest(cid):
+            _start_note_replace(cid, data[len("note_replace:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     elif data.startswith("note_delete:"):
         if not _is_guest(cid):
             _handle_note_delete(cid, data[len("note_delete:"):])
@@ -461,6 +481,20 @@ def callback_handler(call):
         handle_mail_settings(cid)
     elif data == "mail_del_creds":
         handle_mail_del_creds(cid)
+
+    # ── Error protocol ─────────────────────────────────────────────────────
+    elif data == "errp_start":
+        if _is_admin(cid):
+            _start_error_protocol(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+    elif data == "errp_send":
+        if _is_admin(cid):
+            _errp_send(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+    elif data == "errp_cancel":
+        _errp_cancel(cid)
 
     # ── Calendar ───────────────────────────────────────────────────────────
     elif data == "menu_calendar":
@@ -559,6 +593,7 @@ def callback_handler(call):
         _st._pending_note.pop(cid, None)
         _pending_cal.pop(cid, None)
         _pending_mail_setup.pop(cid, None)
+        _st._pending_error_protocol.pop(cid, None)
         _st._user_mode.pop(cid, None)
         bot.send_message(cid, _t(cid, "cancelled"), reply_markup=_back_keyboard())
 
@@ -675,9 +710,46 @@ def text_handler(message):
                          reply_markup=_notes_menu_keyboard(cid))
         return
 
+    if mode == "note_append_content":
+        if _is_guest(cid):
+            _st._user_mode.pop(cid, None)
+            _st._pending_note.pop(cid, None)
+            return
+        info = _st._pending_note.pop(cid, {})
+        _st._user_mode.pop(cid, None)
+        slug = info.get("slug")
+        if not slug:
+            _send_menu(cid, greeting=False)
+            return
+        existing   = _load_note_text(cid, slug) or ""
+        content    = existing.rstrip() + "\n\n" + message.text.strip()
+        _save_note_file(cid, slug, content)
+        title_line = existing.splitlines()[0] if existing else f"# {slug}"
+        title = title_line.lstrip("# ").strip()
+        bot.send_message(cid,
+                         _t(cid, "note_updated", title=_escape_md(title)),
+                         parse_mode="Markdown",
+                         reply_markup=_notes_menu_keyboard(cid))
+        return
+
     # ── Email recipient address entry ─────────────────────────────────
     if mode == "email_set_target":
         finish_email_set_target(cid, message.text)
+        return
+
+    # ── Error protocol flows ──────────────────────────────────────────
+    if mode == "errp_name":
+        if _is_admin(cid):
+            _finish_errp_name(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+        return
+
+    if mode == "errp_collect":
+        if _is_admin(cid):
+            _errp_collect_text(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
         return
 
     # ── Mail credential setup flow ────────────────────────────────────
@@ -753,7 +825,28 @@ def voice_handler(message):
         _deny(cid)
         return
     _set_lang(cid, message.from_user)
+    # Error protocol voice collection
+    if _st._user_mode.get(cid) == "errp_collect" and cid in _st._pending_error_protocol:
+        _errp_collect_voice(cid, message.voice)
+        return
     _handle_voice_message(cid, message.voice)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Photo handler (error protocol collection)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@bot.message_handler(content_types=["photo"])
+def photo_handler(message):
+    cid = message.chat.id
+    if not _is_allowed(cid):
+        _deny(cid)
+        return
+    _set_lang(cid, message.from_user)
+    if _st._user_mode.get(cid) == "errp_collect" and cid in _st._pending_error_protocol:
+        _errp_collect_photo(cid, message.photo)
+        return
+    # Outside error protocol — no general photo handling needed
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -95,6 +95,11 @@ plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests
 | T14 | `lang_routing` | `_piper_model_path(lang)` and vosk model routing return correct paths for ru/en/de; file existence checked |
 | T15 | `de_tts_synthesis` | German Piper TTS (de_DE-thorsten-medium.onnx) synthesises to raw PCM; SKIP if model absent |
 | T16 | `de_vosk_model` | German Vosk model loads and decodes silence without error; SKIP if absent |
+| T17 | `bot_name_injection` | BOT_NAME defined in bot_config, {bot_name} placeholders in strings.json, format() works (Bug 0.2) |
+| T18 | `profile_resilience` | _handle_profile() has try/except around deferred bot_mail_creds import (Bug 0.1) |
+| T19 | `note_edit_append_replace` | Append/Replace functions, callbacks, and i18n keys all present (Bug 0.3) |
+| T20 | `calendar_tts_call_signature` | _cal_tts_text(chat_id, ev) 2-arg signature; ev_dict has datetime obj (Bug 0.4) |
+| T21 | `calendar_console_classifier` | Console uses JSON intent classifier with add default, not general LLM (Bug 0.5) |
 
 ---
 
@@ -329,6 +334,7 @@ Notification state is stored in `~/.picoclaw/last_notified_version.txt` — dele
 |---|---|---|
 | `~/.picoclaw/voice_opts.json` | First voice opts toggle | Per-user voice optimization flags |
 | `~/.picoclaw/last_notified_version.txt` | First admin notification | Tracks last notified `BOT_VERSION` |
+| `~/.picoclaw/error_protocols/` | First error protocol | Admin error reports (YYYYMMDD-HHMMSS_name/) |
 | `~/.picoclaw/bot.env` | Manual step (secrets) | `BOT_TOKEN` + `ALLOWED_USER` |
 
 ---

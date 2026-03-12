@@ -128,7 +128,7 @@ Module dependency chain (no circular imports):
 ```
 bot_config → bot_state → bot_instance → bot_security → bot_access → bot_users
     → bot_voice → bot_calendar → bot_admin → bot_handlers
-    → bot_mail_creds → bot_email → telegram_menu_bot
+    → bot_mail_creds → bot_email → bot_error_protocol → telegram_menu_bot
 ```
 
 | Module | Responsibility |
@@ -145,6 +145,7 @@ bot_config → bot_state → bot_instance → bot_security → bot_access → bo
 | `bot_handlers.py` | User handlers: free chat, system chat, digest, notes, profile |
 | `bot_mail_creds.py` | Per-user IMAP credentials, consent flow, digest fetch + LLM summarise |
 | `bot_email.py` | "Send as email" SMTP for notes, digest, and calendar events |
+| `bot_error_protocol.py` | Error protocol: collect text/voice/photo → save dir → email |
 | `telegram_menu_bot.py` | Entry point: handler registration + callback dispatcher + `main()` |
 
 ### 3.2 Main Menu — User Functions
@@ -158,6 +159,7 @@ bot_config → bot_state → bot_instance → bot_security → bot_access → bo
 | 📝 Notes | `menu_notes` | all approved | Personal Markdown notes manager |
 | 🗓 Calendar | `menu_calendar` | all approved | Smart calendar with NL add, query, console, multi-event |
 | 👤 Profile | `profile` | all approved | Show name, username, role, registration date, masked email |
+| 🐛 Error Protocol | `errp_start` | **admin only** | Collect text/voice/photo error reports → save + email |
 | ❓ Help | `help` | all approved | Contextual help (admin / user / guest variants) |
 | 🔐 Admin | `admin_menu` | **admin only** | Admin control panel |
 
@@ -208,6 +210,8 @@ Incoming text
       ├─ _user_mode == "calendar"          → _finish_cal_add()
       ├─ _user_mode == "cal_console"       → _handle_cal_console()   ← new
       ├─ _user_mode == "cal_edit_*"        → _cal_handle_edit_input()
+      ├─ _user_mode == "errp_name"         → _finish_errp_name()
+      ├─ _user_mode == "errp_collect"      → _errp_collect_text()
       ├─ _pending_note[cid] exists        → note title / content step
       ├─ _pending_mail_setup[cid] exists  → mail setup wizard step
       ├─ _pending_llm_key[cid] exists     → _handle_save_llm_key()
@@ -268,6 +272,7 @@ All inline button taps arrive at a single `@bot.callback_query_handler`. Selecte
 | `menu_calendar` / `cal_*` | calendar handlers | approved |
 | `mail_consent` / `mail_provider:*` / `mail_settings` / `mail_del_creds` | mail setup | all |
 | `email_change_target` | SMTP target | all |
+| `errp_start` / `errp_send` / `errp_cancel` | error protocol | **admin** |
 | `cancel` | clear pending state, show menu | all |
 | `run:<hash>` | `_execute_pending_cmd` | **admin** |
 
@@ -637,6 +642,7 @@ systemd
   bot_handlers.py               ← user handlers: chat, digest, notes, profile, system
   bot_mail_creds.py             ← per-user IMAP credentials + digest
   bot_email.py                  ← send-as-email SMTP
+  bot_error_protocol.py         ← error protocol: collect text/voice/photo → save → email
   voice_assistant.py            ← standalone voice daemon
   strings.json                  ← i18n UI strings (ru / de / en — 115 keys)
   release_notes.json            ← versioned changelog
@@ -656,6 +662,7 @@ systemd
   mail_creds/<chat_id>.json     ← per-user IMAP credentials (chmod 600)
   mail_creds/<chat_id>_last_digest.txt   ← last digest cache
   mail_creds/<chat_id>_target.txt        ← send-as-email target address
+  error_protocols/              ← admin error reports (YYYYMMDD-HHMMSS_name/)
   telegram_bot.log              ← bot log file
 
   ── voice models ──

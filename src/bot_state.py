@@ -46,6 +46,10 @@ _pending_llm_key: dict[int, str] = {}
 # Format: {"username": str, "first_name": str, "last_name": str}
 _pending_registration: dict[int, dict] = {}
 
+# Error protocol collection state
+# Format: {"name": str, "dir": str, "texts": list, "voices": list, "photos": list}
+_pending_error_protocol: dict[int, dict] = {}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Singleton caches
 # ─────────────────────────────────────────────────────────────────────────────

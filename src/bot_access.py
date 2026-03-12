@@ -20,7 +20,7 @@ from typing import Optional
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot_config import (
-    ADMIN_USERS, ALLOWED_USERS,
+    ADMIN_USERS, ALLOWED_USERS, BOT_NAME,
     ACTIVE_MODEL_FILE, PICOCLAW_BIN,
     _STRINGS_FILE,
     log,
@@ -95,7 +95,11 @@ def _t(chat_id: int, key: str, **kwargs) -> str:
     """Look up a localised string by key; falls back to key name."""
     lang = _lang(chat_id)
     text = _STRINGS.get(lang, _STRINGS.get("en", {})).get(key, key)
-    return text.format(**kwargs) if kwargs else text
+    kwargs.setdefault("bot_name", BOT_NAME)
+    try:
+        return text.format(**kwargs)
+    except (KeyError, IndexError, ValueError):
+        return text
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -350,6 +354,7 @@ def _menu_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_profile"),  callback_data="profile"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_help"),     callback_data="help"))
     if _is_admin(chat_id):
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_error_protocol"), callback_data="errp_start"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_admin"),  callback_data="admin_menu"))
     return kb
 

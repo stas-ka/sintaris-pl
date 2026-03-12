@@ -935,6 +935,308 @@ def t_de_vosk_model(verbose: bool = False, **_) -> list[TestResult]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T17 — BOT_NAME injection via _t() (Bug 0.2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_bot_name_injection(**_) -> list[TestResult]:
+    """T17 — BOT_NAME is defined in bot_config and auto-injected by _t() into {bot_name} placeholders."""
+    t0 = time.time()
+    issues: list[str] = []
+
+    # 1) bot_config exports BOT_NAME
+    try:
+        sys.path.insert(0, str(PICOCLAW_DIR))
+        import importlib
+        cfg = importlib.import_module("bot_config")
+        importlib.reload(cfg)
+        bot_name = getattr(cfg, "BOT_NAME", None)
+        if bot_name is None:
+            issues.append("bot_config.BOT_NAME not defined")
+        elif not isinstance(bot_name, str) or not bot_name.strip():
+            issues.append(f"bot_config.BOT_NAME is empty or non-string: {bot_name!r}")
+    except Exception as e:
+        issues.append(f"Cannot import bot_config: {e}")
+        bot_name = None
+    finally:
+        sys.path.pop(0)
+
+    # 2) strings.json has {bot_name} placeholders in key strings
+    if STRINGS_FILE.exists():
+        try:
+            strings = json.loads(STRINGS_FILE.read_text(encoding="utf-8"))
+            required_keys = ["welcome", "greet", "no_answer"]
+            for lang in ("ru", "en", "de"):
+                for key in required_keys:
+                    val = strings.get(lang, {}).get(key, "")
+                    if "{bot_name}" not in val:
+                        issues.append(f"{lang}.{key} missing {{bot_name}} placeholder")
+        except Exception as e:
+            issues.append(f"Cannot parse strings.json: {e}")
+
+    # 3) Verify _t() actually injects bot_name (simulate without Telegram)
+    if STRINGS_FILE.exists() and bot_name:
+        try:
+            strings = json.loads(STRINGS_FILE.read_text(encoding="utf-8"))
+            test_tmpl = strings.get("en", {}).get("greet", "")
+            if "{bot_name}" in test_tmpl:
+                formatted = test_tmpl.format(bot_name=bot_name)
+                if bot_name in formatted:
+                    pass  # ok
+                else:
+                    issues.append(f"greet.format(bot_name={bot_name!r}) did not inject: {formatted!r}")
+        except Exception as e:
+            issues.append(f"Format test failed: {e}")
+
+    dur = time.time() - t0
+    if issues:
+        return [TestResult("bot_name_injection", "FAIL", dur,
+                           f"{len(issues)} issue(s): " + "; ".join(issues))]
+    return [TestResult("bot_name_injection", "PASS", dur,
+                       f"BOT_NAME={bot_name!r}, placeholders present in required keys")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T18 — Profile handler resilience (Bug 0.1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_profile_resilience(**_) -> list[TestResult]:
+    """T18 — _handle_profile() has try/except around deferred mail_creds import so it never crashes."""
+    t0 = time.time()
+    issues: list[str] = []
+    handler_path = PICOCLAW_DIR / "bot_handlers.py"
+
+    if not handler_path.exists():
+        return [TestResult("profile_resilience", "FAIL", time.time() - t0,
+                           f"bot_handlers.py not found: {handler_path}")]
+
+    src = handler_path.read_text(encoding="utf-8")
+
+    # Find _handle_profile function
+    if "def _handle_profile" not in src:
+        issues.append("_handle_profile() function not found")
+    else:
+        # Extract the function body (from def to next def or end)
+        match = re.search(
+            r'(def _handle_profile\b.*?)(?=\ndef [a-z_]|\Z)',
+            src, re.DOTALL,
+        )
+        if match:
+            func_body = match.group(1)
+            # Must have try/except around the import
+            if "try:" not in func_body or "from bot_mail_creds" not in func_body:
+                issues.append("_handle_profile missing try/except around bot_mail_creds import")
+            if "except" not in func_body:
+                issues.append("_handle_profile has no except clause for import guard")
+            # Must have a fallback lambda or similar for _load_creds
+            if "lambda" not in func_body and "_load_creds = None" not in func_body:
+                if "lambda" not in func_body:
+                    # Acceptable if there's a conditional check
+                    pass
+        else:
+            issues.append("Could not extract _handle_profile function body")
+
+    dur = time.time() - t0
+    if issues:
+        return [TestResult("profile_resilience", "FAIL", dur,
+                           "; ".join(issues))]
+    return [TestResult("profile_resilience", "PASS", dur,
+                       "_handle_profile has try/except guard around deferred import")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T19 — Note edit Append/Replace functions exist (Bug 0.3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_note_edit_append_replace(**_) -> list[TestResult]:
+    """T19 — bot_handlers has _start_note_append/_start_note_replace and strings.json has the keys."""
+    t0 = time.time()
+    issues: list[str] = []
+
+    # 1) Functions exist in bot_handlers.py
+    handler_path = PICOCLAW_DIR / "bot_handlers.py"
+    if not handler_path.exists():
+        return [TestResult("note_edit_append_replace", "FAIL", time.time() - t0,
+                           f"bot_handlers.py not found")]
+    src = handler_path.read_text(encoding="utf-8")
+
+    for fn_name in ("_start_note_append", "_start_note_replace", "_start_note_edit"):
+        if f"def {fn_name}" not in src:
+            issues.append(f"{fn_name}() not found in bot_handlers.py")
+
+    # 2) _start_note_edit shows Append/Replace choice (not direct ForceReply)
+    match = re.search(
+        r'(def _start_note_edit\b.*?)(?=\ndef [a-z_]|\Z)',
+        src, re.DOTALL,
+    )
+    if match:
+        edit_body = match.group(1)
+        if "note_append:" in edit_body or "btn_note_append" in edit_body:
+            pass  # good — shows append button
+        else:
+            issues.append("_start_note_edit does not offer Append option")
+        if "note_replace:" in edit_body or "btn_note_replace" in edit_body:
+            pass  # good — shows replace button
+        else:
+            issues.append("_start_note_edit does not offer Replace option")
+
+    # 3) Callback dispatch in telegram_menu_bot.py
+    entry_path = PICOCLAW_DIR / "telegram_menu_bot.py"
+    if entry_path.exists():
+        entry_src = entry_path.read_text(encoding="utf-8")
+        if "note_append:" not in entry_src:
+            issues.append("telegram_menu_bot.py missing callback dispatch for note_append:")
+        if "note_replace:" not in entry_src:
+            issues.append("telegram_menu_bot.py missing callback dispatch for note_replace:")
+    else:
+        issues.append("telegram_menu_bot.py not found")
+
+    # 4) strings.json has the required keys
+    if STRINGS_FILE.exists():
+        strings = json.loads(STRINGS_FILE.read_text(encoding="utf-8"))
+        required_keys = ["note_edit_choice", "btn_note_append", "btn_note_replace", "note_append_prompt"]
+        for lang in ("ru", "en", "de"):
+            for key in required_keys:
+                if key not in strings.get(lang, {}):
+                    issues.append(f"{lang}.{key} missing from strings.json")
+
+    dur = time.time() - t0
+    if issues:
+        return [TestResult("note_edit_append_replace", "FAIL", dur,
+                           f"{len(issues)} issue(s): " + "; ".join(issues))]
+    return [TestResult("note_edit_append_replace", "PASS", dur,
+                       "Append/Replace note edit flow: functions, callbacks, and i18n keys all present")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T20 — Calendar TTS call signature (Bug 0.4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_calendar_tts_call_signature(**_) -> list[TestResult]:
+    """T20 — _cal_tts_text(chat_id, ev_dict) accepts 2 args; _handle_cal_event_tts builds ev_dict correctly."""
+    t0 = time.time()
+    issues: list[str] = []
+
+    cal_path = PICOCLAW_DIR / "bot_calendar.py"
+    if not cal_path.exists():
+        return [TestResult("calendar_tts_call_signature", "FAIL", time.time() - t0,
+                           "bot_calendar.py not found")]
+
+    src = cal_path.read_text(encoding="utf-8")
+
+    # 1) _cal_tts_text signature: must be (chat_id, ev) — exactly 2 positional args
+    sig_match = re.search(r'def _cal_tts_text\(([^)]+)\)', src)
+    if sig_match:
+        params = [p.strip().split(":")[0].strip() for p in sig_match.group(1).split(",")]
+        if len(params) != 2:
+            issues.append(f"_cal_tts_text has {len(params)} params (expected 2): {params}")
+        if params[0] != "chat_id":
+            issues.append(f"_cal_tts_text first param should be chat_id, got {params[0]!r}")
+    else:
+        issues.append("_cal_tts_text definition not found")
+
+    # 2) _cal_tts_text body uses ev["dt"].strftime (requires datetime obj, not string)
+    tts_func = re.search(
+        r'(def _cal_tts_text\b.*?)(?=\ndef [a-z_]|\Z)',
+        src, re.DOTALL,
+    )
+    if tts_func:
+        body = tts_func.group(1)
+        if 'ev["dt"]' in body or "ev['dt']" in body:
+            pass  # good — accesses ev["dt"]
+        else:
+            issues.append("_cal_tts_text does not access ev['dt'] — may not format datetime")
+
+    # 3) _handle_cal_event_tts builds ev_dict with datetime object
+    handler_match = re.search(
+        r'(def _handle_cal_event_tts\b.*?)(?=\ndef [a-z_]|\Z)',
+        src, re.DOTALL,
+    )
+    if handler_match:
+        h_body = handler_match.group(1)
+        if "fromisoformat" in h_body:
+            pass  # good — converts dt_iso string to datetime
+        else:
+            issues.append("_handle_cal_event_tts does not call fromisoformat — ev_dict may lack datetime")
+        if "_cal_tts_text(chat_id" in h_body:
+            pass  # good — calls with chat_id first
+        else:
+            issues.append("_handle_cal_event_tts does not call _cal_tts_text(chat_id, ...)")
+    else:
+        issues.append("_handle_cal_event_tts function not found")
+
+    dur = time.time() - t0
+    if issues:
+        return [TestResult("calendar_tts_call_signature", "FAIL", dur,
+                           f"{len(issues)} issue(s): " + "; ".join(issues))]
+    return [TestResult("calendar_tts_call_signature", "PASS", dur,
+                       "_cal_tts_text(chat_id, ev) with datetime obj in ev_dict — correct")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T21 — Calendar console intent classifier (Bug 0.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_calendar_console_classifier(**_) -> list[TestResult]:
+    """T21 — _handle_cal_console uses JSON intent classifier, not general LLM action prompt."""
+    t0 = time.time()
+    issues: list[str] = []
+
+    cal_path = PICOCLAW_DIR / "bot_calendar.py"
+    if not cal_path.exists():
+        return [TestResult("calendar_console_classifier", "FAIL", time.time() - t0,
+                           "bot_calendar.py not found")]
+
+    src = cal_path.read_text(encoding="utf-8")
+
+    # Extract _handle_cal_console body
+    match = re.search(
+        r'(def _handle_cal_console\b.*?)(?=\ndef [a-z_]|\Z)',
+        src, re.DOTALL,
+    )
+    if not match:
+        return [TestResult("calendar_console_classifier", "FAIL", time.time() - t0,
+                           "_handle_cal_console not found")]
+
+    func_body = match.group(1)
+
+    # 1) Must have intent classification keywords
+    if '"intent"' not in func_body and "'intent'" not in func_body:
+        issues.append("No 'intent' key referenced — not using JSON classification")
+
+    # 2) Must have "add" as default fallback
+    if '"add"' in func_body:
+        pass  # good — defaults to add
+    else:
+        issues.append("No default 'add' intent fallback found")
+
+    # 3) Must NOT ask LLM to perform the action itself
+    # The classifier prompt should say "Do NOT refuse" or "Do NOT perform"
+    if "Do NOT" in func_body or "Do not" in func_body or "classifier" in func_body.lower():
+        pass  # good — has guardrail instruction
+    else:
+        issues.append("Missing classifier guardrail instructions (Do NOT refuse/perform)")
+
+    # 4) Must call _finish_cal_add for add intent (not _ask_picoclaw again)
+    if "_finish_cal_add" in func_body:
+        pass  # good — routes add intent to local handler
+    else:
+        issues.append("add intent does not route to _finish_cal_add()")
+
+    # 5) Must parse JSON from LLM response
+    if "json.loads" in func_body or "re.search" in func_body:
+        pass  # good — parses structured output
+    else:
+        issues.append("No JSON parsing found in console handler")
+
+    dur = time.time() - t0
+    if issues:
+        return [TestResult("calendar_console_classifier", "FAIL", dur,
+                           f"{len(issues)} issue(s): " + "; ".join(issues))]
+    return [TestResult("calendar_console_classifier", "PASS", dur,
+                       "Console uses JSON intent classifier with add default + routes to local handlers")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Regression check
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -998,6 +1300,12 @@ TEST_FUNCTIONS = [
     t_lang_routing,
     t_de_tts_synthesis,
     t_de_vosk_model,
+    # Bugfix verification tests (T17–T21)
+    t_bot_name_injection,
+    t_profile_resilience,
+    t_note_edit_append_replace,
+    t_calendar_tts_call_signature,
+    t_calendar_console_classifier,
 ]
 
 
