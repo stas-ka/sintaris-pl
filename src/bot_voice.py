@@ -816,6 +816,16 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             _finish_cal_add(chat_id, _clean_text)
             return
 
+        # ── Voice input during calendar console ───────────────────────────────
+        if _cur_mode == "cal_console" and not _is_guest(chat_id):
+            _clean_text = re.sub(r'\[\?([^\]]*)\]', r'\1', text).strip()
+            _safe_edit(chat_id, msg.message_id,
+                       f"🎤 _{_escape_md(_clean_text)}_",
+                       parse_mode="Markdown")
+            from bot_calendar import _handle_cal_console  # noqa: PLC0415
+            _handle_cal_console(chat_id, _clean_text)
+            return
+
         # ── Voice note commands (intercept before LLM) ────────────────────────
         _text_lower = text.lower()
         _note_create_ru = ("запиши заметку", "создай заметку", "запишите заметку", "сохрани заметку")

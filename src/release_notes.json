@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.27",
+    "date":    "2026-03-13",
+    "title":   "Calendar console voice fix",
+    "notes":   "- Fixed: voice messages in calendar console mode were routed to general LLM instead of calendar handler\n- Voice commands like 'add meeting at 9' now correctly add events via calendar console\n- Bug 0.5: security preamble no longer blocks calendar add-event intent"
+  },
+  {
     "version": "2026.3.26",
     "date":    "2026-03-11",
     "title":   "Multilingual support: Russian, English, German (DE)",

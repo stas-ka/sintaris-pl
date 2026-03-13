@@ -137,6 +137,28 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+### Session 7 — 2026-03-12 (UTC+1)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~21:00 | Bug 0.1-0.5 fixes + T17-T21 tests (carried from prior session) | 4 | ~8 | claude-opus-4.6 | bot_handlers.py, bot_config.py, bot_security.py, bot_calendar.py, strings.json, test_voice_regression.py, copilot-instructions.md | done |
+| ~22:00 | Error Protocol feature: collect text/voice/photo, save to dir, email with attachments | 4 | ~6 | claude-opus-4.6 | bot_error_protocol.py (new), bot_config.py, bot_state.py, bot_access.py, telegram_menu_bot.py, strings.json | done |
+| ~22:30 | Docs update + deploy + verify | 2 | ~3 | claude-opus-4.6 | architecture.md, bot-code-map.md, copilot-instructions.md, vibe-coding-protocol.md | done |
+
+**Session 7 total: 3 items, ~17 requests**
+
+---
+
+## Session 8 — 2026-03-12 (continued, Bug 0.5 fix)
+
+| Time | Request | Complexity | Requests used | Model | Files changed | Status |
+|------|---------|------------|---------------|-------|---------------|--------|
+| ~22:40 | Fix Bug 0.5: calendar console voice messages bypass cal_console mode, route through general LLM which refuses | 3 | ~2 | claude-opus-4.6 | bot_voice.py | done |
+
+**Session 8 total: 1 item, ~2 requests**
+
+---
+
 ## Summary Table (all sessions)
 
 | Session | Date | Items | Requests | Avg complexity | Model |
@@ -147,7 +169,9 @@ Each session block contains a table with one row per completed request:
 | 4 | 2026-03-11 AM | 5 | ~16 | 3.8 | unknown (pre-protocol) |
 | 5 | 2026-03-11 | 9 | ~22 | 2.4 | claude-sonnet-4.6 |
 | 6 | 2026-03-11 | 2 | ~6 | 2.0 | claude-sonnet-4.6 |
-| **Total** | | **41** | **~86** | | |
+| 7 | 2026-03-12 | 3 | ~17 | 4.0 | claude-opus-4.6 |
+| 8 | 2026-03-12 | 1 | ~2 | 3.0 | claude-opus-4.6 |
+| **Total** | | **45** | **~105** | | |
 
 ---
 
@@ -163,6 +187,21 @@ Each session block contains a table with one row per completed request:
 | Docs / TODO tracking | 8 | ~10 | Low cost, high value |
 | Multi-language (DE) | 4 | ~15 | In progress |
 | Bugfixes | 3 | ~5 | |
+
+---
+
+## Session 9 — 2026-03-26 (UTC+1)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| — | Web interface concept document (prior conversation) | 5 | ~5 | claude-opus-4.6 | doc/concept-web-interface.md | done |
+| — | Vibe coding + rapid UI analysis: Copilot assessment, agent design, NiceGUI vs HTMX comparison | 4 | ~3 | claude-opus-4.6 | doc/concept-vibe-coding-ui.md | done |
+
+| — | English UI mockup set: 7 HTML screens + shared CSS + index | 3 | ~4 | claude-opus-4.6 | doc/mockups/*.html, doc/mockups/shared.css | done |
+| — | Russian UI mockup set: 8 HTML screens (full translation) | 3 | ~4 | claude-opus-4.6 | doc/mockups-ru/*.html | done |
+| — | Detailed web UI implementation roadmap: 6-phase plan, standalone auth, unified identity, NiceGUI, Screen DSL | 4 | ~1 | claude-opus-4.6 | doc/roadmap-web-ui.md | done |
+
+**Session 9 total: 5 items, ~20 requests**
 
 ---
 
