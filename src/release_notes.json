@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.29",
+    "date":    "2026-03-15",
+    "title":   "Identity silo fix: unified Telegram+Web user identity",
+    "notes":   "- Fixed: Telegram and Web now share a single user identity\n- Web UUID and Telegram int chat_id unified under shared profile key\n- Calendar, Notes, and Profile data now visible across both channels\n- _resolve_storage_id() ensures consistent file-based storage resolution"
+  },
+  {
     "version": "2026.3.28",
     "date":    "2026-03-13",
     "title":   "Unified Chat+Voice mode",
