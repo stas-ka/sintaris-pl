@@ -5,14 +5,31 @@
 picoclaw is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/German/English). Bot source lives in `src/`. The Pi target host is `OpenClawPI`. All secrets are in `.credentials/` (git-ignored).
 
 ## Reference Docs — Read First
-
 | Document | When to use |
 |---|---|
-| [`doc/bot-code-map.md`](../doc/bot-code-map.md) | **Always** — function index, callback `data=` keys, runtime files on Pi |
-| [`doc/dev-patterns.md`](../doc/dev-patterns.md) | Before adding any feature — voice opts, callbacks, i18n, versioning, subprocess, session state |
-| [`doc/architecture.md`](../doc/architecture.md) | When adding components, services, or changing the pipeline |
-| [`doc/hardware-performance-analysis.md`](../doc/hardware-performance-analysis.md) | Before choosing algorithms, models, or hardware upgrades |
-| [`TODO.md`](../TODO.md) | **Session start** — check planned/in-progress/done work before proposing work |
+| [`doc/bot-code-map.md`](../doc/bot-code-map.md) | **Always** — find any function by name/line before searching the file. Maps every function in `telegram_menu_bot.py` with its line number and purpose. Also lists all callback `data=` keys and all runtime files on the Pi. |
+| [`doc/dev-patterns.md`](../doc/dev-patterns.md) | **Before adding any feature** — exact copy-paste patterns for: voice opts, callbacks, multi-step input flows, i18n strings, access guards, versioning, subprocess calls, session state, deployment, service files. |
+| [`doc/architecture.md`](../doc/architecture.md) | When adding components, services, or changing the pipeline. Keep it in sync. |
+| [`doc/hardware-performance-analysis.md`](../doc/hardware-performance-analysis.md) | Before choosing algorithms, models, or suggesting hardware upgrades. |
+| [`doc/test-suite.md`](../doc/test-suite.md) | **Before running or extending tests** — complete reference for all test categories (voice regression T01–T21, Web UI Playwright, hardware audio, smoke), trigger rules, run commands, and Copilot chat-mode "test software" protocol. |
+| [`TODO.md`](../TODO.md) | **Session start** — check what is planned/in-progress/done before proposing work. |
+
+### Quick rules from the patterns doc
+
+- Voice opts: 6-step pattern — defaults `False`, toggle row, opt-in side-effect in `_handle_voice_opt_toggle()` and `main()`
+- New callback: handler function + button in keyboard + dispatch branch in `handle_callback()`
+- Version bump: always `BOT_VERSION = "YYYY.M.D"` + prepend entry in `release_notes.json` (never use `\_` in JSON — invalid escape)
+- Deploy: pscp all changed files → plink restart → verify `Version : X.Y.Z` in journal
+- Strings: always add to both `"ru"` and `"en"` in `src/strings.json`
+- **Testing ("test software" / "run tests" / "verify"):** consult `doc/test-suite.md` — it has the complete decision table (Section 1), all run commands, and the Copilot chat-mode protocol (Section 10). Do **not** scan test files manually every time.
+
+### Post-deploy rule — ALWAYS ask after every successful deploy to the Pi
+
+After every successful deployment to the host (confirmed by journal showing `Version : X.Y.Z` and `Polling Telegram…`), **always ask the user**:
+
+ "Deployment verified ✅. Shall I also:
+ 1. Commit and push to git? (if not already done)
+ 2. Update `release_notes.json` with a new version entry? (if `BOT_VERSION` was bumped)"
 
 ## Workspace Layout
 
