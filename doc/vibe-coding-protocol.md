@@ -343,6 +343,20 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+---
+
+## Session 19 — 2026-03-15 (UTC+1)
+
+**Focus:** VS Code Copilot skills — prompt files for common workflows
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 17:08 | Create VS Code Copilot skills (prompt files) and usage guide so user can invoke tasks with /skill-name from Chat | 3 | 1 | claude-sonnet-4.6 | .github/prompts/deploy-bot.prompt.md, .github/prompts/run-tests.prompt.md, .github/prompts/bump-version.prompt.md, .github/prompts/test-software.prompt.md, doc/copilot-skills-guide.md, .vscode/settings.json, .github/copilot-instructions.md | done |
+
+**Session 19 total: 1 item, ~1 request**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.

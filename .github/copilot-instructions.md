@@ -1,5 +1,20 @@
 # Copilot Instructions — picoclaw workspace
 
+## Available Skills (Prompt Files)
+
+These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill-name` in VS Code Copilot Chat (requires VS Code 1.99+ with `chat.promptFiles: true` — already set in `.vscode/settings.json`).
+
+| `/skill-name` | What it does |
+|---|---|
+| `/deploy-bot` | Copy changed files to Pi, restart service, verify journal |
+| `/run-tests` | Run voice regression T01–T21 on Pi, report results |
+| `/bump-version` | Update `BOT_VERSION`, prepend release note, commit |
+| `/test-software` | Auto-select tests based on changed files (also triggered by plain "test software") |
+
+📖 Full usage guide: [`doc/copilot-skills-guide.md`](../doc/copilot-skills-guide.md)
+
+---
+
 ## Developer Reference Documents — READ FIRST
 
 Before writing any code for this project, consult these documents in `doc/`:
