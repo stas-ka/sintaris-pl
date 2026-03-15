@@ -35,6 +35,7 @@ from bot_instance import bot
 from bot_access import (
     _t, _ask_picoclaw, _escape_md, _back_keyboard, _send_menu, _is_allowed,
 )
+from bot_users import _resolve_storage_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ _cal_timers: dict[str, threading.Timer] = {}   # event_id → Timer
 def _cal_user_file(chat_id: int) -> Path:
     d = Path(CALENDAR_DIR)
     d.mkdir(parents=True, exist_ok=True)
-    return d / f"{chat_id}.json"
+    return d / f"{_resolve_storage_id(chat_id)}.json"
 
 
 def _cal_load(chat_id: int) -> list:
@@ -139,15 +140,23 @@ def _fmt_countdown(dt: datetime, lang: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _calendar_keyboard(chat_id: int, events: list) -> InlineKeyboardMarkup:
-    """Main calendar keyboard: list of upcoming events + Add + Back."""
+    """Main calendar keyboard: upcoming events (or recent past if none) + Add + Back."""
     lang = _st._user_lang.get(chat_id, "ru")
     kb = InlineKeyboardMarkup(row_width=1)
     now = datetime.now()
-    future = sorted(
+    upcoming = sorted(
         [e for e in events if datetime.fromisoformat(e["dt_iso"]) > now],
         key=lambda e: e["dt_iso"],
     )
-    for ev in future[:8]:
+    display = upcoming[:8]
+    if not display:
+        # No upcoming events — show recent past so user can view/delete them
+        display = sorted(
+            [e for e in events if datetime.fromisoformat(e["dt_iso"]) <= now],
+            key=lambda e: e["dt_iso"],
+            reverse=True,
+        )[:8]
+    for ev in display:
         dt = datetime.fromisoformat(ev["dt_iso"])
         cdown = _fmt_countdown(dt, lang)
         dt_str = dt.strftime("%d.%m %H:%M")
@@ -191,15 +200,29 @@ def _handle_calendar_menu(chat_id: int) -> None:
     lang = _st._user_lang.get(chat_id, "ru")
     events = _cal_load(chat_id)
     now = datetime.now()
-    future = sorted(
+    upcoming = sorted(
         [e for e in events if datetime.fromisoformat(e["dt_iso"]) > now],
         key=lambda e: e["dt_iso"],
     )
-    if not future:
+    if not events:
         header = _t(chat_id, "cal_empty")
+    elif not upcoming:
+        # Has events but all in the past — show recent ones
+        past = sorted(
+            [e for e in events if datetime.fromisoformat(e["dt_iso"]) <= now],
+            key=lambda e: e["dt_iso"],
+            reverse=True,
+        )[:5]
+        lines = ["🗓 *" + _t(chat_id, "cal_header") + "*\n"]
+        lines.append("_" + _t(chat_id, "cal_no_upcoming") + "_\n")
+        for ev in past:
+            dt = datetime.fromisoformat(ev["dt_iso"])
+            cdown = _fmt_countdown(dt, lang)
+            lines.append(f"• {_escape_md(ev['title'])} — {dt.strftime('%d.%m %H:%M')} {cdown}")
+        header = "\n".join(lines)
     else:
         lines = ["🗓 *" + _t(chat_id, "cal_header") + "*\n"]
-        for ev in future[:5]:
+        for ev in upcoming[:5]:
             dt = datetime.fromisoformat(ev["dt_iso"])
             cdown = _fmt_countdown(dt, lang)
             lines.append(f"• *{_escape_md(ev['title'])}* — {dt.strftime('%d.%m %H:%M')} {cdown}")

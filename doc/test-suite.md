@@ -1,0 +1,407 @@
+# Picoclaw — Test Suite Overview
+
+**Purpose:** This document is the single reference for Copilot (and human developers) on *which tests exist*, *where they live*, *what triggers them*, and *how to run them*.  
+Use it any time a user says "test the software", "run tests", or asks whether something is covered.
+
+---
+
+## Quick-Reference: "I changed X — what do I run?"
+
+| Changed file / area | Tests to run | Where |
+|---|---|---|
+| `src/bot_voice.py` | Voice regression T01–T21 | Pi (engineering or production) |
+| `src/bot_config.py` (voice constants) | Voice regression T01–T21 | Pi |
+| `src/bot_access.py` (`_escape_tts`) | Voice regression T07, T08 | Pi |
+| `src/setup/setup_voice.sh` | Voice regression T01–T09 | Pi after reinstall |
+| `src/strings.json` | Voice regression T13 (i18n) | Pi |
+| `src/bot_handlers.py` | Voice regression T17–T21 (bug guards) | Pi |
+| `src/bot_calendar.py` | Voice regression T20, T21 | Pi |
+| `src/bot_web.py` / `src/templates/` / `src/static/` | Web UI tests (Playwright) | Local machine → Pi2 |
+| Any audio hardware driver, ALSA, PipeWire | Hardware audio shell tests | Pi direct |
+| Any deployment / infrastructure change | Smoke: service start + journal log check | Pi |
+| Bug fix for known bug 0.1–0.5 | Matching regression test (T17–T21) | Pi |
+
+---
+
+## 1. Test Categories Overview
+
+| Category | Technology | Runs on | Automated? |
+|---|---|---|---|
+| **A — Voice regression** | Python (`test_voice_regression.py`) | Pi (target) | Yes |
+| **B — Web UI (E2E)** | Playwright + pytest (`test_ui.py`) | Local → Pi2 | Yes |
+| **C — Hardware audio** | Bash shell scripts (`test_*.sh`, `check_*.sh`) | Pi (direct) | Manual/CI |
+| **D — Mic capture** | Python (`test_mic.py`) | Pi (direct) | Manual |
+| **E — Smoke / deployment** | `plink` + `journalctl` | Pi (remote) | Manual |
+
+---
+
+## 2. Category A — Voice Regression Tests
+
+**File:** `src/tests/test_voice_regression.py`  
+**Deploy path on Pi:** `~/.picoclaw/tests/test_voice_regression.py`  
+**Fixture audio:** `src/tests/voice/*.ogg` → `~/.picoclaw/tests/voice/`  
+**Ground truth:** `src/tests/voice/ground_truth.json` → `~/.picoclaw/tests/voice/ground_truth.json`  
+**Baseline file (Pi only):** `~/.picoclaw/tests/voice/results/baseline.json`
+
+### 2.1 Run commands
+
+```bat
+rem Standard run — all tests
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+
+rem Verbose — show per-test detail
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --verbose"
+
+rem Run only tests matching a name fragment (e.g. only TTS tests)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test tts"
+
+rem Save current run as new regression baseline
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --set-baseline"
+
+rem Compare two saved result files
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --compare 2026-03-07_17-00-00.json 2026-03-10_10-00-00.json"
+```
+
+### 2.2 Deploy test assets (run once, or when fixtures change)
+
+```bat
+pscp -pw "%HOSTPWD%" src\tests\test_voice_regression.py stas@OpenClawPI:/home/stas/.picoclaw/tests/
+pscp -pw "%HOSTPWD%" src\tests\voice\ground_truth.json  stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
+pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
+```
+
+### 2.3 Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | All tests PASS or SKIP (and no significant regression vs baseline) |
+| 1 | One or more tests FAIL or regression exceeded threshold |
+| 2 | Test runner error (missing fixtures, import errors) |
+
+> **Note:** A run where all tests are SKIP (e.g. no optional models installed) returns exit code 0 — no failures occurred. SKIP is acceptable for optional components and should not block a CI/CD pipeline.
+
+### 2.4 Test status meanings
+
+| Status | Meaning |
+|---|---|
+| PASS | Test passed within thresholds |
+| FAIL | Test failed — must be fixed before committing |
+| WARN | Regression > 30% slower than baseline — investigate; update baseline if intentional |
+| SKIP | Optional component absent (Whisper, German models) — acceptable |
+
+### 2.5 Individual test descriptions
+
+| ID | Test name | What it checks | Trigger |
+|---|---|---|---|
+| T01 | `model_files_present` | Vosk model, Piper binary, `.onnx`, `.onnx.json`, ffmpeg; optional: Whisper, low-quality model | After `setup_voice.sh`, after `bot_config.py` path changes |
+| T02 | `piper_json_present` | `.onnx.json` config exists alongside every `.onnx` in use (required for Piper to work) | After adding/swapping Piper models |
+| T03 | `tmpfs_model_complete` | Both `.onnx` + `.onnx.json` present in `/dev/shm/piper/` when `tmpfs_model` voice opt is on | After enabling `tmpfs_model` opt |
+| T04 | `ogg_decode` | ffmpeg decodes OGG fixture files to S16LE PCM; measures decode latency | After changing ffmpeg pipeline, after audio filter changes |
+| T05 | `vad_filter` | WebRTC VAD (`webrtcvad`) strips non-speech frames; measures speech fraction + latency | After changing VAD settings in `bot_voice.py` |
+| T06 | `vosk_stt` | Vosk transcribes fixture audio; WER ≤ 30% vs ground truth; measures STT latency | After changing Vosk model, STT pipeline, audio preprocessing |
+| T07 | `confidence_strip` | `[?word] → word` regex (7 cases); must match `bot_voice.py` exactly | After changing `_CONF_MARKER_RE` or confidence logic |
+| T08 | `tts_escape` | `_escape_tts()` removes emoji + Markdown before Piper (6 cases); must match `bot_access.py` | After changing `_escape_tts()` in `bot_access.py` |
+| T09 | `tts_synthesis` | Piper synthesizes Russian test text to raw PCM, then ffmpeg encodes OGG; measures latency | After changing TTS pipeline, Piper model, or output format |
+| T10 | `whisper_stt` | whisper.cpp transcribes fixture audio; WER ≤ 40% vs ground truth (SKIP if binary absent) | After upgrading Whisper model or binary |
+| T11 | `whisper_hallucination_guard` | Sparse-output guard rejects known hallucinated phrases; Vosk fallback produces real words | After changing hallucination guard logic in `bot_voice.py` |
+| T12 | `regression_check` | All timing metrics within 30% of saved baseline | After any voice pipeline change; always run with `--set-baseline` after hardware changes |
+| T13 | `i18n_string_coverage` | `strings.json`: all 3 languages (ru/en/de) have identical key sets, no empty values, checks current key count | After adding/removing/renaming any string key |
+| T14 | `lang_routing` | `_piper_model_path(lang)` and Vosk model routing return correct paths for ru/en/de; file existence checked | After adding language support or changing model-routing logic |
+| T15 | `de_tts_synthesis` | German Piper TTS (`de_DE-thorsten-medium.onnx`) synthesizes to raw PCM (SKIP if model absent) | After adding German TTS model |
+| T16 | `de_vosk_model` | German Vosk model loads and decodes silence without error (SKIP if absent) | After adding German STT model |
+| T17 | `bot_name_injection` | `BOT_NAME` defined in `bot_config`; `{bot_name}` placeholders in `strings.json`; `format()` works (Bug 0.2) | After centralizing bot name references |
+| T18 | `profile_resilience` | `_handle_profile()` has `try/except` around deferred `bot_mail_creds` import (Bug 0.1) | After fixing profile crash bug |
+| T19 | `note_edit_append_replace` | Append/Replace functions, callbacks, and i18n keys all present (Bug 0.3) | After implementing note Append/Replace edit flow |
+| T20 | `calendar_tts_call_signature` | `_cal_tts_text(chat_id, ev)` 2-arg signature; `ev_dict` has datetime object (Bug 0.4) | After fixing calendar TTS voice deletion bug |
+| T21 | `calendar_console_classifier` | Console uses JSON intent classifier with `add` default, not general LLM (Bug 0.5) | After fixing calendar console "add" routing |
+
+### 2.6 When specific tests are mandatory
+
+| Scenario | Required tests |
+|---|---|
+| Before committing **any** voice-related change | T01–T12 (full suite) |
+| After fixing a known bug (0.1–0.5) | Corresponding T17–T21 test |
+| After changing `strings.json` | T13 |
+| After adding a new language | T13, T14, matching Txx for new language |
+| After `setup_voice.sh` re-run | T01–T09 minimum |
+| After hardware change (Pi re-image, new Pi unit) | T01–T12 + `--set-baseline` |
+
+---
+
+## 3. Category B — Web UI End-to-End Tests
+
+**File:** `src/tests/ui/test_ui.py`  
+**Config:** `src/tests/ui/conftest.py`  
+**Pytest ini:** `src/tests/ui/pytest.ini`  
+**Technology:** Playwright (Python sync API) + pytest  
+**Target:** Pi2 web interface at `https://openclawpi2:8080` (self-signed TLS)
+
+### 3.1 Run commands
+
+```bat
+rem Run all UI tests against default Pi2 target
+py -m pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080 --browser chromium
+
+rem Run only one test class
+py -m pytest src/tests/ui/test_ui.py::TestAuth -v --base-url https://openclawpi2:8080
+
+rem Run via conftest default (uses PICO_BASE_URL env var or default https://openclawpi2:8080)
+py -m pytest src/tests/ui/ -v
+
+rem Override credentials via env vars
+set PICO_ADMIN_USER=admin
+set PICO_ADMIN_PASS=admin
+set PICO_USER=stas
+set PICO_USER_PASS=zusammen20192
+py -m pytest src/tests/ui/ -v
+```
+
+### 3.2 Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PICO_BASE_URL` | `https://openclawpi2:8080` | Target Pi base URL |
+| `PICO_ADMIN_USER` | `admin` | Admin username |
+| `PICO_ADMIN_PASS` | `admin` | Admin password |
+| `PICO_USER` | `stas` | Regular user username |
+| `PICO_USER_PASS` | `zusammen20192` | Regular user password |
+
+### 3.3 Test classes and what they cover
+
+| Class | Tests | What it validates |
+|---|---|---|
+| `TestAuth` | 7 tests | Login/logout flow, invalid creds, session persistence, unauthenticated redirect |
+| `TestDashboard` | 5 tests | Dashboard heading, sidebar nav links, admin panel link visibility, status cards |
+| `TestChat` | 7 tests | Chat input/send button, button state during LLM request, model selector, message display |
+| `TestNotes` | 4 tests | Notes page layout, create button, list panel, editor panel |
+| `TestCalendar` | 5 tests | Calendar page, console toggle, add-event form fields, form submit, console NL parse |
+| `TestVoice` | 3 tests | Voice page, settings panel, TTS input presence |
+| `TestMail` | 2 tests | Mail page, setup/digest section |
+| `TestAdmin` | 4 tests | Admin access for admin role, user list, LLM section, non-admin blocked |
+| `TestNavigation` | 3 tests (+ parametrized) | All sidebar nav links load correct page, clicking nav, logout link |
+| `TestRegistration` | 3 tests | Register form, login→register link, duplicate username error |
+
+### 3.4 When to run
+
+Run Web UI tests after any change to:
+- `src/bot_web.py` (API routes, auth, HTMX endpoints)
+- `src/templates/*.html` (Jinja2 templates)
+- `src/static/` (CSS, JS)
+- Any UI flow visible to users (login, dashboard, chat, notes, calendar, voice, mail, admin)
+
+**Always run UI tests before deploying a Web UI change to a production Pi.**
+
+### 3.5 Requirements
+
+```bat
+pip install pytest playwright pytest-playwright
+playwright install chromium
+```
+
+---
+
+## 4. Category C — Hardware Audio Shell Tests
+
+**Location:** `src/tests/*.sh`  
+**Run on:** Pi directly (SSH), or via `plink` from Windows  
+**Purpose:** Low-level audio hardware diagnosis when microphone or speaker issues occur
+
+### 4.1 Test scripts
+
+| Script | Purpose | When to use |
+|---|---|---|
+| `test_tts.sh` | End-to-end TTS: Piper synthesizes Russian text → ALSA playback via 3.5mm jack | After hardware speaker change, after Piper reinstall |
+| `test_alsa_direct.sh` | Test ALSA direct capture (`hw:2,0` and `plughw:2,0`) with PipeWire stopped | When microphone produces zero audio |
+| `test_ffmpeg_audio.sh` | Test ffmpeg audio capture via ALSA | After ALSA config changes |
+| `test_ffmpeg_pa.sh` | Test ffmpeg capture via PulseAudio (`parec` compat layer) | When PipeWire/PA routing issues suspected |
+| `test_mic.py` | Python `sounddevice` mic capture test; lists all audio devices, records 1s, reports levels | After new USB mic connected |
+| `test_after_reboot.sh` | Check ALSA cards and webcam mic availability after Pi reboot | After Pi OS update or reboot |
+| `test_video_audio.sh` | Test webcam video + audio capture together | When USB webcam microphone issues occur |
+| `test_webcam_mic.sh` | Test webcam mic capture via ALSA | USB webcam mic debugging |
+| `test_webcam_mic2.sh` | Second webcam mic test variant with different ALSA params | USB webcam mic fallback |
+
+### 4.2 Diagnostic / check scripts
+
+| Script | Purpose |
+|---|---|
+| `check_kernel_audio.sh` | Check kernel audio driver modules and ALSA cards |
+| `check_dmesg_during_rec.sh` | Monitor `dmesg` during recording to catch USB errors |
+| `check_pcm_detailed.sh` | Detailed ALSA PCM status dump |
+| `check_usb_stream.sh` | Check USB isochronous stream status |
+| `check_wireplumber.sh` | Check WirePlumber (PipeWire session manager) state |
+| `try_latency_fix.sh` | Try ALSA latency settings to reduce underruns |
+| `try_native_rate.sh` | Try microphone at its native sample rate (48kHz) instead of 16kHz |
+
+### 4.3 Run commands
+
+```bat
+rem Run TTS hardware test
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "bash /home/stas/.picoclaw/tests/test_tts.sh"
+
+rem Run mic capture test (Python)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_mic.py"
+
+rem Run ALSA direct test
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "bash /home/stas/.picoclaw/tests/test_alsa_direct.sh"
+```
+
+### 4.4 When to run
+
+Run hardware audio tests when:
+- Microphone produces no audio or zero-level audio
+- TTS voice playback fails or is silent
+- After connecting a new USB microphone or speaker
+- After Pi OS update (ALSA/PipeWire configuration may change)
+- After reboot, if voice pipeline stops working (`test_after_reboot.sh`)
+
+---
+
+## 5. Category D — Mic Capture Test
+
+**File:** `src/tests/test_mic.py`  
+**Run on:** Pi directly
+
+Captures 1 second of audio from the default/USB input device, reports levels and sample rate. Use when diagnosing a microphone that appears connected but produces no data.
+
+```bat
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_mic.py"
+```
+
+Expected output includes `MIC_OK`. If `ERROR:` appears, the input device or sounddevice library has a problem.
+
+---
+
+## 6. Category E — Smoke / Deployment Tests
+
+**Technology:** `plink` + `journalctl`  
+**Run on:** Pi (remote SSH)  
+**Purpose:** Verify the bot service started correctly after a deployment
+
+### 6.1 Telegram bot smoke check
+
+```bat
+rem After deploying telegram_menu_bot.py
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-telegram -n 20 --no-pager"
+```
+
+**Pass criteria:**
+```
+[INFO] Version      : 2026.X.Y
+[INFO] DB init OK   : /home/stas/.picoclaw/pico.db
+[INFO] Polling Telegram…
+```
+
+### 6.2 Web UI smoke check
+
+```bat
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-web -n 20 --no-pager"
+```
+
+Expected: `Uvicorn running on https://0.0.0.0:8080`
+
+### 6.3 Voice assistant smoke check
+
+```bat
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-voice -n 20 --no-pager"
+```
+
+Expected: `[Voice] Ready — say "Пико" to activate`
+
+### 6.4 LLM gateway smoke check
+
+```bat
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-gateway -n 20 --no-pager"
+```
+
+### 6.5 When to run
+
+Run smoke tests after every deployment. They are the fastest sanity check — if the journal shows errors, do not proceed to automated tests.
+
+---
+
+## 7. Targets: Engineering vs Production
+
+| Target | Host | Purpose | Tests allowed |
+|---|---|---|---|
+| **Engineering (Pi1)** | `OpenClawPI` / `100.81.143.126` | Primary development Pi — all test types | All categories A–E |
+| **Production (Pi2)** | `OpenClawPI2` | Second Pi, stable deployments, UI test target | Category B (UI), Category E (smoke) |
+
+**Rules:**
+- Run destructive tests (audio hardware, regression) on engineering Pi1 first.
+- Run Web UI Playwright tests against Pi2 (`https://openclawpi2:8080`) unless told otherwise.
+- Only deploy to Pi2 after Pi1 tests pass.
+
+---
+
+## 8. Regression Tests vs Fix Tests
+
+### Regression tests
+Tests T01–T16 are **regression tests**: they check that existing functionality (voice pipeline quality, latency, model files) did not degrade. Always run on Pi before committing voice-related code.
+
+### Fix / bug guard tests
+Tests T17–T21 are **fix (bug guard) tests**: each corresponds to a specific known bug (0.1–0.5 in `TODO.md`). They verify that the fix was correctly implemented and check that the fix does not regress. Run the matching test whenever you implement or modify a bug fix.
+
+| Bug | Test | Description |
+|---|---|---|
+| Bug 0.1 — Profile crash | T18 `profile_resilience` | `_handle_profile()` must have `try/except` around deferred import |
+| Bug 0.2 — Hardcoded bot name | T17 `bot_name_injection` | `BOT_NAME` from config, `{bot_name}` in strings |
+| Bug 0.3 — Note edit loses content | T19 `note_edit_append_replace` | Append/Replace flow implemented |
+| Bug 0.4 — Calendar voice deleted | T20 `calendar_tts_call_signature` | Correct function signature + datetime object |
+| Bug 0.5 — Calendar console ignores add | T21 `calendar_console_classifier` | JSON intent classifier with `add` default |
+
+---
+
+## 9. Adding New Tests
+
+### Adding a new voice regression test
+
+1. Add a test function `t_my_test(**_) -> list[TestResult]:` in `test_voice_regression.py`
+2. Register it in the `ALL_TESTS` list near the bottom of the file
+3. If it has a new fixture audio file, add it to `src/tests/voice/` and update `ground_truth.json`
+4. Deploy updated test file and fixtures to Pi
+5. Run with `--set-baseline` after the first successful run
+
+### Adding a new Web UI test
+
+1. Add a test method inside the appropriate `Test*` class in `test_ui.py`
+2. Use the `admin_page` or `user_page` fixtures for authenticated tests
+3. Use `fresh_page(browser, base_url)` for unauthenticated tests
+4. Run locally against Pi2 to verify
+
+### When to add a fix test
+
+Whenever a new known bug is discovered and filed in `TODO.md` (bugs 0.N), add a corresponding `t_*` test in `test_voice_regression.py` that will FAIL if the bug is present and PASS when it is fixed.
+
+---
+
+## 10. Copilot Chat Mode — "Test the Software" Protocol
+
+When a user writes a plain-text request such as:
+
+- *"test the software"*
+- *"run the tests"*
+- *"verify the changes"*
+- *"check if it works"*
+- *"validate this deployment"*
+
+Copilot should:
+
+1. **Check what changed** — look at recent git diff or deployment context to determine which areas changed.
+2. **Select the relevant test category** from the quick-reference table in Section 1.
+3. **Run smoke tests first** (Category E) — fastest check; if journal shows errors, stop and report.
+4. **Run automated tests** (Category A for voice changes, Category B for UI changes) — deploy test assets if needed.
+5. **Run hardware tests** (Category C/D) only if an audio hardware issue is suspected.
+6. **Report results** — summarize PASS/FAIL/SKIP/WARN counts, paste the test summary table.
+
+**Default when nothing specific changed:** run Category E smoke tests on Pi1 + Category A voice regression suite.
+
+**Example session flow:**
+```
+User: "test software"
+Copilot:
+  1. Check what files changed since last deploy
+  2. If voice-related → deploy + run test_voice_regression.py on Pi1
+  3. If UI-related → run pytest src/tests/ui/ --base-url https://openclawpi2:8080
+  4. Always finish with smoke check: journalctl -u picoclaw-telegram -n 20
+  5. Report: "All 21 voice tests PASS, smoke OK ✅" or list failures
+```

@@ -103,6 +103,24 @@ import re as _notes_re
 from bot_config import NOTES_DIR
 
 
+def _resolve_storage_id(chat_id: int) -> str:
+    """Return the web UUID for this Telegram chat_id if an account is linked,
+    otherwise fall back to str(chat_id).
+
+    Reads accounts.json and matches on the telegram_chat_id field so that
+    Telegram and Web UI share the same notes/calendar directories.
+    """
+    try:
+        from bot_auth import ACCOUNTS_FILE  # noqa: PLC0415  (local import avoids circular)
+        data = json.loads(Path(ACCOUNTS_FILE).read_text(encoding="utf-8"))
+        for acct in data.get("accounts", []):
+            if acct.get("telegram_chat_id") == chat_id:
+                return acct["user_id"]
+    except Exception:
+        pass
+    return str(chat_id)
+
+
 def _slug(title: str) -> str:
     """Convert a note title to a safe filename slug (lowercase, underscores)."""
     s = title.lower().strip()
@@ -113,8 +131,12 @@ def _slug(title: str) -> str:
 
 
 def _notes_user_dir(chat_id: int) -> Path:
-    """Return (and create) the per-user notes directory."""
-    p = Path(NOTES_DIR) / str(chat_id)
+    """Return (and create) the per-user notes directory.
+
+    If the Telegram chat_id is linked to a web account, uses the web UUID
+    so that notes are shared between Telegram and the Web UI.
+    """
+    p = Path(NOTES_DIR) / _resolve_storage_id(chat_id)
     p.mkdir(parents=True, exist_ok=True)
     return p
 
