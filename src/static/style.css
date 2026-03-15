@@ -421,16 +421,17 @@ input:focus, select:focus { border-color: var(--accent); }
 .login-page {
   min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
-  background: var(--bg-primary);
+  background: radial-gradient(ellipse at 50% 40%, #1a1a3a 0%, var(--bg-primary) 65%);
 }
 
 .login-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: #252535;
+  border: 1px solid rgba(124, 77, 255, 0.35);
   border-radius: var(--radius);
   padding: 40px 36px;
   width: 100%; max-width: 400px;
   text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 60px rgba(124,77,255,0.08);
 }
 
 .login-card h1 {

@@ -1,7 +1,8 @@
 # Picoclaw Bot — Developer Patterns & Conventions
 
-This document describes the exact patterns used throughout `telegram_menu_bot.py`.
-Follow them precisely when adding features to keep the codebase consistent.
+This document describes the exact patterns used across the picoclaw codebase.
+The bot is split into 20 modules (`bot_*.py`, `render_telegram.py`, `bot_web.py`, etc.).
+Follow these patterns precisely when adding features to keep the codebase consistent.
 
 ---
 
@@ -457,3 +458,332 @@ _handle_calendar_query(chat_id, user_text)
 {"intent": "edit",   "ev_id": "<id or empty>"}
 # Unknown ev_id → _cal_find_by_text(chat_id, user_text) for fuzzy title match
 ```
+
+---
+
+## 15. Screen DSL Pattern
+
+The Screen DSL (`bot_ui.py` + `bot_actions.py` + `render_telegram.py`) enables write-once, render-anywhere UI logic. Action handlers return `Screen` objects; renderers convert them to channel-specific output.
+
+### Define a screen in `bot_actions.py`
+
+```python
+from bot_ui import Screen, Card, Button, ButtonRow, UserContext
+
+def action_my_feature(ctx: UserContext, **kwargs) -> Screen:
+    return Screen(
+        title="My Feature",
+        widgets=[
+            Card(title="Some info", subtitle="2026-04-01", body="Details here"),
+            ButtonRow(buttons=[
+                Button(label="✅ Do it",  action="my_feature_confirm"),
+                Button(label="🔙 Back",   action="menu"),
+            ]),
+        ],
+    )
+```
+
+### Render in Telegram (`telegram_menu_bot.py` callback dispatcher)
+
+```python
+elif data == "my_feature":
+    from render_telegram import render_screen
+    from bot_actions import action_my_feature
+    ctx = UserContext(chat_id=cid, lang=_lang(cid), is_admin=_is_admin(cid))
+    render_screen(action_my_feature(ctx), cid, bot)
+```
+
+### Render in Web UI (`bot_web.py`)
+
+```python
+@app.get("/my-feature")
+async def my_feature_page(request: Request, user=Depends(get_current_user)):
+    from bot_actions import action_my_feature
+    from bot_ui import UserContext
+    ctx = UserContext(chat_id=user.chat_id, lang=user.lang, is_admin=user.is_admin)
+    screen = action_my_feature(ctx)
+    return templates.TemplateResponse("my_feature.html",
+                                      {"request": request, "screen": screen, "user": user})
+```
+
+### Widget → Telegram mapping (from `render_telegram.py`)
+
+| Widget | Telegram output |
+|---|---|
+| `Card` | Formatted text block in message body |
+| `Button` / `ButtonRow` | `InlineKeyboardButton` row |
+| `Toggle` | `InlineKeyboardButton` with ✅/⬜ prefix |
+| `TextInput` | `bot.send_message(reply_markup=ForceReply())` |
+| `AudioPlayer` | `bot.send_voice(ogg_bytes)` |
+| `Spinner` | `bot.send_message("⏳ …")` — edited on completion |
+| `Confirm` | Two-button ✅/❌ keyboard |
+| `Redirect` | Immediately calls the target action handler |
+
+### Rules
+
+- **Never** call Telegram API directly from `bot_actions.py` — it must stay channel-agnostic.
+- Each `Button.action` must map to a callback key in the Telegram dispatcher **and** a URL in the Web UI.
+- Add new `Screen` dataclass variants to `bot_ui.py` only if no existing widget satisfies the need.
+
+---
+
+## 16. Adding a Web UI Route
+
+### Full page route (Jinja2 template)
+
+```python
+# In bot_web.py — at the end of the route roster
+@app.get("/my-feature")
+async def my_feature_page(request: Request, user=Depends(get_current_user)):
+    """Full page render — navigated to directly."""
+    ctx = _make_ctx(user)          # helper already defined in bot_web.py
+    screen = action_my_feature(ctx)
+    return templates.TemplateResponse(
+        "my_feature.html",
+        {"request": request, "screen": screen, "user": user},
+    )
+```
+
+### HTMX partial route (returns HTML fragment, no full page)
+
+```python
+@app.post("/my-feature/action")
+async def my_feature_action(request: Request,
+                             ev_id: str = Form(...),
+                             user=Depends(get_current_user)):
+    """HTMX partial — replaces a div, no page reload."""
+    # ... do the work ...
+    return templates.TemplateResponse(
+        "_my_feature_result.html",           # name starts with _ by convention
+        {"request": request, "result": result},
+    )
+```
+
+### Auth guard
+
+Every protected route uses the `Depends(get_current_user)` FastAPI dependency (defined in `bot_web.py`). It reads the `pico_token` JWT cookie and raises `401` on failure. Admin-only routes additionally check `user.is_admin`:
+
+```python
+@app.post("/admin/my-admin-action")
+async def admin_action(request: Request, user=Depends(get_current_user)):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    # ...
+```
+
+### Template convention
+
+- Full-page templates: `src/templates/<feature>.html` — extend `base.html`
+- HTMX partials: `src/templates/_<feature>_<variant>.html` — standalone fragment (no `{% extends %}`)
+- Add a nav link in `base.html` for any new top-level page visible in the sidebar
+- HTMX swap target: `hx-target="#content"` on interactive elements inside `base.html`'s main area
+
+### Checklist
+
+1. Add route(s) to `bot_web.py`
+2. Create template file(s) in `src/templates/`
+3. Add nav entry to `base.html` if this is a top-level page
+4. Add corresponding Playwright test in `src/tests/ui/test_ui.py` (at minimum: page loads, no 500)
+5. Update `doc/bot-code-map.md` route inventory table
+
+---
+
+## 17. Telegram ↔ Web Shared Action Pattern
+
+When a feature must appear in **both** Telegram and the Web UI, put all logic in `bot_actions.py` and render it in each channel separately.
+
+### Decision guide
+
+| Where does the logic go? | When |
+|---|---|
+| `bot_actions.py` + `Screen` DSL | Any UI state that both channels show |
+| `bot_handlers.py` (Telegram only) | Voice pipeline, ForceReply multi-step flows |
+| `bot_calendar.py` / `bot_notes.py` etc. | Domain-specific mutations (data layer) |
+| `bot_web.py` (Web only) | HTMX fragments, file uploads, OAuth2 flow |
+
+### Implementation steps
+
+**Step 1 — Write the action handler in `bot_actions.py`**
+
+```python
+def action_my_shared_feature(ctx: UserContext, slug: str = "") -> Screen:
+    # pure logic — no Telegram API, no HTTP response
+    data = _load_my_data(ctx.chat_id, slug)     # from bot_users, bot_calendar, etc.
+    return Screen(
+        title=_t_str(ctx.lang, "my_feature_title"),
+        widgets=[
+            Card(title=data["title"], body=data["body"]),
+            ButtonRow(buttons=[Button(label="🔙", action="menu")]),
+        ],
+    )
+```
+
+**Step 2 — Telegram callback dispatch in `telegram_menu_bot.py`**
+
+```python
+elif data.startswith("my_shared:"):
+    slug = data[len("my_shared:"):]
+    ctx  = UserContext(chat_id=cid, lang=_lang(cid), is_admin=_is_admin(cid))
+    render_screen(action_my_shared_feature(ctx, slug=slug), cid, bot)
+```
+
+**Step 3 — Web route in `bot_web.py`**
+
+```python
+@app.get("/my-shared/{slug}")
+async def my_shared_page(slug: str, request: Request, user=Depends(get_current_user)):
+    ctx    = _make_ctx(user)
+    screen = action_my_shared_feature(ctx, slug=slug)
+    return templates.TemplateResponse("my_shared.html",
+                                      {"request": request, "screen": screen})
+```
+
+**Step 4 — Template: iterate `screen.widgets` in Jinja2**
+
+```html
+{# src/templates/my_shared.html #}
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ screen.title }}</h2>
+  {% for widget in screen.widgets %}
+    {% if widget.__class__.__name__ == 'Card' %}
+      <article><h3>{{ widget.title }}</h3><p>{{ widget.body }}</p></article>
+    {% elif widget.__class__.__name__ == 'ButtonRow' %}
+      <div class="grid">
+        {% for btn in widget.buttons %}
+          <a href="{{ btn.url or ('#' + btn.action) }}">{{ btn.label }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endblock %}
+```
+
+**Step 5 — Add strings to `strings.json`**
+
+All title/label strings must exist in `ru`, `en`, and `de`. Use `_t(chat_id, key)` in Telegram code and `{{ t("key") }}` (or equivalent) in Jinja2 templates.
+
+---
+
+## 18. Password Reset Pattern
+
+Password management follows a **role-aware** model:
+- Any user can reset their **own** password via the Web UI settings page.
+- Admin can reset **any** user's password via the Web admin panel **or** via the Telegram admin panel.
+
+### Core function — `bot_auth.py`
+
+```python
+change_password(user_id: str, new_password: str) -> bool
+# Re-hashes with bcrypt, updates accounts.json, returns True if user_id found.
+```
+
+### Web UI — user self-service (already wired)
+
+`POST /settings/password` in `bot_web.py` — requires `current_password` verification first:
+
+```python
+@app.post("/settings/password")
+async def change_own_password(request: Request,
+                               current_password: str = Form(...),
+                               new_password: str     = Form(...),
+                               user=Depends(get_current_user)):
+    account = find_account_by_id(user.user_id)
+    if not verify_password(account, current_password):
+        return templates.TemplateResponse("settings.html",
+            {"request": request, "error": "Current password incorrect", "user": user})
+    change_password(user.user_id, new_password)
+    return RedirectResponse("/settings", status_code=303)
+```
+
+### Web UI — admin reset (route to add in `bot_web.py`)
+
+```python
+@app.post("/admin/user/{user_id}/reset-password")
+async def admin_reset_password(user_id: str,
+                                new_password: str = Form(...),
+                                user=Depends(get_current_user)):
+    if not user.is_admin:
+        raise HTTPException(status_code=403)
+    ok = change_password(user_id, new_password)
+    if not ok:
+        raise HTTPException(status_code=404, detail="User not found")
+    return templates.TemplateResponse("_admin_user_row.html",
+                                      {"request": Request, "message": "Password reset"})
+```
+
+### Telegram — admin reset (pattern for `bot_admin.py` + dispatcher)
+
+**Step 1 — Add to admin keyboard**
+
+```python
+# In _admin_keyboard() in bot_admin.py
+InlineKeyboardButton("🔑 Reset password", callback_data="admin_reset_pw_menu")
+```
+
+**Step 2 — Handler function in `bot_admin.py`**
+
+```python
+def _start_admin_reset_password(chat_id: int) -> None:
+    """Show user list with 'reset pw' buttons for each approved web account."""
+    from bot_auth import list_accounts
+    accounts = [a for a in list_accounts() if a["role"] != "admin" or True]  # show all
+    if not accounts:
+        bot.send_message(chat_id, "No web accounts found.")
+        return
+    kb = InlineKeyboardMarkup(row_width=1)
+    for acc in accounts:
+        kb.add(InlineKeyboardButton(
+            f"🔑 {acc['username']} ({acc['role']})",
+            callback_data=f"admin_reset_pw:{acc['id']}",
+        ))
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="admin_menu"))
+    bot.send_message(chat_id, "Select account to reset password:", reply_markup=kb)
+
+def _start_admin_reset_pw_input(admin_id: int, target_user_id: str) -> None:
+    """Prompt admin for new password."""
+    _pending_reset_pw[admin_id] = {"target_id": target_user_id}
+    bot.send_message(admin_id, "Enter new password for the selected account:")
+
+def _finish_admin_reset_password(admin_id: int, new_pw: str) -> None:
+    """Apply the password change."""
+    state = _pending_reset_pw.pop(admin_id, {})
+    from bot_auth import change_password
+    ok = change_password(state["target_id"], new_pw)
+    msg = "✅ Password changed." if ok else "❌ User not found."
+    bot.send_message(admin_id, msg)
+    _handle_admin_menu(admin_id)
+```
+
+**Step 3 — Module-level state dict in `bot_admin.py`**
+
+```python
+_pending_reset_pw: dict[int, dict] = {}   # admin_chat_id → {target_id: str}
+```
+
+**Step 4 — Dispatch in `telegram_menu_bot.py`**
+
+```python
+elif data == "admin_reset_pw_menu":
+    if _is_admin(cid): _start_admin_reset_password(cid)
+
+elif data.startswith("admin_reset_pw:"):
+    if _is_admin(cid): _start_admin_reset_pw_input(cid, data[len("admin_reset_pw:"):])
+```
+
+In the text handler, before mode-routing:
+
+```python
+if cid in _pending_reset_pw:
+    return _finish_admin_reset_password(cid, text)
+```
+
+**Step 5 — User self-service via Telegram (optional)**
+
+Add a `🔑 Change password` button to the Profile screen. The flow follows the Web UI self-service model: prompt current password → prompt new password → `change_password(user_id, new_pw)`. Both prompts use `ForceReply` and `_pending_pw_change[chat_id]` session state.
+
+### Security rules
+
+- Minimum password length: 8 characters (enforce in `change_password()` or caller)
+- Admin cannot change their own password via the admin reset route — only via the settings route (forces current-password check)
+- Log every password reset to `telegram_bot.log` with admin's chat_id + target account username (never log the password itself)

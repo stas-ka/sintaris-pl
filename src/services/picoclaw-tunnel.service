@@ -1,0 +1,39 @@
+[Unit]
+Description=PicoAssist — reverse SSH tunnel to VPS
+Documentation=https://github.com/sipeed/picoclaw
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stas
+
+# ── All tunnel config lives in tunnel.env — written by setup_tunnel_key.sh ──
+# Fields: VPS_HOST, VPS_USER, REMOTE_PORT, LOCAL_PORT, SSH_KEY
+EnvironmentFile=/home/stas/.picoclaw/tunnel.env
+
+# AUTOSSH_GATETIME=0 means autossh won't give up on the first failed attempt
+Environment=AUTOSSH_GATETIME=0
+
+ExecStart=/usr/bin/autossh -M 0 -N \
+    -o "ServerAliveInterval=30" \
+    -o "ServerAliveCountMax=3" \
+    -o "ExitOnForwardFailure=yes" \
+    -o "StrictHostKeyChecking=accept-new" \
+    -o "BatchMode=yes" \
+    -i "${SSH_KEY}" \
+    -R "127.0.0.1:${REMOTE_PORT}:127.0.0.1:${LOCAL_PORT}" \
+    "${VPS_USER}@${VPS_HOST}"
+
+# Restart if the tunnel drops (network change, VPS reboot, etc.)
+Restart=always
+RestartSec=15
+# Cap restart rate so we don't hammer the VPS on persistent failures
+StartLimitInterval=300
+StartLimitBurst=5
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

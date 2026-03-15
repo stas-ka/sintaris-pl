@@ -24,6 +24,13 @@
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <!-- Alpine.js -->
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#7c4dff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
@@ -59,6 +66,8 @@
     <hr>
     <p class="sidebar-section-label">Account</p>
     <ul class="sidebar-nav">
+      <li><a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}">
+        <span class="nav-icon">⚙️</span> Settings</a></li>
       <li><a href="/logout">
         <span class="nav-icon">🚪</span> Logout</a></li>
     </ul>

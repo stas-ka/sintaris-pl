@@ -1,9 +1,5 @@
 <!-- HTMX partial: appended to #chat-thread after POST /chat/send -->
-<div class="chat-bubble chat-user">
-  <div class="chat-avatar">👤</div>
-  <div class="chat-meta">{{ user_time }}</div>
-  <div class="chat-body">{{ user_text }}</div>
-</div>
+<!-- user bubble is injected optimistically in before-request (chat.html) -->
 <div class="chat-bubble chat-bot">
   <div class="chat-avatar">🤖</div>
   <div class="chat-meta">{{ bot_time }}</div>

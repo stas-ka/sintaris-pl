@@ -7,6 +7,7 @@ are tightly coupled to the state they manage.
 """
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -49,6 +50,42 @@ _pending_registration: dict[int, dict] = {}
 # Error protocol collection state
 # Format: {"name": str, "dir": str, "texts": list, "voices": list, "photos": list}
 _pending_error_protocol: dict[int, dict] = {}
+
+# Web account link codes — generated in Telegram, redeemed on /register
+# Format: {"code": {"chat_id": int, "expires_at": datetime}}
+# Codes expire after 15 minutes and are single-use.
+_web_link_codes: dict[str, dict] = {}
+
+WEB_LINK_CODE_TTL_MINUTES = 15
+
+
+def generate_web_link_code(chat_id: int) -> str:
+    """Generate a 6-character alphanumeric link code for the given chat_id.
+    Any previous code for this user is replaced. Returns the new code."""
+    import random, string
+    # Revoke any existing code for this user first
+    for existing_code, entry in list(_web_link_codes.items()):
+        if entry["chat_id"] == chat_id:
+            del _web_link_codes[existing_code]
+    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    _web_link_codes[code] = {
+        "chat_id":    chat_id,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=WEB_LINK_CODE_TTL_MINUTES),
+    }
+    return code
+
+
+def validate_web_link_code(code: str) -> Optional[int]:
+    """Validate a link code. Returns chat_id if valid, None if expired/unknown.
+    Consumes the code (single-use)."""
+    entry = _web_link_codes.get(code.upper().strip())
+    if not entry:
+        return None
+    if datetime.now(timezone.utc) > entry["expires_at"]:
+        _web_link_codes.pop(code, None)
+        return None
+    _web_link_codes.pop(code, None)  # single-use
+    return entry["chat_id"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Singleton caches

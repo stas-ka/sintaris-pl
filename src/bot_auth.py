@@ -139,6 +139,14 @@ def list_accounts() -> list[dict]:
     return _load_accounts()
 
 
+def change_password(user_id: str, new_password: str) -> bool:
+    """Replace the stored bcrypt hash for the given user_id.  Returns True if found."""
+    new_hash = bcrypt.hashpw(
+        new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)
+    ).decode("utf-8")
+    return update_account(user_id, pw_hash=new_hash)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # JWT tokens
 # ─────────────────────────────────────────────────────────────────────────────

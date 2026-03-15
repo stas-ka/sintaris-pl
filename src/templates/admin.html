@@ -5,6 +5,18 @@
 {% block content %}
 <div class="admin-container">
 
+  <!-- ── Flash messages ─────────────────────────────────── -->
+  {% if msg %}
+  <div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
+    <span style="color:#4caf50">✅</span> {{ msg }}
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="card mb-md" style="border-left:4px solid #f44336; background:rgba(244,67,54,.12)">
+    <span style="color:#f44336">⚠️</span> {{ error }}
+  </div>
+  {% endif %}
+
   <!-- ── Stats row ───────────────── -->
   <div class="stat-row mb-md">
     {% for s in stats %}
@@ -26,10 +38,10 @@
           <th>Status</th>
           <th>Chat ID</th>
           <th>Created</th>
-          <th style="width:100px"></th>
+          <th style="width:140px"></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody x-data="{ openRows: {} }">
         {% for u in users %}
         <tr>
           <td class="text-white fw-bold">{{ u.username }}</td>
@@ -46,6 +58,10 @@
           <td class="text-dim">{{ u.chat_id or '—' }}</td>
           <td class="text-dim">{{ u.created }}</td>
           <td class="flex gap-xs">
+            <button class="btn btn-ghost btn-icon btn-sm" title="Reset password"
+                    @click="openRows['{{ u.user_id }}'] = !openRows['{{ u.user_id }}']">
+              <span class="material-icons-round" style="font-size:16px;color:#ffb300">key</span>
+            </button>
             {% if u.status == 'pending' %}
             <button class="btn btn-ghost btn-icon btn-sm" title="Approve"
                     hx-post="/admin/user/{{ u.user_id }}/approve"
@@ -65,6 +81,32 @@
               <span class="material-icons-round" style="font-size:16px">delete</span>
             </button>
             {% endif %}
+          </td>
+        </tr>
+        <tr x-show="openRows['{{ u.user_id }}']" style="display:none">
+          <td colspan="6" style="background:var(--surface-2); padding:10px 14px">
+            <form style="display:flex; align-items:center; gap:8px; flex-wrap:wrap"
+                  hx-post="/admin/user/{{ u.user_id }}/reset-password"
+                  hx-swap="none">
+              <span style="color:var(--text-muted); font-size:13px">
+                New password for <strong style="color:var(--text-primary)">{{ u.username }}</strong>:
+              </span>
+              <input type="password" name="new_password" required minlength="4"
+                     placeholder="Min 4 characters"
+                     style="padding:6px 10px; background:var(--surface-2);
+                            border:1px solid var(--border-color); border-radius:6px;
+                            color:var(--text-primary); font-size:13px; min-width:180px">
+              <button type="submit"
+                      style="padding:6px 14px; border-radius:6px; border:none;
+                             background:var(--accent); color:#fff; font-size:13px;
+                             font-weight:600; cursor:pointer">Set</button>
+              <button type="button"
+                      @click="openRows['{{ u.user_id }}'] = false"
+                      style="padding:6px 12px; border-radius:6px;
+                             border:1px solid var(--border-color);
+                             background:transparent; color:var(--text-muted);
+                             font-size:13px; cursor:pointer">Cancel</button>
+            </form>
           </td>
         </tr>
         {% endfor %}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — Pico Bot</title>
+  <title>Login — Pico Bot @ {{ hostname }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -13,23 +13,27 @@
     <div class="text-center mb-md">
       <div style="font-size:48px">🤖</div>
       <h2 style="margin:8px 0 4px; color:#fff">Pico Bot</h2>
-      <p class="text-dim text-sm">Sign in to your assistant</p>
+      <p class="text-dim text-sm" style="margin-bottom:4px">Sign in to your assistant</p>
+      <p style="font-size:11px; color:var(--text-dim); margin:0">📡 {{ hostname }}</p>
     </div>
 
     {% if error %}
     <div class="login-error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="/login">
+    <form method="post" action="/login" autocomplete="on">
       <label>
         <span class="text-sm text-muted">Username</span>
         <input type="text" name="username" required autocomplete="username"
-               placeholder="admin" class="w-full">
+               placeholder="admin" class="w-full"
+               value="{{ username or '' }}"
+               {% if username %}id="login-username"{% endif %}>
       </label>
       <label style="margin-top:12px; display:block">
         <span class="text-sm text-muted">Password</span>
         <input type="password" name="password" required autocomplete="current-password"
-               placeholder="••••" class="w-full">
+               placeholder="••••" class="w-full"
+               {% if username %}autofocus{% endif %}>
       </label>
       <button type="submit" class="btn btn-accent w-full" style="margin-top:16px; padding:10px; justify-content:center">
         Sign In

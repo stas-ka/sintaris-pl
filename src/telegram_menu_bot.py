@@ -74,6 +74,7 @@ from bot_handlers import (
     _start_note_append, _start_note_replace,
     _notes_menu_keyboard,
     _handle_profile,
+    _handle_web_link,
 )
 
 # ─── Calendar ─────────────────────────────────────────────────────────────────
@@ -283,6 +284,9 @@ def callback_handler(call):
     elif data == "profile":
         if not _is_allowed(cid): return _deny(cid)
         _handle_profile(cid)
+    elif data == "web_link":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_web_link(cid)
     # ── Admin panel ────────────────────────────────────────────────────────
     elif data == "admin_menu":
         if _is_admin(cid):
@@ -847,6 +851,8 @@ def photo_handler(message):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    from bot_db import init_db as _init_db
+    _init_db()
     log.info("=" * 50)
     log.info("Pico Telegram Menu Bot starting")
     from bot_config import ADMIN_USERS, ALLOWED_USERS

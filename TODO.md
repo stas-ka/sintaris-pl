@@ -2,20 +2,70 @@
 
 **Legend:** ✅ Done · 🔄 In progress · 🔲 Planned · 💡 Idea / future
 
-**Completed:** Registration workflow (v2026.3.15) · Notes system · Per-user mail digest · Voice opts (silence_strip, VAD, whisper, piper_low, persistent_piper, tmpfs_model, warm_piper) · Smart calendar with NL input + reminders + morning briefing · Voice regression tests T01–T12 · Backup system · 3-layer prompt injection guard · Whisper hallucination guard (v2026.3.24) · Calendar multi-event, NL query, delete confirmation, console mode (v2026.3.25)
+**Completed:** Registration workflow (v2026.3.15) · Notes system · Per-user mail digest · Voice opts (silence_strip, VAD, whisper, piper_low, persistent_piper, tmpfs_model, warm_piper) · Smart calendar with NL input + reminders + morning briefing · Voice regression tests T01–T12 · Backup system · 3-layer prompt injection guard · Whisper hallucination guard (v2026.3.24) · Calendar multi-event, NL query, delete confirmation, console mode (v2026.3.25) · Web UI P0–P4: FastAPI+HTMX, Screen DSL, JWT auth, PWA manifest; `picoclaw-web.service` live on OpenClawPI2 (v2026.3.28) · Login UX fix: username preserved on failed attempt, password autofocus (v2026.3.28) · **Telegram↔Web account linking**: 6-char code, 15 min TTL, `/register` integration, role inheritance, status=active for linked accounts (v2026.3.28)
 
 ---
 
 ## 0. Known Bugs 🐛
 
-### 0.1 Profile menu button does nothing 🔲
+### 0.1 Profile menu not functional — missing actions in Telegram and Web UI 🔲
 
-**Observed (2026-03-08):** Tapping 👤 Profile sends no reply — silently fails.
+**Observed (2026-03-08 / 2026-03-15):** Tapping 👤 Profile in the Telegram client sends no reply — silently fails. Additionally the profile section is missing key self-service actions in both Telegram and Web UI.
 
-**Likely cause:** `_handle_profile()` in `src/bot_handlers.py` does a deferred `from bot_mail_creds import _load_creds` inside the function body. If the import throws, `telebot` swallows the exception silently.
+**Root cause (silent failure):** `_handle_profile()` in `src/bot_handlers.py` does a deferred `from bot_mail_creds import _load_creds` inside the function body. If the import throws, `telebot` swallows the exception silently.
+
+#### Fix — crash guard (immediate)
 
 - [ ] Wrap deferred import + `_load_creds()` in `try/except` — degrade gracefully (show profile without email line, log warning)
 - [ ] Verify: `journalctl -u picoclaw-telegram -n 50 | grep -i profile`
+
+#### Feature — Profile screen redesign (Telegram + Web UI both)
+
+The profile menu must be a proper self-service hub. All actions below must be accessible from **both** the Telegram 👤 Profile button **and** the Web UI `/settings`+`/profile` pages.
+
+**Required profile actions:**
+
+| Action | Telegram | Web UI |
+|---|---|---|
+| View personal info (name, username, chat ID, role, registration date) | ✅ already shown (when profile works) | 🔲 `/profile` page |
+| Update display name | 🔲 `profile_edit_name` callback → ForceReply | 🔲 Inline edit form |
+| Update email address (IMAP send-to target) | 🔲 `profile_edit_email` → `finish_email_set_target()` | 🔲 Settings form field |
+| Access mailbox / digest | 🔲 Button → `digest` callback | 🔲 Link to `/mail` |
+| Change password | 🔲 `profile_change_pw` → 2-step ForceReply (current → new) | ✅ `/settings/password` already exists |
+| Reset password (admin on behalf of user) | 🔲 Admin panel → `admin_reset_pw_menu` | 🔲 `/admin/user/{id}/reset-password` |
+
+**Telegram implementation checklist:**
+
+- [ ] Fix silent crash first (try/except guard above)
+- [ ] Replace current static text reply with an inline keyboard:
+  ```
+  👤 Profile — @username
+  ─────────────────────
+  [✏️ Edit name]  [📧 Email settings]
+  [🔑 Change password]  [📬 Open mailbox]
+  [🔙 Menu]
+  ```
+- [ ] Add `_profile_keyboard(chat_id)` to `bot_handlers.py`
+- [ ] Add `profile_edit_name` callback → ForceReply → `_finish_profile_edit_name(chat_id, text)` → update `registrations.json` name field
+- [ ] Add `profile_edit_email` callback → reuse `handle_email_change_target(chat_id)` from `bot_email.py` (shows current masked address + ForceReply for new one)
+- [ ] Add `profile_change_pw` callback → 2-step ForceReply: prompt current password → prompt new password → `change_password(user_id, new_pw)` from `bot_auth.py`
+- [ ] Add `profile_open_mail` callback → forward to `handle_digest_auth(chat_id)`
+- [ ] Register all new `profile_*` callbacks in `telegram_menu_bot.py` dispatcher
+- [ ] Add `_pending_profile[chat_id]` session dict for multi-step flows (edit name, change password)
+- [ ] Add all new string keys to `src/strings.json` (ru / en / de)
+
+**Web UI implementation checklist:**
+
+- [ ] Add `GET /profile` route in `bot_web.py` — show name, username, chat ID, role, registration date, masked email
+- [ ] Add `POST /profile/name` — update display name (writes to `registrations.json`)
+- [ ] Add `POST /profile/email` — update send-to email (writes `_target.txt` via `_set_target_email()`)
+- [ ] Link to mailbox: `/profile` page shows a "📬 Open mailbox" button → `/mail`
+- [ ] Password change already at `POST /settings/password` — ensure it is linked from `/profile`
+- [ ] Add `profile.html` template (or extend `settings.html`) with all fields in editable form
+- [ ] Add 👤 Profile link to `base.html` nav sidebar
+- [ ] Add Playwright test: `GET /profile` returns 200; name field is visible; password change link present
+
+**UI sync rule:** changes to profile actions must be applied in both Telegram **and** Web UI in the same commit — see `.github/copilot-instructions.md` §UI Sync Rule.
 
 ### 0.2 Rename bot / assistant — centralise all user-facing name references 🔲
 
@@ -52,6 +102,40 @@
 - [ ] Check `_clear_pending_tts()` call sites in `bot_calendar.py` — confirm it is called **after** `bot.send_voice()` returns, not before
 - [ ] Add a guard: only delete the pending TTS record after the voice message is confirmed sent (non-None file_id)
 
+### 0.6 🔴 System Chat has no role-differentiated guards — Admin and Developer get same (insufficient) rights 🔲
+
+**Observed (2026-03-14):** System Chat (`mode_system`) is currently gated by `_is_admin()` only. Both Admin and Developer users enter the same unrestricted bash-command flow with identical guards. There is no role-aware permission boundary — the guard structure does not reflect the intended role model:
+
+| Role | Intended System Chat rights |
+|---|---|
+| **User** | No access to System Chat |
+| **Admin** | Monitor, view, and change configuration — `read`, `ls`, `cat`, `systemctl status`, `journalctl`, config file edits. No code execution, no service restart, no file writes outside config dirs |
+| **Developer** | Full system access — all Admin rights + file writes, code patches, service restart/redeploy. All destructive operations require explicit confirmation |
+
+**Root cause:** `_handle_system_message()` and `_execute_pending_cmd()` in `src/bot_handlers.py` call `_is_admin()` as the single guard — treating all admins as equivalent. No Developer role exists (`DEVELOPER_USERS` not yet implemented). No command-class filtering is applied per role.
+
+**Required changes:**
+
+- [ ] Add `DEVELOPER_USERS` set to `bot_config.py` (env var `DEVELOPER_USERS`) — see §1.3
+- [ ] Add `_is_developer(chat_id)` to `bot_access.py`
+- [ ] Define **command class allowlists** per role in `bot_security.py` or `bot_config.py`:
+  - `ADMIN_ALLOWED_CMDS` — read-only + config ops: `cat`, `ls`, `head`, `tail`, `grep`, `systemctl status`, `journalctl`, `df`, `free`, `ps`, `uname`, `ping`, `curl` (GET only)
+  - `DEVELOPER_ALLOWED_CMDS` — extends Admin: adds `systemctl restart/stop/start`, `cp`, `mv`, `rm`, `python3`, `pip3`, `git`, `pscp`, `plink`
+- [ ] In `_handle_system_message()`: branch on `_is_developer()` vs `_is_admin()` vs user:
+  - User → `_deny()`
+  - Admin → extract command → validate against `ADMIN_ALLOWED_CMDS` allowlist → confirm gate
+  - Developer → extract command → validate against `DEVELOPER_ALLOWED_CMDS` allowlist → **always** confirm gate (no auto-run)
+- [ ] In `_execute_pending_cmd()`: re-check role at execution time (not just at LLM-extract time) — defence in depth
+- [ ] Add `_classify_cmd_class(cmd)` helper — returns `"read"` / `"config"` / `"destructive"` / `"code_change"` based on the bash command
+- [ ] Adjust confirm-gate message to show the command class: `⚠️ Destructive command — run as Developer?` vs `ℹ️ Read-only — run as Admin?`
+- [ ] For Admin: if `_classify_cmd_class()` returns `"destructive"` or `"code_change"` → reject with explanation, do not show confirm gate
+- [ ] Add regression test T22 (or extend T18): `_is_admin` / `_is_developer` / allowlist enforcement unit tests
+- [ ] Update `src/strings.json` with role-specific System Chat prompt strings (ru/en/de)
+
+**Related:** §1.1 RBAC, §1.3 Developer Role & Dev Menu
+
+---
+
 ### 0.5 🔴 Calendar console ignores "add event" requests — LLM refuses with policy message 🔲
 
 **Observed (2026-03-12):** Sending a multi-event natural language request via the calendar console:
@@ -73,24 +157,41 @@ The assistant responds with a refusal ("Я не могу добавлять со
 
 ### 1.1 Role-Based Access Control (RBAC) 🔲
 
-| Role | Permissions |
-|---|---|
-| **Admin** | Configuration only — manage users, LLM providers, run system commands; cannot implement features |
-| **Developer** | Extend and maintain the assistant — special dev menu, LLM-assisted coding, restart, deploy, fix issues |
-| **User** | Chat, voice, notes, calendar, mail |
-| **Guest** | Limited until admin approves |
+| Role | System Chat | Admin Panel | Dev Menu | User features |
+|---|---|---|---|---|
+| **Admin** | ✅ Read + config ops only (allowlist) | ✅ Full | ❌ No | ✅ Full |
+| **Developer** | ✅ All ops incl. restart/deploy (allowlist + confirm) | ✅ Full | ✅ Full | ✅ Full |
+| **User** | ❌ No access | ❌ No | ❌ No | ✅ Full |
+| **Guest** | ❌ No access | ❌ No | ❌ No | ⚠️ Pending approval |
 
-- [ ] Implement role storage and enforcement
-- [ ] Admin-only commands gated by role check
+**See Bug 0.6** for the current missing guard implementation.
+
+- [ ] Add `DEVELOPER_USERS` set to `bot_config.py` (env var `DEVELOPER_USERS`)
+- [ ] Add `_is_developer(chat_id)` to `bot_access.py`
+- [ ] Implement per-role command allowlists (`ADMIN_ALLOWED_CMDS`, `DEVELOPER_ALLOWED_CMDS`) in `bot_security.py`
+- [ ] Role-aware `_handle_system_message()` — Admin vs Developer vs User branches
+- [ ] Admin-only panel items gated by `_is_admin()` check
 - [ ] Guest mode: only `/start` + "registration sent"
 
 ### 1.3 Developer Role & Dev Menu 🔲
 
 **Concept:** Developer users get a dedicated 🛠 Developer menu that opens a specialised LLM chat session pre-primed with the bot's source code context and dev patterns. The LLM acts as a coding assistant — it can propose code changes, explain implementation options, and generate patches. The developer can then apply them and restart the bot, all from within Telegram.
 
-**Admin vs Developer distinction:**
-- **Admin** — operational control: add/remove users, switch LLM model, run a bash command, view logs. Cannot write new features.
-- **Developer** — full dev access: chat with Pico to extend/fix/implement; restart service; view and apply code patches.
+**Admin vs Developer distinction (System Chat):**
+
+| Capability | Admin | Developer |
+|---|---|---|
+| Read files, view logs, check status | ✅ | ✅ |
+| Change config files (edit settings) | ✅ | ✅ |
+| Restart / stop / start services | ❌ Blocked | ✅ Confirm gate |
+| Write / patch source code | ❌ Blocked | ✅ Confirm gate |
+| Install packages, run `pip3`/`git` | ❌ Blocked | ✅ Confirm gate |
+| Deploy files (`pscp`, `mv`) | ❌ Blocked | ✅ Confirm gate |
+| Describe new feature → agent implements | ❌ Blocked | ✅ Dev Chat mode |
+
+**Guards are flexible by design:** allowlists defined per role in `ADMIN_ALLOWED_CMDS` / `DEVELOPER_ALLOWED_CMDS` constants — adding a new command class to a role requires only updating the list, no code changes.
+
+**See Bug 0.6** for the current guard gap that must be fixed as part of implementation.
 
 **Dev menu buttons:**
 | Button | Action |
@@ -162,6 +263,112 @@ See: `doc/hardware-performance-analysis.md` §8.9
 ---
 
 ## 4. Content & Knowledge
+
+### 4.0 Contact Book 🔲
+
+Personal address book — add, update, remove and view contacts via text or voice in both Telegram and Web UI channels.
+
+#### 4.0.1 Data Schema
+
+```sql
+-- SQLite table (part of pico.db and §9.3 schema)
+CREATE TABLE IF NOT EXISTS contacts (
+    id          TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(4)))),
+    chat_id     INTEGER NOT NULL REFERENCES users(chat_id),
+    name        TEXT    NOT NULL,
+    phone       TEXT,
+    email       TEXT,
+    address     TEXT,
+    notes       TEXT,
+    created_at  TEXT    DEFAULT (datetime('now')),
+    updated_at  TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_contacts_chat_name ON contacts(chat_id, name COLLATE NOCASE);
+```
+
+Storage: `~/.picoclaw/pico.db` `contacts` table (same DB as calendar + users).  
+No separate JSON/file store needed — SQLite handles all CRUD.
+
+#### 4.0.2 Operations
+
+| Operation | Trigger (Telegram) | Trigger (Voice) | Trigger (Web) |
+|---|---|---|---|
+| **Add** contact | Button ➕ → multi-step ForceReply (name → phone → email → notes) | "добавь контакт Иван Иванов телефон ..."; NL → LLM extracts fields | Web form on `/contacts/new` |
+| **View** one | `contact_open:<id>` button or NL "найди Ивана" | "позвони Ивану" / "покажи Ивана" → lookup + TTS | `/contacts/<id>` detail page |
+| **List** all / filtered | `contact_list` button; inline search by name | "кто у меня в контактах?" → TTS list | `/contacts` paginated table |
+| **Update** | `contact_edit:<id>` → ForceReply for changed field | "обнови телефон Ивана на ..." | Edit form (HTMX in-place) |
+| **Delete** | `contact_del:<id>` → confirm card → `contact_del_confirm:<id>` | "удали контакт Ивана" + confirm | Delete button + confirmation modal |
+| **Search** | NL text in console mode or inline search | "найди контакт с почтой gmail" | `/contacts?q=` query param |
+
+#### 4.0.3 Telegram Implementation Checklist
+
+- [ ] Create `src/bot_contacts.py` module (no circular imports — imports `bot_config`, `bot_state`, `bot_instance`, `bot_access`)
+- [ ] `_contacts_user_dir(chat_id)` — use DB not files; CRUD helpers: `_contact_add()`, `_contact_get()`, `_contact_update()`, `_contact_delete()`, `_contact_search()`
+- [ ] `_contacts_menu_keyboard(chat_id)` — ➕ Add / 🔍 Search / 📋 List / 🔙 Back  
+- [ ] `_contacts_list_keyboard(chat_id, contacts)` — per-contact open/edit/delete inline buttons (paginated: max 8 per page)
+- [ ] `_start_contact_add(chat_id)` — enter `contact_add` mode; ForceReply: name → phone → email → address → notes (each optional except name)
+- [ ] `_finish_contact_add(chat_id, text)` — multi-step state machine via `_pending_contact[chat_id]`
+- [ ] `_handle_contact_open(chat_id, cid)` — show detail card: name, phone (tap-to-copy hint), email, address, notes
+- [ ] `_start_contact_edit(chat_id, cid)` — show field selector (6 buttons); targeted ForceReply for chosen field
+- [ ] `_handle_contact_delete(chat_id, cid)` — confirm card → `contact_del_confirm:<id>`
+- [ ] `_handle_contact_search(chat_id)` — enter `contact_search` mode; text → `_contact_search()` → paginated results
+- [ ] NL voice integration: in `_handle_voice_message()`, detect "добавь контакт / найди контакт / удали контакт" intent → route to contacts handlers
+- [ ] Add `📇 Contacts` button to `_menu_keyboard()` in `bot_access.py`
+- [ ] Register all `contact_*` callbacks in `telegram_menu_bot.py` dispatcher
+- [ ] Add to `src/strings.json`: all contact UI keys in `ru`, `en`, `de`
+- [ ] Add DB init: `contacts` table in `bot_db.py` `init_db()` (§9.3)
+
+#### 4.0.4 Web UI Implementation Checklist
+
+- [ ] Add routes to `src/bot_web.py`:
+  - `GET /contacts` — list with search (`?q=`) + pagination
+  - `GET /contacts/new` — create form
+  - `POST /contacts` — create contact
+  - `GET /contacts/{id}` — detail view
+  - `PUT /contacts/{id}` — update (HTMX form submit)
+  - `DELETE /contacts/{id}` — delete (HTMX confirm)
+- [ ] Create `src/templates/contacts.html` — list + search bar + "New contact" button
+- [ ] Create `src/templates/_contact_editor.html` — HTMX partial: create/edit form
+- [ ] Add 📇 Contacts link to `src/templates/dashboard.html` and `base.html` nav
+- [ ] Voice add via web: record button on contacts page → STT → NL parse → pre-fill form fields (uses existing `/api/voice/transcribe` endpoint + client-side form fill)
+
+#### 4.0.5 Voice Parsing Pattern (NL → Contact Fields)
+
+```python
+# LLM prompt in _finish_contact_add() voice path:
+CONTACT_EXTRACT_PROMPT = """
+Extract contact details from the text. Return ONLY JSON:
+{"name": "...", "phone": "...", "email": "...", "address": "...", "notes": "..."}
+Use null for absent fields. Name is required.
+Text: {text}
+"""
+# If name is null → ask user to repeat with name
+# All other fields optional — save partial contact
+```
+
+#### 4.0.6 `_user_mode` Values
+
+| Value | Set by | Cleared by |
+|---|---|---|
+| `"contact_add"` | `_start_contact_add()` | `_finish_contact_add()` on last step |
+| `"contact_edit"` | `_start_contact_edit()` | `_handle_contact_edit_input()` |
+| `"contact_search"` | `_handle_contact_search()` | after results sent |
+
+#### 4.0.7 Callback Keys (add to dispatcher and `doc/bot-code-map.md`)
+
+| Key / Prefix | Handler |
+|---|---|
+| `menu_contacts` | `_handle_contacts_menu` |
+| `contact_list` | `_handle_contact_list` |
+| `contact_create` | `_start_contact_add` |
+| `contact_open:<id>` | `_handle_contact_open` |
+| `contact_edit:<id>` | `_start_contact_edit` |
+| `contact_del:<id>` | `_handle_contact_delete` (confirm card) |
+| `contact_del_confirm:<id>` | `_handle_contact_delete_confirmed` |
+| `contact_search` | `_handle_contact_search` |
+| `contact_page:<n>` | `_handle_contact_list` with offset |
+
+---
 
 ### 4.1 Local RAG Knowledge Base 🔲
 
@@ -318,49 +525,26 @@ With `persistent_piper` + `tmpfs_model` + `piper_low_model` all ON: estimated **
 
 ## 8. Web UI & CRM Platform 💡
 
-### 8.1 PicoUI Platform — FastAPI Web Interface 🔲
+### 8.1 PicoUI Platform — FastAPI Web Interface ✅ Implemented (v2026.3.28)
 
-5-phase rollout: FastAPI + Jinja2 + HTMX + Alpine.js + Pico CSS.
-Full roadmap: `doc/web-ui/roadmap-web-ui.md`. Mockups: `doc/web-ui/mockups-fastapi/`.
+All 5 phases deployed. New files: `bot_web.py`, `bot_auth.py`, `bot_llm.py`, `bot_ui.py`, `bot_actions.py`, `render_telegram.py`, 12 Jinja2 templates, `static/manifest.json`, `picoclaw-web.service` — running on OpenClawPI2 (HTTPS :8080).
+See: `doc/architecture.md` §17 (Web UI Channel) and §18 (Screen DSL), `doc/web-ui/roadmap-web-ui.md`.
 
-| Phase | Scope |
-|---|---|
-| P0 | Extract UI layer (`bot_ui.py` Screen DSL) + `bot_llm.py` (pluggable LLM backend) + `bot_auth.py` (JWT + bcrypt) |
-| P1 | FastAPI app + templates + auth + chat + notes |
-| P2 | Calendar + admin dashboard |
-| P3 | Voice: browser recording + audio playback |
-| P4 | Full migration: all screens unified, PWA, responsive |
+### 8.2 Multi-Channel Rendering ✅ Implemented (v2026.3.28)
 
-### 8.2 Multi-Channel Rendering 🔲
+Telegram (`render_telegram.py`) and Web (Jinja2 + HTMX via `bot_web.py`) renderers deployed. WhatsApp / Discord / Slack remain 💡 future ideas.
 
-Screen DSL enables write-once, render-anywhere. Priority: Telegram (P0) + Web (P1). Future messengers via thin renderers (~50-100 lines each).
+### 8.3 LLM Backend Abstraction ✅ Implemented (v2026.3.28)
 
-| Renderer | Priority | Status |
-|---|---|---|
-| Telegram (`render_telegram.py`) | P0 | 🔲 Planned |
-| Web (Jinja2 templates) | P1 | 🔲 Planned |
-| WhatsApp | Future | 💡 Idea |
-| Discord | Future | 💡 Idea |
-| Slack | Future | 💡 Idea |
-
-### 8.3 LLM Backend Abstraction 🔲
-
-`bot_llm.py` — pluggable backend switchable via `LLM_BACKEND` env var.
-
-| Backend | Status |
-|---|---|
-| `picoclaw_cli` — current subprocess call | 🔲 Planned (default) |
-| `picoclaw_gateway` — HTTP :18790 | 🔲 Planned |
-| `openclaw_gateway` — HTTP :18789 | 🔲 Planned |
-| `openai_direct` — OpenAI API | 🔲 Planned |
+`bot_llm.py` deployed. `picoclaw_cli` (default) and `openai_direct` backends live. `picoclaw_gateway` / `openclaw_gateway` HTTP backends 🔲 planned.
 
 ### 8.4 CRM Platform Vision 💡
 
-**Long-term objective.** Current focus: core platform (P0–P1) + prototype for concrete CRM customer projects. CRM-specific modules added per customer need, never speculatively.
+**Long-term objective.** Core platform C0 — Screen DSL, auth, multi-channel rendering, LLM backend — complete (v2026.3.28). CRM-specific modules added per concrete customer project, never speculatively.
 
-| CRM Phase | Scope | Depends on |
-|---|---|---|
-| C0 (current) | Core platform: Screen DSL, auth, multi-channel, LLM backend | P0–P1 |
+| CRM Phase | Scope | Depends on | Status |
+|---|---|---|---|
+| C0 | Core platform: Screen DSL, auth, multi-channel, LLM backend | P0–P4 | ✅ Done |
 | C1 | Contact management: CRUD, search, link to notes/calendar/mail | P2 + C0 |
 | C2 | Deals pipeline: stages, Kanban board in Web UI | C1 |
 | C3 | Custom fields + workflows: admin-defined schema + automation | P4 + C2 |

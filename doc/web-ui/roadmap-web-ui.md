@@ -1,7 +1,7 @@
 # PicoUI Platform — Implementation Roadmap
 
 **Created:** March 2026  
-**Updated:** March 13, 2026 — multi-backend (PicoClaw / OpenClaw), multi-channel (Telegram + Web + messengers), CRM-ready  
+**Updated:** March 2026 — multi-backend (PicoClaw / OpenClaw), multi-channel (Telegram + Web + messengers), CRM-ready; **Phases P0–P4 complete + Telegram↔Web account linking (Flow C), deployed to OpenClawPI2 (v2026.3.28)**  
 **Primary framework:** FastAPI + Jinja2 + HTMX (as designed in `mockups-fastapi/`)  
 **Future enhancement:** NiceGUI integration (nice-to-have, see §12)  
 **LLM backends:** PicoClaw CLI (current), PicoClaw Gateway HTTP, OpenClaw Gateway WS — switchable via config  
@@ -50,13 +50,13 @@ The Picoclaw bot currently exists only as a Telegram bot. All user identity is t
 
 The existing `mockups-fastapi/` already demonstrates every screen (Dashboard, Chat, Notes, Calendar, Mail, Voice, Admin) with a polished dark theme, HTMX interactivity, and responsive CSS. We build directly on these mockups.
 
-| Phase | Scope | Effort | Outcome |
-|---|---|---|---|
-| **P0** | Extract `bot_ui.py` + `bot_actions.py` + `render_telegram.py` + `bot_llm.py`; `bot_auth.py`; migrate 3 screens internally | ~1 day | Telegram works via Screen objects; LLM backend abstracted; `accounts.json` identity store ready |
-| **P1** | FastAPI + Jinja2 templates + JWT auth + Dashboard + Chat + Notes | ~3–5 days | Web login, dashboard, real-time chat with LLM, notes with live Markdown editor |
-| **P2** | Calendar views + Mail digest + Admin dashboard | ~5–7 days | Month grid calendar, categorized mail digest, full admin panel with user/LLM/voice management |
-| **P3** | Browser voice recording via MediaRecorder, TTS audio playback, pipeline visualization | ~3–5 days | Voice orb recording, waveform display, STT/TTS in browser |
-| **P4** | All 19 Telegram keyboards → Screen objects; both channels unified; PWA | ~5–7 days | Single action layer drives Telegram + Web; no duplicated UI logic |
+| Phase | Scope | Effort | Outcome | Status |
+|---|---|---|---|---|
+| **P0** | Extract `bot_ui.py` + `bot_actions.py` + `render_telegram.py` + `bot_llm.py`; `bot_auth.py`; migrate 3 screens internally | ~1 day | Telegram works via Screen objects; LLM backend abstracted; `accounts.json` identity store ready | ✅ Done |
+| **P1** | FastAPI + Jinja2 templates + JWT auth + Dashboard + Chat + Notes | ~3–5 days | Web login, dashboard, real-time chat with LLM, notes with live Markdown editor | ✅ Done |
+| **P2** | Calendar views + Mail digest + Admin dashboard | ~5–7 days | Month grid calendar, categorized mail digest, full admin panel with user/LLM/voice management | ✅ Done |
+| **P3** | Browser voice recording via MediaRecorder, TTS audio playback, pipeline visualization | ~3–5 days | Voice orb recording, waveform display, STT/TTS in browser | ✅ Done |
+| **P4** | All 19 Telegram keyboards → Screen objects; both channels unified; PWA | ~5–7 days | Single action layer drives Telegram + Web; no duplicated UI logic | ✅ Done |
 
 **NiceGUI** is planned as a future nice-to-have enhancement (§12) — it can replace or complement the Jinja2 templates, reusing the same `bot_actions.py` backend.
 
@@ -206,18 +206,44 @@ User opens https://pi:8080/login
   → redirect to dashboard
 ```
 
-#### Flow C — Telegram User Links Web Account
+#### Flow C — Telegram User Links Web Account ✅ Implemented (v2026.3.28)
 
 ```
-Existing Telegram user taps "🌐 Link Web Account" in Profile menu
-  → bot generates a one-time 6-digit code, valid 5 minutes
-  → bot sends: "Go to https://pi:8080/link and enter code: 847293"
-  → user opens web, enters code + chooses username + password
-  → server: verify code → link telegram_chat_id to same account record
-  → user now has both Telegram and Web access to same data
+Existing Telegram user taps "🔗 Link to Web" in Profile menu
+  → bot dispatches "web_link" callback → _handle_web_link(chat_id)
+  → bot generates a one-time 6-char alphanumeric code (uppercase), valid 15 minutes
+      code stored in _web_link_codes dict: {code: {chat_id, expires_at}}
+  → bot sends message with code, e.g.:
+      "🔗 Web Account Link Code
+       Your code: `ABC123`
+       Valid for 15 minutes. Enter it on the registration page."
+  → user opens https://agents.sintaris.net/picoassist2/register (PI2)
+       or https://agents.sintaris.net/picoassist/register (PI1)
+  → enters username + password + Telegram Link Code (optional field, auto-uppercased)
+  → server: validates code via validate_web_link_code(code)
+      → resolves telegram_chat_id
+      → checks if chat_id is in ADMIN_USERS → sets role="admin" or role="user"
+      → creates account with status="active" (no admin approval step for linked accounts)
+      → code invalidated (single-use)
+  → user now has both Telegram and Web access; profile shows linked Telegram identity
 ```
 
-#### Flow D — Web User Links Telegram
+**Implementation notes vs original design:**
+- Code format: **6 alphanumeric uppercase chars** (not 6-digit numeric)
+- TTL: **15 minutes** (not 5 minutes)
+- Entry point: **`/register` page optional field** (not a separate `/link` route)
+- Status on success: **`active`** (not `approved`) — linked accounts bypass admin approval
+- Role inheritance: Telegram ADMIN_USERS → web `admin` role automatically
+
+**Files implementing Flow C:**
+- `src/bot_state.py` — `generate_web_link_code()`, `validate_web_link_code()`, `_web_link_codes` dict, `WEB_LINK_CODE_TTL_MINUTES = 15`
+- `src/bot_handlers.py` — `_handle_web_link(chat_id)`, Profile menu link button
+- `src/telegram_menu_bot.py` — `web_link` callback dispatch
+- `src/bot_web.py` — `register_submit()` accepts `link_code` Form field
+- `src/templates/register.html` — optional Telegram Link Code input
+- `src/strings.json` — `web_link_btn`, `web_link_code_msg` keys (ru/en/de)
+
+#### Flow D — Web User Links Telegram 🔲 Planned
 
 ```
 Web user opens Profile → "Link Telegram"
@@ -706,18 +732,20 @@ def _notes_user_dir(user_ref) -> Path:
 
 ### 4.9 Deliverables
 
+**Status: ✅ Deployed (v2026.3.28)**
+
 | # | File | Status |
 |---|---|---|
-| 1 | `src/bot_auth.py` | New — unified identity + auth |
-| 2 | `src/bot_llm.py` | New — pluggable LLM backend (PicoClaw/OpenClaw/OpenAI) |
-| 3 | `src/bot_ui.py` | New — Screen DSL widget dataclasses |
-| 4 | `src/bot_actions.py` | New — 3 proof-of-concept screen handlers |
-| 5 | `src/render_telegram.py` | New — Screen → Telegram API |
-| 6 | `src/bot_config.py` | Modified — add `ACCOUNTS_FILE`, `WEB_SECRET_FILE`, `LLM_BACKEND` |
-| 7 | `src/bot_access.py` | Modified — `_ask_picoclaw()` delegates to `bot_llm.ask_llm()` |
-| 8 | `src/bot_users.py` | Modified — accept `user_id` |
-| 9 | `src/bot_calendar.py` | Modified — accept `user_id` |
-| 10 | `src/bot_mail_creds.py` | Modified — accept `user_id` |
+| 1 | `src/bot_auth.py` | ✅ New — unified identity + auth |
+| 2 | `src/bot_llm.py` | ✅ New — pluggable LLM backend (PicoClaw/OpenClaw/OpenAI) |
+| 3 | `src/bot_ui.py` | ✅ New — Screen DSL widget dataclasses |
+| 4 | `src/bot_actions.py` | ✅ New — 3 proof-of-concept screen handlers |
+| 5 | `src/render_telegram.py` | ✅ New — Screen → Telegram API |
+| 6 | `src/bot_config.py` | ✅ Modified — add `ACCOUNTS_FILE`, `WEB_SECRET_FILE`, `LLM_BACKEND` |
+| 7 | `src/bot_access.py` | ✅ Modified — `_ask_picoclaw()` delegates to `bot_llm.ask_llm()` |
+| 8 | `src/bot_users.py` | ✅ Modified — accept `user_id` |
+| 9 | `src/bot_calendar.py` | ✅ Modified — accept `user_id` |
+| 10 | `src/bot_mail_creds.py` | ✅ Modified — accept `user_id` |
 
 ### 4.10 Verification
 
@@ -915,18 +943,20 @@ WantedBy=multi-user.target
 
 ### 5.7 Deliverables
 
+**Status: ✅ Deployed (v2026.3.28)**
+
 | # | File | Status |
 |---|---|---|
-| 1 | `src/bot_web.py` | New — FastAPI app with login/register/dashboard/chat/notes |
-| 2 | `src/templates/base.html` | New (from mockup) — sidebar layout with HTMX |
-| 3 | `src/templates/login.html` | New — auth form |
-| 4 | `src/templates/register.html` | New — registration form |
-| 5 | `src/templates/dashboard.html` | New (from mockup) — real stats |
-| 6 | `src/templates/chat.html` | New (from mockup) — HTMX chat |
-| 7 | `src/templates/notes.html` | New (from mockup) — HTMX CRUD + live preview |
-| 8 | `src/static/style.css` | New (from mockup) — 500-line dark theme |
-| 9 | `src/services/picoclaw-web.service` | New — systemd unit |
-| 10 | `src/bot_auth.py` | Modified — add JWT issue/decode helpers |
+| 1 | `src/bot_web.py` | ✅ New — FastAPI app with login/register/dashboard/chat/notes |
+| 2 | `src/templates/base.html` | ✅ New — sidebar layout with HTMX |
+| 3 | `src/templates/login.html` | ✅ New — auth form |
+| 4 | `src/templates/register.html` | ✅ New — registration form |
+| 5 | `src/templates/dashboard.html` | ✅ New — real stats |
+| 6 | `src/templates/chat.html` | ✅ New — HTMX chat |
+| 7 | `src/templates/notes.html` | ✅ New — HTMX CRUD + live preview |
+| 8 | `src/static/style.css` | ✅ New — 500-line dark theme |
+| 9 | `src/services/picoclaw-web.service` | ✅ New — systemd unit |
+| 10 | `src/bot_auth.py` | ✅ Modified — add JWT issue/decode helpers |
 
 ### 5.8 Verification
 
@@ -998,13 +1028,15 @@ def action_cal_query(user: UserContext, text: str) -> Screen: ...
 
 ### 6.4 Deliverables
 
+**Status: ✅ Deployed (v2026.3.28)**
+
 | # | File | Status |
 |---|---|---|
-| 1 | `src/templates/calendar.html` | New (from mockup) — month grid + HTMX |
-| 2 | `src/templates/mail.html` | New (from mockup) — categorized digest |
-| 3 | `src/templates/admin.html` | New (from mockup) — full admin panel |
-| 4 | `src/bot_web.py` | Modified — calendar/mail/admin routes |
-| 5 | `src/bot_actions.py` | Modified — calendar + admin action handlers |
+| 1 | `src/templates/calendar.html` | ✅ New — month grid + HTMX |
+| 2 | `src/templates/mail.html` | ✅ New — categorized digest |
+| 3 | `src/templates/admin.html` | ✅ New — full admin panel |
+| 4 | `src/bot_web.py` | ✅ Modified — calendar/mail/admin routes |
+| 5 | `src/bot_actions.py` | ✅ Modified — calendar + admin action handlers |
 
 ### 6.5 Verification
 
@@ -1118,12 +1150,14 @@ Browser push notifications for calendar reminders:
 
 ### 7.6 Deliverables
 
+**Status: ✅ Deployed (v2026.3.28)**
+
 | # | File | Status |
 |---|---|---|
-| 1 | `src/templates/voice.html` | New (from mockup) — orb + waveform + pipeline display |
-| 2 | `src/static/voice.js` | New — MediaRecorder helper |
-| 3 | `src/static/sw.js` | New — Service Worker for push (optional) |
-| 4 | `src/bot_web.py` | Modified — voice upload/playback routes |
+| 1 | `src/templates/voice.html` | ✅ New — orb + waveform + pipeline display |
+| 2 | `src/static/voice.js` | ✅ New — MediaRecorder helper |
+| 3 | `src/static/sw.js` | ✅ New — Service Worker for push (optional) |
+| 4 | `src/bot_web.py` | ✅ Modified — voice upload/playback routes |
 
 ### 7.7 Verification
 
@@ -1197,15 +1231,17 @@ Language switcher in web profile updates `accounts.json` and refreshes the page.
 
 ### 8.6 Deliverables
 
+**Status: ✅ Deployed (v2026.3.28)**
+
 | # | File | Status |
 |---|---|---|
-| 1 | `src/bot_actions.py` | Complete — all screens |
-| 2 | `src/bot_handlers.py` | Simplified — delegates to actions |
-| 3 | `src/bot_admin.py` | Simplified — delegates to actions |
-| 4 | `src/bot_calendar.py` | Storage only — UI migrated to actions |
-| 5 | `src/render_telegram.py` | Complete — handles all widget types |
-| 6 | `src/templates/*.html` | Complete — all 8+ pages |
-| 7 | `src/static/manifest.json` | New — PWA manifest |
+| 1 | `src/bot_actions.py` | ✅ Complete — all screens |
+| 2 | `src/bot_handlers.py` | ✅ Simplified — delegates to actions |
+| 3 | `src/bot_admin.py` | ✅ Simplified — delegates to actions |
+| 4 | `src/bot_calendar.py` | ✅ Storage only — UI migrated to actions |
+| 5 | `src/render_telegram.py` | ✅ Complete — handles all widget types |
+| 6 | `src/templates/*.html` | ✅ Complete — all 8+ pages |
+| 7 | `src/static/manifest.json` | ✅ New — PWA manifest |
 
 ### 8.7 Verification
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Register — Pico Bot</title>
+  <title>Register — Pico Bot @ {{ hostname }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -13,7 +13,8 @@
     <div class="text-center mb-md">
       <div style="font-size:48px">🤖</div>
       <h2 style="margin:8px 0 4px; color:#fff">Create Account</h2>
-      <p class="text-dim text-sm">Join your personal assistant</p>
+      <p class="text-dim text-sm" style="margin-bottom:4px">Join your personal assistant</p>
+      <p style="font-size:11px; color:var(--text-dim); margin:0">📡 {{ hostname }}</p>
     </div>
 
     {% if error %}
@@ -38,6 +39,15 @@
         <span class="text-sm text-muted">Password</span>
         <input type="password" name="password" required minlength="4"
                placeholder="••••••" class="w-full" autocomplete="new-password">
+      </label>
+      <label style="margin-top:16px; display:block">
+        <span class="text-sm text-muted">Telegram Link Code <span style="opacity:.5; font-size:11px">(optional)</span></span>
+        <input type="text" name="link_code" placeholder="ABC123"
+               class="w-full" maxlength="6" autocomplete="off"
+               style="text-transform:uppercase; letter-spacing:.15em">
+        <small style="color:var(--text-dim,#888); font-size:11px; display:block; margin-top:4px">
+          🤖 Get from Telegram bot: 👤 Profile → 🔗 Link to Web. Code valid 15 min.
+        </small>
       </label>
       <button type="submit" class="btn btn-accent w-full" style="margin-top:16px; padding:10px; justify-content:center">
         Create Account

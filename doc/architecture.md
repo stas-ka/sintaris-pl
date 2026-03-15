@@ -1,15 +1,16 @@
 # Picoclaw Bot — Architecture
 
-**Version:** `2026.3.26` · **Last updated:** March 2026
+**Version:** `2026.3.28` · **Last updated:** March 2026
 
 ## 1. Overview
 
-A multi-modal personal assistant running on a Raspberry Pi 3 B+. Two parallel channels reach the same LLM backend:
+A multi-modal personal assistant running on a Raspberry Pi 3 B+. Three parallel channels reach the same LLM backend:
 
 1. **Telegram Menu Bot** (`bot = @smartpico_bot`) — interactive button-driven Telegram interface with text chat, voice sessions, notes, calendar, mail digest, and admin panel.
 2. **Standalone Voice Assistant** (`voice_assistant.py`) — always-on wake-word loop using the Pi's microphone and speaker.
+3. **FastAPI Web UI** (`bot_web.py`) — HTTPS web interface on port 8080 with full chat, voice (browser recording → STT → LLM → TTS), notes, calendar, mail, and admin panel. JWT cookie authentication. PWA-installable.
 
-Both channels call the same LLM backend: `picoclaw agent -m` → OpenRouter.
+All three channels call the same LLM backend (`bot_llm.py`) and share the same data layer. The Telegram and Web UI channels additionally share a common **Screen DSL** (`bot_ui.py` + `bot_actions.py` + `render_telegram.py`) so that action logic is written once and rendered by each channel independently.
 
 ```
 Microphone (USB / I2S HAT)
@@ -117,9 +118,9 @@ When triggered: hotword stream killed → beep plays → fresh Vosk recognizer r
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.26"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
+**Version:** `BOT_VERSION = "2026.3.28"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
 
-The interactive Telegram bot is split into 12 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks.
+The interactive Telegram bot is split into 14 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks. Shared Screen DSL modules (`bot_ui.py`, `bot_actions.py`, `render_telegram.py`) are used by both this channel and the Web UI channel.
 
 ### 3.1 Module Structure
 
@@ -129,12 +130,18 @@ Module dependency chain (no circular imports):
 bot_config → bot_state → bot_instance → bot_security → bot_access → bot_users
     → bot_voice → bot_calendar → bot_admin → bot_handlers
     → bot_mail_creds → bot_email → bot_error_protocol → telegram_menu_bot
+
+bot_config → bot_llm          ← pluggable LLM backend (shared by Telegram + Web)
+bot_config → bot_auth         ← JWT/bcrypt auth (used by Web UI only)
+bot_ui     → bot_actions      ← Screen DSL action handlers (shared)
+bot_actions ← render_telegram ← Telegram renderer (reads bot_actions output)
+bot_actions ← bot_web         ← Web renderer (reads bot_actions output via Jinja2)
 ```
 
 | Module | Responsibility |
 |---|---|
 | `bot_config.py` | Constants, env loading, logging — root of dependency tree |
-| `bot_state.py` | Mutable runtime dicts, voice_opts I/O, dynamic_users I/O |
+| `bot_state.py` | Mutable runtime dicts, voice_opts I/O, dynamic_users I/O; `generate_web_link_code()` / `validate_web_link_code()` for Telegram↔Web account linking |
 | `bot_instance.py` | `bot = TeleBot(...)` singleton |
 | `bot_security.py` | 3-layer prompt injection guard; `SECURITY_PREAMBLE`; `_wrap_user_input()` |
 | `bot_access.py` | Access control, i18n `_t()`, keyboards, text utils, `_ask_picoclaw()` |
@@ -147,6 +154,12 @@ bot_config → bot_state → bot_instance → bot_security → bot_access → bo
 | `bot_email.py` | "Send as email" SMTP for notes, digest, and calendar events |
 | `bot_error_protocol.py` | Error protocol: collect text/voice/photo → save dir → email |
 | `telegram_menu_bot.py` | Entry point: handler registration + callback dispatcher + `main()` |
+| `bot_llm.py` | Pluggable LLM backend abstraction — shared by Telegram + Web channels |
+| `bot_auth.py` | JWT/bcrypt authentication, `accounts.json` — used by Web UI |
+| `bot_ui.py` | Screen DSL dataclasses: `Screen`, `Button`, `Card`, `Toggle`, `Spinner`, etc. |
+| `bot_actions.py` | Action handlers returning `Screen` objects — shared logic layer |
+| `render_telegram.py` | Renders `Screen` → Telegram `send_message` / `InlineKeyboardMarkup` |
+| `bot_web.py` | FastAPI application: all HTTP routes, Jinja2 templates, HTMX endpoints |
 
 ### 3.2 Main Menu — User Functions
 
@@ -615,6 +628,19 @@ systemd
   │           └── [email send threads]
   │                 └── _send_in_thread() per send op  ← SMTP
   │
+  ├── picoclaw-web.service
+  │     └── uvicorn bot_web:app --host 0.0.0.0 --port 8080 --ssl-keyfile …
+  │           │   FastAPI application (bot_web.py)
+  │           │
+  │           ├── GET/POST /login, /register     ← JWT cookie auth (bot_auth.py)
+  │           ├── GET /                          ← dashboard (Jinja2 + HTMX)
+  │           ├── GET /chat  POST /api/chat/send ← LLM chat (bot_llm.py)
+  │           ├── GET /notes  GET /notes/{slug}  ← notes CRUD
+  │           ├── GET /calendar                  ← calendar view
+  │           ├── GET /mail  POST /api/mail/…    ← mail digest
+  │           ├── GET /admin                     ← admin dashboard (admin-only)
+  │           └── POST /api/voice/…              ← voice: upload/STT/TTS
+  │
   └── picoclaw-voice.service
         └── /usr/bin/python3 voice_assistant.py
               ├── pw-record [subprocess]  ← continuous hotword listen
@@ -629,7 +655,7 @@ systemd
 
 ```
 /home/stas/.picoclaw/
-  telegram_menu_bot.py          ← entry point (v2026.3.23)
+  telegram_menu_bot.py          ← entry point (v2026.3.28)
   bot_config.py                 ← constants, env loading, logging
   bot_state.py                  ← mutable runtime state dicts
   bot_instance.py               ← TeleBot singleton
@@ -650,7 +676,32 @@ systemd
   bot.env                       ← BOT_TOKEN + ALLOWED_USERS + ADMIN_USERS
   gmail_digest.py               ← legacy shared digest cron (deprecated)
 
+  ── Web UI channel ──
+  bot_web.py                    ← FastAPI application: HTTP routes, Jinja2, HTMX endpoints
+  bot_auth.py                   ← JWT/bcrypt authentication, accounts.json management
+  bot_llm.py                    ← pluggable LLM backend abstraction (Telegram + Web share)
+  bot_ui.py                     ← Screen DSL dataclasses: Screen, Button, Card, Toggle, etc.
+  bot_actions.py                ← action handlers returning Screen objects (shared logic)
+  render_telegram.py            ← Telegram renderer: Screen → send_message / InlineKeyboard
+  templates/                    ← Jinja2 HTML templates
+    base.html                   ← layout with PWA meta, HTMX, Alpine.js, Pico CSS
+    login.html                  ← JWT login form
+    register.html               ← user self-registration
+    dashboard.html              ← main dashboard (links to all sections)
+    chat.html                   ← free-text LLM chat with streaming
+    notes.html                  ← notes list + create form
+    _note_editor.html           ← note editor partial (HTMX)
+    calendar.html               ← calendar view + add/edit events
+    mail.html                   ← mail digest + refresh
+    voice.html                  ← voice: record → STT → LLM → TTS playback
+    admin.html                  ← admin dashboard (users, LLM, voice opts)
+    _chat_messages.html         ← chat messages partial (HTMX swap)
+  static/
+    style.css                   ← custom styles on top of Pico CSS
+    manifest.json               ← PWA manifest (icons, theme_color, shortcuts)
+
   ── auto-created runtime files ──
+  accounts.json                 ← web UI user accounts (username + bcrypt hash)
   voice_opts.json               ← voice optimisation flags (do not commit)
   pending_tts.json              ← TTS orphan-cleanup tracker
   users.json                    ← dynamically approved guest users
@@ -685,6 +736,7 @@ systemd
   picoclaw-gateway.service
   picoclaw-voice.service
   picoclaw-telegram.service
+  picoclaw-web.service          ← FastAPI web UI (uvicorn HTTPS :8080)
 
 /mnt/ssd/backups/images/          ← full SD card image backups (optional, USB SSD)
 /etc/modprobe.d/
@@ -699,7 +751,7 @@ systemd
 
 | Constant | Value | Env override | Description |
 |---|---|---|---|
-| `BOT_VERSION` | `"2026.3.23"` | — | Version string; bump on every user-visible change |
+| `BOT_VERSION` | `"2026.3.28"` | — | Version string; bump on every user-visible change |
 | `PIPER_BIN` | `/usr/local/bin/piper` | `PIPER_BIN` | Piper TTS wrapper binary |
 | `PIPER_MODEL` | `~/.picoclaw/ru_RU-irina-medium.onnx` | `PIPER_MODEL` | Default Piper voice model |
 | `PIPER_MODEL_LOW` | `~/.picoclaw/ru_RU-irina-low.onnx` | `PIPER_MODEL_LOW` | Low-quality Piper model |
@@ -891,9 +943,260 @@ Three-tier backup strategy:
 
 | Item | Value |
 |---|---|
-| Constant | `BOT_VERSION = "2026.3.26"` in `bot_config.py` |
+| Constant | `BOT_VERSION = "2026.3.28"` in `bot_config.py` |
 | Format | `YYYY.M.D` (no zero-padding) |
 | Changelog source | `release_notes.json` (deployed alongside bot) |
 | Tracking file | `~/.picoclaw/last_notified_version.txt` (auto-created) |
 | Trigger | On startup: if `BOT_VERSION != last_notified`, send release entry to all admins |
 | Admin view | Admin panel → 📝 Release Notes shows full changelog |
+
+---
+
+## 17. Web UI Channel (FastAPI)
+
+**Service:** `picoclaw-web.service` · **Port:** HTTPS 8080 · **Auth:** JWT cookie `pico_token`
+
+The Web UI channel provides a browser-based interface with the same features as the Telegram bot, served from the Pi over HTTPS using a self-signed TLS certificate. The interface is PWA-installable (works as a standalone app on mobile/desktop).
+
+### 17.1 Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Application server | FastAPI (Python) + uvicorn |
+| Transport | HTTPS TLS (self-signed, port 8080) |
+| Templates | Jinja2 (server-side rendering) |
+| Interactivity | HTMX (partial HTML swaps, no full-page reloads) |
+| Client state | Alpine.js (lightweight reactive JS) |
+| CSS framework | Pico CSS + custom `style.css` |
+| PWA | `static/manifest.json` + theme_color + shortcuts |
+
+### 17.2 Authentication (`bot_auth.py`)
+
+| Item | Detail |
+|---|---|
+| User accounts | `~/.picoclaw/accounts.json` (username + bcrypt hash) |
+| Token | JWT, RS256 or HS256, returned as `HttpOnly` cookie `pico_token` |
+| Session | Cookie-based; re-login on expiry |
+| Registration | Self-registration with admin approval flow |
+| Admin check | `is_admin` flag in JWT claims |
+| Dependency | FastAPI `Depends(get_current_user)` on every protected route |
+
+**Auth flows:**
+- **Flow A (login):** `POST /login` → verify bcrypt → issue JWT → set `pico_token` cookie → redirect `/`
+- **Flow B (register):** `POST /register` → create pending account → admin notified → admin approves
+- **Flow B2 (Telegram-linked register):** `POST /register` with `link_code` → `validate_web_link_code()` in `bot_state.py` → inherit role from Telegram account → status=active immediately (no admin approval needed)
+- **Flow C (protected route):** incoming request → decode `pico_token` → raise 401 if missing/invalid → pass `UserContext` to handler
+- **Flow D (logout):** `POST /logout` → delete cookie
+
+### 17.3 Route Inventory
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| `GET` | `/login` | Login form | — |
+| `POST` | `/login` | Verify creds, set JWT cookie | — |
+| `GET` | `/register` | Registration form | — |
+| `POST` | `/register` | Create pending account (optional `link_code` for Telegram-linked instant activation) | — |
+| `POST` | `/logout` | Clear cookie | ✅ |
+| `GET` | `/settings` | User settings page (language selector, change password) | ✅ |
+| `POST` | `/settings` | Save language or password change | ✅ |
+| `GET` | `/` | Dashboard | ✅ |
+| `GET` | `/chat` | Chat page | ✅ |
+| `POST` | `/api/chat/send` | Send message to LLM, return HTML partial (HTMX) | ✅ |
+| `GET` | `/notes` | Notes list | ✅ |
+| `GET` | `/notes/{slug}` | View note | ✅ |
+| `POST` | `/notes` | Create note | ✅ |
+| `PUT` | `/notes/{slug}` | Update note | ✅ |
+| `DELETE` | `/notes/{slug}` | Delete note | ✅ |
+| `GET` | `/calendar` | Calendar view | ✅ |
+| `POST` | `/api/calendar/add` | Add event via NL | ✅ |
+| `DELETE` | `/api/calendar/{id}` | Delete event | ✅ |
+| `GET` | `/mail` | Mail digest page | ✅ |
+| `POST` | `/api/mail/refresh` | Trigger IMAP refresh | ✅ |
+| `GET` | `/voice` | Voice recording page | ✅ |
+| `POST` | `/api/voice/transcribe` | Upload OGG → STT → LLM → return text+TTS | ✅ |
+| `GET` | `/admin` | Admin dashboard | ✅ admin |
+| `POST` | `/api/admin/users/{id}/approve` | Approve user | ✅ admin |
+| `POST` | `/api/admin/llm/select` | Switch active LLM model | ✅ admin |
+| `POST` | `/api/admin/voice_opts` | Toggle voice optimisation flag | ✅ admin |
+
+### 17.5 Telegram↔Web Account Linking
+
+Users with an existing Telegram account can link it to a new web account in one step.
+
+**Implementation:**
+- `generate_web_link_code(chat_id)` in `bot_state.py` — creates a 6-character uppercase alphanumeric code with a 15-minute TTL; stores in `_web_link_codes: dict[str, tuple[int, float]]`
+- `validate_web_link_code(code)` — returns the `chat_id` if the code is valid and not expired; consumes the code (one-time use)
+- Telegram callback `web_link` — triggered by Profile → **🔗 Link to Web** button;  calls `generate_web_link_code()` and sends the code to the user
+- `POST /register` in `bot_web.py` — optional `link_code: str = Form("")` field; if provided, calls `validate_web_link_code()`, looks up the Telegram account's role, creates the web account with `status=active` and the corresponding role inherited — no admin approval required
+
+**Linked account properties:**
+- `username` and `password` are set from the web form
+- `role` is inherited: if `chat_id in ADMIN_USERS` → `admin`; else `approved`
+- `telegram_id` field in `accounts.json` references the Telegram chat ID
+- Subsequent logins use web credentials only (JWT cookie)
+
+### 17.6 Templates
+
+| Template | Purpose |
+|---|---|
+| `base.html` | Root layout: PWA meta tags, HTMX script, Alpine.js, Pico CSS, nav bar |
+| `login.html` | Login form with error display |
+| `register.html` | Self-registration form |
+| `dashboard.html` | Main dashboard: quick links to all sections |
+| `chat.html` | Free-text LLM chat; message history HTMX-swapped |
+| `_chat_messages.html` | Chat messages partial (returned by `POST /api/chat/send`) |
+| `notes.html` | Notes list + inline create form |
+| `_note_editor.html` | HTMX note editor partial (loaded on note open/edit) |
+| `calendar.html` | Calendar event list + add form + NL query |
+| `mail.html` | Digest text + Refresh button (HTMX) |
+| `voice.html` | Voice orb UI: record button, waveform, TTS playback |
+| `admin.html` | Admin: user list, approve/block, LLM switcher, voice opts |
+
+### 17.5 PWA Support
+
+`static/manifest.json` provides PWA metadata so the site can be added to the home screen:
+
+| Field | Value |
+|---|---|
+| `name` | `"Pico Assistant"` |
+| `short_name` | `"Pico"` |
+| `theme_color` | `"#1e1e2e"` |
+| `background_color` | `"#1e1e2e"` |
+| `display` | `"standalone"` |
+| `start_url` | `"/"` |
+| `shortcuts` | Chat, Notes, Calendar, Voice |
+
+### 17.6 Service File (`picoclaw-web.service`)
+
+The service runs uvicorn with TLS. Key environment vars:
+- `WEB_HOST` — bind address (default `0.0.0.0`)
+- `WEB_PORT` — port (default `8080`)
+- `SSL_KEYFILE` / `SSL_CERTFILE` — paths to TLS key + cert
+- `JWT_SECRET` — signing secret for JWT tokens
+- `ADMIN_USERS` — comma-separated chat IDs granted admin access in Web UI
+
+---
+
+## 18. Screen DSL & Multi-Channel Rendering (Phase 4)
+
+### 18.1 Architecture Concept
+
+The Screen DSL enables **write-once, render-anywhere** UI logic. A single set of action functions in `bot_actions.py` describes *what* to show; separate renderers in `render_telegram.py` and Jinja2 templates describe *how* to show it for each channel.
+
+```
+Action request (e.g. "show notes list")
+    │
+    ▼
+bot_actions.py → action_note_list(ctx) → Screen(
+    title="My Notes",
+    widgets=[
+        Card(title=note.title, subtitle=note.mtime),
+        Button(label="➕ New Note", action="note_create"),
+        Button(label="🔙 Menu", action="menu"),
+    ]
+)
+    │
+    ├── render_telegram.py → InlineKeyboardMarkup + send_message()
+    │
+    └── bot_web.py (Jinja2) → notes.html template renders the same Screen object
+```
+
+### 18.2 Screen DSL Dataclasses (`bot_ui.py`)
+
+| Class | Purpose |
+|---|---|
+| `UserContext` | Caller identity: `chat_id`, `lang`, `is_admin` |
+| `Screen` | Top-level container: `title`, `body`, `widgets`, `parse_mode` |
+| `Button` | Single action button: `label`, `action` (callback key), `url` |
+| `ButtonRow` | Horizontal group of `Button`s |
+| `Card` | Information card: `title`, `subtitle`, `body` |
+| `TextInput` | Prompt for text input (ForceReply in Telegram; `<input>` in Web) |
+| `Toggle` | Boolean toggle: `label`, `key`, `value` |
+| `AudioPlayer` | Playback widget: `url` or `ogg_bytes`, `caption` |
+| `MarkdownBlock` | Pre-formatted Markdown content |
+| `Spinner` | Loading indicator (shown while async op runs) |
+| `Confirm` | Yes/No confirmation: `message`, `confirm_action`, `cancel_action` |
+| `Redirect` | Immediately redirect to another action |
+
+### 18.3 Action Handlers (`bot_actions.py`)
+
+Each action handler receives a `UserContext` + optional parameters and returns a `Screen`. The Screen is then passed to the appropriate channel renderer.
+
+| Function | Returns |
+|---|---|
+| `action_menu(ctx)` | Dashboard Screen with all menu buttons |
+| `action_note_list(ctx)` | Notes list with per-note open/edit/delete buttons |
+| `action_note_view(ctx, slug)` | Note detail: title, body (Markdown), action buttons |
+| *(more handlers planned)* | *(calendar, chat, mail, admin)* |
+
+### 18.4 Telegram Renderer (`render_telegram.py`)
+
+`render_screen(chat_id, screen, bot)` converts a `Screen` to Telegram API calls:
+
+| Widget type | Telegram output |
+|---|---|
+| `Card` | Formatted text block in message body |
+| `Button` | `InlineKeyboardButton(text=label, callback_data=action)` |
+| `ButtonRow` | One row in `InlineKeyboardMarkup` |
+| `Toggle` | `InlineKeyboardButton` with ✅/⬜ prefix |
+| `TextInput` | `bot.send_message(…, reply_markup=ForceReply())` |
+| `AudioPlayer` | `bot.send_voice(…, ogg_bytes)` |
+| `MarkdownBlock` | `bot.send_message(…, parse_mode="Markdown")` |
+| `Spinner` | `bot.send_message("⏳ …")` — edited on completion |
+| `Confirm` | Two-button keyboard: ✅ / ❌ |
+| `Redirect` | Immediately calls the target action handler |
+
+### 18.5 Web Renderer (Jinja2 + HTMX)
+
+The Web UI renders the same `Screen` objects via Jinja2 templates. HTMX swaps allow partial page updates without full reloads:
+
+| Widget type | HTML output |
+|---|---|
+| `Card` | `<article>` with header + body |
+| `Button` | `<a hx-post="…" hx-target="#content">` |
+| `ButtonRow` | `<div class="grid">` with button children |
+| `Toggle` | `<input type="checkbox" hx-post="…">` |
+| `TextInput` | `<input type="text">` with `hx-trigger="keyup[key=='Enter']"` |
+| `AudioPlayer` | `<audio controls src="…">` |
+| `MarkdownBlock` | Rendered via `marked.js` or server-side Markdown |
+| `Spinner` | `<span aria-busy="true">` (Pico CSS spinner) |
+| `Confirm` | Modal dialog with confirm/cancel buttons |
+
+### 18.6 Adding a New Screen
+
+To add a new screen visible in both Telegram and Web:
+
+1. **Add action function in `bot_actions.py`:**
+   ```python
+   def action_my_feature(ctx: UserContext, **kwargs) -> Screen:
+       return Screen(
+           title="My Feature",
+           widgets=[
+               Card(title="Some info", body="Details here"),
+               Button(label="🔙 Back", action="menu"),
+           ]
+       )
+   ```
+
+2. **Wire up in Telegram** (`telegram_menu_bot.py` callback dispatcher):
+   ```python
+   elif data == "my_feature":
+       from render_telegram import render_screen
+       from bot_actions import action_my_feature
+       ctx = UserContext(chat_id=cid, lang=_lang(cid), is_admin=_is_admin(cid))
+       render_screen(cid, action_my_feature(ctx), bot)
+   ```
+
+3. **Wire up in Web UI** (`bot_web.py`):
+   ```python
+   @app.get("/my-feature")
+   async def my_feature_page(user=Depends(get_current_user)):
+       ctx = UserContext(chat_id=user.chat_id, lang=user.lang, is_admin=user.is_admin)
+       screen = action_my_feature(ctx)
+       return templates.TemplateResponse("feature.html", {"screen": screen})
+   ```
+
+4. **Add Menu button** in `action_menu()` in `bot_actions.py`.
+
+5. **Update `doc/bot-code-map.md`** callback key table.
+

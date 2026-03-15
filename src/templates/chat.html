@@ -124,7 +124,7 @@
           hx-post="/chat/send"
           hx-target="#chat-thread"
           hx-swap="beforeend scroll:#chat-thread:bottom"
-          hx-on::before-request="_setTextBusy(true)"
+          hx-on::before-request="_appendBubble('user', document.getElementById('chat-input').value); _setTextBusy(true)"
           hx-on::after-request="_setTextBusy(false); this.reset(); _resetTA()"
           hx-on::response-error="_setTextBusy(false)">
       <textarea id="chat-input" name="message"

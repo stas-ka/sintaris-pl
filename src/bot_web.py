@@ -18,6 +18,7 @@ import os
 import random
 import re
 import requests as _requests_lib
+import socket
 import stat as _stat_mod
 import subprocess
 import tempfile
@@ -50,7 +51,8 @@ from bot_config import (
 from bot_auth import (
     find_account_by_username, create_account, verify_password,
     create_token, verify_token, list_accounts, ensure_admin_account,
-    COOKIE_NAME, find_account_by_id, update_account,
+    COOKIE_NAME, find_account_by_id, update_account, change_password,
+    find_account_by_chat_id,
 )
 from bot_llm import ask_llm, get_active_model, list_models, set_active_model
 
@@ -308,13 +310,15 @@ _chat_history: dict[str, list[dict]] = {}  # user_id → [{role, text, time}]
 # Auth routes
 # ─────────────────────────────────────────────────────────────────────────────
 
+_HOSTNAME = socket.gethostname()
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     user = _get_current_user(request)
     if user:
         return RedirectResponse("/", status_code=302)
     return templates.TemplateResponse("login.html", {
-        "request": request, "error": None,
+        "request": request, "error": None, "hostname": _HOSTNAME, "username": None,
     })
 
 
@@ -324,16 +328,19 @@ async def login_submit(request: Request, username: str = Form(...), password: st
     if not account or not verify_password(account, password):
         return templates.TemplateResponse("login.html", {
             "request": request, "error": "Invalid username or password",
+            "hostname": _HOSTNAME, "username": username,
         })
     status = account.get("status", "active")
     if status == "pending":
         return templates.TemplateResponse("login.html", {
             "request": request,
             "error": "Account pending admin approval. Please wait.",
+            "hostname": _HOSTNAME, "username": username,
         })
     if status == "blocked":
         return templates.TemplateResponse("login.html", {
             "request": request, "error": "Account blocked. Contact admin.",
+            "hostname": _HOSTNAME, "username": username,
         })
     token = create_token(account["user_id"], account["username"], account.get("role", "user"))
     resp = RedirectResponse("/", status_code=302)
@@ -347,7 +354,7 @@ async def login_submit(request: Request, username: str = Form(...), password: st
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {
-        "request": request, "error": None,
+        "request": request, "error": None, "hostname": _HOSTNAME,
     })
 
 
@@ -357,27 +364,60 @@ async def register_submit(
     username: str = Form(...),
     password: str = Form(...),
     display_name: str = Form(""),
+    link_code: str = Form(""),
 ):
     if len(username) < 3 or len(password) < 4:
         return templates.TemplateResponse("register.html", {
             "request": request,
             "error": "Username must be >= 3 chars, password >= 4 chars",
+            "hostname": _HOSTNAME,
         })
     if find_account_by_username(username):
         return templates.TemplateResponse("register.html", {
-            "request": request, "error": "Username already taken",
+            "request": request, "error": "Username already taken", "hostname": _HOSTNAME,
         })
-    # First account (no existing non-admin accounts from admin panel) gets active status.
-    # Any subsequent self-registration is set to pending for admin approval.
+
+    # ── Telegram link code handling ──────────────────────────────────────────
+    telegram_chat_id = None
+    inherited_role   = "user"
+    if link_code.strip():
+        import bot_state as _st_web
+        from bot_config import ADMIN_USERS
+        validated_cid = _st_web.validate_web_link_code(link_code.strip())
+        if not validated_cid:
+            return templates.TemplateResponse("register.html", {
+                "request": request,
+                "error": "Link code is invalid or expired. Get a new code from the Telegram bot.",
+                "hostname": _HOSTNAME,
+            })
+        if find_account_by_chat_id(validated_cid):
+            return templates.TemplateResponse("register.html", {
+                "request": request,
+                "error": "This Telegram account is already linked to a web account.",
+                "hostname": _HOSTNAME,
+            })
+        telegram_chat_id = validated_cid
+        if validated_cid in ADMIN_USERS:
+            inherited_role = "admin"
+
+    # ── Account creation ──────────────────────────────────────────────────────
+    # First non-admin self-registration gets active status;
+    # subsequent ones are pending unless linked via a Telegram code.
     existing = [a for a in list_accounts() if a.get("role") != "admin"]
-    new_status = "active" if not existing else "pending"
+    if telegram_chat_id:
+        new_status = "active"   # Telegram-linked accounts inherit approved status
+    else:
+        new_status = "active" if not existing else "pending"
     account = create_account(username, password,
                              display_name=display_name or username,
+                             role=inherited_role,
+                             telegram_chat_id=telegram_chat_id,
                              status=new_status)
     if new_status == "pending":
         return templates.TemplateResponse("register.html", {
             "request": request,
             "info": "Registration submitted. An admin will review your account.",
+            "hostname": _HOSTNAME,
         })
     token = create_token(account["user_id"], account["username"], account.get("role", "user"))
     resp = RedirectResponse("/", status_code=302)
@@ -390,6 +430,69 @@ async def logout():
     resp = RedirectResponse("/login", status_code=302)
     resp.delete_cookie(COOKIE_NAME)
     return resp
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Settings (language + password)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SUPPORTED_LANGS = {"en": "🇬🇧 English", "ru": "🇷🇺 Русский", "de": "🇩🇪 Deutsch"}
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request, msg: str = "", error: str = ""):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    account = find_account_by_id(user["sub"]) or {}
+    current_lang = account.get("language", "en")
+    return templates.TemplateResponse("settings.html", _ctx(
+        request, user, "settings",
+        current_lang=current_lang,
+        supported_langs=_SUPPORTED_LANGS,
+        msg=msg,
+        error=error,
+    ))
+
+
+@app.post("/settings/language", response_class=HTMLResponse)
+async def settings_set_language(request: Request, language: str = Form(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if language not in _SUPPORTED_LANGS:
+        return RedirectResponse("/settings?error=invalid_language", status_code=302)
+    update_account(user["sub"], language=language)
+    return RedirectResponse("/settings?msg=language_saved", status_code=302)
+
+
+@app.post("/settings/password", response_class=HTMLResponse)
+async def settings_change_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    account = find_account_by_id(user["sub"])
+    current_lang = (account or {}).get("language", "en")
+    ctx_error = lambda msg: templates.TemplateResponse("settings.html", _ctx(
+        request, user, "settings",
+        current_lang=current_lang,
+        supported_langs=_SUPPORTED_LANGS,
+        msg="",
+        error=msg,
+    ))
+    if not account or not verify_password(account, current_password):
+        return ctx_error("Current password is incorrect.")
+    if len(new_password) < 4:
+        return ctx_error("New password must be at least 4 characters.")
+    if new_password != confirm_password:
+        return ctx_error("New passwords do not match.")
+    change_password(user["sub"], new_password)
+    return RedirectResponse("/settings?msg=password_changed", status_code=302)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1652,6 +1755,63 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
                 pass
 
 
+@app.post("/voice/chat_text")
+async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
+    """Text input in voice-chat page: skip STT, run LLM + Piper TTS.
+
+    Returns JSON: {user_text, reply_text, audio_b64}  (same shape as /voice/chat)
+    """
+    user = _get_current_user(request)
+    if not user:
+        raise HTTPException(401)
+
+    user_text = message.strip()
+    if not user_text:
+        raise HTTPException(400, "Empty message")
+
+    reply_text = ask_llm(user_text, timeout=90)
+    if not reply_text:
+        reply_text = "No response from LLM."
+
+    # ── Piper TTS ──────────────────────────────────────────────────────────────
+    audio_b64 = ""
+    tts_text = re.sub(r"[*_`#~]", "", reply_text)
+    tts_text = re.sub(r"\[([^\]]*?)\]\([^)]*?\)", r"\1", tts_text)
+    tts_text = tts_text.strip()[:600]
+
+    if tts_text:
+        d = Path(_PICOCLAW_DIR)
+        tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
+        low_m     = d / "ru_RU-irina-low.onnx"
+        med_m     = d / "ru_RU-irina-medium.onnx"
+        piper_bin = "/usr/local/bin/piper"
+        model_path = (
+            str(tmpfs_m) if tmpfs_m.exists() else
+            str(low_m)   if low_m.exists()   else
+            str(med_m)   if med_m.exists()   else None
+        )
+        if model_path and Path(piper_bin).exists():
+            try:
+                pr = subprocess.run(
+                    [piper_bin, "--model", model_path, "--output-raw"],
+                    input=tts_text.encode("utf-8"),
+                    capture_output=True, timeout=180,
+                )
+                if pr.stdout:
+                    ff2 = subprocess.run(
+                        ["ffmpeg", "-y",
+                         "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
+                         "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
+                        input=pr.stdout, capture_output=True, timeout=30,
+                    )
+                    if ff2.stdout:
+                        audio_b64 = base64.b64encode(ff2.stdout).decode()
+            except Exception as tts_err:
+                log.warning(f"[Web/VoiceChatText TTS] {tts_err}")
+
+    return {"user_text": user_text, "reply_text": reply_text, "audio_b64": audio_b64}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Admin panel
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1703,6 +1863,8 @@ async def admin_page(request: Request):
         })
 
     system_status = _system_status()
+    msg   = request.query_params.get("msg", "")
+    error = request.query_params.get("error", "")
 
     return templates.TemplateResponse("admin.html", _ctx(
         request, user, "admin",
@@ -1710,6 +1872,8 @@ async def admin_page(request: Request):
         users=admin_users,
         llm_models=llm_models,
         voice_opts=voice_opts,
+        msg=msg,
+        error=error,
     ))
 
 
@@ -1764,6 +1928,26 @@ async def admin_block_user(request: Request, user_id: str):
     update_account(user_id, status="blocked")
     log.info(f"[Admin] User {user_id} blocked by {user.get('username')}")
     return Response(headers={"HX-Redirect": "/admin"})
+
+
+@app.post("/admin/user/{user_id}/reset-password")
+async def admin_reset_password(
+    request: Request,
+    user_id: str,
+    new_password: str = Form(...),
+):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(403)
+    if len(new_password) < 4:
+        return Response(headers={"HX-Redirect": "/admin?error=Password+must+be+at+least+4+characters"})
+    ok = change_password(user_id, new_password)
+    if not ok:
+        return Response(headers={"HX-Redirect": "/admin?error=User+not+found"})
+    account = find_account_by_id(user_id)
+    uname = account.get("username", user_id) if account else user_id
+    log.info(f"[Admin] Password reset for user '{uname}' by admin '{user.get('username')}'")
+    return Response(headers={"HX-Redirect": f"/admin?msg=Password+reset+for+{uname}"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

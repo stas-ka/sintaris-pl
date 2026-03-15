@@ -3,21 +3,40 @@
 Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://github.com/sipeed/picoclaw) + OpenRouter. Listens for the wake word **"Пико"**, sends your Russian voice command to an LLM, and speaks the response back — entirely offline except the LLM API call.
 
 **Features:**
+
+### Voice & AI Core
 - Offline Russian STT via Vosk (48 MB model, real-time on Pi 3)
 - Offline Russian TTS via Piper (natural female voice, ~1–3 s latency)
 - LLM via OpenRouter (100+ models, free tier available)
 - **OpenAI ChatGPT sub-menu** — switch between gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview directly from the admin panel; manage API keys inline
-- Telegram bot channel via picoclaw gateway
-- Daily Gmail digest to Telegram
-- Interactive Telegram menu bot (Mail Digest / Free Chat / System Chat / Voice Session modes)
-- **On-demand Voice Session via Telegram** — tap the 🎤 button, then use Telegram's mic button to send a voice message; bot transcribes with Vosk (offline, Russian), sends to LLM, replies with text + Piper TTS voice note
-- **Voice works in all modes** — voice messages are routed into the active flow (note creation, note edit, or chat) rather than always going to the LLM
+- **On-demand Voice Session via Telegram** — tap the 🎤 button, send a voice message; bot transcribes with Vosk (offline), sends to LLM, replies with text + Piper TTS voice note
+- **Voice works in all modes** — voice messages are routed into the active flow (note creation, note edit, or chat)
 - **Voice pipeline optimization flags** — 10 optional toggles in the admin panel (silence strip, low sample rate, Piper warm-up, parallel TTS, per-user audio toggle, tmpfs model, VAD pre-filter, Whisper STT, Piper low model, persistent Piper)
-- **Voice regression test suite** — T01–T13 automated tests covering model files, OGG decode, VAD, Vosk STT, WER, TTS, Piper synthesis, ffmpeg encode; baseline comparison; run on Pi via `test_voice_regression.py`
-- **Markdown Notes** — personal per-user note manager: create, edit (ForceReply in-place editing), view (Markdown rendered), raw text view, read aloud via Piper TTS, delete
-- **Versioned release notes + admin notification** — bump `BOT_VERSION`, add entry to `release_notes.json`, deploy; admins are notified automatically on first startup
-- **Internationalization** — Russian and English UI strings via `strings.json`; language toggle per user
-- **Backup & Recovery system** — full SD card image backup with zstd compression + SHA-256 checksum; Nextcloud WebDAV upload/download/prune; fresh-install bootstrap and incremental update scripts
+- **Voice regression test suite** — T01–T21 automated tests covering model files, OGG decode, VAD, Vosk STT, WER, TTS, Piper synthesis, i18n coverage, bot name injection, and more; run on Pi via `test_voice_regression.py`
+
+### Telegram Bot Channel
+- Interactive Telegram menu bot (Mail Digest / Free Chat / System Chat / Voice Session modes)
+- **Per-user mail digest** — configure your own IMAP credentials (Gmail, Yandex, Mail.ru, custom); fetch + AI summarise last 24 h; daily auto-digest at 19:00
+- **Smart Calendar** — NL event add (multi-event batch), date-range query, console mode, reminders, morning briefing at 08:00
+- **Markdown Notes** — create, edit, view (Markdown rendered), raw text view, read aloud via Piper TTS, delete; send as email
+- **User registration & approval flow** — `/start` queues request; admins approve/block via inline buttons
+- **Versioned release notes + admin notification** — bump `BOT_VERSION`, add entry to `release_notes.json`, deploy; admins notified automatically on first startup
+- **Error Protocol** — collect text/voice/photo error reports, save to timestamped directory, send by email
+
+### Web Interface
+- **FastAPI Web UI** (HTTPS :8080) — Notes, Calendar, Chat, Mail Digest, Voice (browser recording + TTS playback), Admin panel
+- **PWA-installable** — add to home screen on mobile/desktop; dark mode, responsive layout
+- **JWT authentication** — cookie-based sessions; self-registration with admin approval
+- **Telegram↔Web account linking** — 6-char code from Telegram Profile page → enter on `/register`; role + access inherited automatically
+- **User Settings page** — language selector (Russian / English / German), change password
+- **Admin password reset** — admin can reset any web user's password directly from the admin panel (no email flow required)
+- **Externally accessible** via VPS reverse proxy: `https://agents.sintaris.net/picoassist2/` (Pi2) and `https://agents.sintaris.net/picoassist/` (Pi1)
+
+### Architecture & Operations
+- **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently
+- **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
+- **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`
+- **Backup & Recovery system** — full SD card image backup + Nextcloud WebDAV upload; fresh-install bootstrap and incremental update scripts
 - Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7)
 
 ---
@@ -27,9 +46,13 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 | Document | Description |
 |---|---|
 | [doc/architecture.md](doc/architecture.md) | Full pipeline diagram, all components, file layout, configuration reference |
+| [doc/howto_bot.md](doc/howto_bot.md) | End-user guide — Telegram bot menus, Web UI access, roles, voice, admin panel |
+| [doc/web-ui/concept-web-interface.md](doc/web-ui/concept-web-interface.md) | Web UI architecture: Screen DSL, multi-channel rendering, FastAPI + HTMX |
+| [doc/web-ui/roadmap-web-ui.md](doc/web-ui/roadmap-web-ui.md) | Web UI implementation roadmap — phases P0–P4 + account linking (all ✅ done) |
 | [doc/update_strategy.md](doc/update_strategy.md) | Update & deployment strategy: pre-user notification, rollback, parallel deployment, release SOP |
-| [doc/howto_bot.md](doc/howto_bot.md) | End-user guide for the Telegram bot — menus, roles, voice, admin panel |
 | [doc/hardware-performance-analysis.md](doc/hardware-performance-analysis.md) | Hardware bottleneck analysis, Pi 3 tuning guide, upgrade path for voice / LLM / RAG use cases |
+| [doc/bot-code-map.md](doc/bot-code-map.md) | Function-level code map for every `bot_*.py` module + all callback keys |
+| [doc/dev-patterns.md](doc/dev-patterns.md) | Exact copy-paste patterns for voice opts, callbacks, multi-step flows, i18n, versioning |
 | [backup/device/README.md](backup/device/README.md) | Captured device configuration snapshot + restore instructions |
 | [deploy/packages.txt](deploy/packages.txt) | Project-essential apt packages for fresh install |
 | [deploy/requirements.txt](deploy/requirements.txt) | Python pip package requirements |
@@ -181,29 +204,31 @@ picoclaw agent -m "Привет! Как дела?"
 
 ### Step 5 — Deploy all source files from Windows to the Pi
 
-`[Win]` Copy all Python scripts and setup files to the Pi in one go:
+`[Win]` Copy all Python source files and assets to the Pi:
 ```bat
-rem Copy Python application scripts
-pscp -pw "%HOSTPWD%" src\voice_assistant.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\gmail_digest.py      %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+rem Copy Telegram bot modules (20-module split)
+pscp -pw "%HOSTPWD%" src\bot_config.py src\bot_state.py src\bot_instance.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_security.py src\bot_access.py src\bot_users.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_voice.py src\bot_calendar.py                     %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_admin.py src\bot_handlers.py src\bot_mail_creds.py %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_email.py src\bot_error_protocol.py               %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py src\voice_assistant.py           %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+
+rem Copy Web UI modules
+pscp -pw "%HOSTPWD%" src\bot_web.py src\bot_auth.py src\bot_llm.py            %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_ui.py src\bot_actions.py src\render_telegram.py  %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+
+rem Copy i18n and changelog
+pscp -pw "%HOSTPWD%" src\strings.json src\release_notes.json                  %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+
+rem Copy Web UI templates and static assets
+pscp -pw "%HOSTPWD%" -r src\templates %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" -r src\static    %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
 
 rem Copy setup scripts to /tmp for execution
 pscp -pw "%HOSTPWD%" src\setup\setup_voice.sh         %HOSTUSER%@%TARGETHOST%:/tmp/
 pscp -pw "%HOSTPWD%" src\setup\setup_gateway.sh       %HOSTUSER%@%TARGETHOST%:/tmp/
 pscp -pw "%HOSTPWD%" src\setup\deploy_telegram_bot.sh %HOSTUSER%@%TARGETHOST%:/tmp/
-```
-
-Or with Git Bash (MSYS):
-```bash
-# [Win — Git Bash]
-HOSTPWD="<password>" HOSTUSER="<user>" TARGETHOST="<hostname>"
-for f in src/voice_assistant.py src/telegram_menu_bot.py src/gmail_digest.py; do
-  pscp -pw "$HOSTPWD" "$f" "$HOSTUSER@$TARGETHOST:/home/$HOSTUSER/.picoclaw/"
-done
-pscp -pw "$HOSTPWD" src/setup/setup_voice.sh         "$HOSTUSER@$TARGETHOST:/tmp/"
-pscp -pw "$HOSTPWD" src/setup/setup_gateway.sh       "$HOSTUSER@$TARGETHOST:/tmp/"
-pscp -pw "$HOSTPWD" src/setup/deploy_telegram_bot.sh "$HOSTUSER@$TARGETHOST:/tmp/"
 ```
 
 ---
@@ -294,7 +319,7 @@ journalctl -u picoclaw-gateway -n 20 --no-pager
 
 ### Step 9 — Install the Telegram menu bot (optional)
 
-The menu bot provides a structured 3-mode interface in Telegram (Mail Digest / Free Chat / System Chat). It requires Steps 7 and 8 to be done first.
+The menu bot provides a full-featured Telegram interface: voice sessions, free chat, system chat (admin), notes, smart calendar, per-user mail digest, error protocol collection, and admin panel. It is a 20-module split architecture (`src/bot_*.py`). It requires Steps 7 and 8 to be done first.
 
 `[Pi]` Run the deploy script:
 ```bash
@@ -374,9 +399,10 @@ Say **"Пико"** — wait for the beep — then ask your question in Russian. 
 systemctl status picoclaw-gateway  --no-pager
 systemctl status picoclaw-voice    --no-pager
 systemctl status picoclaw-telegram --no-pager
+systemctl status picoclaw-web      --no-pager
 ```
 
-All three should show `active (running)`. Services are enabled at boot (`systemctl enable` is called by the install scripts).
+All four should show `active (running)`. Services are enabled at boot (`systemctl enable` is called by the install scripts). The Web UI is accessible at `https://<hostname>:8080`.
 
 ---
 
@@ -486,10 +512,17 @@ sudo systemctl start   picoclaw-gateway
 sudo systemctl restart picoclaw-gateway
 journalctl -u picoclaw-gateway -n 30 --no-pager
 
-# Telegram menu bot (interactive 3-mode bot)
+# Telegram menu bot (20-module bot)
 sudo systemctl start   picoclaw-telegram
 sudo systemctl restart picoclaw-telegram
 journalctl -u picoclaw-telegram -n 30 --no-pager
+
+# FastAPI Web UI (HTTPS port 8080)
+sudo systemctl start   picoclaw-web
+sudo systemctl restart picoclaw-web
+sudo systemctl stop    picoclaw-web
+journalctl -u picoclaw-web -n 30 --no-pager
+# Web UI accessible at: https://<hostname>:8080
 ```
 
 ---
@@ -547,12 +580,39 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 ```
 .
 ├── src/                          ← ALL target-side sources
-│   ├── voice_assistant.py        ← voice loop daemon
-│   ├── telegram_menu_bot.py      ← interactive Telegram menu bot
-│   ├── gmail_digest.py           ← daily email digest agent
-│   ├── gmail_auth.py             ← OAuth2 setup helper (run once on Windows)
-│   ├── strings.json              ← i18n UI strings (ru/en) deployed alongside bot
-│   ├── release_notes.json        ← versioned changelog deployed alongside bot
+│   ├── telegram_menu_bot.py      ← entry point: handler registration + dispatching
+│   ├── bot_config.py             ← constants, env loading, logging
+│   ├── bot_state.py              ← mutable runtime state dicts
+│   ├── bot_instance.py           ← TeleBot singleton
+│   ├── bot_security.py           ← 3-layer prompt injection guard
+│   ├── bot_access.py             ← access control, i18n, keyboards
+│   ├── bot_users.py              ← registration + notes file I/O
+│   ├── bot_voice.py              ← voice pipeline: STT/TTS/VAD + multi-part TTS
+│   ├── bot_calendar.py           ← smart calendar: CRUD, NL, reminders, briefing
+│   ├── bot_admin.py              ← admin panel handlers
+│   ├── bot_handlers.py           ← user handlers: chat, notes, system, digest
+│   ├── bot_mail_creds.py         ← per-user IMAP credentials + digest
+│   ├── bot_email.py              ← send-as-email SMTP
+│   ├── bot_error_protocol.py     ← error collection → save dir → email
+│   ├── bot_llm.py                ← pluggable LLM backend (Telegram + Web)
+│   ├── bot_auth.py               ← JWT/bcrypt auth for Web UI
+│   ├── bot_ui.py                 ← Screen DSL dataclasses
+│   ├── bot_actions.py            ← shared action handlers → Screen objects
+│   ├── render_telegram.py        ← Screen → Telegram messages/keyboards
+│   ├── bot_web.py                ← FastAPI web app: HTTPS :8080
+│   ├── voice_assistant.py        ← standalone voice daemon
+│   ├── gmail_digest.py           ← legacy shared digest cron (deprecated)
+│   ├── strings.json              ← i18n UI strings (ru/en/de)
+│   ├── release_notes.json        ← versioned changelog
+│   ├── templates/                ← Jinja2 HTML templates for Web UI
+│   │   ├── base.html             ← layout: PWA, HTMX, Alpine.js, Pico CSS
+│   │   ├── dashboard.html, chat.html, notes.html, calendar.html
+│   │   ├── mail.html, voice.html, admin.html
+│   │   ├── login.html, register.html
+│   │   └── _*.html               ← HTMX partial templates
+│   ├── static/
+│   │   ├── style.css             ← custom styles on top of Pico CSS
+│   │   └── manifest.json         ← PWA manifest (icons, theme_color, shortcuts)
 │   ├── setup/                    ← installation & fix scripts (run on Pi)
 │   │   ├── setup_voice.sh        ← full voice stack installer
 │   │   ├── setup_gateway.sh      ← picoclaw gateway service installer
@@ -563,8 +623,9 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 │   │   ├── piper_wrapper.sh      ← Piper TTS wrapper script
 │   │   └── bot.env.example       ← template for /home/stas/.picoclaw/bot.env
 │   ├── services/                 ← systemd unit files
-│   │   ├── picoclaw-voice.service    ← voice assistant daemon
-│   │   └── picoclaw-telegram.service ← Telegram menu bot daemon
+│   │   ├── picoclaw-telegram.service ← Telegram menu bot daemon
+│   │   ├── picoclaw-web.service      ← FastAPI Web UI (uvicorn HTTPS :8080)
+│   │   └── picoclaw-voice.service    ← voice assistant daemon
 │   └── tests/                    ← hardware diagnostic scripts
 │       ├── test_tts.sh
 │       ├── test_mic.py
@@ -576,9 +637,74 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 │   ├── crontab
 │   ├── systemd/
 │   └── modprobe.d/
+├── deploy/
+│   ├── packages.txt              ← apt packages for fresh install
+│   └── requirements.txt          ← pip packages
 ├── doc/
-│   └── architecture.md           ← component architecture & design notes
+│   ├── architecture.md           ← component architecture, data flow, file layout
+│   ├── bot-code-map.md           ← function map for all 20 modules
+│   ├── dev-patterns.md           ← copy-paste patterns for all features
+│   ├── howto_bot.md              ← bot usage guide
+│   ├── hardware-performance-analysis.md ← Pi 3 B+ timing + upgrade path
+│   └── web-ui/
+│       ├── roadmap-web-ui.md     ← Web UI feature roadmap
+│       └── concept-web-interface.md ← Web UI design concepts
 └── .credentials/                 ← secrets ONLY (gitignored)
     ├── .pico_env                  ← bot tokens & API keys (never commit)
     └── client_secret_*.json      ← OAuth2 client secret (never commit)
+```
+
+---
+
+## Configuration and Developer Files
+
+The repository root contains several hidden files (prefixed with `.`) and AI-guidance documents that are not part of the deployed bot but control the development workflow and tooling.
+
+### Secrets and credentials (never committed to Git)
+
+| File / Directory | Purpose |
+|---|---|
+| `.env` | Windows-side SSH deploy variables: `TARGETHOST`, `HOSTUSER`, `HOSTPWD` (PI1) and `TARGET2HOST`, `TARGET2USER`, `TARGET2PWD` (PI2). Also holds VPS SSH credentials. Loaded by `plink`/`pscp` deploy commands. See [Step 2](#step-2----clone-this-repo-on-your-dev-machine). |
+| `.credentials/.pico_env` | Runtime secrets deployed to the Pi: `BOT_TOKEN`, `OPENROUTER_API_KEY`, `ALLOWED_USER`, `ADMIN_USERS`, and optional `GMAIL_USER` / `GMAIL_APP_PASSWORD`. See [Step 2](#step-2----clone-this-repo-on-your-dev-machine). |
+| `.credentials/client_secret_*.json` | OAuth2 client secret for Gmail API access (if used). Never committed. |
+| `.venv/` | Local Python virtual environment created in Step 1. Not committed. |
+
+### Git configuration files
+
+| File | Tracked | Purpose |
+|---|---|---|
+| `.gitignore` | ✅ | Excludes credentials, `__pycache__`, test audio (`*.ogg`, `*.wav`, `*.pcm`), large tarballs, `temp/`, `src/res/`, the entire `.github/agents/` directory, and `You`. |
+| `.gitattributes` | ✅ | Enforces LF line endings for `.sh`, `.py`, `.json`, `.service`, `.md`, and `.txt` files so scripts deploy correctly to Linux without CRLF issues. |
+
+### AI coding-assistant instruction files
+
+These files are read by GitHub Copilot (and similar AI tools) to understand the project's workflow, conventions, and deployment rules.
+
+| File | Tracked | Purpose |
+|---|---|---|
+| `.github/copilot-instructions.md` | ✅ | **Primary AI workflow rules.** Covers deployment protocol (always test on PI2 first), voice regression test requirements, UI sync rule (Telegram + Web UI must change together), bot versioning SOP, and the safe-update protocol. Loaded automatically by VS Code Copilot for every request in this workspace. |
+| `.github/agents/su-first-copilot-agent.agent.md` | ❌ | Local-only VS Code Copilot custom agent definition — "SU first Copilot Agent" — used to review and test PicoClaw. The entire `.github/agents/` directory is gitignored so agent definitions are not shared via the repository. |
+| `AGENTS.md` | ✅ | **Persistent AI session memory.** Contains remote host access tables, current `BOT_VERSION`, implemented feature summaries, calendar/web context, and the Vibe Coding Protocol rules. Intended to be read at the start of every AI assistant session to restore operational context without re-reading all code. |
+| `INSTRUCTIONS.md` | ✅ | **AI agent quick reference.** Project summary, PI1/PI2 host connection commands, full `src/` module list with one-liners, key services table (including `picoclaw-tunnel.service`), and the Quick Deploy command block. Lighter than the full copilot instructions — loaded as context by the custom Copilot agent. |
+| `TODO.md` | ✅ | **Single source of truth for planned and in-progress work.** Contains known bugs, feature roadmap, and completed items. Check this at the start of each development session. |
+
+### VS Code workspace settings
+
+| File | Tracked | Purpose |
+|---|---|---|
+| `.vscode/mcp.json` | ✅ | VS Code MCP (Model Context Protocol) server configuration. Currently registers the `playwright-mcp` server so GitHub Copilot can control a browser for automated UI tests. |
+
+### TLS certificates (public only — safe to commit)
+
+These are the **public** certificates for the self-signed HTTPS servers on each Pi. They contain no private key material.
+
+| File | Purpose |
+|---|---|
+| `OpenClawPI.crt` | TLS root certificate for PI1 (`OpenClawPI`). Import as a Trusted Root CA on your Windows developer machine so that Chrome/Edge trusts `https://OpenClawPI:8080` without a security warning. |
+| `OpenClawPI2.crt` | TLS root certificate for PI2 (`OpenClawPI2`). Same purpose for the engineering/test device. |
+
+To import on Windows (run as Administrator):
+```bat
+certutil -addstore -f "Root" OpenClawPI.crt
+certutil -addstore -f "Root" OpenClawPI2.crt
 ```

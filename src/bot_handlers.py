@@ -289,6 +289,19 @@ def _handle_profile(chat_id: int) -> None:
               reg_date=reg_date,
               email_line=email_line)
 
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "web_link_btn"), callback_data="web_link"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"),     callback_data="menu"),
+    )
+    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+
+
+def _handle_web_link(chat_id: int) -> None:
+    """Generate a web link code and show it to the user via Telegram."""
+    code = _st.generate_web_link_code(chat_id)
+    ttl  = _st.WEB_LINK_CODE_TTL_MINUTES
+    text = _t(chat_id, "web_link_code_msg", code=code, ttl=ttl)
     bot.send_message(chat_id, text, parse_mode="Markdown",
                      reply_markup=_back_keyboard())
 

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Settings — Pico Bot{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+
+<!-- ── Flash messages ────────────────────────────────────── -->
+{% if msg == 'language_saved' %}
+<div class="card mb-md" style="border-left:4px solid var(--accent); background:rgba(124,77,255,.12)">
+  <span style="color:var(--accent)">✅</span> Language preference saved.
+</div>
+{% elif msg == 'password_changed' %}
+<div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
+  <span style="color:#4caf50">✅</span> Password changed successfully.
+</div>
+{% endif %}
+
+{% if error %}
+<div class="card mb-md" style="border-left:4px solid #f44336; background:rgba(244,67,54,.12)">
+  <span style="color:#f44336">⚠️</span> {{ error }}
+</div>
+{% endif %}
+
+<!-- ── Language card ─────────────────────────────────────── -->
+<p class="section-label">Interface Language</p>
+<div class="card mb-md">
+  <p class="text-muted" style="margin-bottom:16px">
+    Choose the language for the web interface and LLM responses.
+  </p>
+  <div style="display:flex; gap:10px; flex-wrap:wrap">
+    {% for code, label in supported_langs.items() %}
+    <form method="post" action="/settings/language" style="margin:0">
+      <input type="hidden" name="language" value="{{ code }}">
+      <button type="submit"
+        style="{% if current_lang == code %}
+          background:var(--accent); color:#fff; border-color:var(--accent);
+        {% else %}
+          background:transparent; color:var(--text-muted); border-color:var(--border-color);
+        {% endif %}
+        padding:8px 20px; border-radius:8px; border:1.5px solid; cursor:pointer;
+        font-size:15px; font-weight:{% if current_lang == code %}600{% else %}400{% endif %};
+        transition:all .15s ease">
+        {{ label }}
+        {% if current_lang == code %} ✓{% endif %}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Change password card ──────────────────────────────── -->
+<p class="section-label mt-md">Change Password</p>
+<div class="card mb-md">
+  <form method="post" action="/settings/password">
+    <div style="display:grid; gap:12px; max-width:420px">
+
+      <div>
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
+          Current Password
+        </label>
+        <input type="password" name="current_password" required
+               placeholder="Enter current password"
+               style="width:100%; padding:9px 12px; background:var(--surface-2);
+                      border:1px solid var(--border-color); border-radius:8px;
+                      color:var(--text-primary); font-size:14px">
+      </div>
+
+      <div>
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
+          New Password
+        </label>
+        <input type="password" name="new_password" required minlength="4"
+               placeholder="At least 4 characters"
+               style="width:100%; padding:9px 12px; background:var(--surface-2);
+                      border:1px solid var(--border-color); border-radius:8px;
+                      color:var(--text-primary); font-size:14px">
+      </div>
+
+      <div>
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
+          Confirm New Password
+        </label>
+        <input type="password" name="confirm_password" required
+               placeholder="Repeat new password"
+               style="width:100%; padding:9px 12px; background:var(--surface-2);
+                      border:1px solid var(--border-color); border-radius:8px;
+                      color:var(--text-primary); font-size:14px">
+      </div>
+
+      <div>
+        <button type="submit"
+                style="padding:9px 24px; border-radius:8px; border:none;
+                       background:var(--accent); color:#fff; font-size:14px;
+                       font-weight:600; cursor:pointer; transition:opacity .15s ease">
+          🔑 Update Password
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- ── Account info card ─────────────────────────────────── -->
+<p class="section-label mt-md">Account</p>
+<div class="card mb-md">
+  <table style="border-collapse:collapse; width:100%; max-width:400px">
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted); width:130px">Username</td>
+      <td style="padding:7px 0; color:var(--text-primary); font-weight:600">{{ user.username }}</td>
+    </tr>
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted)">Role</td>
+      <td style="padding:7px 0; color:var(--text-primary)">{{ user.role }}</td>
+    </tr>
+  </table>
+</div>
+
+{% endblock %}

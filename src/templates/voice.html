@@ -67,10 +67,22 @@
 
   <!-- waveform + mic button -->
   <div class="vc-input-bar">
+    <!-- text input row -->
+    <div class="flex gap-sm items-center mb-sm">
+      <textarea id="vc-text-input" rows="1"
+                placeholder="Or type your message…"
+                style="flex:1; resize:none; padding:8px 12px; border-radius:8px;
+                       background:var(--card-bg,#2a2a3e); color:inherit;
+                       border:1px solid rgba(255,255,255,0.15); font-size:14px"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vcSendTextMsg();}"></textarea>
+      <button class="btn btn-secondary" onclick="vcSendTextMsg()"
+              style="padding:8px 16px; white-space:nowrap">💬 Send</button>
+    </div>
+    <!-- voice row -->
     <div id="vc-waveform" class="vc-waveform" style="display:none"></div>
     <div class="flex gap-sm items-center">
       <span id="vc-status" class="text-dim text-sm" style="flex:1">
-        Press <strong>Record</strong> to start
+        Press <strong>Record</strong> to speak
       </span>
       <span id="vc-timer" class="fw-bold text-white"
             style="display:none; min-width:36px; text-align:right">0:00</span>
@@ -354,6 +366,46 @@ function vcEsc(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>');
+}
+
+/* ── Text message send (text input row in vc-input-bar) ─────────────────── */
+async function vcSendTextMsg() {
+  const ta = document.getElementById('vc-text-input');
+  const text = ta.value.trim();
+  if (!text || vcBusy) return;
+
+  ta.value = '';
+  vcBusy = true;
+  const now = vcNow();
+  vcAddBubble('user', text, now, null);
+  vcScrollThread();
+
+  const procBar = document.getElementById('vc-proc-bar');
+  procBar.style.display = '';
+  vcSetStage('llm');
+
+  const fd = new FormData();
+  fd.append('message', text);
+
+  try {
+    const r = await fetch('/voice/chat_text', { method: 'POST', body: fd });
+    if (!r.ok) {
+      const err = await r.text();
+      vcAddBubble('bot', '❌ Error: ' + err, vcNow(), null);
+      return;
+    }
+    const data = await r.json();
+
+    if (data.audio_b64) vcSetStage('tts');
+    vcAddBubble('bot', data.reply_text || '…', vcNow(), data.audio_b64 || null);
+    vcScrollThread();
+  } catch (e) {
+    vcAddBubble('bot', '❌ Network error: ' + e.message, vcNow(), null);
+  } finally {
+    procBar.style.display = 'none';
+    vcResetStages();
+    vcBusy = false;
+  }
 }
 
 /* ── Standalone TTS test (inside collapsed <details>) ────────────────────── */

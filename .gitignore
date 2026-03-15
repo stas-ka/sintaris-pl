@@ -24,6 +24,20 @@ nul
 %TEMP%*
 d?Temp*
 
+# IDE / editor settings
+.vscode/
+
+# TLS certificates (local dev certs, not for version control)
+*.crt
+*.pem
+*.key
+
+# Backup tar archives in root (misplaced snapshots)
+Projectsworkspace*.tar.gz
+
+# Test run result JSON files
+src/tests/voice/results/
+
 # IDE agents
 .github/agents/
 

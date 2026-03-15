@@ -343,7 +343,110 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+## Session 19 — 2026-03-14 (UTC+1)
+
+**Focus:** Phase 3+4 web-ui roadmap implementation — PWA manifest, Screen DSL, action handlers, Telegram renderer; deploy to Pi2
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| — | Implement open P3/P4 roadmap features: PWA manifest + base.html meta tags; Screen DSL (bot_ui.py dataclasses); action handlers (bot_actions.py: action_menu, action_note_list, action_note_view); Telegram renderer (render_telegram.py); deploy to OpenClawPI2; verify manifest served + syntax OK | 4 | ~6 | claude-sonnet-4.6 | src/static/manifest.json, src/templates/base.html, src/bot_ui.py, src/bot_actions.py, src/render_telegram.py | done |
+
+**Session 19 total: 1 item, ~6 requests**
+
 ---
+
+## Session 20 — 2026-03-28 (UTC+1)
+
+**Focus:** Documentation sync for Web UI P0–P4 completion — architecture.md, TODO.md, roadmap-web-ui.md
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| — | Update architecture and documentation: add §17 Web UI Channel + §18 Screen DSL to architecture.md; fix all BOT_VERSION inconsistencies to v2026.3.28; update module dependency chain and process hierarchy | 3 | ~4 | claude-sonnet-4.6 | doc/architecture.md | done |
+| — | Collapse TODO.md §8.1/8.2/8.3 planning items to ✅ summaries; update §8.4 CRM table with Status column; extend Completed header with Web UI P0–P4 (v2026.3.28) | 2 | ~2 | claude-sonnet-4.6 | TODO.md | done |
+| — | Update roadmap-web-ui.md: header completion note; phase summary table Status column; ✅ status prefix on all 5 deliverables tables (§4.9/§5.7/§6.4/§7.6/§8.6) | 2 | ~2 | claude-sonnet-4.6 | doc/web-ui/roadmap-web-ui.md | done |
+
+**Session 20 total: 3 items, ~8 requests**
+
+---
+
+## Session 21 — 2026-03-14 (UTC+1)
+
+**Focus:** Bug 0.6 (role guards), §1.1/§1.3 RBAC expansion, login page black-page fix
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| — | File Bug 0.6: Admin/Developer role guards for System Chat; expand §1.1 RBAC 4-role table; expand §1.3 Developer Role capability table | 3 | ~3 | claude-sonnet-4.6 | TODO.md | done |
+| — | Diagnose black login page (low contrast: card #1e1e1e on bg #121212) and "Not secure" SSL warning; fix login page CSS: radial gradient bg, #252535 card, accent purple border + box-shadow | 2 | ~5 | claude-sonnet-4.6 | src/static/style.css | done |
+| — | Show hostname on login + register pages: add `import socket`, `_HOSTNAME`, pass to all login/register template contexts; update login.html + register.html title + subtitle | 2 | ~4 | claude-sonnet-4.6 | src/bot_web.py, src/templates/login.html, src/templates/register.html | done |
+| — | VPS internet exposure: design reverse SSH autossh tunnel architecture (no Fritz.Box changes, dynamic IP irrelevant); create nginx-vps.conf with sub_filter path rewriting, install_vps.sh, picoclaw-tunnel.service, setup_tunnel_key.sh | 4 | ~6 | claude-sonnet-4.6 | src/setup/nginx-vps.conf, src/setup/install_vps.sh, src/setup/setup_tunnel_key.sh, src/services/picoclaw-tunnel.service | done |
+| 11:00 UTC | User settings page: language selector (EN/RU/DE) + change password form; add `change_password()` to bot_auth.py; add GET /settings + POST /settings/language + POST /settings/password routes; create settings.html; add ⚙️ Settings link in sidebar nav; deploy to both Pis | 3 | ~3 | claude-sonnet-4.6 | src/bot_auth.py, src/bot_web.py, src/templates/settings.html, src/templates/base.html | done |
+
+**Session 21 total: 6 items, ~21 requests**
+
+---
+
+## Session 22 — 2026-03-14 (UTC+1)
+
+**Focus:** Telegram↔Web account linking feature + documentation sync + PI2 deployment
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 21:00 UTC | Implement Telegram↔Web account linking: 6-char alphanumeric code with 15 min TTL, "🔗 Link to Web" button in Profile, /register optional link_code field, status=active + role inheritance on link, strings.json in ru/en/de | 4 | ~8 | claude-sonnet-4.6 | src/bot_state.py, src/bot_handlers.py, src/telegram_menu_bot.py, src/bot_web.py, src/templates/register.html, src/strings.json | done |
+| 21:10 UTC | Documentation: update roadmap Flow C with actual implementation details (vs old 6-digit/5-min/`/link` plan); mark Flow D as 🔲 Planned; update TODO.md Completed line; update roadmap "Updated:" header | 2 | ~3 | claude-sonnet-4.6 | doc/web-ui/roadmap-web-ui.md, TODO.md | done |
+| 21:15 UTC | Deploy to OpenClawPI2: upload 6 files (5 src + register.html template), restart picoclaw-telegram + picoclaw-web, verify both services active (v2026.3.28, Polling Telegram, TLS :8080) | 2 | ~2 | claude-sonnet-4.6 | — (remote deploy) | done |
+
+**Session 22 total: 3 items, ~13 requests**
+
+---
+
+## Session 23 — 2026-03-28 (UTC+1)
+
+**Focus:** Documentation sync — reflect all Web UI + Account Linking implementations across README, howto, architecture, and concept docs
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~21:30 UTC | Update README.md: rewrite features into 4 groups (Voice & AI Core, Telegram Bot, Web Interface, Architecture & Ops); expand docs table from 7 to 11 rows | 2 | ~2 | claude-sonnet-4.6 | README.md | done |
+| ~21:35 UTC | Update doc/howto_bot.md: Voice Opts table 6→10 rows with key names; Developer role row; German language; Web registration sub-section; new Profile section; new Web Interface section (URL table, features, PWA install); Troubleshooting 8→13 rows | 3 | ~4 | claude-sonnet-4.6 | doc/howto_bot.md | done |
+| ~21:45 UTC | Update doc/architecture.md: bot_state.py module table web-link functions; Flow B2 Telegram-linked register; /register route link_code param; GET/POST /settings routes; /api/admin/voice_opts route; new §17.5 Telegram↔Web Account Linking | 3 | ~4 | claude-sonnet-4.6 | doc/architecture.md | done |
+| ~22:00 UTC | Update doc/web-ui/concept-web-interface.md: header v0.1 Draft → v1.0 Implemented; §1 Resolution paragraph; §2 Design Goals status column; §4 title Proposed→Implemented; §9 all phases rewritten as ✅ Complete; §12 Implementation Status table (new) | 3 | ~8 | claude-sonnet-4.6 | doc/web-ui/concept-web-interface.md | done |
+
+**Session 23 total: 4 items, ~18 requests — documentation only, no code changes**
+
+---
+
+## Session 24 — 2026-03-28 (UTC+1)
+
+**Focus:** Instruction files audit — AGENTS.md, INSTRUCTIONS.md, .github/copilot-instructions.md consistency update
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~22:30 UTC | Audit and update all 3 instruction files: AGENTS.md (PI2 section added, BOT_VERSION updated to 2026.3.28, remove unrelated accounting task reference); INSTRUCTIONS.md (truncated to 119 lines with clean format, full bot_*.py module list, Quick Deploy commands, 6 reference docs); .github/copilot-instructions.md (Developer Reference table expanded, Remote Host Access split into PI2+PI1 two-section layout per PI2-first rule, voice regression tests now target PI2 with %TARGET2PWD%, all $HOSTPWD bash-style quoting replaced with %HOSTPWD% bat-style throughout all sections: sipeed, Gmail Digest, Telegram Gateway, Voice Assistant setup, Service Management, Common Remote Tasks, Notes section expanded with full companion file list) | 3 | ~20 | claude-sonnet-4.6 | .github/copilot-instructions.md, AGENTS.md, INSTRUCTIONS.md | done |
+
+**Session 24 total: 1 item, ~20 requests — documentation only, no code changes**
+
+---
+
+---
+
+## Session 25 — 2026-03-15 (UTC+1)
+
+**Focus:** Project-wide cleanup — delete obsolete files/dirs; update all core documentation (bot-code-map, dev-patterns, README) to reflect 20-module architecture + Web UI channel + Screen DSL
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 05:00 UTC | Delete obsolete files: `temp/` dir (10 scripts), `PicoClaw Howto.md`, `src/telegram_menu_bot_original.py`, `src/gmail_auth.py`, `doc/web-ui/mockups-fastapi/`, `doc/web-ui/mockups-nicegui/`, `doc/web-ui/mockups-ru/`, `doc/web-ui/mockups-gen1/` | 1 | ~2 | claude-sonnet-4.6 | (deleted files) | done |
+| 05:10 UTC | Update `doc/bot-code-map.md`: full rewrite — 881 lines, 20 module sections with function tables, module dependency chain, Callback Data Key Reference table, Key Files on Pi section, Web UI route inventory (41 routes), Screen DSL dataclasses, bot_actions handlers | 4 | ~5 | claude-sonnet-4.6 | doc/bot-code-map.md | done |
+| 05:20 UTC | Update `doc/dev-patterns.md`: fix header (20-module split), complete sections 15–18 (Screen DSL Pattern, Adding a Web UI Route, Telegram↔Web Shared Action Pattern, Password Reset Pattern) | 3 | ~4 | claude-sonnet-4.6 | doc/dev-patterns.md | done |
+| 05:35 UTC | Update `README.md`: 5 stale sections fixed — (1) directory structure expanded to all 20 modules + web UI files; (2) Step 5 deploy commands updated from 3 files to full 20-module + web templates deploy; (3) Step 9 description changed from "3-mode interface" to full-featured 20-module description; (4) Step 12 verification added picoclaw-web service; (5) Service Management added picoclaw-web block | 3 | ~3 | claude-sonnet-4.6 | README.md | done |
+
+| 06:00 UTC | Implement admin password reset: `POST /admin/user/{user_id}/reset-password` route — admin-only, min 4 chars, bcrypt via `change_password()`; `HX-Redirect` with `msg`/`error` flash params; `admin_page` GET updated to extract + pass `msg`/`error`; `admin.html` updated: flash messages block, `x-data="{ openRows: {} }"` on `<tbody>`, 🔑 key button per user row (Alpine toggle), expandable inline password form row with HTMX submit; actions column widened 100→140px | 3 | ~8 | claude-sonnet-4.6 | src/bot_web.py, src/templates/admin.html | done |
+
+**Session 25 total: 5 items, ~22 requests — cleanup + documentation + password reset feature**
+
+---
+
+## Session 26 — 2026-03-15 (UTC)
+>>>>>>> 765350b (feat: Web UI P3/P4 — Screen DSL, PWA, account linking, admin reset, VPS tunnel; cleanup mockups/obsolete files)
 
 ## Session 19 — 2026-03-15 (UTC+1)
 
@@ -353,7 +456,7 @@ Each session block contains a table with one row per completed request:
 |---|---|---|---|---|---|---|
 | 17:08 | Create VS Code Copilot skills (prompt files) and usage guide so user can invoke tasks with /skill-name from Chat | 3 | 1 | claude-sonnet-4.6 | .github/prompts/deploy-bot.prompt.md, .github/prompts/run-tests.prompt.md, .github/prompts/bump-version.prompt.md, .github/prompts/test-software.prompt.md, doc/copilot-skills-guide.md, .vscode/settings.json, .github/copilot-instructions.md | done |
 
-**Session 19 total: 1 item, ~1 request**
+**Session 26 total: 1 item, 1 request**
 
 ---
 
