@@ -234,9 +234,9 @@ Each session block contains a table with one row per completed request:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| — | Adapt roadmap: multi-backend LLM abstraction + multi-channel rendering + CRM vision. Title/metadata, executive summary, §4.2 bot_llm.py, §9 Multi-Channel Renderer Architecture, §13 CRM Platform Vision, decision log, risks, file structure, Appendix A, TODO.md §8 | 4 | ~2 | claude-opus-4.6 | doc/web-ui/roadmap-web-ui.md, TODO.md | done |
-| — | Add email verification to registration flows (Web + Telegram). Flow A updated, new Flow A2, §2.6 Email Verification section, account schema gets email + email_verified fields | 3 | 1 | claude-opus-4.6 | doc/web-ui/roadmap-web-ui.md | done |
-| — | Align concept-vibe-coding-ui.md with current roadmap: FastAPI-first (not NiceGUI), add bot_llm.py + multi-channel + CRM refs, rewrite §4.5/§5 recommendation, update §7 roadmap to P0–P4, fix appendixes A/B/C | 4 | ~2 | claude-opus-4.6 | doc/web-ui/concept-vibe-coding-ui.md | done |
+| — | Adapt roadmap: multi-backend LLM abstraction + multi-channel rendering + CRM vision. Title/metadata, executive summary, §4.2 bot_llm.py, §9 Multi-Channel Renderer Architecture, §13 CRM Platform Vision, decision log, risks, file structure, Appendix A, TODO.md §8 | 4 | ~2 | claude-opus-4.6 | concept/web-ui/roadmap-web-ui.md, TODO.md | done |
+| — | Add email verification to registration flows (Web + Telegram). Flow A updated, new Flow A2, §2.6 Email Verification section, account schema gets email + email_verified fields | 3 | 1 | claude-opus-4.6 | concept/web-ui/roadmap-web-ui.md | done |
+| — | Align concept-vibe-coding-ui.md with current roadmap: FastAPI-first (not NiceGUI), add bot_llm.py + multi-channel + CRM refs, rewrite §4.5/§5 recommendation, update §7 roadmap to P0–P4, fix appendixes A/B/C | 4 | ~2 | claude-opus-4.6 | concept/web-ui/concept-vibe-coding-ui.md | done |
 
 **Session 10 total: 3 items, ~5 requests**
 
@@ -308,7 +308,7 @@ Each session block contains a table with one row per completed request:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| — | Multimodal UX concept: 8-screen interactive HTML mockup (Hub idle, Listening, Intent card, Note editor+voice, Confirm, Success+WhatsNext, Chat thread, Telegram adaptation) + concept markdown doc | 4 | ~3 | claude-sonnet-4.6 | doc/web-ui/mockups-gen1/index.html, doc/web-ui/concept-multimodal-ux.md | done |
+| — | Multimodal UX concept: 8-screen interactive HTML mockup (Hub idle, Listening, Intent card, Note editor+voice, Confirm, Success+WhatsNext, Chat thread, Telegram adaptation) + concept markdown doc | 4 | ~3 | claude-sonnet-4.6 | concept/web-ui/mockups-gen1/index.html, concept/web-ui/concept-multimodal-ux.md | done |
 
 **Session 16 total: 1 item, ~3 requests**
 
@@ -349,3 +349,15 @@ Each session block contains a table with one row per completed request:
 - Time estimates for sessions 1–4 reconstructed from git commit timestamps.
 - Session 5 onward: tracked from message metadata (UTC timestamps recorded above).
 - Update this file at the end of each session with actual turn counts.
+
+---
+
+## Session 19 — 2026-03-15 (UTC)
+
+**Focus:** Refactor project directory structure — create `concept/` dir, move concept artefacts, update references, add directory rule to AGENTS.md
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 22:46 UTC | Refactor project dir: create concept/ at top level, move concept artefacts from doc/ and src/, handle certs dir in deploy/, add rule to copilot instructions | 3 | 1 | claude-sonnet-4-5 | concept/README.md, concept/web-ui/* (moved from doc/web-ui/), concept/telegram_menu_bot_original.py (moved from src/), doc/PicoClaw Howto.md (moved from root), deploy/certs/.gitkeep, .gitignore, TODO.md, doc/vibe-coding-protocol.md, AGENTS.md | done |
+
+**Session 19 total: 1 item, 1 request**

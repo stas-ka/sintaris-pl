@@ -32,3 +32,8 @@ src/res/
 
 # You (scratch)
 You
+
+# SSL/TLS certificates (generated locally, never commit secrets)
+deploy/certs/*.crt
+deploy/certs/*.pem
+deploy/certs/*.key

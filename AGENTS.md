@@ -4,6 +4,25 @@
 - Keep persistent operational knowledge in this file so future sessions can continue quickly.
 - Use this file as the first reference for recurring document/accounting tasks.
 
+## Project Directory Structure Rule
+
+The repository top-level is organised by **current vs future**:
+
+| Directory | What belongs here |
+|---|---|
+| `src/` | All target-side source code, scripts, templates, services, tests deployed to the Pi |
+| `doc/` | Documentation for the **current** implementation: architecture, how-tos, code map, dev patterns, benchmarks |
+| `deploy/` | Deployment scripts, package lists, requirements, and SSL certificates (`deploy/certs/`) |
+| `backup/` | Device configuration snapshots and backup scripts relevant to the current setup |
+| `tools/` | Local developer utilities relevant to the current implementation |
+| `concept/` | Future ideas, design explorations, mockups, roadmaps, and archived prototypes — **not deployed, not current implementation** |
+
+**Rules:**
+- `concept/` is for **reference only**. Nothing in `concept/` is deployed to any target host.
+- When a concept moves to implementation, move the artefact from `concept/` to the appropriate `src/`, `doc/`, or `deploy/` directory.
+- `src/`, `doc/`, `deploy/`, `backup/`, `tools/` must contain **only** artefacts relevant to the **current** project realisation.
+- SSL/TLS certificates generated locally belong in `deploy/certs/` (git-ignored). Never commit cert or key files.
+
 ## Remote Host Access
 
 | Key | Value |

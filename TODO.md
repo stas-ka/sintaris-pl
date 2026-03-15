@@ -321,7 +321,7 @@ With `persistent_piper` + `tmpfs_model` + `piper_low_model` all ON: estimated **
 ### 8.1 PicoUI Platform — FastAPI Web Interface 🔲
 
 5-phase rollout: FastAPI + Jinja2 + HTMX + Alpine.js + Pico CSS.
-Full roadmap: `doc/web-ui/roadmap-web-ui.md`. Mockups: `doc/web-ui/mockups-fastapi/`.
+Full roadmap: `concept/web-ui/roadmap-web-ui.md`. Mockups: `concept/web-ui/mockups-fastapi/`.
 
 | Phase | Scope |
 |---|---|
@@ -366,13 +366,13 @@ Screen DSL enables write-once, render-anywhere. Priority: Telegram (P0) + Web (P
 | C3 | Custom fields + workflows: admin-defined schema + automation | P4 + C2 |
 | C4 | Customer project template: config-driven customization, white-label UI | C3 |
 
-See: `doc/web-ui/roadmap-web-ui.md` §13 — CRM Platform Vision.
+See: `concept/web-ui/roadmap-web-ui.md` §13 — CRM Platform Vision.
 
 ### 8.5 NiceGUI Integration 💡
 
 **Nice to have — after FastAPI web UI is stable.**
 
-Replace Jinja2 templates with NiceGUI for richer interactivity (sliders, live data binding, drag-and-drop). See `doc/web-ui/roadmap-web-ui.md` §12 and `doc/web-ui/mockups-nicegui/` for concept.
+Replace Jinja2 templates with NiceGUI for richer interactivity (sliders, live data binding, drag-and-drop). See `concept/web-ui/roadmap-web-ui.md` §12 and `concept/web-ui/mockups-nicegui/` for concept.
 
 - [ ] Evaluate NiceGUI RAM footprint on Pi 3 B+ (~60 MB vs FastAPI ~25 MB)
 - [ ] Prototype single page (e.g. Voice Opts toggles) in NiceGUI

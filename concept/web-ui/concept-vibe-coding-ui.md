@@ -182,8 +182,8 @@ You are PicoUI — a specialised agent for generating PicoUI Platform user inter
 - Dev patterns: `doc/dev-patterns.md`
 - Code map: `doc/bot-code-map.md`
 - i18n strings: `src/strings.json`
-- Platform roadmap: `doc/web-ui/roadmap-web-ui.md`
-- Multi-channel renderers: `doc/web-ui/roadmap-web-ui.md` §9
+- Platform roadmap: `concept/web-ui/roadmap-web-ui.md`
+- Multi-channel renderers: `concept/web-ui/roadmap-web-ui.md` §9
 
 ## Output format for "Generate screen" requests
 For each screen, produce:

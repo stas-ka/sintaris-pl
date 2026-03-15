@@ -2,7 +2,7 @@
 
 **Date:** March 2026  
 **Status:** Design Concept — not yet implemented  
-**Companion:** `doc/web-ui/mockups-gen1/index.html` — interactive mockup (8 screens)
+**Companion:** `concept/web-ui/mockups-gen1/index.html` — interactive mockup (8 screens)
 
 ---
 
