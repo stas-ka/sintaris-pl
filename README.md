@@ -51,6 +51,7 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 | [doc/web-ui/roadmap-web-ui.md](doc/web-ui/roadmap-web-ui.md) | Web UI implementation roadmap — phases P0–P4 + account linking (all ✅ done) |
 | [doc/update_strategy.md](doc/update_strategy.md) | Update & deployment strategy: pre-user notification, rollback, parallel deployment, release SOP |
 | [doc/hardware-performance-analysis.md](doc/hardware-performance-analysis.md) | Hardware bottleneck analysis, Pi 3 tuning guide, upgrade path for voice / LLM / RAG use cases |
+| [doc/hw-requirements-report.md](doc/hw-requirements-report.md) | **Hardware requirements report** — per-function RAM/ROM/CPU/TOPS estimates for PicoClaw (Pi 3 B+), ZeroClaw (Pi Zero 2 W), OpenClaw (Pi 5 / RK3588); mini-computer research for local AI |
 | [doc/bot-code-map.md](doc/bot-code-map.md) | Function-level code map for every `bot_*.py` module + all callback keys |
 | [doc/dev-patterns.md](doc/dev-patterns.md) | Exact copy-paste patterns for voice opts, callbacks, multi-step flows, i18n, versioning |
 | [backup/device/README.md](backup/device/README.md) | Captured device configuration snapshot + restore instructions |
@@ -646,6 +647,7 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 │   ├── dev-patterns.md           ← copy-paste patterns for all features
 │   ├── howto_bot.md              ← bot usage guide
 │   ├── hardware-performance-analysis.md ← Pi 3 B+ timing + upgrade path
+│   ├── hw-requirements-report.md ← HW requirements: PicoClaw/ZeroClaw/OpenClaw
 │   └── web-ui/
 │       ├── roadmap-web-ui.md     ← Web UI feature roadmap
 │       └── concept-web-interface.md ← Web UI design concepts

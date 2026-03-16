@@ -216,5 +216,7 @@ Migrate from per-user JSON files to `pico.db`. `bot_db.py` created (v2026.3.30);
 ## 17. Implementing  Max messenger UI analog Telegram
 
 ## 18. Using ZeroClaw instead PicoClaw
+→ [Hardware Requirements Report §4.2](doc/hw-requirements-report.md) — ZeroClaw feasibility analysis (text-only; voice not viable on 512 MB)
 
 ## 19. Using OpenClaw instead PicoClaw
+→ [Hardware Requirements Report §4.3 + §6](doc/hw-requirements-report.md) — OpenClaw configurations (Pi 5, RK3588, Jetson); full local AI stack
