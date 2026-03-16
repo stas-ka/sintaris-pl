@@ -413,21 +413,27 @@ def _format_release_entry(entry: dict, header: bool = True) -> str:
     v   = entry.get("version", "?")
     d   = entry.get("date", "")
     t   = _escape_md(entry.get("title", ""))
-    n   = entry.get("notes", "")
+    n   = _escape_md(entry.get("notes", ""))
     hdr = f"📦 *v{v}*" + (f"  _({d})_" if d else "") + (f" — {t}" if t else "")
     return (hdr + "\n\n" + n) if header else n
 
 
-def _get_changelog_text(max_entries: int = 0) -> str:
-    """Return formatted changelog Markdown (all or first max_entries entries)."""
+def _get_changelog_text(max_entries: int = 5) -> str:
+    """Return formatted changelog Markdown (last max_entries entries, truncated to 3500 chars)."""
     entries = _load_release_notes()
     if not entries:
         return "📝 _Release notes not available._"
     if max_entries:
         entries = entries[:max_entries]
-    parts = [_format_release_entry(e) for e in entries]
-    sep = "\n\n" + "─" * 28 + "\n\n"
-    return sep.join(parts)
+    sep = "\n\n" + "─" * 20 + "\n\n"
+    result = ""
+    for e in entries:
+        part = _format_release_entry(e)
+        candidate = (result + sep + part) if result else part
+        if len(candidate) > 3500:
+            break
+        result = candidate
+    return result or _format_release_entry(entries[0])
 
 
 def _notify_admins_new_version() -> None:
