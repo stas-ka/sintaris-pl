@@ -495,6 +495,14 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+**Session 29**
+
+| 23:00 UTC | PI1 package structure migration | 2 | 7 | claude-sonnet-4-5 | src/setup/migrate_pi1_packages.bat | done |
+
+**Session 29 total: 1 item, ~7 requests — PI1 migrated to package layout. Telegram v2026.3.30+1 + Web UI both running ✅**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.
