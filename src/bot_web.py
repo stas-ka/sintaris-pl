@@ -46,7 +46,7 @@ from fastapi.templating import Jinja2Templates
 
 from core.bot_config import (
     BOT_VERSION, PICOCLAW_BIN, PICOCLAW_CONFIG, NOTES_DIR,
-    ACTIVE_MODEL_FILE, log,
+    ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, log,
 )
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
@@ -2032,12 +2032,18 @@ async def admin_page(request: Request):
     msg   = request.query_params.get("msg", "")
     error = request.query_params.get("error", "")
 
+    try:
+        release_notes = json.loads(Path(RELEASE_NOTES_FILE).read_text(encoding="utf-8"))
+    except Exception:
+        release_notes = []
+
     return templates.TemplateResponse("admin.html", _ctx(
         request, user, "admin",
         stats=system_status,
         users=admin_users,
         llm_models=llm_models,
         voice_opts=voice_opts,
+        release_notes=release_notes,
         msg=msg,
         error=error,
     ))

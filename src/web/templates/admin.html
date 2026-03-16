@@ -159,5 +159,25 @@
     {% endfor %}
   </div>
 
+  <!-- ── Release Notes ─────────────── -->
+  <p class="section-label" style="margin-top:1.5rem">Release Notes</p>
+  <div class="card">
+    {% if release_notes %}
+      {% for rn in release_notes[:5] %}
+      <div class="py-sm {% if not loop.last %}border-b{% endif %}">
+        <div class="flex items-center gap-sm" style="flex-wrap:wrap">
+          <span class="badge badge-info">v{{ rn.version }}</span>
+          <span class="text-dim text-xs">{{ rn.date }}</span>
+          <span class="text-white fw-bold">{{ rn.title }}</span>
+        </div>
+        <pre style="margin:6px 0 0 0; font-size:12px; color:var(--text-muted);
+                    white-space:pre-wrap; font-family:inherit">{{ rn.notes }}</pre>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-dim">Release notes not available.</p>
+    {% endif %}
+  </div>
+
 </div>
 {% endblock %}
