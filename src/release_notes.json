@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.31",
+    "date":    "2026-03-17",
+    "title":   "Bug fixes 0.7 and 0.8",
+    "notes":   "- Bug 0.7: Contact add/edit cancel button was showing 'btn_cancel' instead of translated text — added missing btn_cancel i18n key to ru/en/de\n- Bug 0.8: Profile change password failed with 'could not change password' — fixed account['id'] key error (correct key is 'user_id')"
+  },
+  {
     "version": "2026.3.30+1",
     "date":    "2026-03-16",
     "title":   "Contact Book (Feature 4.0)",

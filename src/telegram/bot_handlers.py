@@ -375,7 +375,7 @@ def _finish_profile_change_pw(chat_id: int, text: str) -> None:
             bot.send_message(chat_id, _t(chat_id, "profile_no_web_account"),
                              reply_markup=_back_keyboard())
             return
-        change_password(account["id"], pw)
+        change_password(account["user_id"], pw)
         log.info(f"[Profile] password changed for chat_id={chat_id} account={account.get('username')}")
     except Exception as _e:
         log.error(f"[Profile] change_password failed for {chat_id}: {_e}")

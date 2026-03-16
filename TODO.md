@@ -5,10 +5,7 @@
 ---
 
 ## 0. Known bugs
-### 0.7 Add new Contact errors
-Showing title of cancel button as "btn_cancel" 
-### 0.8 Errors in the profile window
-After input new password ❌ Error: could not change password.
+
 ### Bugs — Fixed in this Sprint ✅
 
 | Bug | Fix | Version |
@@ -19,6 +16,8 @@ After input new password ❌ Error: could not change password.
 | 0.4 Calendar voice deleted | Fixed orphan TTS cleanup guard — only deletes spinner messages | v2026.3.29 |
 | 0.5 Calendar console ignores add | Intent classifier calls `_finish_cal_add()` directly | v2026.3.29 |
 | 0.6 System Chat no role guards | `ADMIN_ALLOWED_CMDS` / `DEVELOPER_ALLOWED_CMDS` + `_classify_cmd_class()` | v2026.3.30 |
+| 0.7 Add new Contact cancel shows "btn_cancel" | Added missing `btn_cancel` i18n key to ru/en/de in `strings.json` | v2026.3.31 |
+| 0.8 Profile change password error | Fixed `account["id"]` → `account["user_id"]` key in `_finish_profile_change_pw()` | v2026.3.31 |
 
 ---
 

@@ -511,6 +511,18 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+## Session 31 — 2026-03-17 (UTC+1)
+
+**Focus:** Bug fixes 0.7 and 0.8 — contacts i18n key, profile password change key error
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~09:00 UTC | Fix all known bugs: Bug 0.7 (contacts "Add Contact" cancel button showed raw key "btn_cancel" — added missing i18n key to ru/en/de in strings.json); Bug 0.8 (profile change password silently failed — fixed account["id"] KeyError, correct key is "user_id" in _finish_profile_change_pw()); bump version 2026.3.30+1 → 2026.3.31; update release_notes.json + TODO.md; deploy to PI2, verified v2026.3.31 running | 2 | ~4 | claude-sonnet-4-5 | src/strings.json, src/telegram/bot_handlers.py, src/core/bot_config.py, src/release_notes.json, TODO.md | done |
+
+**Session 31 total: 1 item, ~4 requests — both bugs fixed, deployed to PI2 ✅**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.
