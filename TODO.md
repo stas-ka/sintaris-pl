@@ -198,8 +198,9 @@ Migrate from per-user JSON files to `pico.db`. `bot_db.py` created (v2026.3.30);
 - all inputs of textes shall be possible per voice exceptional confirmation of runnig activities
 
 ## 13. Implementing smart CRM 
-- Implementing all fuctions from ..\hp\alex-crm\crm_commercial_proposal.md
-- all inputs and switching between  all windows shall be possible per voice
+- Implementing open fuctions if they are not already implemented from concept\additional\crm_system_requirements.md and concept\additional\SYSTEM_REQUIREMENTS_SmartClient360.md
+- all inputs and switching between  all windows shall be controlable per voice. Smart client. 
+- smart input of text and automatical set values in the input fields 
 
 
 ## 14. Developer Board
@@ -210,14 +211,10 @@ Migrate from per-user JSON files to `pico.db`. `bot_db.py` created (v2026.3.30);
 
 
 ## 16 Implementing functions of personal assistant
-- Implementing all fuctions ..\from hp\KIM-ASSISTANT\analyse\KIM_PACKAGES.md
+- - Implementing open fuctions if they are not already implemented from concept\additional\KIM_PACKAGES.md
 
-
-
-## 17. Connect Max
-
+## 17. Implementing  Max messenger UI analog Telegram
 
 ## 18. Using ZeroClaw instead PicoClaw
-
 
 ## 19. Using OpenClaw instead PicoClaw

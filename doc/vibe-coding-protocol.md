@@ -503,6 +503,14 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+**Session 30**
+
+| 23:20 UTC | fix: web admin Release Notes button had no functionality — added backend load + admin.html section | 2 | 4 | claude-sonnet-4.6 | src/bot_web.py, src/web/templates/admin.html | done |
+
+**Session 30 total: 1 item, ~4 requests — Release Notes now visible in web admin panel (last 5 entries). Deployed + committed `54dbaba` ✅**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.
