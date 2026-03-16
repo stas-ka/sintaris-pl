@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.30+1",
+    "date":    "2026-03-16",
+    "title":   "Contact Book (Feature 4.0)",
+    "notes":   "- Add, view, edit and delete contacts via Telegram bot\n- Search contacts by name, phone or email\n- Web UI at /contacts with two-panel layout (search + list + form)\n- 38 new i18n strings (ru/en/de)"
+  },
+  {
     "version": "2026.3.30",
     "date":    "2026-03-16",
     "title":   "System Chat role guards (Bug 0.6)",
