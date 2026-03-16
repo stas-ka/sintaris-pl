@@ -4,7 +4,12 @@
 
 ---
 
-## 0. Bugs — Fixed in this Sprint ✅
+## 0. Known bugs
+### 0.7 Add new Contact errors
+Showing title of cancel button as "btn_cancel" 
+### 0.8 Errors in the profile window
+After input new password ❌ Error: could not change password.
+### Bugs — Fixed in this Sprint ✅
 
 | Bug | Fix | Version |
 |---|---|---|
@@ -81,9 +86,7 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 
 ## 4. Content & Knowledge
 
-### 4.0 Contact Book 🔲
-SQLite-backed personal address book — add, view, search, edit, delete via Telegram, voice, Web UI.
-→ [Full spec](doc/todo/4.0-contact-book.md)
+### 4.0 Contact Book ✅ Implemented (v2026.3.30)
 
 ---
 
