@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.30",
+    "date":    "2026-03-16",
+    "title":   "System Chat role guards (Bug 0.6)",
+    "notes":   "- Admin role limited to read-only commands (cat, ls, journalctl, systemctl status, etc.)\n- New Developer role (DEVELOPER_USERS env var) allows service control and file writes\n- Commands not on any allowlist are blocked before execution\n- Confirm gate always required for all system commands\n- _classify_cmd_class() added to bot_security; _is_developer() added to bot_access"
+  },
+  {
     "version": "2026.3.29",
     "date":    "2026-03-15",
     "title":   "Identity silo fix: unified Telegram+Web user identity",

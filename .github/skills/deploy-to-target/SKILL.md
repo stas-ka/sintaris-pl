@@ -52,6 +52,50 @@ For any user-facing change (bug fix, feature, UI/text change, voice change, stri
 
 ---
 
+### Step 0.5 — Pre-Deploy Backup *(mandatory before every deploy to any target)*
+
+> ⚠️ **Do this before copying any files to the target.** If a deploy breaks the target, this backup is your only recovery path.
+
+**Create a timestamped backup on the target and download it locally:**
+
+```bat
+rem Set target vars — substitute TARGET and PWD for the actual target
+rem PI2: set THOST=OpenClawPI2 & set TPWD=%TARGET2PWD%
+rem PI1: set THOST=OpenClawPI  & set TPWD=%HOSTPWD%
+
+for /f %%i in ('powershell -c "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%i
+for /f %%v in ('plink -pw "%TPWD%" -batch stas@%THOST% "grep BOT_VERSION /home/stas/.picoclaw/bot_config.py | head -1 | cut -d'"' -f2"') do set VER=%%v
+set BNAME=picoclaw_backup_%THOST%_v%VER%_%TS%
+
+plink -pw "%TPWD%" -batch stas@%THOST% ^
+  "tar czf /tmp/%BNAME%.tar.gz -C /home/stas/.picoclaw ^
+    --exclude=vosk-model-small-ru --exclude=vosk-model-small-de ^
+    --exclude='*.onnx' --exclude='ggml-*.bin' ^
+    . 2>/dev/null && echo BACKUP_OK"
+```
+
+Expected: `BACKUP_OK`. If not — **stop, do not deploy**.
+
+**Download the backup locally before proceeding:**
+
+```bat
+if not exist backup\snapshots\%BNAME% mkdir backup\snapshots\%BNAME%
+pscp -pw "%TPWD%" stas@%THOST%:/tmp/%BNAME%.tar.gz backup\snapshots\%BNAME%\
+```
+
+**Verify the backup contains config and data files:**
+
+```bat
+plink -pw "%TPWD%" -batch stas@%THOST% ^
+  "tar tzf /tmp/%BNAME%.tar.gz | grep -E '\.(json|db|txt|env)$' | head -20"
+```
+
+Expected to see: `bot.env`, `config.json`, `pico.db` (or `voice_opts.json`, `users.json`). **Do not proceed until the backup is confirmed on local disk.**
+
+> ✅ Keep the last 3 backup archives in `backup/snapshots/`; delete older ones after a successful deploy.
+
+---
+
 ### Step 1 — Classify the change
 
 Ask or determine:
@@ -137,24 +181,24 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u %SVCNAME% -n 10 
 
 Required when data format, schema, or new modules are added. See full protocol in [`doc/architecture.md`](../../doc/architecture.md).
 
-**Step 1 — Create timestamped backup on Pi:**
-```bat
-for /f %%i in ('powershell -c "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%i
-for /f %%v in ('plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "grep BOT_VERSION /home/stas/.picoclaw/bot_config.py | head -1 | cut -d'\"' -f2"') do set VER=%%v
-set BNAME=picoclaw_backup_OpenClawPI2_v%VER%_%TS%
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "tar czf /tmp/%BNAME%.tar.gz -C /home/stas/.picoclaw --exclude=vosk-model-small-ru --exclude=vosk-model-small-de --exclude='*.onnx' --exclude='ggml-*.bin' . 2>/dev/null && echo BACKUP_OK"
-```
+> Backup is already covered by **Step 0.5** above. After the backup is confirmed locally, continue here:
 
-**Step 2 — Download backup locally:**
-```bat
-if not exist backup\snapshots\%BNAME% mkdir backup\snapshots\%BNAME%
-pscp -pw "%TARGET2PWD%" stas@OpenClawPI2:/tmp/%BNAME%.tar.gz backup\snapshots\%BNAME%\
-```
-
-**Step 3 — Stop services, deploy, migrate, restart:**
+**Stop services — BEFORE deploying files (prevents race condition):**
 ```bat
 plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl stop picoclaw-telegram picoclaw-web 2>/dev/null; echo STOPPED"
-rem ... deploy files (pscp) ...
+```
+
+**Deploy files** (pscp commands from the relevant deploy section above).
+
+**Run migration if schema changed:**
+```bat
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 ^
+  "python3 /home/stas/.picoclaw/migrate_to_db.py --source=/home/stas/.picoclaw && echo MIGRATION_OK"
+```
+Expected: `MIGRATION_OK`. If not — **rollback immediately** (restore from backup in `backup/snapshots/`).
+
+**Restart services:**
+```bat
 plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl start picoclaw-telegram picoclaw-web && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
 ```
 
@@ -235,10 +279,18 @@ After every successful deployment, ask:
 
 ## Step 6 — PI1 Promotion (after PI2 confirmed)
 
-Only after project lead (stas) confirms PI2 tests pass:
+Only after project lead (stas) confirms PI2 tests pass **and** the change is committed and pushed to git.
+
+**First: run the mandatory pre-deploy backup on PI1 (Step 0.5 with `THOST=OpenClawPI` and `TPWD=%HOSTPWD%`). Do not skip — PI1 is production.**
 
 ```bat
-rem Replace TARGET2PWD → HOSTPWD, OpenClawPI2 → OpenClawPI
+set THOST=OpenClawPI
+set TPWD=%HOSTPWD%
+rem ... run Step 0.5 backup commands here ...
+```
+
+**Then deploy:**
+```bat
 pscp -pw "%HOSTPWD%" src\<changed-files> stas@OpenClawPI:/home/stas/.picoclaw/
 plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
 ```

@@ -188,3 +188,45 @@ def _check_injection(text: str) -> tuple[bool, str]:
             log.warning(f"[Security] injection pattern matched ({reason}): {text[:120]!r}")
             return True, reason
     return False, ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System-chat command allowlists (used by bot_handlers._handle_system_message)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Admin: read-only monitoring + config inspection
+ADMIN_ALLOWED_CMDS: set[str] = {
+    "cat", "head", "tail", "grep", "ls", "find", "pwd", "du", "df", "free",
+    "ps", "top", "htop", "uptime", "uname", "date", "hostname", "id", "who",
+    "systemctl status", "journalctl", "ping", "curl", "dmesg", "lsblk",
+    "vcgencmd", "lscpu", "lsusb", "env", "printenv", "stat", "wc", "sort",
+}
+
+# Developer: all admin commands + service control + code/file operations
+DEVELOPER_ALLOWED_CMDS: set[str] = ADMIN_ALLOWED_CMDS | {
+    "systemctl restart", "systemctl stop", "systemctl start",
+    "sudo systemctl",
+    "cp", "mv", "mkdir", "rm", "touch", "chmod", "chown",
+    "python3", "pip3", "pip", "git", "nano", "vi", "vim",
+    "pscp", "plink", "scp", "rsync",
+    "tar", "unzip", "zip", "wget", "apt",
+}
+
+
+def _classify_cmd_class(cmd: str) -> str:
+    """Return 'admin', 'developer', or 'blocked' for *cmd*.
+
+    'admin'     — command is allowed for the admin role (read-only + inspection)
+    'developer' — command requires the developer role (service control / writes)
+    'blocked'   — command is not on any allowlist; must be denied
+    """
+    cmd_lower = cmd.strip().lower()
+    # Check admin allowlist first (subset of developer)
+    for allowed in ADMIN_ALLOWED_CMDS:
+        if cmd_lower == allowed or cmd_lower.startswith(allowed + " "):
+            return "admin"
+    # Check developer-only additions
+    for allowed in DEVELOPER_ALLOWED_CMDS - ADMIN_ALLOWED_CMDS:
+        if cmd_lower == allowed or cmd_lower.startswith(allowed + " "):
+            return "developer"
+    return "blocked"

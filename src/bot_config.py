@@ -52,8 +52,14 @@ def _parse_admin_users() -> set[int]:
     return ids if ids else set(_parse_allowed_users())
 
 
-ALLOWED_USERS: set[int] = _parse_allowed_users()
-ADMIN_USERS:   set[int] = _parse_admin_users()
+def _parse_developer_users() -> set[int]:
+    raw = os.environ.get("DEVELOPER_USERS", "")
+    return {int(p) for p in raw.split(",") if p.strip().isdigit()}
+
+
+ALLOWED_USERS:   set[int] = _parse_allowed_users()
+ADMIN_USERS:     set[int] = _parse_admin_users()
+DEVELOPER_USERS: set[int] = _parse_developer_users()
 
 BOT_NAME = os.environ.get("BOT_NAME", "Pico")
 
@@ -83,7 +89,7 @@ ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.29"
+BOT_VERSION        = "2026.3.30"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_notes.json"),

@@ -107,3 +107,4 @@ Then redeploy the previous code version from git and restart services.
 - **NEVER** skip regression tests after a schema change.
 - Keep the last 3 backup archives locally; delete older ones after successful tests.
 - After a successful update: `git tag deploy/YYYY.M.D`
+- **Deployment pipeline:** ALL changes MUST be deployed and tested on the engineering target **PI2** (`OpenClawPI2`) first. Only after tests pass and the change is committed and pushed to git may it be deployed to the production target **PI1** (`OpenClawPI`). Never deploy directly to PI1 without prior PI2 validation.

@@ -23,7 +23,7 @@ from bot_config import (
 )
 from bot_instance import bot
 from bot_access import (
-    _t, _is_admin, _is_allowed, _with_lang, _escape_md, _truncate,
+    _t, _is_admin, _is_allowed, _is_developer, _with_lang, _escape_md, _truncate,
     _safe_edit, _back_keyboard, _run_subprocess, _ask_picoclaw,
 )
 from bot_users import (
@@ -425,16 +425,20 @@ def _extract_bash_cmd(raw: str) -> str:
 
 def _handle_system_message(chat_id: int, user_text: str) -> None:
     """Translate natural language → bash command → ask for confirmation.
-    Admin-only: executing system commands is restricted to administrators.
+    Admin-only: read/inspect commands.  Developer: adds service control and writes.
     """
-    if not _is_admin(chat_id):
+    if _is_admin(chat_id):
+        role = "admin"
+    elif _is_developer(chat_id):
+        role = "developer"
+    else:
         bot.send_message(chat_id,
                          _t(chat_id, "security_admin_only"),
                          reply_markup=_back_keyboard())
         log.warning(f"[Security] non-admin system-chat attempt from chat_id={chat_id}")
         return
 
-    from bot_security import _check_injection
+    from bot_security import _check_injection, _classify_cmd_class
     is_inj, reason = _check_injection(user_text)
     if is_inj:
         bot.send_message(chat_id,
@@ -463,6 +467,27 @@ def _handle_system_message(chat_id: int, user_text: str) -> None:
                 chat_id, msg.message_id, parse_mode="Markdown",
             )
             log.warning(f"[SystemChat] empty cmd after extraction. raw={cmd_text[:200]}")
+            return
+
+        # Role-based allowlist check
+        cmd_class = _classify_cmd_class(cmd_clean)
+        if cmd_class == "blocked":
+            bot.edit_message_text(
+                f"⛔ Command not permitted:\n```\n{cmd_clean}\n```\n"
+                "Only read-only monitoring and config commands are allowed.",
+                chat_id, msg.message_id, parse_mode="Markdown",
+                reply_markup=_back_keyboard(),
+            )
+            log.warning(f"[Security] blocked cmd (not on allowlist) role={role}: {cmd_clean!r}")
+            return
+        if cmd_class == "developer" and role == "admin":
+            bot.edit_message_text(
+                f"⛔ Command requires Developer role:\n```\n{cmd_clean}\n```\n"
+                "Admin can only run read-only commands.",
+                chat_id, msg.message_id, parse_mode="Markdown",
+                reply_markup=_back_keyboard(),
+            )
+            log.warning(f"[Security] admin attempted developer cmd: {cmd_clean!r}")
             return
 
         cmd_hash = hashlib.md5(cmd_clean.encode()).hexdigest()[:8]

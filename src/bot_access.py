@@ -20,7 +20,7 @@ from typing import Optional
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot_config import (
-    ADMIN_USERS, ALLOWED_USERS, BOT_NAME,
+    ADMIN_USERS, ALLOWED_USERS, DEVELOPER_USERS, BOT_NAME,
     ACTIVE_MODEL_FILE, PICOCLAW_BIN,
     _STRINGS_FILE,
     log,
@@ -41,6 +41,11 @@ def _is_allowed(chat_id: int) -> bool:
 
 def _is_admin(chat_id: int) -> bool:
     return chat_id in ADMIN_USERS
+
+
+def _is_developer(chat_id: int) -> bool:
+    """True if chat_id is in DEVELOPER_USERS (elevated system-chat access)."""
+    return chat_id in DEVELOPER_USERS
 
 
 def _is_guest(chat_id: int) -> bool:

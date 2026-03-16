@@ -6,6 +6,16 @@ applyTo: "src/telegram_menu_bot.py,src/bot_*.py,src/strings.json,src/release_not
 
 Use this skill whenever deploying bot changes to the Pi.
 
+## Deployment Pipeline — MANDATORY ORDER
+
+> **RULE: Engineering before Production — always.**
+>
+> 1. Deploy and test on **PI2** (`OpenClawPI2`) — engineering target.
+> 2. **Only after** all tests pass and the change is committed and pushed to git:
+> 3. Deploy to **PI1** (`OpenClawPI`) — production target.
+>
+> **NEVER** deploy directly to PI1 without prior validation on PI2.
+
 ## 1 — Version Bump and Release Notes
 
 Every user-visible change needs a version bump.

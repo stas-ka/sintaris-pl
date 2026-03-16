@@ -88,6 +88,7 @@ picoclaw/
 - **UI changes:** apply to both Telegram and Web UI simultaneously. See [bot-coding](.github/instructions/bot-coding.instructions.md).
 - **Docs:** update `doc/architecture.md`, `README.md` etc. in the same commit as the code change.
 - **TODO.md:** keep current; collapse completed items to `✅ Implemented (vX.Y.Z)`.
+- **Deployment pipeline:** ALL changes MUST be deployed and tested on the engineering target **PI2** (`OpenClawPI2`) first. Only after tests pass and the change is committed and pushed to git may it be deployed to the production target **PI1** (`OpenClawPI`). Never deploy directly to PI1 without prior PI2 validation.
 
 ## Post-Deploy Rule
 
