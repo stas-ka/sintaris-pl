@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Profile — Pico Bot{% endblock %}
+{% block page_title %}Profile{% endblock %}
+
+{% block content %}
+
+<!-- ── Flash messages ────────────────────────────────────── -->
+{% if msg == 'name_saved' %}
+<div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
+  <span style="color:#4caf50">✅</span> Display name saved.
+</div>
+{% endif %}
+
+{% if error %}
+<div class="card mb-md" style="border-left:4px solid #f44336; background:rgba(244,67,54,.12)">
+  <span style="color:#f44336">⚠️</span> {{ error }}
+</div>
+{% endif %}
+
+<!-- ── Account info card ─────────────────────────────────── -->
+<p class="section-label">Account Info</p>
+<div class="card mb-md">
+  <table style="border-collapse:collapse; width:100%; max-width:440px">
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted); width:150px">Username</td>
+      <td style="padding:7px 0; color:var(--text-primary); font-weight:600">{{ account.get('username', user.username) }}</td>
+    </tr>
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted)">Display name</td>
+      <td style="padding:7px 0; color:var(--text-primary)">{{ account.get('display_name') or '—' }}</td>
+    </tr>
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted)">Role</td>
+      <td style="padding:7px 0; color:var(--text-primary)">{{ account.get('role', user.role) }}</td>
+    </tr>
+    {% if account.get('telegram_chat_id') %}
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted)">Telegram ID</td>
+      <td style="padding:7px 0; color:var(--text-primary); font-family:monospace">{{ account.get('telegram_chat_id') }}</td>
+    </tr>
+    {% endif %}
+    {% if tg_reg %}
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted)">Telegram name</td>
+      <td style="padding:7px 0; color:var(--text-primary)">{{ tg_reg.get('name') or '—' }}</td>
+    </tr>
+    <tr>
+      <td style="padding:7px 0; color:var(--text-muted)">Registered</td>
+      <td style="padding:7px 0; color:var(--text-primary)">{{ (tg_reg.get('timestamp') or '')[:10] or '—' }}</td>
+    </tr>
+    {% endif %}
+  </table>
+</div>
+
+<!-- ── Edit display name card ────────────────────────────── -->
+<p class="section-label mt-md">Edit Display Name</p>
+<div class="card mb-md">
+  <form method="post" action="/profile/name">
+    <div style="display:grid; gap:12px; max-width:420px">
+      <div>
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
+          Display Name
+        </label>
+        <input type="text" name="display_name" required
+               value="{{ account.get('display_name') or '' }}"
+               placeholder="Enter your display name"
+               style="width:100%; padding:9px 12px; background:var(--surface-2);
+                      border:1px solid var(--border-color); border-radius:8px;
+                      color:var(--text-primary); font-size:14px">
+      </div>
+      <div>
+        <button type="submit"
+                style="padding:9px 24px; border-radius:8px; border:none;
+                       background:var(--accent); color:#fff; font-size:14px;
+                       font-weight:600; cursor:pointer; transition:opacity .15s ease">
+          ✏️ Save Name
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- ── Password & security ───────────────────────────────── -->
+<p class="section-label mt-md">Security</p>
+<div class="card mb-md">
+  <p style="color:var(--text-muted); margin:0 0 12px">
+    To change your password, go to
+    <a href="/settings" style="color:var(--accent)">Settings</a>.
+  </p>
+</div>
+
+{% endblock %}

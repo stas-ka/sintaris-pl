@@ -75,6 +75,9 @@ from bot_handlers import (
     _notes_menu_keyboard,
     _handle_profile,
     _handle_web_link,
+    _start_profile_edit_name, _finish_profile_edit_name,
+    _start_profile_change_pw, _finish_profile_change_pw,
+    _pending_profile,
 )
 
 # ─── Calendar ─────────────────────────────────────────────────────────────────
@@ -287,6 +290,12 @@ def callback_handler(call):
     elif data == "web_link":
         if not _is_allowed(cid): return _deny(cid)
         _handle_web_link(cid)
+    elif data == "profile_edit_name":
+        if not _is_allowed(cid): return _deny(cid)
+        _start_profile_edit_name(cid)
+    elif data == "profile_change_pw":
+        if not _is_allowed(cid): return _deny(cid)
+        _start_profile_change_pw(cid)
     # ── Admin panel ────────────────────────────────────────────────────────
     elif data == "admin_menu":
         if _is_admin(cid):
@@ -596,6 +605,7 @@ def callback_handler(call):
         _pending_cal.pop(cid, None)
         _pending_mail_setup.pop(cid, None)
         _st._pending_error_protocol.pop(cid, None)
+        _pending_profile.pop(cid, None)
         _st._user_mode.pop(cid, None)
         bot.send_message(cid, _t(cid, "cancelled"), reply_markup=_back_keyboard())
 
@@ -635,6 +645,15 @@ def text_handler(message):
 
     if mode is None:
         _send_menu(cid, greeting=False)
+        return
+
+    # ── Profile self-service text flows ────────────────────────────────────────
+    if mode == "profile_edit_name":
+        _finish_profile_edit_name(cid, message.text)
+        return
+
+    if mode == "profile_change_pw":
+        _finish_profile_change_pw(cid, message.text)
         return
 
     # ── Admin text flows ───────────────────────────────────────────────────

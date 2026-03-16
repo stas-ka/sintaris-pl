@@ -439,6 +439,46 @@ async def logout():
 _SUPPORTED_LANGS = {"en": "🇬🇧 English", "ru": "🇷🇺 Русский", "de": "🇩🇪 Deutsch"}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile page
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request, msg: str = "", error: str = ""):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    account = find_account_by_id(user["sub"]) or {}
+    # Try to load linked Telegram registration record
+    tg_chat_id = account.get("telegram_chat_id")
+    tg_reg = None
+    if tg_chat_id:
+        try:
+            from bot_users import _find_registration
+            tg_reg = _find_registration(int(tg_chat_id))
+        except Exception:
+            pass
+    return templates.TemplateResponse("profile.html", _ctx(
+        request, user, "profile",
+        account=account,
+        tg_reg=tg_reg,
+        msg=msg,
+        error=error,
+    ))
+
+
+@app.post("/profile/name", response_class=HTMLResponse)
+async def profile_update_name(request: Request, display_name: str = Form(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    display_name = display_name.strip()
+    if not display_name:
+        return RedirectResponse("/profile?error=Name+cannot+be+empty", status_code=302)
+    update_account(user["sub"], display_name=display_name)
+    return RedirectResponse("/profile?msg=name_saved", status_code=302)
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, msg: str = "", error: str = ""):
     user = _get_current_user(request)

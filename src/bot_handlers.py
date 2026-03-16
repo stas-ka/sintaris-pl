@@ -28,10 +28,16 @@ from bot_access import (
 )
 from bot_users import (
     _list_notes_for, _load_note_text, _save_note_file, _delete_note_file,
-    _slug, _find_registration,
+    _slug, _find_registration, _upsert_registration,
 )
 
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile multi-step state
+# ─────────────────────────────────────────────────────────────────────────────
+
+_pending_profile: dict[int, dict] = {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -291,10 +297,93 @@ def _handle_profile(chat_id: int) -> None:
 
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton(_t(chat_id, "web_link_btn"), callback_data="web_link"),
-        InlineKeyboardButton(_t(chat_id, "btn_back"),     callback_data="menu"),
+        InlineKeyboardButton(_t(chat_id, "profile_btn_edit_name"),  callback_data="profile_edit_name"),
+        InlineKeyboardButton(_t(chat_id, "profile_btn_change_pw"),  callback_data="profile_change_pw"),
     )
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "profile_btn_mailbox"),    callback_data="mail_settings"),
+        InlineKeyboardButton(_t(chat_id, "web_link_btn"),           callback_data="web_link"),
+    )
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),            callback_data="menu"))
     bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile self-service: edit name
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _start_profile_edit_name(chat_id: int) -> None:
+    """Prompt the user to enter a new display name."""
+    _st._user_mode[chat_id] = "profile_edit_name"
+    bot.send_message(chat_id, _t(chat_id, "profile_edit_name_prompt"),
+                     parse_mode="Markdown", reply_markup=_back_keyboard())
+
+
+def _finish_profile_edit_name(chat_id: int, text: str) -> None:
+    """Apply the new display name to the user's registration record."""
+    _st._user_mode.pop(chat_id, None)
+    name = text.strip()
+    if not name:
+        _handle_profile(chat_id)
+        return
+    reg = _find_registration(chat_id) or {}
+    _upsert_registration(
+        chat_id,
+        username=reg.get("username", ""),
+        name=name,
+        status=reg.get("status", "allowed"),
+        first_name=reg.get("first_name", ""),
+        last_name=reg.get("last_name", ""),
+    )
+    bot.send_message(chat_id, _t(chat_id, "profile_name_updated", name=_escape_md(name)),
+                     parse_mode="Markdown", reply_markup=_back_keyboard())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile self-service: change password
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _start_profile_change_pw(chat_id: int) -> None:
+    """Check that a linked web account exists, then prompt for a new password."""
+    try:
+        from bot_auth import find_account_by_chat_id
+        account = find_account_by_chat_id(chat_id)
+    except Exception as _e:
+        log.warning(f"[Profile] cannot load bot_auth: {_e}")
+        account = None
+    if not account:
+        bot.send_message(chat_id, _t(chat_id, "profile_no_web_account"),
+                         reply_markup=_back_keyboard())
+        return
+    _st._user_mode[chat_id] = "profile_change_pw"
+    bot.send_message(chat_id, _t(chat_id, "profile_change_pw_prompt"),
+                     parse_mode="Markdown", reply_markup=_back_keyboard())
+
+
+def _finish_profile_change_pw(chat_id: int, text: str) -> None:
+    """Validate and apply the new password."""
+    _st._user_mode.pop(chat_id, None)
+    pw = text.strip()
+    if len(pw) < 4:
+        bot.send_message(chat_id, _t(chat_id, "profile_change_pw_short"),
+                         reply_markup=_back_keyboard())
+        return
+    try:
+        from bot_auth import find_account_by_chat_id, change_password
+        account = find_account_by_chat_id(chat_id)
+        if not account:
+            bot.send_message(chat_id, _t(chat_id, "profile_no_web_account"),
+                             reply_markup=_back_keyboard())
+            return
+        change_password(account["id"], pw)
+        log.info(f"[Profile] password changed for chat_id={chat_id} account={account.get('username')}")
+    except Exception as _e:
+        log.error(f"[Profile] change_password failed for {chat_id}: {_e}")
+        bot.send_message(chat_id, "❌ Error: could not change password.",
+                         reply_markup=_back_keyboard())
+        return
+    bot.send_message(chat_id, _t(chat_id, "profile_change_pw_ok"),
+                     reply_markup=_back_keyboard())
 
 
 def _handle_web_link(chat_id: int) -> None:
