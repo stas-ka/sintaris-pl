@@ -69,7 +69,8 @@ pip3 install --break-system-packages --quiet \
   google-api-python-client \
   google-auth-httplib2 \
   google-auth-oauthlib \
-  requests
+  requests \
+  sqlite-vec
 
 echo "  Python packages installed."
 

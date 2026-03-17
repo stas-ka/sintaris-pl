@@ -36,6 +36,8 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently
 - **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
 - **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`
+- **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `pico.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends
+- **sqlite-vec vector search** — optional SQLite extension enabling KNN embedding search and local RAG; installed via `pip3 install sqlite-vec`; enabled automatically when present (see `src/setup/install_sqlite_vec.sh`)
 - **Backup & Recovery system** — full SD card image backup + Nextcloud WebDAV upload; fresh-install bootstrap and incremental update scripts
 - Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7)
 
@@ -57,6 +59,7 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 | [backup/device/README.md](backup/device/README.md) | Captured device configuration snapshot + restore instructions |
 | [deploy/packages.txt](deploy/packages.txt) | Project-essential apt packages for fresh install |
 | [deploy/requirements.txt](deploy/requirements.txt) | Python pip package requirements |
+| [src/setup/install_sqlite_vec.sh](src/setup/install_sqlite_vec.sh) | Standalone installer for sqlite-vec vector search extension |
 
 ---
 

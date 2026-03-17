@@ -34,4 +34,5 @@ pgvector
 sentence-transformers  # all-MiniLM-L6-v2 embeddings
 pdfminer.six           # PDF text extraction
 python-docx            # .docx text extraction
+sqlite-vec             # SQLite vector search extension (RAG / KNN embeddings)
 cryptography           # optional dependency for psycopg TLS

@@ -59,6 +59,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Step 1b — Ensure Python packages are up to date (including sqlite-vec)
+# ---------------------------------------------------------------------------
+echo ""
+echo "[1b/4] Installing/upgrading Python packages..."
+pip3 install --break-system-packages --quiet --upgrade sqlite-vec
+echo "  sqlite-vec: $(python3 -c 'import sqlite_vec; print(sqlite_vec.__version__)' 2>/dev/null || echo 'not installed')"
+
+# ---------------------------------------------------------------------------
 # Step 2 — Deploy bot source files
 # ---------------------------------------------------------------------------
 echo ""
