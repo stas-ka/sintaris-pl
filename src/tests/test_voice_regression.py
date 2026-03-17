@@ -1332,6 +1332,134 @@ def t_db_migration_idempotent(**_) -> list[TestResult]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T24 — RAG: LR-products query retrieves relevant chunks + answer quality
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_rag_lr_products(**_) -> list[TestResult]:
+    """T24 — RAG pipeline: FTS5 query for LR products must return chunks that
+    contain key topic keywords (алоэ, Mind Master, витамин, цинк, LR LIFETAKT).
+
+    Two sub-tests are produced:
+      rag_lr_products_fts  — always runs; verifies chunk retrieval keyword coverage
+      rag_lr_products_llm  — only with LLM_JUDGE=1; runs full RAG prompt and uses
+                             LLM-as-judge to confirm the answer covers expected topics.
+
+    SKIP if pico.db or doc_chunks table is absent (document not yet uploaded).
+    """
+    import sqlite3 as _sql
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    db_file = PICOCLAW_DIR / "pico.db"
+    if not db_file.exists():
+        return [TestResult("rag_lr_products_fts", "SKIP", time.time() - t0,
+                           "pico.db not found — RAG database not initialised")]
+
+    # ── Step 1: FTS5 chunk retrieval ─────────────────────────────────────────
+    QUERY       = "какие продукты LR ты можешь мне предложить"
+    FTS_TERMS   = "LR OR алоэ OR Mind OR витамин OR цинк OR LIFETAKT OR Kölner"
+    # Keywords expected somewhere in the combined returned chunks
+    EXPECTED_KW = ["алоэ", "mind master", "витамин", "цинк", "lr lifetakt", "kölner"]
+    MIN_KW_HITS = 2
+
+    try:
+        con = _sql.connect(str(db_file))
+        tables = {r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "doc_chunks" not in tables:
+            con.close()
+            return [TestResult("rag_lr_products_fts", "SKIP", time.time() - t0,
+                               "doc_chunks table not found — upload an LR document first")]
+        rows = con.execute(
+            "SELECT chunk_text FROM doc_chunks"
+            " WHERE doc_chunks MATCH ? ORDER BY rank LIMIT 10",
+            (FTS_TERMS,),
+        ).fetchall()
+        con.close()
+    except Exception as exc:
+        return [TestResult("rag_lr_products_fts", "FAIL", time.time() - t0,
+                           f"DB error: {exc}")]
+
+    dur_fts = time.time() - t0
+
+    if not rows:
+        results.append(TestResult("rag_lr_products_fts", "SKIP", dur_fts,
+                                  "FTS5 returned 0 chunks — LR products document not yet uploaded"))
+    else:
+        combined = "\n".join(r[0] for r in rows).lower()
+        kw_hits = [kw for kw in EXPECTED_KW if kw.lower() in combined]
+        if len(kw_hits) >= MIN_KW_HITS:
+            results.append(TestResult(
+                "rag_lr_products_fts", "PASS", dur_fts,
+                f"{len(rows)} chunk(s) retrieved; "
+                f"{len(kw_hits)}/{len(EXPECTED_KW)} keywords found: {kw_hits}",
+            ))
+        else:
+            results.append(TestResult(
+                "rag_lr_products_fts", "FAIL", dur_fts,
+                f"Only {len(kw_hits)}/{len(EXPECTED_KW)} keywords in chunks "
+                f"(need ≥{MIN_KW_HITS}); found: {kw_hits}; "
+                f"first chunk sample: {rows[0][0][:150] if rows else '—'}",
+            ))
+
+    # ── Step 2: LLM answer quality (only if LLM_JUDGE=1) ────────────────────
+    if os.environ.get("LLM_JUDGE") == "1" and rows:
+        t1 = time.time()
+        try:
+            sys.path.insert(0, str(PICOCLAW_DIR))
+            from core.bot_llm import ask_llm  # type: ignore
+
+            ctx_text = "\n".join(r[0] for r in rows[:3])[:1600]
+            rag_prompt = (
+                "Ответь на вопрос, используя только предоставленный контекст.\n\n"
+                f"Контекст:\n{ctx_text}\n\n"
+                f"Вопрос: {QUERY}"
+            )
+            answer = ask_llm(rag_prompt, timeout=60)
+            answer_lower = answer.lower()
+
+            # Keyword presence check
+            ANSWER_KW  = ["алоэ", "mind master", "витамин", "цинк", "lr"]
+            ANSWER_MIN = 2
+            answer_hits = [kw for kw in ANSWER_KW if kw.lower() in answer_lower]
+
+            # LLM-as-judge: second call to verify thematic correctness
+            judge_prompt = (
+                "Оцени: содержит ли следующий ответ информацию о продуктах LR? "
+                "(алоэ-вера, Mind Master, витамин C, цинк, LR LIFETAKT — "
+                "хотя бы 2 из этих тем достаточно)\n\n"
+                f"Ответ: {answer[:600]}\n\n"
+                "Ответь только YES или NO."
+            )
+            verdict = ask_llm(judge_prompt, timeout=30).strip().upper()
+            judge_ok = verdict.startswith("YES")
+
+            dur_llm = time.time() - t1
+            if judge_ok or len(answer_hits) >= ANSWER_MIN:
+                results.append(TestResult(
+                    "rag_lr_products_llm", "PASS", dur_llm,
+                    f"LLM judge: {verdict}; keywords in answer: {answer_hits}; "
+                    f"answer[:120]: {answer[:120]}",
+                ))
+            else:
+                results.append(TestResult(
+                    "rag_lr_products_llm", "FAIL", dur_llm,
+                    f"LLM judge: {verdict}; "
+                    f"only {len(answer_hits)}/{len(ANSWER_KW)} keywords; "
+                    f"answer[:200]: {answer[:200]}",
+                ))
+        except Exception as exc:
+            results.append(TestResult("rag_lr_products_llm", "FAIL", time.time() - t1,
+                                      f"LLM judge error: {exc}"))
+    else:
+        results.append(TestResult("rag_lr_products_llm", "SKIP", 0.0,
+                                  "Set LLM_JUDGE=1 to enable LLM answer quality check"))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Regression check
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1404,6 +1532,8 @@ TEST_FUNCTIONS = [
     # SQLite integration tests (T22–T23)
     t_db_voice_opts_roundtrip,
     t_db_migration_idempotent,
+    # RAG quality tests (T24)
+    t_rag_lr_products,
 ]
 
 

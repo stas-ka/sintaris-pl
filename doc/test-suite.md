@@ -20,6 +20,8 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | Any audio hardware driver, ALSA, PipeWire | Hardware audio shell tests | Pi direct |
 | Any deployment / infrastructure change | Smoke: service start + journal log check | Pi |
 | Bug fix for known bug 0.1–0.5 | Matching regression test (T17–T21) | Pi |
+| `src/core/store_sqlite.py` / `src/core/bot_db.py` | SQLite integration T22–T23 | Pi |
+| RAG document upload / `bot_web.py` knowledge routes | RAG quality T24 | Pi |
 
 ---
 
@@ -114,6 +116,10 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T19 | `note_edit_append_replace` | Append/Replace functions, callbacks, and i18n keys all present (Bug 0.3) | After implementing note Append/Replace edit flow |
 | T20 | `calendar_tts_call_signature` | `_cal_tts_text(chat_id, ev)` 2-arg signature; `ev_dict` has datetime object (Bug 0.4) | After fixing calendar TTS voice deletion bug |
 | T21 | `calendar_console_classifier` | Console uses JSON intent classifier with `add` default, not general LLM (Bug 0.5) | After fixing calendar console "add" routing |
+| T22 | `db_voice_opts_roundtrip` | SQLite store: write + read voice opts round-trip via `store_sqlite.py` | After changing `store_sqlite.py` or voice opts persistence |
+| T23 | `db_migration_idempotent` | `migrate_to_db.py` run twice on same DB — row count stable, no duplicates | After changing migration script or DB schema |
+| T24 | `rag_lr_products_fts` | FTS5 query for LR product keywords (алоэ, Mind Master, витамин, цинк, LR LIFETAKT) returns ≥2 expected keywords; SKIP if `pico.db`/`doc_chunks` absent | After uploading a knowledge document; after changing FTS5 index or `store_sqlite.search_fts()` |
+| T24 | `rag_lr_products_llm` | Full RAG pipeline: chunks → LLM answer → LLM-as-judge verifies topical similarity (set `LLM_JUDGE=1`); SKIP otherwise | When `LLM_JUDGE=1` is set; after changing RAG prompt logic |
 
 ### 2.6 When specific tests are mandatory
 
@@ -125,6 +131,8 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After adding a new language | T13, T14, matching Txx for new language |
 | After `setup_voice.sh` re-run | T01–T09 minimum |
 | After hardware change (Pi re-image, new Pi unit) | T01–T12 + `--set-baseline` |
+| After changing `store_sqlite.py` or `bot_db.py` | T22, T23 |
+| After uploading new RAG document | T24 (`--test rag_lr`) |
 
 ---
 
@@ -348,6 +356,31 @@ Tests T17–T21 are **fix (bug guard) tests**: each corresponds to a specific kn
 | Bug 0.3 — Note edit loses content | T19 `note_edit_append_replace` | Append/Replace flow implemented |
 | Bug 0.4 — Calendar voice deleted | T20 `calendar_tts_call_signature` | Correct function signature + datetime object |
 | Bug 0.5 — Calendar console ignores add | T21 `calendar_console_classifier` | JSON intent classifier with `add` default |
+
+### SQLite integration tests
+Tests T22–T23 validate the `store_sqlite.py` data layer. Run after any change to the storage adapter or database schema.
+
+| Test | What it validates |
+|---|---|
+| T22 `db_voice_opts_roundtrip` | Write voice opts via adapter, read back, confirm values round-trip correctly |
+| T23 `db_migration_idempotent` | Run `migrate_to_db.py` twice; verify row count is stable (no duplicate rows) |
+
+### RAG quality tests
+Tests T24 validate the RAG pipeline. They gracefully SKIP when no knowledge documents have been uploaded yet.
+
+| Sub-test | Env var | What it validates |
+|---|---|---|
+| `rag_lr_products_fts` | (always) | FTS5 retrieves chunks for LR products query; ≥2 of 6 expected keywords present in combined chunks |
+| `rag_lr_products_llm` | `LLM_JUDGE=1` | Full RAG: FTS5 chunks → LLM answer → second LLM-as-judge call verifies thematic correctness |
+
+**Run command for T24 only:**
+```bat
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test rag_lr"
+```
+**With LLM judge:**
+```bat
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "LLM_JUDGE=1 python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test rag_lr"
+```
 
 ---
 
