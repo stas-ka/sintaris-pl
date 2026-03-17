@@ -648,8 +648,10 @@ def _execute_pending_cmd(chat_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_chat_message(chat_id: int, user_text: str) -> None:
-    """Forward message to picoclaw agent and return response."""
+    """Forward message to LLM with conversation history context."""
     from security.bot_security import _check_injection
+    from core.bot_state import add_to_history, get_history_with_ids
+    from core.bot_llm import ask_llm_with_history
     is_inj, reason = _check_injection(user_text)
     if is_inj:
         bot.send_message(chat_id,
@@ -663,8 +665,40 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
     msg = bot.send_message(chat_id, "⏳ Thinking…")
 
     def _run():
-        response = _ask_picoclaw(_with_lang(chat_id, user_text), timeout=60)
-        reply    = response if response else "❌ No response from picoclaw."
+        import uuid
+        from core.bot_db import db_log_llm_call
+        from core.bot_config import LLM_PROVIDER
+        call_id = str(uuid.uuid4())
+
+        # Get history with DB IDs for call tracking
+        history_entries = get_history_with_ids(chat_id)
+        history_ids = [m["_db_id"] for m in history_entries if m.get("_db_id")]
+        history_msgs = [{"role": m["role"], "content": m["content"]} for m in history_entries]
+
+        # Build message list: past history + current user turn (with lang hint)
+        current_content = _with_lang(chat_id, user_text)
+        messages = history_msgs + [{"role": "user", "content": current_content}]
+
+        # Record the raw user text (without lang prefix) before calling the LLM
+        add_to_history(chat_id, "user", user_text, call_id=call_id)
+
+        response = ask_llm_with_history(messages, timeout=60)
+        reply    = response if response else "❌ No response from LLM."
+
+        # Record assistant turn
+        add_to_history(chat_id, "assistant", reply, call_id=call_id)
+
+        # Log which history messages were included in this LLM call
+        try:
+            db_log_llm_call(
+                call_id, chat_id, LLM_PROVIDER,
+                history_ids,
+                sum(len(m["content"]) for m in messages),
+                bool(response),
+            )
+        except Exception as _e:
+            log.warning(f"[History] LLM call DB logging failed: {_e}")
+
         try:
             bot.edit_message_text(_truncate(reply), chat_id, msg.message_id,
                                   reply_markup=_back_keyboard())

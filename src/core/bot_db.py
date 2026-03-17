@@ -98,10 +98,24 @@ CREATE TABLE IF NOT EXISTS chat_history (
     chat_id    INTEGER,
     role       TEXT    NOT NULL,
     content    TEXT    NOT NULL,
+    call_id    TEXT,
     created_at TEXT    DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_history_chat_time
     ON chat_history(chat_id, created_at);
+
+-- LLM calls tracker — records which history entries were included in each call
+CREATE TABLE IF NOT EXISTS llm_calls (
+    call_id       TEXT    PRIMARY KEY,
+    chat_id       INTEGER NOT NULL,
+    provider      TEXT,
+    history_count INTEGER DEFAULT 0,
+    history_ids   TEXT,
+    prompt_chars  INTEGER DEFAULT 0,
+    response_ok   INTEGER DEFAULT 1,
+    created_at    TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_llm_calls_chat ON llm_calls(chat_id, created_at);
 
 -- TTS orphan cleanup tracker (replaces pending_tts.json)
 CREATE TABLE IF NOT EXISTS tts_pending (
@@ -124,6 +138,20 @@ CREATE TABLE IF NOT EXISTS contacts (
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_chat_name
     ON contacts(chat_id, name COLLATE NOCASE);
+
+-- Documents / Knowledge Base metadata (Phase 2d)
+CREATE TABLE IF NOT EXISTS documents (
+    doc_id      TEXT    PRIMARY KEY,
+    chat_id     INTEGER NOT NULL,
+    title       TEXT    NOT NULL,
+    file_path   TEXT,
+    doc_type    TEXT,
+    is_shared   INTEGER DEFAULT 0,
+    metadata    TEXT,
+    created_at  TEXT    DEFAULT (datetime('now')),
+    updated_at  TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_docs_chat ON documents(chat_id);
 """
 
 
@@ -141,7 +169,16 @@ def get_db() -> sqlite3.Connection:
 def init_db() -> None:
     """Create all tables on startup.  Safe to call every time — idempotent."""
     conn = get_db()
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA_SQL)
+    # Migrations: add columns to existing tables (idempotent — ignore if already present)
+    for _migration in [
+        "ALTER TABLE chat_history ADD COLUMN call_id TEXT",
+    ]:
+        try:
+            conn.execute(_migration)
+        except Exception:
+            pass  # column already exists
     conn.commit()
     log.info(f"[DB] init OK : {DB_PATH}")
 
@@ -181,3 +218,60 @@ def db_get_voice_opts() -> dict:
     for key in _VOICE_OPT_KEYS:
         result.setdefault(key, False)
     return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conversation history helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def db_add_history(chat_id: int, role: str, content: str,
+                   call_id: str | None = None) -> int:
+    """Insert a conversation message into the DB. Returns the row id."""
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO chat_history (chat_id, role, content, call_id) VALUES (?,?,?,?)",
+        (chat_id, role, content, call_id),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def db_get_history(chat_id: int, limit: int = 15) -> list:
+    """Return the last *limit* messages for chat_id, oldest first.
+    Each entry includes '_db_id' for call-tracking purposes."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, role, content FROM chat_history "
+        "WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
+        (chat_id, limit),
+    ).fetchall()
+    return [
+        {"_db_id": r["id"], "role": r["role"], "content": r["content"]}
+        for r in reversed(rows)
+    ]
+
+
+def db_clear_history(chat_id: int) -> None:
+    """Delete all stored conversation history for a user."""
+    conn = get_db()
+    conn.execute("DELETE FROM chat_history WHERE chat_id = ?", (chat_id,))
+    conn.commit()
+
+
+def db_log_llm_call(call_id: str, chat_id: int, provider: str,
+                    history_ids: list, prompt_chars: int,
+                    response_ok: bool) -> None:
+    """Record which history entries were sent to the LLM in this call."""
+    import json as _json
+    conn = get_db()
+    conn.execute(
+        "INSERT OR IGNORE INTO llm_calls "
+        "(call_id, chat_id, provider, history_count, history_ids, prompt_chars, response_ok) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (
+            call_id, chat_id, provider, len(history_ids),
+            _json.dumps(history_ids), prompt_chars,
+            1 if response_ok else 0,
+        ),
+    )
+    conn.commit()

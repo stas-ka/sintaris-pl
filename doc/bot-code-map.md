@@ -35,7 +35,7 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_state.py` | `core/` | ~115 | Mutable runtime dicts, voice_opts/dynamic_users I/O; web link codes |
 | `bot_instance.py` | `core/` | ~12 | `bot = TeleBot(...)` singleton |
 | `bot_db.py` | `core/` | ~60 | SQLite init and connection helper |
-| `bot_llm.py` | `core/` | ~130 | Pluggable LLM backend — `picoclaw_cli` / `openai_direct`; shared by Telegram + Web |
+| `bot_llm.py` | `core/` | ~250 | Pluggable LLM backend — 6 providers via `LLM_PROVIDER`; `ask_llm()` unified entry point; shared by Telegram + Web |
 | `bot_security.py` | `security/` | ~200 | 3-layer prompt injection guard; `SECURITY_PREAMBLE`; `_wrap_user_input()` |
 | `bot_auth.py` | `security/` | ~200 | JWT/bcrypt authentication, `accounts.json` — Web UI only |
 | `bot_access.py` | `telegram/` | ~380 | Access control, i18n, keyboards, text utils, `_ask_picoclaw()` |
@@ -539,13 +539,23 @@ Imports: `bot_config` only.
 
 Imports: `bot_config` only. Shared by Telegram and Web channels.
 
+**Provider selection:** `LLM_PROVIDER` env-var in `bot.env` selects the active provider at startup.
+
 | Function | Purpose |
 |---|---|
 | `get_active_model() -> str` | Read active model name from `active_model.txt` |
 | `set_active_model(name)` | Write model name to `active_model.txt` |
 | `list_models() -> list[dict]` | Read `model_list` from `config.json` |
 | `_clean_output(raw) -> str` | Strip log lines, printf wrappers, ANSI from CLI output |
-| `ask_llm(prompt, timeout=60) -> str` | Call `picoclaw agent -m "..."`, return clean reply |
+| `_http_post_json(url, payload, timeout)` | Shared HTTP helper for REST-based providers (OpenAI, YandexGPT, Gemini, Anthropic, local) |
+| `_ask_picoclaw(prompt, timeout)` | OpenRouter via `picoclaw agent` CLI subprocess (default; `LLM_PROVIDER=picoclaw`) |
+| `_ask_openai(prompt, timeout)` | OpenAI / OpenAI-compatible REST API (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`) |
+| `_ask_yandexgpt(prompt, timeout)` | YandexGPT REST API (`YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI`) |
+| `_ask_gemini(prompt, timeout)` | Google Gemini REST API (`GEMINI_API_KEY`, `GEMINI_MODEL`) |
+| `_ask_anthropic(prompt, timeout)` | Anthropic Claude REST API (`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`) |
+| `_ask_local(prompt, timeout)` | Local llama.cpp HTTP server (`LLAMA_CPP_URL` default `http://127.0.0.1:8081`) |
+| `_DISPATCH` | `dict` mapping `LLM_PROVIDER` values → provider functions |
+| `ask_llm(prompt, timeout=60) -> str` | Public entry point: routes via `_DISPATCH`; if primary fails and `LLM_LOCAL_FALLBACK=true`, retries via `_ask_local()` with `⚠️ [local fallback]` prefix |
 
 ---
 

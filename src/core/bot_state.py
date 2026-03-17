@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Optional
 
 from core.bot_config import (
+    CONVERSATION_HISTORY_FILE,
+    CONVERSATION_HISTORY_MAX,
+    CONVERSATION_PERSIST,
     USERS_FILE,
     _VOICE_OPTS_FILE,
     _VOICE_OPTS_DEFAULTS,
@@ -124,6 +127,14 @@ def _save_voice_opts() -> None:
         )
     except Exception as e:
         log.warning(f"[VoiceOpts] save failed: {e}")
+    try:
+        from core.store import store                          # lazy — avoids circular import
+        from core.store_sqlite import _VOICE_OPT_COLUMNS     # injection-safe whitelist
+        for key, val in _voice_opts.items():
+            if key in _VOICE_OPT_COLUMNS:
+                store.set_voice_opt(None, key, val)
+    except Exception as _e:
+        log.warning(f"[VoiceOpts] store.set_voice_opt failed: {_e}")
 
 
 _voice_opts: dict = _load_voice_opts()
@@ -151,3 +162,78 @@ def _save_dynamic_users() -> None:
 
 
 _dynamic_users: set[int] = _load_dynamic_users()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conversation history  (Feature 2.1 — sliding window, optional persistence)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Per-user history.  Format: [{"role": "user"|"assistant", "content": str}]
+_conversation_history: dict[int, list] = {}
+
+
+def add_to_history(chat_id: int, role: str, content: str,
+                   call_id: str | None = None) -> int:
+    """Append a message to the user's history.
+    Writes to SQLite (primary storage) and the in-memory cache.
+    Returns the DB row id for call-tracking purposes.
+    """
+    from core.bot_db import db_add_history
+    db_id = db_add_history(chat_id, role, content, call_id)
+    hist = _conversation_history.setdefault(chat_id, [])
+    hist.append({"role": role, "content": content, "_db_id": db_id})
+    if len(hist) > CONVERSATION_HISTORY_MAX:
+        _conversation_history[chat_id] = hist[-CONVERSATION_HISTORY_MAX:]
+    return db_id
+
+
+def get_history(chat_id: int) -> list[dict]:
+    """Return conversation history without internal _db_id fields (for LLM calls)."""
+    return [
+        {"role": m["role"], "content": m["content"]}
+        for m in _conversation_history.get(chat_id, [])
+    ]
+
+
+def get_history_with_ids(chat_id: int) -> list[dict]:
+    """Return history entries including _db_id for LLM call tracking."""
+    return list(_conversation_history.get(chat_id, []))
+
+
+def clear_history(chat_id: int) -> None:
+    """Clear the conversation history for a user (in-memory + DB)."""
+    from core.bot_db import db_clear_history
+    _conversation_history.pop(chat_id, None)
+    db_clear_history(chat_id)
+
+
+def load_conversation_history() -> None:
+    """Load recent histories from the DB into the in-memory cache (call once at startup)."""
+    try:
+        from core.bot_db import get_db, db_get_history
+        conn = get_db()
+        chat_ids = [
+            row[0] for row in conn.execute(
+                "SELECT DISTINCT chat_id FROM chat_history"
+            ).fetchall()
+        ]
+        loaded = 0
+        for cid in chat_ids:
+            rows = db_get_history(cid, limit=CONVERSATION_HISTORY_MAX)
+            if rows:
+                _conversation_history[cid] = rows
+                loaded += 1
+        if loaded:
+            log.info(f"[History] Loaded DB histories for {loaded} users")
+    except Exception as exc:
+        log.warning(f"[History] Could not load conversation history from DB: {exc}")
+
+
+def _save_conversation_history() -> None:
+    """Persist conversation histories to disk."""
+    try:
+        path = Path(CONVERSATION_HISTORY_FILE)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {str(k): v for k, v in _conversation_history.items()}
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log.warning(f"[History] Could not save conversation history: {exc}")

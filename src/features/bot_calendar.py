@@ -36,6 +36,7 @@ from telegram.bot_access import (
     _t, _ask_picoclaw, _escape_md, _back_keyboard, _send_menu, _is_allowed,
 )
 from telegram.bot_users import _resolve_storage_id
+from core.store import store
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +75,11 @@ def _cal_save(chat_id: int, events: list) -> None:
     _cal_user_file(chat_id).write_text(
         json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    try:
+        for ev in events:
+            store.save_event(chat_id, ev)
+    except Exception as _e:
+        log.warning("[Cal] store.save_event failed: %s", _e)
 
 
 def _cal_add_event(chat_id: int, title: str, dt: datetime,
@@ -96,6 +102,10 @@ def _cal_delete_event(chat_id: int, ev_id: str) -> bool:
     new_events = [e for e in events if e.get("id") != ev_id]
     if len(new_events) < len(events):
         _cal_save(chat_id, new_events)
+        try:
+            store.delete_event(chat_id, ev_id)
+        except Exception as _e:
+            log.warning("[Cal] store.delete_event failed: %s", _e)
         return True
     return False
 

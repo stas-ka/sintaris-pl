@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.32",
+    "date":    "2026-03-17",
+    "title":   "Multi-LLM Provider Support & Local Fallback",
+    "notes":   "- Feature 3.1: LLM_PROVIDER env-var switch (picoclaw/openai/yandexgpt/gemini/anthropic/local) — set in ~/.picoclaw/bot.env\n- Feature 3.2: Local llama.cpp offline fallback with LLM_LOCAL_FALLBACK=1 and picoclaw-llm.service systemd unit\n- Fallback responses labelled with warning prefix"
+  },
+  {
     "version": "2026.3.31",
     "date":    "2026-03-17",
     "title":   "Bug fixes 0.7 and 0.8",

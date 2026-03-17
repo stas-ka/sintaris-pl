@@ -23,15 +23,14 @@
 
 ## 1. Open Issues &amp; Roadmap
 
-### 1.0 Profile Redesign 🔲
-Profile must be a self-service hub — edit name, email, change password, open mailbox — in both Telegram and Web UI.
-→ [Full spec](doc/todo/1.1-rbac.md)
+### 1.0 Profile Redesign ✅ Implemented (v2026.3.31)
+Profile self-service hub — edit name, change password, open mailbox — in both Telegram and Web UI.
 
-- [ ] Crash guard: `try/except` in `_handle_profile()` around deferred import (Telegram)
-- [ ] Profile inline keyboard: Edit name / Email settings / Change password / Open mailbox
-- [ ] `GET /profile` + `POST /profile/name|email` routes in `bot_web.py`
-- [ ] Add `profile.html` template; link from `base.html` nav sidebar
-- [ ] Playwright test: `GET /profile` returns 200
+- [x] Crash guard: `try/except` in `_handle_profile()` around deferred import (Telegram) (v2026.3.29)
+- [x] Profile inline keyboard: Edit name / Change password / Open mailbox / Web link (v2026.3.29)
+- [x] `GET /profile` + `POST /profile/name` routes in `bot_web.py` (v2026.3.29)
+- [x] `profile.html` template + `base.html` nav sidebar link (v2026.3.29)
+- [x] Playwright test: `GET /profile` returns 200 — `TestProfile` class in `test_ui.py` (v2026.3.31)
 
 ---
 
@@ -58,28 +57,38 @@ Role validation on every command/callback, security event logging, configurable 
 
 ## 2. Conversation & Memory
 
-### 2.1 Conversation Memory System 🔲
+### 2.1 Conversation Memory System ✅ Implemented (v2026.3.33)
 
-- [ ] Store per-user conversation history (sliding window, default 15 messages)
-- [ ] Inject last N messages as context into LLM prompt
-- [ ] Optional: persist across restarts (JSON / SQLite)
+- [x] Store per-user conversation history (sliding window, default 15 messages)
+- [x] Inject last N messages as context into LLM prompt
+- [x] Optional: persist across restarts (JSON / SQLite)
 
 ---
 
 ## 3. LLM Provider Support
 
-### 3.1 Multi-LLM Provider Support 🔄
-OpenRouter ✅ · OpenAI direct ✅ · YandexGPT / Gemini / Anthropic / local llama.cpp 🔲
+### 3.1 Multi-LLM Provider Support ✅ Implemented (v2026.3.32)
+OpenRouter ✅ · OpenAI direct ✅ · YandexGPT ✅ · Gemini ✅ · Anthropic ✅ · local llama.cpp ✅
 
-- [ ] `LLM_PROVIDER` env-var switch in `bot.env`
-- [ ] YandexGPT client with API key from `bot.env`
+- [x] `LLM_PROVIDER` env-var switch in `bot.env` (`picoclaw` | `openai` | `yandexgpt` | `gemini` | `anthropic` | `local`)
+- [x] `_DISPATCH` table + `ask_llm(prompt, timeout)` entry point in `src/core/bot_llm.py`
+- [x] OpenAI direct client `_ask_openai()` — `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`
+- [x] YandexGPT client `_ask_yandexgpt()` — `YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI`
+- [x] Gemini client `_ask_gemini()` — `GEMINI_API_KEY`, `GEMINI_MODEL`
+- [x] Anthropic client `_ask_anthropic()` — `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
+- [x] 14 provider constants added to `src/core/bot_config.py`
+- [x] `picoclaw` (default) provider wraps existing OpenRouter CLI — all existing behaviour unchanged
 
-### 3.2 Local LLM — Offline Fallback 🔲
+### 3.2 Local LLM — Offline Fallback ✅ Implemented (v2026.3.32)
 Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-mini.
 → See: `doc/hardware-performance-analysis.md` §8.9
 
-- [ ] Build `llama.cpp` on Pi; create `picoclaw-llm.service`; `try/except` fallback in `_ask_picoclaw()`
-- [ ] Label fallback responses with `⚠️ [local fallback]`
+- [x] `picoclaw-llm.service` systemd unit — llama-server on port 8081, `qwen2-0.5b-q4.gguf`, 4 threads, ctx 2048
+- [x] `_ask_local()` client — OpenAI-compatible `/v1/chat/completions` against `LLAMA_CPP_URL` (default `http://127.0.0.1:8081`)
+- [x] `LLM_LOCAL_FALLBACK=true` env-var — enables automatic fallback when primary provider fails
+- [x] `ask_llm()` catches all primary errors; retries via `_ask_local()` when fallback enabled
+- [x] Fallback responses prefixed with `⚠️ [local fallback]` label
+- [x] Service staged on Pi2; starts automatically once `llama-server` binary is installed
 
 ---
 
@@ -173,15 +182,37 @@ Replace Jinja2 with NiceGUI for richer interactivity — evaluate RAM footprint 
 
 ---
 
-## 9. SQLite Data Layer 🔲
+## 9. Flexible Storage Architecture 🔲
 
-Migrate from per-user JSON files to `pico.db`. `bot_db.py` created (v2026.3.30); migration pending.
-→ [Full spec, schema & migration plan](doc/todo/9-sqlite-data-layer.md)
+Multi-backend storage with adapter pattern:  
+**PicoClaw / ZeroClaw** → SQLite + `sqlite-vec` (vector search, local RAG) · **OpenClaw** → PostgreSQL + pgvector.  
+Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files always on disk.
 
-- [x] `src/bot_db.py` created + `init_db()` called on startup (v2026.3.30)
-- [ ] Dual-write wrappers (Phase 2): `_upsert_registration`, `_save_voice_opts`, `_cal_save`, mail creds
-- [ ] `src/setup/migrate_to_db.py` script (Phase 3)
-- [ ] Tests T22 `sqlite_schema` + T23 `migration_idempotent`
+→ **[Storage Architecture Proposal](doc/todo/storage-architecture.md)** ← full design, adapter interface, DDL, migration  
+→ [Original SQLite schema & Phase 1 spec](doc/todo/9-sqlite-data-layer.md) (Phase 1 done, superseded for scope by the proposal above)
+
+| Phase | Description | Status |
+|---|---|---|
+| Phase 1 | `bot_db.py` schema + `init_db()` at startup | ✅ Done (v2026.3.30) |
+| Phase 2a | `store_base.py` Protocol + `store.py` factory singleton | ✅ Done (v2026.3.32) |
+| Phase 2b | `store_sqlite.py` full adapter (no vector yet) | ✅ Done (v2026.3.32) |
+| Phase 2c | Dual-write wrappers: existing JSON writers also call adapter | ✅ Done (v2026.3.32) |
+| Phase 2d | `documents` + `vec_embeddings` tables; `upsert_embedding` / `search_similar` | 🔲 |
+| Phase 3 | `migrate_to_db.py` — JSON → adapter (idempotent) | ✅ |
+| Phase 4 | Switch all reads to adapter; remove JSON writes | 🔲 |
+| Phase 5 | `store_postgres.py` PostgreSQL adapter; test on OpenClaw | 🔲 |
+| Phase 6 | RAG (§4.1) via `search_similar()`; conversation memory (§2.1) via `append_history()` | 🔲 |
+
+- [x] `src/core/bot_db.py` schema + `init_db()` on startup — SQLite Phase 1 (v2026.3.30)
+- [x] `src/core/store_base.py` — `DataStore` Protocol definition + `StoreCapabilityError`
+- [x] `src/core/store.py` — `create_store()` factory + module-level `store` singleton
+- [x] `src/core/store_sqlite.py` — full SQLite adapter incl. sqlite-vec optional vector support
+- [ ] `src/core/store_postgres.py` — PostgreSQL + pgvector adapter (OpenClaw)
+- [ ] `src/core/bot_db.py` extended — add `documents` table; vec_embeddings created dynamically
+- [ ] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target
+- [x] `src/setup/migrate_to_db.py` — JSON → adapter migration (Phase 3, idempotent)
+- [ ] `src/setup/migrate_sqlite_to_pg.py` — pico.db → PostgreSQL (Phase 5)
+- [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
 
 ## 10. Upload and using documents as Knowlegdes
 - Function to upload and administration documents (upload, view,  delete , move to directory , set title, set hash/label, share to other users in system)

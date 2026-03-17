@@ -523,6 +523,110 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+## Session 32 — 2026-03-17 (UTC+1)
+
+**Focus:** Feature 3 — Multi-LLM Provider Support (§3.1) & Local LLM Offline Fallback (§3.2)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~10:00 UTC | Feature 3.1: rewrite `bot_llm.py` with 6 provider clients (picoclaw/openai/yandexgpt/gemini/anthropic/local); `LLM_PROVIDER` env-var switch + 14 provider constants in `bot_config.py`; stdlib-only urllib HTTP dispatch; `_DISPATCH` dict + `ask_llm()`; no new pip dependencies (Pi constraint) | 4 | ~6 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py | done |
+| ~10:30 UTC | Feature 3.2: local llama.cpp offline fallback — `LLM_LOCAL_FALLBACK` guard, `⚠️ [local fallback]` prefix on responses; create `picoclaw-llm.service` systemd unit (qwen2-0.5b-q4.gguf, port 8081, 4 threads); bump BOT_VERSION → 2026.3.32; prepend release_notes.json entry; mark TODO.md §3.1 + §3.2 ✅ | 3 | ~4 | claude-sonnet-4.6 | src/services/picoclaw-llm.service, src/release_notes.json, TODO.md | done |
+
+**Session 32 total: 2 items, ~10 requests — Feature 3 complete. 6-provider LLM dispatch + local fallback ✅**
+
+---
+
+## Session 33 — 2026-03-17 (UTC+1)
+
+**Focus:** Documentation update pass for v2026.3.32 — Feature 3.1/3.2 docs
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~11:00 UTC | Update all project docs for Feature 3 (6-provider LLM + local fallback): expand TODO.md §3.1/§3.2 checklists; add LLM provider + offline fallback info to `help_text_admin` in 3 languages (strings.json); rewrite bot_llm.py entry in bot-code-map.md (module table + 13-row function table); create doc/arch/llm-providers.md (sections 19.1–19.7: dispatch diagram, provider table, fallback config, bot.env sample, provider guide); add llm-providers.md row to architecture.md index | 2 | ~5 | claude-sonnet-4.6 | TODO.md, src/strings.json, doc/bot-code-map.md, doc/arch/llm-providers.md, doc/architecture.md | done |
+
+**Session 33 total: 1 item, ~5 requests — docs fully updated for v2026.3.32 ✅**
+
+---
+
+## Session 34 — 2026-03-17 (UTC+1)
+
+**Focus:** Storage adapter layer + migration script — Phase 2 (adapters) + Phase 3 (migration)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~12:00 UTC | Create flexible multi-backend storage adapter layer: `store_base.py` (DataStore Protocol + StoreCapabilityError), `store.py` (factory + singleton), `store_sqlite.py` (full SQLite adapter ~380 lines), extend `bot_db.py` with WAL + documents table + idx_docs_chat | 5 | ~8 | claude-sonnet-4-5 | src/core/store_base.py, src/core/store.py, src/core/store_sqlite.py, src/core/bot_db.py | done |
+| ~13:30 UTC | Answer 4 operational readiness questions; research all JSON source formats (registrations, voice_opts, calendar, notes, mail_creds, pending_tts, accounts); create idempotent migration script `src/setup/migrate_to_db.py` (~315 lines) with 6 migration functions + dry-run mode; verify all 7 bot_config constants | 4 | ~12 | claude-sonnet-4.6 | src/setup/migrate_to_db.py | done |
+
+**Session 34 total: 2 items, ~20 requests — storage adapter layer + migration script complete ✅**
+
+---
+
+## Session 35 — 2026-03-17 (UTC+1)
+
+**Focus:** Topic 9 Phase 2c — Flexible Storage Architecture dual-write wrappers (all feature modules)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~14:00 UTC | Phase 2c dual-write — `bot_calendar.py`: import `store`; extend `_cal_save()` with `store.save_event()` loop + `store.delete_event()` in `_cal_delete_event()`, both wrapped in try/except | 3 | ~5 | claude-sonnet-4-5 | src/features/bot_calendar.py | done |
+| ~14:20 UTC | Phase 2c dual-write — `bot_users.py`: import `store`; extend `_save_note_file()` with `store.save_note()` + re-write plain content after (title prefix conflict); `_delete_note_file()` calls `store.delete_note()`, try/except guards | 3 | ~5 | claude-sonnet-4-5 | src/telegram/bot_users.py | done |
+| ~14:40 UTC | Phase 2c dual-write — `bot_mail_creds.py`: import `store`; extend `_save_creds()` with `store.save_mail_creds()` try/except | 2 | ~3 | claude-sonnet-4-5 | src/features/bot_mail_creds.py | done |
+| ~15:00 UTC | Phase 2c dual-write — `bot_state.py`: lazy imports inside `_save_voice_opts()` to avoid circular import; `_VOICE_OPT_COLUMNS` whitelist check before `store.set_voice_opt(None, key, val)` loop; no module-level store import | 3 | ~6 | claude-sonnet-4-5 | src/core/bot_state.py | done |
+| ~15:30 UTC | Phase 2c dual-write — `bot_web.py`: `_STORE_OK` guard flag (mirrors `_GOOGLE_AUTH_OK` pattern); extend `_cal_save()` with event loop; OAuth2 callback, IMAP settings POST, token refresh — all add `_store.save_mail_creds()`; confirmed `creds` variable name + `uid` scope before editing | 4 | ~8 | claude-sonnet-4-5 | src/bot_web.py | done |
+| ~16:00 UTC | Update TODO.md: Phase 2a/2b/2c table rows → `✅ Done (v2026.3.32)`; store_base.py / store.py / store_sqlite.py checklist items → `[x]` | 1 | ~2 | claude-sonnet-4-5 | TODO.md | done |
+
+**Session 35 total: 6 items, ~29 requests — Topic 9 Phase 2c complete. All 5 feature modules dual-write to SQLite store ✅**
+
+---
+
+## Session 36 — 2026-03-17 (UTC+1)
+
+**Focus:** PI2 safe-update deployment — Phase 2c code + JSON→SQLite migration
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~09:30 UTC | PI2 safe-update: verify + download backup (`picoclaw_backup_OpenClawPI2_v2026.3.32`), stop services | 2 | ~2 | claude-sonnet-4-6 | — | done |
+| ~09:35 UTC | Deploy Phase 2c files to PI2: core (store_base, store, store_sqlite, bot_db, bot_state), features (bot_calendar, bot_mail_creds, bot_users, bot_web), migrate_to_db.py | 2 | ~3 | claude-sonnet-4-6 | — | done |
+| ~09:40 UTC | Fix `migrate_to_db.py` SyntaxError: `global DB_PATH` moved to top of `main()` before argparse block | 2 | ~4 | claude-sonnet-4-6 | src/setup/migrate_to_db.py | done |
+| ~09:45 UTC | Run migration on PI2: 41 rows (users 4, voice_opts 12, calendar_events 19, notes_index 6); start services; verified journal — `Version: 2026.3.32`, `Polling Telegram…` | 2 | ~3 | claude-sonnet-4-6 | — | done |
+
+**Session 36 total: 4 items, ~12 requests — PI2 Phase 2c deployment + JSON→SQLite migration complete ✅**
+
+---
+
+## Session 37 — 2026-03-17 (UTC+1)
+
+**Focus:** Menu navigation benchmark — measure user-perceived latency for all key menu switches across 3 platforms
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~10:00 UTC | Design and create `tools/benchmark_menus.py` — 13 TCs covering menu keyboard builders, notes list, admin panel, calendar menu, contacts (SQLite); temp-dir isolation, env var patching, `bot_db.DB_PATH` monkeypatch, mocked Telegram `send_message` | 4 | ~8 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
+| ~10:15 UTC | Fix `datetime.utcnow()` DeprecationWarning → `datetime.now(timezone.utc)` for Python 3.12+ compatibility | 1 | ~1 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
+| ~10:20 UTC | Fix `sys.path` auto-detection for Pi flat layout (`~/.picoclaw/core/`) vs dev `src/core/` — benchmark fails on PI1 with `ModuleNotFoundError: No module named 'core'` | 2 | ~3 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
+| ~10:30 UTC | Deploy benchmark to PI1 + PI2, run on both, download results (`bench_pi1_tmp.json`, `bench_pi2_tmp.json`), merge into `tools/benchmark_results.json` (now 6 entries: 3 storage_ops + 3 menu_navigation) | 2 | ~5 | claude-sonnet-4-6 | tools/benchmark_results.json | done |
+
+**Key findings:**
+- SQLite contacts list (TC13) on Pi: **566–574 µs** vs JSON notes list 10 files (TC06): **3,030–3,445 µs** → SQLite **5–6× faster** for list/scan operations
+- SQLite contacts menu COUNT (TC11–TC12): **141–157 µs** vs admin menu JSON badge (TC07): **270–320 µs** → SQLite **~2× faster** for single-item reads
+- PI1 (JSON-only) and PI2 (SQLite-enabled) show nearly identical SQLite performance → confirms benefit is backend choice, not hardware difference
+- Dev machine (NVMe) SQLite (14–48 µs) vs Pi (microSD) SQLite (141–574 µs) → ~10× slower on Pi storage
+
+**Session 37 total: 4 items, ~17 requests — Menu navigation benchmark complete on all 3 platforms ✅**
+
+---
+
+## Session 38 — 2026-03-17 (UTC+1)
+
+**Focus:** Feature 2.1 — Conversation Memory System: DB write-through + LLM call tracking
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~12:00 UTC | Check why DB conversation history was unused at runtime (root cause: `chat_history` table existed but `add_to_history()` only wrote to in-memory dict + optional JSON; startup never loaded from DB) | 2 | ~2 | claude-sonnet-4.6 | — | done |
+| ~12:15 UTC | Implement DB write-through: add `call_id TEXT` column + `llm_calls` table to schema; `init_db()` migration; 4 helpers (`db_add_history`, `db_get_history`, `db_clear_history`, `db_log_llm_call`); rewrite `add_to_history/get_history/clear_history/load_conversation_history` for DB-primary storage; add `get_history_with_ids()`; update `_handle_chat_message` with `call_id` tracking + `db_log_llm_call`; add `load_conversation_history()` to startup | 4 | ~9 | claude-sonnet-4.6 | src/core/bot_db.py, src/core/bot_state.py, src/telegram/bot_handlers.py, src/telegram_menu_bot.py | done |
+
+**Session 38 total: 2 items, ~11 requests — Feature 2.1 DB write-through + call tracking fully implemented ✅**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.

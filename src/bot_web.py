@@ -33,6 +33,13 @@ try:
 except ImportError:
     _GOOGLE_AUTH_OK = False
 
+try:
+    from core.store import store as _store
+    _STORE_OK = True
+except Exception:
+    _store = None   # type: ignore[assignment]
+    _STORE_OK = False
+
 # Web UI runs without a Telegram BOT_TOKEN — tell bot_config to skip that check.
 os.environ.setdefault("WEB_ONLY", "1")
 from datetime import datetime, timezone
@@ -54,7 +61,7 @@ from security.bot_auth import (
     COOKIE_NAME, find_account_by_id, update_account, change_password,
     find_account_by_chat_id,
 )
-from core.bot_llm import ask_llm, get_active_model, list_models, set_active_model
+from core.bot_llm import ask_llm, ask_llm_with_history, get_active_model, list_models, set_active_model
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
@@ -618,7 +625,12 @@ async def chat_send(request: Request, message: str = Form(...)):
 
     history.append({"role": "user", "text": message, "time": now_str})
 
-    reply = ask_llm(message, timeout=60)
+    # Build LLM messages list from display history (convert "bot" role to "assistant")
+    llm_messages = [
+        {"role": "user" if e["role"] == "user" else "assistant", "content": e["text"]}
+        for e in history
+    ]
+    reply = ask_llm_with_history(llm_messages, timeout=60)
     if not reply:
         reply = "No response from LLM."
     history.append({"role": "bot", "text": reply, "time": now_str})
@@ -780,6 +792,12 @@ def _cal_save(user_id: str, events: list[dict]) -> None:
     p = Path(_CALENDAR_DIR) / f"{user_id}.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
+    if _STORE_OK:
+        try:
+            for ev in events:
+                _store.save_event(user_id, ev)
+        except Exception as _e:
+            log.warning("[Cal/Web] _store.save_event failed: %s", _e)
 
 
 @app.get("/calendar", response_class=HTMLResponse)
@@ -1117,6 +1135,11 @@ async def google_oauth_callback(request: Request, code: str = "", state: str = "
         os.chmod(creds_file, 0o600)
     except Exception:
         pass
+    if _STORE_OK:
+        try:
+            _store.save_mail_creds(uid, creds_data)
+        except Exception as _e:
+            log.warning("[Mail/Web] _store.save_mail_creds failed: %s", _e)
     log.info(f"[Mail] OAuth2 Gmail connected: {email_addr} for user {uid}")
     return RedirectResponse("/mail", status_code=302)
 
@@ -1416,6 +1439,11 @@ async def mail_settings_save(request: Request):
         os.chmod(creds_file, 0o600)
     except Exception:
         pass
+    if _STORE_OK:
+        try:
+            _store.save_mail_creds(uid, creds_data)
+        except Exception as _e:
+            log.warning("[Mail/Web] _store.save_mail_creds failed: %s", _e)
 
     log.info(f"[Mail] Web user {uid} saved IMAP creds (provider={provider}, email={email_addr})")
     return RedirectResponse("/mail", status_code=302)
@@ -1521,6 +1549,11 @@ def _do_imap_fetch_and_save(uid: str) -> str:
                     creds["token_expiry"] = gc.expiry.isoformat()
                 _mail_creds_path(uid).write_text(
                     json.dumps(creds, ensure_ascii=False, indent=2), encoding="utf-8")
+                if _STORE_OK:
+                    try:
+                        _store.save_mail_creds(uid, creds)
+                    except Exception as _e:
+                        log.warning("[Mail/Web] _store.save_mail_creds (refresh) failed: %s", _e)
             xoauth2 = base64.b64encode(
                 f"user={user_email}\x01auth=Bearer {gc.token}\x01\x01".encode()
             ).decode()

@@ -1,0 +1,95 @@
+[
+  {
+    "label": "menu_navigation \u2014 OpenClawPI2 (2026-03-17)",
+    "timestamp": "2026-03-17T11:42:14.339834+00:00",
+    "benchmark": "menu_navigation",
+    "n_iterations": 200,
+    "platform": {
+      "node": "OpenClawPI2",
+      "system": "Linux",
+      "release": "6.12.47+rpt-rpi-v8",
+      "machine": "aarch64",
+      "python": "3.13.5"
+    },
+    "results": [
+      {
+        "name": "TC01 main_menu_keyboard admin  [no I/O]",
+        "avg_us": 172.1,
+        "min_us": 167.4,
+        "max_us": 208.1
+      },
+      {
+        "name": "TC02 main_menu_keyboard user   [no I/O]",
+        "avg_us": 124.9,
+        "min_us": 119.3,
+        "max_us": 334.1
+      },
+      {
+        "name": "TC03 send_menu admin           [mocked send_message]",
+        "avg_us": 191.6,
+        "min_us": 187.1,
+        "max_us": 220.7
+      },
+      {
+        "name": "TC04 notes_submenu             [no I/O]",
+        "avg_us": 55.6,
+        "min_us": 54.1,
+        "max_us": 73.3
+      },
+      {
+        "name": "TC05 notes_list empty dir      [JSON: scan dir]",
+        "avg_us": 709.8,
+        "min_us": 675.5,
+        "max_us": 888.8
+      },
+      {
+        "name": "TC06 notes_list 10 files       [JSON: scan + stat 10 files]",
+        "avg_us": 3444.9,
+        "min_us": 3341.7,
+        "max_us": 3925.0
+      },
+      {
+        "name": "TC07 admin_menu                [JSON: read registrations badge]",
+        "avg_us": 319.8,
+        "min_us": 306.0,
+        "max_us": 551.6
+      },
+      {
+        "name": "TC08 admin_user_list           [JSON: read all registrations]",
+        "avg_us": 2569.3,
+        "min_us": 2500.2,
+        "max_us": 2954.7
+      },
+      {
+        "name": "TC09 calendar_menu empty       [JSON: missing file \u2192 []]",
+        "avg_us": 704.4,
+        "min_us": 657.8,
+        "max_us": 1041.2
+      },
+      {
+        "name": "TC10 calendar_menu 10 events   [JSON: read+parse 10-event file]",
+        "avg_us": 2240.5,
+        "min_us": 2166.3,
+        "max_us": 2629.5
+      },
+      {
+        "name": "TC11 contacts_menu 0 contacts  [SQLite: COUNT=0]",
+        "avg_us": 141.4,
+        "min_us": 137.0,
+        "max_us": 209.2
+      },
+      {
+        "name": "TC12 contacts_menu 10 contacts [SQLite: COUNT=10]",
+        "avg_us": 146.6,
+        "min_us": 142.6,
+        "max_us": 184.6
+      },
+      {
+        "name": "TC13 contacts_list 10 contacts [SQLite: SELECT+paginate]",
+        "avg_us": 573.6,
+        "min_us": 562.0,
+        "max_us": 679.6
+      }
+    ]
+  }
+]

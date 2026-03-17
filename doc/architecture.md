@@ -1,6 +1,6 @@
 # Picoclaw Bot — Architecture
 
-**Version:** `2026.3.28` · **Last updated:** March 2026
+**Version:** `2026.3.32` · **Last updated:** March 2026
 
 This document is an **index**. All architectural content lives in topic files under `doc/arch/`.
 Do NOT read this file beyond the table below — load only the specific topic file you need.
@@ -17,3 +17,4 @@ Do NOT read this file beyond the table below — load only the specific topic fi
 | Deployment, file layout, config, backup, versioning | [deployment.md](arch/deployment.md) | Deploying or changing config constants |
 | Multilanguage support (ru/de/en), i18n, `_t()` | [multilanguage.md](arch/multilanguage.md) | Adding i18n strings or a new language |
 | Web UI (FastAPI, routes, auth, Screen DSL) | [web-ui.md](arch/web-ui.md) | Modifying `bot_web.py` or templates |
+| LLM provider abstraction, multi-provider dispatch, offline fallback | [llm-providers.md](arch/llm-providers.md) | Modifying `bot_llm.py` or adding LLM providers |

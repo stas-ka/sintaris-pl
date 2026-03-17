@@ -101,6 +101,7 @@ def _is_pending_reg(chat_id: int) -> bool:
 
 import re as _notes_re
 from core.bot_config import NOTES_DIR
+from core.store import store
 
 
 def _resolve_storage_id(chat_id: int) -> str:
@@ -165,6 +166,13 @@ def _save_note_file(chat_id: int, slug: str, content: str) -> None:
     p = _notes_user_dir(chat_id) / f"{slug}.md"
     p.write_text(content, encoding="utf-8")
     log.info(f"[Notes] saved '{slug}' for user {chat_id}")
+    try:
+        _title = (content.splitlines()[0].lstrip("# ").strip()
+                  if content.strip() else slug.replace("_", " "))
+        store.save_note(chat_id, slug, _title, content)
+        p.write_text(content, encoding="utf-8")  # restore: store overwrites with # header
+    except Exception as _e:
+        log.warning("[Notes] store.save_note failed: %s", _e)
 
 
 def _delete_note_file(chat_id: int, slug: str) -> bool:
@@ -173,5 +181,9 @@ def _delete_note_file(chat_id: int, slug: str) -> bool:
     if p.exists():
         p.unlink()
         log.info(f"[Notes] deleted '{slug}' for user {chat_id}")
+        try:
+            store.delete_note(chat_id, slug)
+        except Exception as _e:
+            log.warning("[Notes] store.delete_note failed: %s", _e)
         return True
     return False

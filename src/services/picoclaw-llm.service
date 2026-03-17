@@ -1,0 +1,25 @@
+[Unit]
+Description=Picoclaw Local LLM Server (llama.cpp)
+Documentation=https://github.com/ggerganov/llama.cpp
+After=network.target
+
+[Service]
+Type=simple
+User=stas
+# Model path and port are configurable via EnvironmentFile
+EnvironmentFile=-/home/stas/.picoclaw/bot.env
+ExecStart=/usr/local/bin/llama-server \
+    --model /home/stas/.picoclaw/models/qwen2-0.5b-q4.gguf \
+    --host 127.0.0.1 \
+    --port 8081 \
+    --ctx-size 2048 \
+    --n-predict 512 \
+    --threads 4 \
+    --log-disable
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

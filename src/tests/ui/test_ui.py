@@ -460,3 +460,34 @@ class TestRegistration:
                "exist" in page.inner_text("body").lower(), \
             "Expected error for duplicate username"
         page.context.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. Profile
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestProfile:
+
+    def test_profile_page_loads(self, admin_page, base_url_or_default):
+        """GET /profile returns 200 and shows the profile heading."""
+        admin_page.goto(f"{base_url_or_default}/profile")
+        expect(admin_page.locator("h1")).to_contain_text("Profile")
+
+    def test_profile_has_account_info(self, admin_page, base_url_or_default):
+        """Profile page shows the account info section."""
+        admin_page.goto(f"{base_url_or_default}/profile")
+        body = admin_page.inner_text("body").lower()
+        assert "username" in body or "account" in body, \
+            "Profile page should show account information"
+
+    def test_profile_edit_name_form_present(self, admin_page, base_url_or_default):
+        """Profile page contains the display name edit form."""
+        admin_page.goto(f"{base_url_or_default}/profile")
+        expect(admin_page.locator("input[name='display_name']")).to_be_visible()
+
+    def test_unauthenticated_profile_redirects_to_login(self, browser, base_url_or_default):
+        """GET /profile without auth redirects to /login."""
+        page = fresh_page(browser, base_url_or_default)
+        page.goto(f"{base_url_or_default}/profile")
+        assert "/login" in page.url, "Unauthenticated /profile should redirect to /login"
+        page.context.close()

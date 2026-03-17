@@ -980,6 +980,7 @@ def main() -> None:
         threading.Thread(target=_start_persistent_piper, daemon=True).start()
 
     # ── Startup tasks ─────────────────────────────────────────────────────
+    _st.load_conversation_history()
     _cleanup_orphaned_tts()
     _notify_admins_new_version()
     _cal_reschedule_all()

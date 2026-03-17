@@ -72,6 +72,46 @@ PICOCLAW_CONFIG     = os.environ.get("PICOCLAW_CONFIG",
                           os.path.expanduser("~/.picoclaw/config.json"))
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           os.path.expanduser("~/.picoclaw/active_model.txt"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM provider switching  (Feature 3.1 + 3.2)
+# Set LLM_PROVIDER in ~/.picoclaw/bot.env to switch backends.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Primary provider: picoclaw | openai | yandexgpt | gemini | anthropic | local
+LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "picoclaw")
+
+# Local llama.cpp fallback — enable with LLM_LOCAL_FALLBACK=1 (Feature 3.2)
+LLM_LOCAL_FALLBACK  = os.environ.get("LLM_LOCAL_FALLBACK", "0") == "1"
+LLAMA_CPP_URL       = os.environ.get("LLAMA_CPP_URL",   "http://127.0.0.1:8081")
+LLAMA_CPP_MODEL     = os.environ.get("LLAMA_CPP_MODEL", "")
+
+# YandexGPT (Feature 3.1)
+YANDEXGPT_API_KEY   = os.environ.get("YANDEXGPT_API_KEY",   "")
+YANDEXGPT_FOLDER_ID = os.environ.get("YANDEXGPT_FOLDER_ID", "")
+YANDEXGPT_MODEL_URI = os.environ.get("YANDEXGPT_MODEL_URI", "yandexgpt-lite")
+
+# Gemini (Feature 3.1)
+GEMINI_API_KEY      = os.environ.get("GEMINI_API_KEY",  "")
+GEMINI_MODEL        = os.environ.get("GEMINI_MODEL",    "gemini-1.5-flash")
+
+# Anthropic (Feature 3.1)
+ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL     = os.environ.get("ANTHROPIC_MODEL",   "claude-3-haiku-20240307")
+
+# Direct OpenAI (bypasses picoclaw, uses own key — Feature 3.1)
+OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
+OPENAI_MODEL        = os.environ.get("OPENAI_MODEL",    "gpt-4o-mini")
+OPENAI_BASE_URL     = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+# Conversation memory (Feature 2.1)
+CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"))
+CONVERSATION_PERSIST      = os.environ.get("CONVERSATION_PERSIST", "0") == "1"
+CONVERSATION_HISTORY_FILE = os.environ.get(
+    "CONVERSATION_HISTORY_FILE",
+    os.path.expanduser("~/.picoclaw/conversation_history.json"),
+)
+
 DIGEST_SCRIPT       = os.environ.get("DIGEST_SCRIPT",
                           os.path.expanduser("~/.picoclaw/gmail_digest.py"))
 LAST_DIGEST_FILE    = os.environ.get("LAST_DIGEST_FILE",
@@ -89,7 +129,7 @@ ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.31"
+BOT_VERSION        = "2026.3.32"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

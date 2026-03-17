@@ -1,52 +1,444 @@
-{
-  "timestamp": "2026-03-15T10:15:12.715607",
-  "n_iterations": 500,
-  "platform": {
-    "os": "nt",
-    "cpu_count": 16
+[
+  {
+    "label": "Windows dev machine (2026-03-15)",
+    "timestamp": "2026-03-15T10:15:12.715607",
+    "n_iterations": 500,
+    "platform": {
+      "os": "nt",
+      "cpu_count": 16
+    },
+    "results": [
+      {
+        "name": "registrations upsert",
+        "file_us": 2548.93,
+        "db_us": 3.81,
+        "ratio": 0.001,
+        "faster": "db"
+      },
+      {
+        "name": "registration lookup",
+        "file_us": 728.61,
+        "db_us": 5.38,
+        "ratio": 0.007,
+        "faster": "db"
+      },
+      {
+        "name": "calendar batch save+load",
+        "file_us": 596.52,
+        "db_us": 104.9,
+        "ratio": 0.176,
+        "faster": "db"
+      },
+      {
+        "name": "voice opts roundtrip",
+        "file_us": 520.94,
+        "db_us": 41.0,
+        "ratio": 0.079,
+        "faster": "db"
+      },
+      {
+        "name": "guest users set",
+        "file_us": 542.62,
+        "db_us": 57.43,
+        "ratio": 0.106,
+        "faster": "db"
+      },
+      {
+        "name": "notes upsert+load",
+        "file_us": 635.18,
+        "db_us": 44.61,
+        "ratio": 0.07,
+        "faster": "db"
+      }
+    ]
   },
-  "results": [
-    {
-      "name": "registrations upsert",
-      "file_us": 2548.93,
-      "db_us": 3.81,
-      "ratio": 0.001,
-      "faster": "db"
+  {
+    "label": "PI1 OpenClawPI \u00e2\u20ac\u201d JSON-only production code (2026-03-17)",
+    "timestamp": "2026-03-17T11:45:51.032275",
+    "n_iterations": 300,
+    "platform": {
+      "os": "posix",
+      "cpu_count": 4,
+      "device": "Raspberry Pi",
+      "hostname": "OpenClawPI"
     },
-    {
-      "name": "registration lookup",
-      "file_us": 728.61,
-      "db_us": 5.38,
-      "ratio": 0.007,
-      "faster": "db"
+    "results": [
+      {
+        "name": "registrations upsert",
+        "file_us": 9539.78,
+        "db_us": 35.29,
+        "ratio": 0.004,
+        "faster": "db"
+      },
+      {
+        "name": "registration lookup",
+        "file_us": 3676.82,
+        "db_us": 46.89,
+        "ratio": 0.013,
+        "faster": "db"
+      },
+      {
+        "name": "calendar batch save+load",
+        "file_us": 891.84,
+        "db_us": 402.97,
+        "ratio": 0.452,
+        "faster": "db"
+      },
+      {
+        "name": "voice opts roundtrip",
+        "file_us": 366.13,
+        "db_us": 188.42,
+        "ratio": 0.515,
+        "faster": "db"
+      },
+      {
+        "name": "guest users set",
+        "file_us": 434.13,
+        "db_us": 388.46,
+        "ratio": 0.895,
+        "faster": "db"
+      },
+      {
+        "name": "notes upsert+load",
+        "file_us": 225.34,
+        "db_us": 162.62,
+        "ratio": 0.722,
+        "faster": "db"
+      }
+    ]
+  },
+  {
+    "label": "PI2 OpenClawPI2 \u00e2\u20ac\u201d dual-write + SQLite migrated (2026-03-17)",
+    "timestamp": "2026-03-17T11:46:06.692750",
+    "n_iterations": 300,
+    "platform": {
+      "os": "posix",
+      "cpu_count": 4,
+      "device": "Raspberry Pi",
+      "hostname": "OpenClawPI2"
     },
-    {
-      "name": "calendar batch save+load",
-      "file_us": 596.52,
-      "db_us": 104.9,
-      "ratio": 0.176,
-      "faster": "db"
+    "results": [
+      {
+        "name": "registrations upsert",
+        "file_us": 10756.68,
+        "db_us": 47.98,
+        "ratio": 0.004,
+        "faster": "db"
+      },
+      {
+        "name": "registration lookup",
+        "file_us": 4179.82,
+        "db_us": 54.16,
+        "ratio": 0.013,
+        "faster": "db"
+      },
+      {
+        "name": "calendar batch save+load",
+        "file_us": 892.72,
+        "db_us": 467.15,
+        "ratio": 0.523,
+        "faster": "db"
+      },
+      {
+        "name": "voice opts roundtrip",
+        "file_us": 416.54,
+        "db_us": 221.42,
+        "ratio": 0.532,
+        "faster": "db"
+      },
+      {
+        "name": "guest users set",
+        "file_us": 494.76,
+        "db_us": 446.26,
+        "ratio": 0.902,
+        "faster": "db"
+      },
+      {
+        "name": "notes upsert+load",
+        "file_us": 259.25,
+        "db_us": 191.34,
+        "ratio": 0.738,
+        "faster": "db"
+      }
+    ]
+  },
+  {
+    "label": "menu_navigation \u2014 SU-HPPP (2026-03-17)",
+    "timestamp": "2026-03-17T11:38:40.385934",
+    "benchmark": "menu_navigation",
+    "n_iterations": 200,
+    "platform": {
+      "node": "SU-HPPP",
+      "system": "Windows",
+      "release": "11",
+      "machine": "AMD64",
+      "python": "3.12.9"
     },
-    {
-      "name": "voice opts roundtrip",
-      "file_us": 520.94,
-      "db_us": 41.0,
-      "ratio": 0.079,
-      "faster": "db"
+    "results": [
+      {
+        "name": "TC01 main_menu_keyboard admin  [no I/O]",
+        "avg_us": 14.2,
+        "min_us": 12.9,
+        "max_us": 55.4
+      },
+      {
+        "name": "TC02 main_menu_keyboard user   [no I/O]",
+        "avg_us": 11.2,
+        "min_us": 8.8,
+        "max_us": 39.0
+      },
+      {
+        "name": "TC03 send_menu admin           [mocked send_message]",
+        "avg_us": 18.8,
+        "min_us": 13.6,
+        "max_us": 103.3
+      },
+      {
+        "name": "TC04 notes_submenu             [no I/O]",
+        "avg_us": 5.1,
+        "min_us": 4.9,
+        "max_us": 5.9
+      },
+      {
+        "name": "TC05 notes_list empty dir      [JSON: scan dir]",
+        "avg_us": 508.2,
+        "min_us": 453.4,
+        "max_us": 897.1
+      },
+      {
+        "name": "TC06 notes_list 10 files       [JSON: scan + stat 10 files]",
+        "avg_us": 3251.5,
+        "min_us": 2865.2,
+        "max_us": 4644.1
+      },
+      {
+        "name": "TC07 admin_menu                [JSON: read registrations badge]",
+        "avg_us": 196.9,
+        "min_us": 175.7,
+        "max_us": 458.7
+      },
+      {
+        "name": "TC08 admin_user_list           [JSON: read all registrations]",
+        "avg_us": 2029.7,
+        "min_us": 1700.5,
+        "max_us": 3301.5
+      },
+      {
+        "name": "TC09 calendar_menu empty       [JSON: missing file \u2192 []]",
+        "avg_us": 451.9,
+        "min_us": 378.7,
+        "max_us": 1073.4
+      },
+      {
+        "name": "TC10 calendar_menu 10 events   [JSON: read+parse 10-event file]",
+        "avg_us": 738.3,
+        "min_us": 642.7,
+        "max_us": 1288.4
+      },
+      {
+        "name": "TC11 contacts_menu 0 contacts  [SQLite: COUNT=0]",
+        "avg_us": 13.6,
+        "min_us": 11.0,
+        "max_us": 44.0
+      },
+      {
+        "name": "TC12 contacts_menu 10 contacts [SQLite: COUNT=10]",
+        "avg_us": 14.2,
+        "min_us": 11.2,
+        "max_us": 51.3
+      },
+      {
+        "name": "TC13 contacts_list 10 contacts [SQLite: SELECT+paginate]",
+        "avg_us": 47.5,
+        "min_us": 40.3,
+        "max_us": 153.4
+      }
+    ]
+  },
+  {
+    "label": "menu_navigation \u2014 OpenClawPI (2026-03-17)",
+    "timestamp": "2026-03-17T11:42:00.483483+00:00",
+    "benchmark": "menu_navigation",
+    "n_iterations": 200,
+    "platform": {
+      "node": "OpenClawPI",
+      "system": "Linux",
+      "release": "6.12.62+rpt-rpi-v8",
+      "machine": "aarch64",
+      "python": "3.13.5"
     },
-    {
-      "name": "guest users set",
-      "file_us": 542.62,
-      "db_us": 57.43,
-      "ratio": 0.106,
-      "faster": "db"
+    "results": [
+      {
+        "name": "TC01 main_menu_keyboard admin  [no I/O]",
+        "avg_us": 146.7,
+        "min_us": 143.2,
+        "max_us": 187.7
+      },
+      {
+        "name": "TC02 main_menu_keyboard user   [no I/O]",
+        "avg_us": 103.6,
+        "min_us": 101.5,
+        "max_us": 125.9
+      },
+      {
+        "name": "TC03 send_menu admin           [mocked send_message]",
+        "avg_us": 179.7,
+        "min_us": 159.7,
+        "max_us": 2024.5
+      },
+      {
+        "name": "TC04 notes_submenu             [no I/O]",
+        "avg_us": 51.1,
+        "min_us": 46.5,
+        "max_us": 360.1
+      },
+      {
+        "name": "TC05 notes_list empty dir      [JSON: scan dir]",
+        "avg_us": 651.1,
+        "min_us": 600.9,
+        "max_us": 1124.5
+      },
+      {
+        "name": "TC06 notes_list 10 files       [JSON: scan + stat 10 files]",
+        "avg_us": 3030.1,
+        "min_us": 2926.3,
+        "max_us": 3627.1
+      },
+      {
+        "name": "TC07 admin_menu                [JSON: read registrations badge]",
+        "avg_us": 269.7,
+        "min_us": 258.6,
+        "max_us": 340.2
+      },
+      {
+        "name": "TC08 admin_user_list           [JSON: read all registrations]",
+        "avg_us": 2200.2,
+        "min_us": 2134.5,
+        "max_us": 2892.0
+      },
+      {
+        "name": "TC09 calendar_menu empty       [JSON: missing file \u2192 []]",
+        "avg_us": 620.9,
+        "min_us": 582.2,
+        "max_us": 937.2
+      },
+      {
+        "name": "TC10 calendar_menu 10 events   [JSON: read+parse 10-event file]",
+        "avg_us": 1967.7,
+        "min_us": 1894.3,
+        "max_us": 2425.2
+      },
+      {
+        "name": "TC11 contacts_menu 0 contacts  [SQLite: COUNT=0]",
+        "avg_us": 148.7,
+        "min_us": 142.4,
+        "max_us": 315.6
+      },
+      {
+        "name": "TC12 contacts_menu 10 contacts [SQLite: COUNT=10]",
+        "avg_us": 157.0,
+        "min_us": 148.1,
+        "max_us": 340.3
+      },
+      {
+        "name": "TC13 contacts_list 10 contacts [SQLite: SELECT+paginate]",
+        "avg_us": 566.0,
+        "min_us": 542.3,
+        "max_us": 969.2
+      }
+    ]
+  },
+  {
+    "label": "menu_navigation \u2014 OpenClawPI2 (2026-03-17)",
+    "timestamp": "2026-03-17T11:42:14.339834+00:00",
+    "benchmark": "menu_navigation",
+    "n_iterations": 200,
+    "platform": {
+      "node": "OpenClawPI2",
+      "system": "Linux",
+      "release": "6.12.47+rpt-rpi-v8",
+      "machine": "aarch64",
+      "python": "3.13.5"
     },
-    {
-      "name": "notes upsert+load",
-      "file_us": 635.18,
-      "db_us": 44.61,
-      "ratio": 0.07,
-      "faster": "db"
-    }
-  ]
-}
+    "results": [
+      {
+        "name": "TC01 main_menu_keyboard admin  [no I/O]",
+        "avg_us": 172.1,
+        "min_us": 167.4,
+        "max_us": 208.1
+      },
+      {
+        "name": "TC02 main_menu_keyboard user   [no I/O]",
+        "avg_us": 124.9,
+        "min_us": 119.3,
+        "max_us": 334.1
+      },
+      {
+        "name": "TC03 send_menu admin           [mocked send_message]",
+        "avg_us": 191.6,
+        "min_us": 187.1,
+        "max_us": 220.7
+      },
+      {
+        "name": "TC04 notes_submenu             [no I/O]",
+        "avg_us": 55.6,
+        "min_us": 54.1,
+        "max_us": 73.3
+      },
+      {
+        "name": "TC05 notes_list empty dir      [JSON: scan dir]",
+        "avg_us": 709.8,
+        "min_us": 675.5,
+        "max_us": 888.8
+      },
+      {
+        "name": "TC06 notes_list 10 files       [JSON: scan + stat 10 files]",
+        "avg_us": 3444.9,
+        "min_us": 3341.7,
+        "max_us": 3925.0
+      },
+      {
+        "name": "TC07 admin_menu                [JSON: read registrations badge]",
+        "avg_us": 319.8,
+        "min_us": 306.0,
+        "max_us": 551.6
+      },
+      {
+        "name": "TC08 admin_user_list           [JSON: read all registrations]",
+        "avg_us": 2569.3,
+        "min_us": 2500.2,
+        "max_us": 2954.7
+      },
+      {
+        "name": "TC09 calendar_menu empty       [JSON: missing file \u2192 []]",
+        "avg_us": 704.4,
+        "min_us": 657.8,
+        "max_us": 1041.2
+      },
+      {
+        "name": "TC10 calendar_menu 10 events   [JSON: read+parse 10-event file]",
+        "avg_us": 2240.5,
+        "min_us": 2166.3,
+        "max_us": 2629.5
+      },
+      {
+        "name": "TC11 contacts_menu 0 contacts  [SQLite: COUNT=0]",
+        "avg_us": 141.4,
+        "min_us": 137.0,
+        "max_us": 209.2
+      },
+      {
+        "name": "TC12 contacts_menu 10 contacts [SQLite: COUNT=10]",
+        "avg_us": 146.6,
+        "min_us": 142.6,
+        "max_us": 184.6
+      },
+      {
+        "name": "TC13 contacts_list 10 contacts [SQLite: SELECT+paginate]",
+        "avg_us": 573.6,
+        "min_us": 562.0,
+        "max_us": 679.6
+      }
+    ]
+  }
+]

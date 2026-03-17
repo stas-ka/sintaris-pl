@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-03-17T11:45:51.032275",
+  "n_iterations": 300,
+  "platform": {
+    "os": "posix",
+    "cpu_count": 4
+  },
+  "results": [
+    {
+      "name": "registrations upsert",
+      "file_us": 9539.78,
+      "db_us": 35.29,
+      "ratio": 0.004,
+      "faster": "db"
+    },
+    {
+      "name": "registration lookup",
+      "file_us": 3676.82,
+      "db_us": 46.89,
+      "ratio": 0.013,
+      "faster": "db"
+    },
+    {
+      "name": "calendar batch save+load",
+      "file_us": 891.84,
+      "db_us": 402.97,
+      "ratio": 0.452,
+      "faster": "db"
+    },
+    {
+      "name": "voice opts roundtrip",
+      "file_us": 366.13,
+      "db_us": 188.42,
+      "ratio": 0.515,
+      "faster": "db"
+    },
+    {
+      "name": "guest users set",
+      "file_us": 434.13,
+      "db_us": 388.46,
+      "ratio": 0.895,
+      "faster": "db"
+    },
+    {
+      "name": "notes upsert+load",
+      "file_us": 225.34,
+      "db_us": 162.62,
+      "ratio": 0.722,
+      "faster": "db"
+    }
+  ]
+}

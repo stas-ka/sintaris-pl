@@ -35,6 +35,7 @@ from typing import Optional
 
 import core.bot_state as _st
 from core.bot_config import MAIL_CREDS_DIR, log
+from core.store import store
 from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _escape_md, _truncate, _back_keyboard, _send_menu, _ask_picoclaw,
@@ -155,6 +156,10 @@ def _save_creds(chat_id: int, data: dict) -> None:
         os.chmod(f, stat.S_IRUSR | stat.S_IWUSR)   # chmod 600 — owner only
     except Exception:
         pass                                         # non-fatal, best-effort
+    try:
+        store.save_mail_creds(chat_id, data)
+    except Exception as _e:
+        log.warning("[Mail] store.save_mail_creds failed: %s", _e)
 
 
 def _delete_creds(chat_id: int) -> None:
