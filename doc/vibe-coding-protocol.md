@@ -639,6 +639,19 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+## Session 40 — 2026-03-17 (UTC+1)
+
+**Focus:** FTS5 RAG feature — document knowledge base with full-text search + T24 regression test
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| — | FTS5 RAG feature: `store_sqlite.py` (doc_chunks FTS5 table, `search_fts()` OR semantics, `chunk_document()`); `bot_web.py` (/knowledge routes: upload/delete/list, PDF/text extraction); `bot_llm.py` (`rag_answer()` context injection); fix Cyrillic OR queries on PI2; deploy to PI1+PI2; verify search working with LR Health products document | 5 | ~20 | claude-sonnet-4.5 | src/core/store_sqlite.py, src/bot_web.py, src/core/bot_llm.py | done |
+| — | T24 `t_rag_lr_products`: FTS5 chunk coverage test (≥2/6 keywords → PASS; 0 chunks → SKIP; no db → SKIP) + optional LLM-as-judge sub-test (set `LLM_JUDGE=1`); update `doc/test-suite.md` (quick-ref table, test table T24, mandatory table, Section 8 sub-tests); deploy+verify: PI1 SKIP (no doc), PI2 PASS (10 chunks, 5/6 keywords); commit `dec99b9` | 4 | ~15 | claude-sonnet-4.5 | src/tests/test_voice_regression.py, doc/test-suite.md | done |
+
+**Session 40 total: 2 items, ~35 requests — FTS5 RAG + T24 test complete. PI1 SKIP ✅ PI2 PASS 5/6 keywords ✅ commit dec99b9**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.
