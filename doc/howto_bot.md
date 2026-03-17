@@ -50,16 +50,16 @@ Ask about the state of the Raspberry Pi in plain language. The bot translates yo
 
 ---
 
-### 🎤 Voice Session
-Send a voice note directly to the bot — it transcribes your speech offline (Vosk), sends the text to the AI, and replies with both text and an audio response (Piper TTS).
+### 🎤 Voice
+Voice messages work in **all bot modes** — no separate Voice Session button is needed.
 
-**How to record:**
-1. Tap **🎤 Voice Session** in the menu.
+**How to send a voice message:**
+1. Open the bot in any mode (💬 **Chat**, 📝 **Notes**, 🗓 **Calendar**, etc.)
 2. In the Telegram input bar, hold the **🎤 microphone** button to record.
 3. Release to send the voice message.
-4. The bot replies with text and a voice note.
+4. The bot transcribes your speech offline (Vosk), sends the text to the AI, and replies with both text and a Piper TTS voice note.
 
-> 🗣️ The voice model is Russian (`ru_RU-irina-medium`). Speak in Russian for best recognition.
+> 🗣️ The STT model is selected automatically based on your Telegram language: Russian (`vosk-model-small-ru`) or German (`vosk-model-small-de`). For all other languages the Russian model is used.
 
 ---
 
@@ -71,7 +71,18 @@ View your account details and link your Telegram account to the web interface.
 - Tap **🔗 Link to Web** to generate a 6-character one-time code (valid 15 minutes). Use it on the Web UI `/register` page to link your accounts.
 
 ---
+### 📒 Contacts
+Save and manage personal contacts accessible from both Telegram and the Web UI.
 
+- **Add Contact** — enter name, phone number, email, and optional notes.
+- **View** — browse your full contact list; tap a contact to see details.
+- **Edit** — update any field of a saved contact.
+- **Delete** — remove a contact after confirmation.
+- **Search** — find contacts by name, phone number, or email address.
+
+Contacts are also accessible from the **Web Interface** at `/contacts`.
+
+---
 ### �🔐 Admin Panel
 Full system management. Visible only to **Admin** users.
 
@@ -82,10 +93,13 @@ Full system management. Visible only to **Admin** users.
 - **➖ Remove User** — revoke access by Telegram chat ID.
 
 #### AI / LLM
-- **🤖 Switch LLM** — Change the active language model:
-  - OpenRouter (default) — 100+ models via free API
-  - OpenAI ChatGPT — gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview
-  - YandexGPT *(planned)*
+- **🤖 Switch LLM** — Change the active language model. Set `LLM_PROVIDER` in `bot.env`:
+  - **picoclaw** (default) — OpenRouter via `picoclaw agent`; access to 100+ models
+  - **openai** — direct ChatGPT API; models: gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview
+  - **yandexgpt** — Yandex Cloud LLM API (`YANDEXGPT_API_KEY`)
+  - **gemini** — Google Gemini API (`GEMINI_API_KEY`)
+  - **anthropic** — Anthropic Claude API (`ANTHROPIC_API_KEY`)
+  - **local** — fully offline llama.cpp inference via `picoclaw-llm.service`; set `LLM_LOCAL_FALLBACK=true` for auto-fallback
 - OpenAI API key is entered once and stored persistently.
 
 #### Voice Pipeline
@@ -138,7 +152,8 @@ The Pico assistant is also accessible from any browser — no Telegram required.
 | 💬 Chat | Free-text conversation with the AI |
 | 📝 Notes | Create, edit, view, delete Markdown notes |
 | 🗓 Calendar | View events, add events via natural language |
-| 📧 Mail | View last mail digest, trigger refresh |
+| � Contacts | View, add, edit, and delete contacts; search by name, phone, or email |
+| �📧 Mail | View last mail digest, trigger refresh |
 | 🎤 Voice | Record audio in browser → STT → LLM → TTS playback |
 | ⚙️ Settings | Change language (Russian / English / German), change password |
 | 🔐 Admin | (Admin role only) manage users, switch LLM, toggle voice opts |
@@ -221,8 +236,8 @@ Voice recognition and speech synthesis run **fully offline** on the Pi — no cl
 
 | Component | Details |
 |-----------|---------|
-| STT | Vosk `vosk-model-small-ru` (48 MB, Russian only) |
-| TTS | Piper `ru_RU-irina-medium` (66 MB, female voice) |
+| STT | Vosk `vosk-model-small-ru` (48 MB, Russian) + `vosk-model-small-de` (48 MB, German) |
+| TTS | Piper `ru_RU-irina-medium` (66 MB, Russian) + `de_DE-thorsten-medium.onnx` (65 MB, German) |
 | Audio HAT | Joy-IT RB-TalkingPI (for standalone voice assistant) |
 
 ---

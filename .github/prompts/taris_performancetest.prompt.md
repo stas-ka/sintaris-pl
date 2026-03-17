@@ -1,9 +1,9 @@
 ---
 mode: agent
-description: Run Picoclaw performance benchmarks (storage ops, menu navigation) locally and/or on Pi targets, merge results, and print a cross-platform comparison.
+description: Run taris performance benchmarks (storage ops, menu navigation) locally and/or on Pi targets, merge results, and print a cross-platform comparison.
 ---
 
-# Claw Performance Test
+# Taris Performance Test
 
 Invoke this skill when the user says:
 - "benchmark", "run benchmarks", "run perf tests"

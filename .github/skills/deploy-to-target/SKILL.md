@@ -1,5 +1,5 @@
 ---
-name: claw-deploy-to-target
+name: taris-deploy-to-target
 description: 'Deploy picoclaw bot to Raspberry Pi targets (OpenClawPI2 / OpenClawPI). Use when: deploying bot updates, pushing new features, deploying service files, restarting services, verifying deployment, running post-deploy tests, safe update with backup, incremental file deploy, full module deploy, release version bump, checking journal logs after restart.'
 argument-hint: 'Which files changed? (e.g. all, bot_admin.py, strings.json) and target (pi2/pi1/both)'
 ---

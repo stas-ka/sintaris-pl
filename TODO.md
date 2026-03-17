@@ -17,8 +17,7 @@
 | 0.5 Calendar console ignores add | Intent classifier calls `_finish_cal_add()` directly | v2026.3.29 |
 | 0.6 System Chat no role guards | `ADMIN_ALLOWED_CMDS` / `DEVELOPER_ALLOWED_CMDS` + `_classify_cmd_class()` | v2026.3.30 |
 | 0.7 Add new Contact cancel shows "btn_cancel" | Added missing `btn_cancel` i18n key to ru/en/de in `strings.json` | v2026.3.31 |
-| 0.8 Profile change password error | Fixed `account["id"]` → `account["user_id"]` key in `_finish_profile_change_pw()` | v2026.3.31 |
-
+| 0.8 Profile change password error | Fixed `account["id"]` → `account["user_id"]` key in `_finish_profile_change_pw()` | v2026.3.31 || 0.9 | Telegram-Web link code HTTP 500 on `/register` | Codes persisted to `~/.picoclaw/web_link_codes.json`; shared between Telegram and Web services | v2026.3.33 |
 ---
 
 ## 1. Open Issues &amp; Roadmap
@@ -31,6 +30,8 @@ Profile self-service hub — edit name, change password, open mailbox — in bot
 - [x] `GET /profile` + `POST /profile/name` routes in `bot_web.py` (v2026.3.29)
 - [x] `profile.html` template + `base.html` nav sidebar link (v2026.3.29)
 - [x] Playwright test: `GET /profile` returns 200 — `TestProfile` class in `test_ui.py` (v2026.3.31)
+- [] setting language per default for user
+- [] view saved information context included about user in the app
 
 ---
 
@@ -104,7 +105,20 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 - [ ] Vector similarity search → inject top-k context into LLM prompt
 - [ ] Commands: `/rag_on`, `/rag_off`
 - [ ] Storage: `~/.picoclaw/knowledge_base/` (documents + `embeddings.db`)
+- [ ] configuration to use local knowledges or remote RAG knowledge  service.
+- [ ] Using local knowledges is possible to use remote RAG servceis
+- [ ] Connect , using to remote service via MCP server connection as tool
+- [ ] Timeout monitoring by using RAG services or by waiting for answer from LLM
+- [ ] settings for using LLM+RAG configurable (temperature, sead, system prompt, role, chunk counts) via Admin panel
+- [ ] settings incl. credentials to connect to remote RAG MCP service via Admin panel
+- [ ] settings for configuration of local RAG service via Admin panel
+- [ ] information for the user about restrictions for uploadable documents and size of database over telegram and web ui
+- [ ] logging in DB information about  founded chunks and prompt by requests to llm (input) and results from llm inclusive returned system information
+- [ ] after uploading document shall be saved statistic about source document parsing, chuncking, mebedding as protocol in the database
 
+### 4.2 [ ] optimize local RAG
+
+### 4.2 [ ] Implement remote  RAG service as MCP service
 ---
 
 ## 5. Voice Pipeline
@@ -129,15 +143,18 @@ Baseline: Pi 3 B+ ~115 s total; target <25 s with all opts ON.
 ## 6. Infrastructure & Operations
 
 ### 6.1 Logging & Monitoring 🔲
-
+- [ ] create and describe logging and monitoring concept
 - [ ] Structured log categories: `assistant.log`, `security.log`, `voice.log`, `datastore.log`
 - [ ] Admin Telegram UI: view last N log lines per category
 - [ ] Log rotation (`logrotate` config)
+- [ ] notification Administrator about critical , fatal error via telegrma and storing protocols on target
+- [ ] create skill to download logs 
 
 ### 6.2 Host–Project Synchronization 🔲
 
 - [ ] rsync-based sync script `src/` → Pi
 - [ ] Git-based deployment hook
+- [ ] creaet tools and skill to backup data from target to lcoal host and upload to cloud.dev2null.de
 
 ### 6.3 Deployment Workflow Enhancements 🔲
 
@@ -215,16 +232,29 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 - [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
 
 ## 10. Upload and using documents as Knowlegdes
-- Function to upload and administration documents (upload, view,  delete , move to directory , set title, set hash/label, share to other users in system)
+- Function to upload and administration documents (upload, view,  delete , share to all , set title, set hash/label, share to other users in system)
 - Using documents as knowledgebase in chat in multimodal RAG way
 - documents can be contain text, images, tables
+- documents used as knowledegs shall assigned to user or can be shared to use from all users as knowledges
+- documents can be replaced through other document if documents are identical by hash, name, size parameters and after confirmation from user to replace already stored document with new. User shall see name and descrition already existed document
+- criteria of compAring of documnts shall be configurable in Admin panel
+- quality consistency check created chunks after uploading of document
+
+### 10.1 Short-, middle and Long-term memories 
+Before implementaion of memories shall be analyse how can be implemented . here is first draft, proposal for implelemnation:
+- implement short-term, middle-term, long-term memories 
+- conversations after reaching maximal short memory size of conversation shall be set as middle-term memory 
+- middle-term memory after reaching a size shall be cleaned and summariazed/compacted and meregd together with long-term memory
+- cleaning all kind of memories if user its wishes in profile 
+- setting all memories parameters in Admin panel
+- all kind of memories can be used as context in conversations with user per default or user can switch off using memories in conversations
 
 ## 11. Central control dashboard (primary per voice)
 - IMplementing central dashboard to contorol and run all activities of the asstsiant
 - all functions can be runned and controled from this board. Steering can be do per voice or per text input.
 - ui shall be switchable  per voice to functional ui part to run activities
 
-## 12. Input all textes in all application parts per voice
+## 12. Input all textes in all application parts per voice in one window
 - all inputs of textes shall be possible per voice exceptional confirmation of runnig activities
 
 ## 13. Implementing smart CRM 

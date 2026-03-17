@@ -9,6 +9,8 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - Offline Russian TTS via Piper (natural female voice, ~1–3 s latency)
 - LLM via OpenRouter (100+ models, free tier available)
 - **OpenAI ChatGPT sub-menu** — switch between gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview directly from the admin panel; manage API keys inline
+- **Multi-LLM provider support** — switch between picoclaw (OpenRouter), OpenAI, YandexGPT, Google Gemini, Anthropic Claude, or local llama.cpp via `LLM_PROVIDER` in `bot.env`; all providers managed from the admin panel
+- **Offline LLM fallback** — `picoclaw-llm.service` runs a quantised model (Qwen2-0.5B / Phi-3-mini) on-device; auto-fallback enabled via `LLM_LOCAL_FALLBACK=true`; fallback responses prefixed with ⚠️ `[local fallback]`
 - **On-demand Voice Session via Telegram** — tap the 🎤 button, send a voice message; bot transcribes with Vosk (offline), sends to LLM, replies with text + Piper TTS voice note
 - **Voice works in all modes** — voice messages are routed into the active flow (note creation, note edit, or chat)
 - **Voice pipeline optimization flags** — 10 optional toggles in the admin panel (silence strip, low sample rate, Piper warm-up, parallel TTS, per-user audio toggle, tmpfs model, VAD pre-filter, Whisper STT, Piper low model, persistent Piper)
@@ -19,6 +21,8 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - **Per-user mail digest** — configure your own IMAP credentials (Gmail, Yandex, Mail.ru, custom); fetch + AI summarise last 24 h; daily auto-digest at 19:00
 - **Smart Calendar** — NL event add (multi-event batch), date-range query, console mode, reminders, morning briefing at 08:00
 - **Markdown Notes** — create, edit, view (Markdown rendered), raw text view, read aloud via Piper TTS, delete; send as email
+- **Contact Book** — save, browse, edit, and delete personal contacts with name, phone, and email; search by name, phone, or email; accessible from both Telegram and Web UI (`/contacts`)
+- **Conversation memory** — per-user sliding-window context (last 15 messages) injected into every LLM request; persists across bot restarts via SQLite
 - **User registration & approval flow** — `/start` queues request; admins approve/block via inline buttons
 - **Versioned release notes + admin notification** — bump `BOT_VERSION`, add entry to `release_notes.json`, deploy; admins notified automatically on first startup
 - **Error Protocol** — collect text/voice/photo error reports, save to timestamped directory, send by email

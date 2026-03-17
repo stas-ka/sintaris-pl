@@ -4,7 +4,7 @@
 
 | Type | Invocation | Example |
 |---|---|---|
-| **Skill** | `/skill-name` in Copilot Chat | `/deploy-to-target bot_admin.py changed, deploy to pi2` |
+| **Skill** | `/skill-name` in Copilot Chat | `/taris_deploy-to-target bot_admin.py changed, deploy to pi2` |
 | **Agent** | `@agent-name` in Copilot Chat | `@su-first-copilot-agent review the voice pipeline` |
 
 ---
@@ -13,7 +13,7 @@
 
 | Skill | Invocation | Purpose |
 |---|---|---|
-| **deploy-to-target** | `/deploy-to-target` | Full Pi deployment lifecycle — incremental file deploy, full module deploy, Web UI deploy, service file deploy, safe update with backup, voice regression tests, post-deploy verification, PI1 promotion. Covers **OpenClawPI2 (test)** and **OpenClawPI (production)**. |
+| **taris_deploy-to-target** | `/taris_deploy-to-target` | Full Pi deployment lifecycle — incremental file deploy, full module deploy, Web UI deploy, service file deploy, safe update with backup, voice regression tests, post-deploy verification, PI1 promotion. Covers **OpenClawPI2 (test)** and **OpenClawPI (production)**. |
 
 Skill files: [`.github/skills/`](.github/skills/)
 

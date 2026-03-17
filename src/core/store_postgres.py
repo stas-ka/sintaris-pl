@@ -672,6 +672,21 @@ class PostgresStore:
             )
             conn.commit()
 
+    # ── FTS5 text search (stubs — not implemented for Postgres) ───────────────
+
+    def has_document_search(self) -> bool:
+        return False  # Postgres adapter uses pgvector; FTS5 not implemented here
+
+    def upsert_chunk_text(self, doc_id: str, chunk_idx: int, chat_id: int,
+                          chunk_text: str) -> None:
+        pass  # not implemented for Postgres
+
+    def search_fts(self, query: str, chat_id: int, top_k: int = 5) -> list[dict]:
+        return []  # not implemented for Postgres
+
+    def delete_text_chunks(self, doc_id: str) -> None:
+        pass  # not implemented for Postgres
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def close(self) -> None:

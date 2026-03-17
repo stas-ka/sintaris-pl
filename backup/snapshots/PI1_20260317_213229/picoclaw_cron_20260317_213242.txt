@@ -1,0 +1,1 @@
+0 19 * * * python3 /home/stas/.picoclaw/gmail_digest.py >> /home/stas/.picoclaw/digest.log 2>&1
