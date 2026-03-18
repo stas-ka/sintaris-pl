@@ -104,6 +104,13 @@ OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
 OPENAI_MODEL        = os.environ.get("OPENAI_MODEL",    "gpt-4o-mini")
 OPENAI_BASE_URL     = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
+# LLM provider tuning parameters
+YANDEXGPT_TEMPERATURE  = float(os.getenv("YANDEXGPT_TEMPERATURE", "0.6"))
+YANDEXGPT_MAX_TOKENS   = os.getenv("YANDEXGPT_MAX_TOKENS", "2000")
+ANTHROPIC_MAX_TOKENS   = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
+LOCAL_MAX_TOKENS       = int(os.getenv("LOCAL_MAX_TOKENS", "512"))
+LOCAL_TEMPERATURE      = float(os.getenv("LOCAL_TEMPERATURE", "0.7"))
+
 # Conversation memory (Feature 2.1)
 CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"))
 CONVERSATION_PERSIST      = os.environ.get("CONVERSATION_PERSIST", "0") == "1"
@@ -131,7 +138,7 @@ DOCS_DIR            = os.environ.get("DOCS_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.33"
+BOT_VERSION        = "2026.3.34"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

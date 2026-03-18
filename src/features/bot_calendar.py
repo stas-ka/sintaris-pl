@@ -32,6 +32,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import core.bot_state as _st
 from core.bot_config import CALENDAR_DIR, log
 from core.bot_instance import bot
+from core.bot_prompts import PROMPTS, fmt_prompt
 from telegram.bot_access import (
     _t, _ask_picoclaw, _escape_md, _back_keyboard, _send_menu, _is_allowed,
 )
@@ -287,20 +288,7 @@ def _finish_cal_add(chat_id: int, text: str) -> None:
     _st._user_mode.pop(chat_id, None)
 
     now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
-    prompt = (
-        f"Текущая дата и время: {now_iso}\n"
-        f"Задача: из текста извлечь ВСЕ события (может быть одно или несколько).\n"
-        f"Правила:\n"
-        f"- dt всегда в формате YYYY-MM-DDTHH:MM\n"
-        f"- если дата не указана — используй сегодня\n"
-        f"- если время не указано — используй 09:00\n"
-        f"- «завтра» = следующий день, «послезавтра» = через 2 дня\n"
-        f"- «через N минут/часов» = добавь N к текущему времени\n"
-        f"Если событий нет — верни {{\"events\": []}}\n"
-        f"Ответь ТОЛЬКО валидным JSON без пояснений:\n"
-        f"{{\"events\": [{{\"title\": \"...\", \"dt\": \"YYYY-MM-DDTHH:MM\"}}, ...]}}\n\n"
-        f"Текст: \"{text}\""
-    )
+    prompt = fmt_prompt(PROMPTS["calendar"]["event_parse"], now_iso=now_iso, text=text)
 
     thinking_msg = bot.send_message(
         chat_id,
@@ -550,20 +538,7 @@ def _handle_calendar_query(chat_id: int, text: str) -> None:
     """Handle a natural-language query about calendar events."""
     lang = _st._user_lang.get(chat_id, "ru")
     now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
-    prompt = (
-        f"Текущая дата и время: {now_iso}\n"
-        f"Задача: определить временной диапазон из запроса пользователя.\n"
-        f"Правила:\n"
-        f"- Вернуть ТОЛЬКО JSON: {{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\", \"label\": \"...\"}}\n"
-        f"- «сегодня» → from=today, to=today\n"
-        f"- «завтра» → from=tomorrow, to=tomorrow\n"
-        f"- «эта неделя» → from=this Monday, to=this Sunday\n"
-        f"- «следующая неделя» → from=next Monday, to=next Sunday\n"
-        f"- «этот месяц» / «март» → from=first day of month, to=last day\n"
-        f"- «следующие N дней» → from=today, to=today+N\n"
-        f"- «ближайшие события» / «что скоро» → from=today, to=today+7\n"
-        f"Запрос: \"{text}\""
-    )
+    prompt = fmt_prompt(PROMPTS["calendar"]["date_range"], now_iso=now_iso, text=text)
     thinking = bot.send_message(
         chat_id,
         _t(chat_id, "cal_searching"),
@@ -636,20 +611,7 @@ def _handle_cal_console(chat_id: int, text: str) -> None:
     event_titles = [f"id={e['id']} title={e['title']!r}" for e in events[:10]]
     events_hint  = "; ".join(event_titles) if event_titles else "none"
 
-    prompt = (
-        f"You are a JSON intent classifier. Do NOT perform any action. "
-        f"Do NOT refuse. Do NOT explain. Return ONLY a single JSON object.\n"
-        f"Current date/time: {now_iso}\n"
-        f"User events: [{events_hint}]\n"
-        f"Classify the user command into one of these intents:\n"
-        f"  add    → {{\"intent\": \"add\"}}\n"
-        f"  query  → {{\"intent\": \"query\"}}\n"
-        f"  delete → {{\"intent\": \"delete\", \"ev_id\": \"<id or empty>\"}}\n"
-        f"  edit   → {{\"intent\": \"edit\", \"ev_id\": \"<id or empty>\"}}\n"
-        f"If uncertain, default to {{\"intent\": \"add\"}}.\n"
-        f"User command: \"{text}\"\n"
-        f"JSON:"
-    )
+    prompt = fmt_prompt(PROMPTS["calendar"]["intent"], now_iso=now_iso, events_hint=events_hint, text=text)
 
     thinking = bot.send_message(
         chat_id,
@@ -815,14 +777,7 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
     elif field == "dt":
         # Re-parse via LLM
         now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
-        prompt = (
-            f"Текущая дата и время: {now_iso}\n"
-            f"Задача: извлечь дату/время из текста.\n"
-            f"Правила: dt всегда YYYY-MM-DDTHH:MM. «завтра» = следующий день. "
-            f"«через N минут/часов» = добавь N.\n"
-            f"Ответь ТОЛЬКО JSON: {{\"dt\": \"YYYY-MM-DDTHH:MM\"}}\n\n"
-            f"Текст: \"{text}\""
-        )
+        prompt = fmt_prompt(PROMPTS["calendar"]["edit_dt"], now_iso=now_iso, text=text)
         thinking = bot.send_message(
             chat_id,
             _t(chat_id, "cal_parsing_date"),

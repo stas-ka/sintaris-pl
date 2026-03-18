@@ -35,6 +35,8 @@ These are reusable, task-specific prompt templates that you invoke **on demand**
 | `run-tests.prompt.md` | `/run-tests` | Runs voice regression T01–T21 on Pi, reports pass/fail |
 | `bump-version.prompt.md` | `/bump-version` | Updates `BOT_VERSION`, prepends release note, commits |
 | `test-software.prompt.md` | `/test-software` | Auto-selects which tests to run based on changed files |
+| `taris_update_doc.prompt.md` | `/taris_update_doc` | Syncs `doc/arch/`, `bot-code-map.md`, `README.md`, `TODO.md`, skill registry with current implementation |
+| `taris_test_ui.prompt.md` | `/taris_test_ui` | Runs Web UI Playwright + Telegram smoke tests; uses playwright-mcp to detect and fill coverage gaps |
 
 ---
 

@@ -26,6 +26,7 @@ from core.bot_config import (
     log,
 )
 from core.bot_instance import bot
+from core.bot_prompts import PROMPTS, fmt_prompt
 from core.bot_state import _user_mode, _user_lang, _voice_opts, _user_audio, _dynamic_users
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -111,23 +112,7 @@ def _t(chat_id: int, key: str, **kwargs) -> str:
 # Language detection & LLM prompt injection
 # ─────────────────────────────────────────────────────────────────────────────
 
-_LANG_INSTRUCTION: dict[str, str] = {
-    "ru": (
-        "Отвечай строго на русском языке. "
-        "Не используй эмоджи, смайлики и символы. "
-        "Отвечай по существу (3–6 предложений).\n\n"
-    ),
-    "de": (
-        "Antworte ausschließlich auf Deutsch. "
-        "Verwende keine Emojis oder Emoticons. "
-        "Halte die Antwort informativ (3–6 Sätze).\n\n"
-    ),
-    "en": (
-        "Reply in English only. "
-        "Do not use emoji or emoticons. "
-        "Keep the answer informative (3–6 sentences).\n\n"
-    ),
-}
+_LANG_INSTRUCTION: dict[str, str] = PROMPTS["lang_instructions"]
 
 
 def _detect_text_lang(text: str) -> Optional[str]:
@@ -176,22 +161,7 @@ def _with_lang_voice(chat_id: int, stt_text: str) -> str:
     lang = _resolve_lang(chat_id, stt_text)
     instruction = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
     if has_uncertain:
-        stt_hint = (
-            "Следующий текст — результат автоматического распознавания речи. "
-            "Слова в скобках [?слово] распознаны с низкой уверенностью — "
-            "исправь их по контексту и ответь на исходный вопрос. "
-            "Не упоминай исправления явно.\n\n"
-        ) if lang == "ru" else (
-            "Der folgende Text ist das Ergebnis der automatischen Spracherkennung "
-            "und kann Fehler enthalten. Wörter in eckigen Klammern [?Wort] wurden "
-            "mit geringer Sicherheit erkannt — korrigiere sie anhand des Kontexts "
-            "und beantworte die ursprüngliche Frage. Erwähne die Korrekturen nicht.\n\n"
-        ) if lang == "de" else (
-            "The following text was produced by automatic speech recognition. "
-            "Words marked [?word] were recognized with low confidence — "
-            "correct them using context and answer the original question. "
-            "Do not mention the corrections.\n\n"
-        )
+        stt_hint = PROMPTS["stt_hints"].get(lang, PROMPTS["stt_hints"]["en"])
         return SECURITY_PREAMBLE + instruction + stt_hint + _wrap_user_input(stt_text)
     return SECURITY_PREAMBLE + instruction + _wrap_user_input(stt_text)
 

@@ -12,6 +12,8 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/run-tests` | Run voice regression T01–T21 on Pi, report results |
 | `/bump-version` | Update `BOT_VERSION`, prepend release note, commit |
 | `/test-software` | Auto-select tests based on changed files (also triggered by plain "test software") |
+| `/taris_update_doc` | Sync project documentation (`doc/arch/`, code-map, TODO, README) with current implementation |
+| `/taris_test_ui` | Run Web UI Playwright + Telegram smoke tests; detect and fill coverage gaps via playwright-mcp |
 
 📖 Full usage guide: [`doc/copilot-skills-guide.md`](../doc/copilot-skills-guide.md)
 

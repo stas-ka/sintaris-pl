@@ -62,6 +62,7 @@ from security.bot_auth import (
     find_account_by_chat_id,
 )
 from core.bot_llm import ask_llm, ask_llm_with_history, get_active_model, list_models, set_active_model
+from core.bot_prompts import PROMPTS, fmt_prompt
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
@@ -926,18 +927,7 @@ def _cal_parse_events_from_text(text: str) -> list[dict]:
     Returns a list of dicts: [{title, dt_iso, remind_min}, ...]
     """
     now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
-    prompt = (
-        f"Current date and time: {now_iso}\n"
-        f"Task: extract ALL events mentioned in the text (there may be one or several).\n"
-        f"Rules:\n"
-        f"- dt must be YYYY-MM-DDTHH:MM format\n"
-        f"- if no date mentioned, use today's date\n"
-        f"- if no time mentioned, use 09:00\n"
-        f"- if no events found, return {{\"events\": []}}\n"
-        f"Reply ONLY with valid JSON, no explanation:\n"
-        f'{{\"events\": [{{\"title\": \"...\", \"dt\": \"YYYY-MM-DDTHH:MM\"}}, ...]}}\n\n'
-        f'Text: "{text}"'
-    )
+    prompt = fmt_prompt(PROMPTS["web"]["cal_event_parse"], now_iso=now_iso, text=text)
     raw = ask_llm(prompt, timeout=30)
     try:
         m = re.search(r'\{.*\}', raw or "", re.DOTALL)
@@ -988,19 +978,7 @@ async def calendar_console_route(request: Request):
     event_hints = [f"id={e['id']} title={e.get('title','')!r}" for e in events[:10]]
     events_hint = "; ".join(event_hints) if event_hints else "none"
 
-    intent_prompt = (
-        "You are a JSON intent classifier. Return ONLY a single JSON object, no explanation.\n"
-        f"Current date/time: {now_iso}\n"
-        f"User's existing events: [{events_hint}]\n"
-        "Classify the user command into one of: add, query, delete, edit.\n"
-        '- add:    {"intent": "add"}\n'
-        '- query:  {"intent": "query"}\n'
-        '- delete: {"intent": "delete", "ev_id": "<matching id or empty string>"}\n'
-        '- edit:   {"intent": "edit",   "ev_id": "<matching id or empty string>"}\n'
-        "If uncertain or it sounds like adding something, default to add.\n"
-        f'User: "{text}"\n'
-        "JSON:"
-    )
+    intent_prompt = fmt_prompt(PROMPTS["web"]["cal_intent"], now_iso=now_iso, events_hint=events_hint, text=text)
     raw_intent = ask_llm(intent_prompt, timeout=20)
     intent = "add"
     ev_id: str | None = None

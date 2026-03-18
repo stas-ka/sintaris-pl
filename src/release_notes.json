@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.34",
+    "date":    "2026-03-18",
+    "title":   "Prompt templates centralised + LLM params configurable",
+    "notes":   "- All LLM prompts extracted to src/prompts.json\n- New core/bot_prompts.py loader with fmt_prompt() helper\n- LLM tuning params (temperature, max_tokens) configurable via env vars\n- bot_config.py: YANDEXGPT_TEMPERATURE, YANDEXGPT_MAX_TOKENS, ANTHROPIC_MAX_TOKENS, LOCAL_MAX_TOKENS, LOCAL_TEMPERATURE"
+  },
+  {
     "version": "2026.3.33",
     "date":    "2026-03-18",
     "title":   "Fix Telegram-Web account link codes",

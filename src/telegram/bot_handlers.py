@@ -22,6 +22,7 @@ from core.bot_config import (
     log,
 )
 from core.bot_instance import bot
+from core.bot_prompts import PROMPTS
 from telegram.bot_access import (
     _t, _is_admin, _is_allowed, _is_developer, _with_lang, _escape_md, _truncate,
     _safe_edit, _back_keyboard, _run_subprocess, _ask_picoclaw,
@@ -415,13 +416,7 @@ def _refresh_digest(chat_id: int) -> None:
 # System chat — natural language → bash → confirm → execute
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SYSTEM_PROMPT = (
-    "You are a Linux system assistant running on a Raspberry Pi 3 B+ "
-    "(aarch64, Raspberry Pi OS Bookworm). The user will describe a task. "
-    "Respond with ONLY a single safe bash command that accomplishes the task. "
-    "No explanation, no markdown fences, no commentary — just the bare command. "
-    "Do NOT use emojis, icons, bullet points, or any decorative characters."
-)
+_SYSTEM_PROMPT = PROMPTS["system_prompt"]
 
 # Broad emoji / pictograph regex — matches everything the Unicode Standard
 # classifies as emoji / symbol characters.

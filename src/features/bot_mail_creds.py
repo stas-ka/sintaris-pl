@@ -37,6 +37,7 @@ import core.bot_state as _st
 from core.bot_config import MAIL_CREDS_DIR, log
 from core.store import store
 from core.bot_instance import bot
+from core.bot_prompts import PROMPTS
 from telegram.bot_access import (
     _t, _escape_md, _truncate, _back_keyboard, _send_menu, _ask_picoclaw,
     _is_guest,
@@ -253,15 +254,7 @@ def _build_digest_prompt(inbox: list, spam: list) -> str:
         sections.append(f"=== SPAM ({len(spam)} emails) ===\n{lines}")
     if not sections:
         return ""
-    return (
-        "You are an email assistant. Analyze the emails and produce a concise daily digest:\n\n"
-        "📌 NEWS & NEWSLETTERS:\n• <Subject> — <1-sentence summary>\n\n"
-        "📬 OTHER EMAILS:\n• <Subject> | From: <sender> — <1-sentence summary>\n\n"
-        "🚨 SPAM:\n• <Subject> | From: <sender> — <1-sentence summary>\n\n"
-        "Rules: classify each email as news/newsletter OR other. Be concise. "
-        "Reply in the same language as the majority of email subjects.\n\n"
-        + "\n\n".join(sections)
-    )
+    return PROMPTS["mail"]["digest_header"] + "\n\n".join(sections)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

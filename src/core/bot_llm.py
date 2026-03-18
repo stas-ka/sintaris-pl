@@ -19,11 +19,14 @@ from pathlib import Path
 from core.bot_config import (
     ACTIVE_MODEL_FILE,
     ANTHROPIC_API_KEY,
+    ANTHROPIC_MAX_TOKENS,
     ANTHROPIC_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
     LLAMA_CPP_MODEL,
     LLAMA_CPP_URL,
+    LOCAL_MAX_TOKENS,
+    LOCAL_TEMPERATURE,
     LLM_LOCAL_FALLBACK,
     LLM_PROVIDER,
     OPENAI_API_KEY,
@@ -33,7 +36,9 @@ from core.bot_config import (
     PICOCLAW_CONFIG,
     YANDEXGPT_API_KEY,
     YANDEXGPT_FOLDER_ID,
+    YANDEXGPT_MAX_TOKENS,
     YANDEXGPT_MODEL_URI,
+    YANDEXGPT_TEMPERATURE,
     log,
 )
 
@@ -148,7 +153,7 @@ def _ask_yandexgpt(prompt: str, timeout: int) -> str:
     }
     body = {
         "modelUri": model_uri,
-        "completionOptions": {"stream": False, "temperature": 0.6, "maxTokens": "2000"},
+        "completionOptions": {"stream": False, "temperature": YANDEXGPT_TEMPERATURE, "maxTokens": YANDEXGPT_MAX_TOKENS},
         "messages": [{"role": "user", "text": prompt}],
     }
     result = _http_post_json(url, headers, body, timeout)
@@ -181,7 +186,7 @@ def _ask_anthropic(prompt: str, timeout: int) -> str:
     }
     body = {
         "model": ANTHROPIC_MODEL,
-        "max_tokens": 1024,
+        "max_tokens": ANTHROPIC_MAX_TOKENS,
         "messages": [{"role": "user", "content": prompt}],
     }
     result = _http_post_json(url, headers, body, timeout)
@@ -194,8 +199,8 @@ def _ask_local(prompt: str, timeout: int) -> str:
     headers = {"Content-Type": "application/json"}
     body: dict = {
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 512,
-        "temperature": 0.7,
+        "max_tokens": LOCAL_MAX_TOKENS,
+        "temperature": LOCAL_TEMPERATURE,
     }
     if LLAMA_CPP_MODEL:
         body["model"] = LLAMA_CPP_MODEL
@@ -305,7 +310,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
             }
             result = _http_post_json(
                 url, headers,
-                {"model": ANTHROPIC_MODEL, "max_tokens": 1024, "messages": messages},
+                {"model": ANTHROPIC_MODEL, "max_tokens": ANTHROPIC_MAX_TOKENS, "messages": messages},
                 timeout,
             )
             return result["content"][0]["text"].strip()
@@ -313,7 +318,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
         elif provider == "local":
             url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
             headers = {"Content-Type": "application/json"}
-            body: dict = {"messages": messages, "max_tokens": 512, "temperature": 0.7}
+            body: dict = {"messages": messages, "max_tokens": LOCAL_MAX_TOKENS, "temperature": LOCAL_TEMPERATURE}
             if LLAMA_CPP_MODEL:
                 body["model"] = LLAMA_CPP_MODEL
             result = _http_post_json(url, headers, body, timeout)
@@ -336,7 +341,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
                 {
                     "modelUri": model_uri,
                     "completionOptions": {
-                        "stream": False, "temperature": 0.6, "maxTokens": "2000",
+                        "stream": False, "temperature": YANDEXGPT_TEMPERATURE, "maxTokens": YANDEXGPT_MAX_TOKENS,
                     },
                     "messages": yandex_msgs,
                 },
@@ -382,7 +387,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
         )
         try:
             url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
-            body_fb: dict = {"messages": messages, "max_tokens": 512, "temperature": 0.7}
+            body_fb: dict = {"messages": messages, "max_tokens": LOCAL_MAX_TOKENS, "temperature": LOCAL_TEMPERATURE}
             if LLAMA_CPP_MODEL:
                 body_fb["model"] = LLAMA_CPP_MODEL
             result = _http_post_json(
