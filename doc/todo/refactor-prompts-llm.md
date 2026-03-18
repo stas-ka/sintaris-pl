@@ -200,6 +200,8 @@ Prepend:
 
 ## Deploy & Test Sequence
 
+use my ...deploy-to-target skill for deplyment and testing
+
 ```bat
 rem Step 12 — Deploy to PI2
 pscp -pw "%HOSTPWD%" src\prompts.json stas@OpenClawPI2:/home/stas/.picoclaw/

@@ -250,9 +250,11 @@ Before implementaion of memories shall be analyse how can be implemented . here 
 - all kind of memories can be used as context in conversations with user per default or user can switch off using memories in conversations
 
 ## 11. Central control dashboard (primary per voice)
-- IMplementing central dashboard to contorol and run all activities of the asstsiant
+- IMplementing central dashboard to control and run all activities of the asstsiant
 - all functions can be runned and controled from this board. Steering can be do per voice or per text input.
 - ui shall be switchable  per voice to functional ui part to run activities
+- all activities can be used later as knowledge for conversation with assistant and for running new activities. Context depended activities. This fucntion shall be deactivatable
+- all activities shall be  stored in databse as activities and as text for LLM context 
 
 ## 12. Input all textes in all application parts per voice in one window
 - all inputs of textes shall be possible per voice exceptional confirmation of runnig activities

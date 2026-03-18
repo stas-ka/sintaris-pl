@@ -12,11 +12,16 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 | Key | Value |
 |---|---|
-| `TARGETHOST` | `OpenClawPI` |
-| `HOSTUSER` | `stas` |
-| `TAILSCALE_IP` | `100.81.143.126` |
-| SSH | `plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "<cmd>"` (LAN) |
-| SSH remote | `plink -pw "%HOSTPWD%" -batch stas@100.81.143.126 "<cmd>"` (Tailscale) |
+| `DEV_TARGETHOST` | `OpenClawPI` |
+| `DEV_HOSTUSER` | `stas` |
+| `DEV_TAILSCALE_IP` | `100.81.143.126` |
+| SSH | `plink -pw "%DEV_HOSTPWD%" -batch stas@OpenClawPI2 "<cmd>"` (LAN) |
+| SSH remote | `plink -pw "%DEV_HOSTPWD%" -batch stas@XXX.XXX.XXX.XXX "<cmd>"` (Tailscale) |
+| `PROD_TARGETHOST` | `OpenClawPI` |
+| `PROD_HOSTUSER` | `stas` |
+| `PROD_TAILSCALE_IP` | `100.81.143.126` |
+| SSH | `plink -pw "PROD_%HOSTPWD%" -batch stas@OpenClawPI "<cmd>"` (LAN) |
+| SSH remote | `plink -pw "%PROD_HOSTPWD%" -batch stas@100.81.143.126 "<cmd>"` (Tailscale) |
 
 ## Current Bot Version
 

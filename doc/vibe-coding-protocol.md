@@ -726,6 +726,16 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+## Session 48 — 2026-03-20
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| ~09:00 | Fix Bug A: voice messages during `contact_add`, `contact_edit`, `contact_search`, `cal_edit_title/dt/remind` modes were silently forwarded to LLM instead of the correct handler. Added 4 routing blocks in `_handle_voice_message()` after `cal_console` block. Fix Bug B1: LLM calls failed on both PIs — picoclaw-gateway was crash-looping; switched to `LLM_PROVIDER=openai` with `OPENAI_BASE_URL=https://openrouter.ai/api/v1` (OpenRouter OpenAI-compat endpoint) in `bot.env` on PI1 and PI2. Fix Bug B2: `NameError: ACTIVE_MODEL_FILE` in `bot_admin.py` — added missing import. Updated PI2 `bot.env` with 4 LLM vars. Bump to v2026.3.39. Commit `b35df5e`. Deploy PI1 ✅ PI2 ✅. | 3 | ~18 | claude-sonnet-4.6 | src/features/bot_voice.py, src/telegram/bot_admin.py, src/core/bot_config.py, src/release_notes.json | done |
+
+**Session 48 total: 3 bugs fixed, ~18 requests — voice mode routing (contacts+cal-edit) + LLM provider switch to OpenRouter direct + ACTIVE_MODEL_FILE import ✅ PI1 ✅ PI2 ✅**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.

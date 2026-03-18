@@ -546,7 +546,7 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
     text = (
         f"🤖 *Switch LLM*\n\nActive: `{current_label}`\n\n"
         f"✅ active   ✔️ key set   ⚠️ needs key\n\n"
-        f"Tap *OpenAI ChatGPT* to select GPT-4o / GPT-4o-mini and set your API key."
+        f"Tap *OpenAI ChatGPT* to select GPT-4.1 / GPT-4o and set your API key."
     )
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
@@ -578,11 +578,14 @@ def _handle_set_llm(chat_id: int, model_name: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _OPENAI_CATALOG = [
-    ("gpt-4o",          "openai/gpt-4o",           "GPT-4o (flagship)"),
-    ("gpt-4o-mini",     "openai/gpt-4o-mini",      "GPT-4o mini (fast & cheap)"),
-    ("o3-mini",         "openai/o3-mini",           "o3-mini (reasoning)"),
-    ("o1",              "openai/o1",                "o1 (advanced reasoning)"),
-    ("gpt-4.5-preview", "openai/gpt-4.5-preview",  "GPT-4.5 preview"),
+    ("gpt-4.1",         "openai/gpt-4.1",         "GPT-4.1 (flagship 2025)"),
+    ("gpt-4.1-mini",    "openai/gpt-4.1-mini",     "GPT-4.1 mini (fast)"),
+    ("gpt-4.1-nano",    "openai/gpt-4.1-nano",     "GPT-4.1 nano (fastest)"),
+    ("gpt-4o",          "openai/gpt-4o",           "GPT-4o (multimodal)"),
+    ("gpt-4o-mini",     "openai/gpt-4o-mini",      "GPT-4o mini (cheap)"),
+    ("o4-mini",         "openai/o4-mini",           "o4-mini (fast reasoning)"),
+    ("o3",              "openai/o3",                "o3 (advanced reasoning)"),
+    ("o3-mini",         "openai/o3-mini",           "o3-mini (reasoning, light)"),
 ]
 _OPENAI_API_BASE = "https://api.openai.com/v1"
 
@@ -627,13 +630,13 @@ def _handle_openai_llm_menu(chat_id: int) -> None:
     current    = _get_active_model()
 
     kb = InlineKeyboardMarkup(row_width=1)
-    for name, _, description in _OPENAI_CATALOG:
+    for name, model_id, description in _OPENAI_CATALOG:
         m          = models.get(name, {})
         has_key    = bool(m.get("api_key", "").strip()) or bool(shared_key)
-        is_current = (name == current)
+        is_current = current in (name, model_id)
         prefix     = "✅" if is_current else ("✔️" if has_key else "⚠️")
         kb.add(InlineKeyboardButton(f"{prefix} {name} — {description}",
-                                    callback_data=f"llm_select:{name}"))
+                                    callback_data=f"llm_select:{model_id}"))
 
     key_label = (f"🔑 Update OpenAI Key (…{shared_key[-4:]})" if shared_key
                  else "🔑 Set OpenAI API Key")

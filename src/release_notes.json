@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.40",
+    "date":    "2026-3-24",
+    "title":   "Fix LLM model selection, update OpenAI catalog",
+    "notes":   "- Fixed: selecting an OpenAI/OpenRouter model via Admin LLM menu now actually takes effect (was always using OPENAI_MODEL env var)\n- Fixed: model selection checkmark (is_current) now correctly compares against full model ID (e.g. openai/gpt-4.1)\n- Fixed: callback_data now sends full OpenRouter model slug (openai/gpt-4.1) instead of short name\n- Updated OpenAI catalog: added gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o3, o4-mini; removed deprecated gpt-4.5-preview"
+  },
+  {
     "version": "2026.3.39",
     "date":    "2026-3-20",
     "title":   "Fix LLM provider (OpenRouter direct), voice mode routing, import error",

@@ -135,7 +135,7 @@ def _ask_openai(prompt: str, timeout: int) -> str:
         "Authorization": f"Bearer {OPENAI_API_KEY}",
     }
     body = {
-        "model": OPENAI_MODEL,
+        "model": get_active_model() or OPENAI_MODEL,
         "messages": [{"role": "user", "content": prompt}],
     }
     result = _http_post_json(url, headers, body, timeout)
@@ -299,7 +299,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
                 "Authorization": f"Bearer {OPENAI_API_KEY}",
             }
             result = _http_post_json(
-                url, headers, {"model": OPENAI_MODEL, "messages": messages}, timeout
+                url, headers, {"model": get_active_model() or OPENAI_MODEL, "messages": messages}, timeout
             )
             return result["choices"][0]["message"]["content"].strip()
 
