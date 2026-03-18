@@ -696,6 +696,16 @@ Each session block contains a table with one row per completed request:
 
 ---
 
+## Session 45 — 2026-03-18
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| ~19:32 | Fix production bug: free chat mode returned raw picoclaw 402 error log to user. Root cause 1: `_ask_picoclaw()` in `bot_llm.py` returned `_clean_output(stdout)` even on non-zero returncode. Root cause 2: `_LOG_PREFIX` regex missed compact `YYYYMMDD HH:MM:SS` date format used by picoclaw logs. Fix: raise `RuntimeError` on rc!=0; extend `_LOG_PREFIX` to match both date formats. Bump to v2026.3.36. Deploy PI2 ✅ PI1 ✅. | 2 | ~5 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py, src/release_notes.json | done |
+
+**Session 45 total: 1 item, ~5 requests — picoclaw 402 log-leak fix ✅ PI2 ✅ PI1 ✅**
+
+---
+
 ## Notes on Measurement
 
 - "Requests" = user→assistant conversation turns, not API calls.

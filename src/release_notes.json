@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.36",
+    "date":    "2026-3-19",
+    "title":   "Fix free chat: picoclaw 402 error leaked as reply",
+    "notes":   "- Fixed: free chat showed raw picoclaw error log (HTTP 402 / OpenRouter out of credits) as bot reply\n- Root cause 1: _ask_picoclaw() in bot_llm.py logged warning on rc!=0 but still returned cleaned output instead of raising\n- Root cause 2: _LOG_PREFIX regex didn't match compact date format YYYYMMDD HH:MM:SS used by picoclaw — log lines passed through cleanup unchanged\n- Fix: raise RuntimeError on non-zero picoclaw exit code — ask_llm() catches it, returns empty — user sees user-friendly error message\n- Fix: extended _LOG_PREFIX regex to also match YYYYMMDD (no separator) date format"
+  },
+  {
     "version": "2026.3.35",
     "date":    "2026-3-19",
     "title":   "Fix calendar LLM call — use ask_llm",

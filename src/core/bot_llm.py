@@ -75,7 +75,7 @@ def list_models() -> list[dict]:
 _ANSI_RE     = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _SPINNER_RE  = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⣾⣽⣻⢿⡿⣟⣯⣷◐◑◒◓⠁⠂⠄⡀⢀⠠⠐⠈|/\\-]")
 _PRINTF_WRAP = re.compile(r"^printf\s+['\"](.+)['\"]\s*$", re.DOTALL)
-_LOG_PREFIX  = re.compile(r"^\d{4}[/-]\d{2}[/-]\d{2}[\sT]\d{2}:\d{2}:\d{2}\s*(INFO|DEBUG|WARN|ERROR)\s*", re.MULTILINE)
+_LOG_PREFIX  = re.compile(r"^(?:\d{4}[/-]\d{2}[/-]\d{2}|\d{8})[\sT]\d{2}:\d{2}:\d{2}\s*(?:INFO|DEBUG|WARN|ERROR)?\s*", re.MULTILINE)
 _PIPE_HEADER = re.compile(r"^(agent|picoclaw)\s*[|│]", re.MULTILINE | re.IGNORECASE)
 
 
@@ -108,9 +108,13 @@ def _ask_picoclaw(prompt: str, timeout: int) -> str:
         cmd, capture_output=True, text=True, timeout=timeout, env=env,
     )
     if proc.returncode != 0:
-        log.warning(f"[LLM] picoclaw rc={proc.returncode}: {proc.stderr[:200]}")
+        log.warning(f"[LLM] picoclaw rc={proc.returncode}: {(proc.stderr or proc.stdout)[:300]}")
+        raise RuntimeError(f"picoclaw exited rc={proc.returncode}")
     raw = proc.stdout or proc.stderr or ""
-    return _clean_output(raw)
+    result = _clean_output(raw)
+    if not result:
+        raise RuntimeError("picoclaw returned empty output")
+    return result
 
 
 def _http_post_json(url: str, headers: dict, body: dict, timeout: int) -> dict:
