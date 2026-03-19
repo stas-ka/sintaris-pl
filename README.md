@@ -10,7 +10,7 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - LLM via OpenRouter (100+ models, free tier available)
 - **OpenAI ChatGPT sub-menu** — switch between gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview directly from the admin panel; manage API keys inline
 - **Multi-LLM provider support** — switch between picoclaw (OpenRouter), OpenAI, YandexGPT, Google Gemini, Anthropic Claude, or local llama.cpp via `LLM_PROVIDER` in `bot.env`; all providers managed from the admin panel
-- **Offline LLM fallback** — `picoclaw-llm.service` runs a quantised model (Qwen2-0.5B / Phi-3-mini) on-device; auto-fallback enabled via `LLM_LOCAL_FALLBACK=true`; fallback responses prefixed with ⚠️ `[local fallback]`
+- **Offline LLM fallback** — `picoclaw-llm.service` runs a quantised model (Qwen2-0.5B / Phi-3-mini) on-device; auto-fallback enabled via `LLM_LOCAL_FALLBACK=true` or Admin Panel (📡 Local Fallback); flag file `~/.picoclaw/llm_fallback_enabled` — no restart needed; fallback responses prefixed with ⚠️ `[local fallback]`
 - **On-demand Voice Session via Telegram** — tap the 🎤 button, send a voice message; bot transcribes with Vosk (offline), sends to LLM, replies with text + Piper TTS voice note
 - **Voice works in all modes** — voice messages are routed into the active flow (note creation, note edit, or chat)
 - **Voice pipeline optimization flags** — 10 optional toggles in the admin panel (silence strip, low sample rate, Piper warm-up, parallel TTS, per-user audio toggle, tmpfs model, VAD pre-filter, Whisper STT, Piper low model, persistent Piper)

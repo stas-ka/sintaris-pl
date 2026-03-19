@@ -316,6 +316,8 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`, `
 | `_handle_openai_llm_menu(chat_id)` | OpenAI ChatGPT model submenu |
 | `_handle_llm_setkey_prompt(chat_id)` | Ask admin to paste API key |
 | `_handle_save_llm_key(chat_id, raw_key)` | Validate `sk-…` + save |
+| `_handle_admin_llm_fallback_menu(chat_id)` | Show fallback toggle menu; displays ON/OFF state + URL/model |
+| `_handle_admin_llm_fallback_toggle(chat_id)` | Write/remove `LLM_FALLBACK_FLAG_FILE`; confirm new state |
 
 ---
 
@@ -827,6 +829,8 @@ All `data=` keys handled in `callback_handler()`:
 | `llm_select:<model>` | `_handle_set_llm` |
 | `openai_llm_menu` | `_handle_openai_llm_menu` |
 | `llm_setkey_openai` | `_handle_llm_setkey_prompt` |
+| `admin_llm_fallback_menu` | `_handle_admin_llm_fallback_menu` |
+| `admin_llm_fallback_toggle` | `_handle_admin_llm_fallback_toggle` |
 | `voice_opts_menu` | `_handle_voice_opts_menu` |
 | `voice_opt_toggle:<key>` | `_handle_voice_opt_toggle` |
 | `admin_changelog` | `_handle_admin_changelog` |

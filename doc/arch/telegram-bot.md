@@ -1,13 +1,13 @@
 # Picoclaw — Telegram Bot Architecture
 
-**Version:** `2026.3.28`  
+**Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.28"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
+**Version:** `BOT_VERSION = "2026.3.43"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
 
 The interactive Telegram bot is split into 14 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks. Shared Screen DSL modules (`bot_ui.py`, `bot_actions.py`, `render_telegram.py`) are used by both this channel and the Web UI channel.
 
@@ -74,6 +74,7 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | 🗑 Remove user | `admin_remove_user` | Remove a dynamic guest user |
 | 👥 Pending | `admin_pending_users` | Approve / block pending registrations |
 | 🤖 Switch LLM | `admin_llm_menu` | Select active model; OpenAI sub-menu with key entry |
+| 📡 Local Fallback | `admin_llm_fallback_menu` | Toggle `~/.picoclaw/llm_fallback_enabled`; shows ON/OFF status + URL/model |
 | ⚡ Voice Opts | `voice_opts_menu` | Toggle 10 voice optimisation flags |
 | 📝 Release Notes | `admin_changelog` | Full versioned changelog from `release_notes.json` |
 
@@ -168,7 +169,7 @@ All inline button taps arrive at a single `@bot.callback_query_handler`. Selecte
 | `profile` / `help` | info handlers | all |
 | `admin_menu` and all `admin_*` | admin handlers | **admin** |
 | `reg_approve:<id>` / `reg_block:<id>` | registration approval | **admin** |
-| `llm_select:<model>` / `llm_setkey_openai` | LLM switcher | **admin** |
+| `llm_select:<model>` / `llm_setkey_openai` / `admin_llm_fallback_menu` / `admin_llm_fallback_toggle` | LLM switcher | **admin** |
 | `voice_opts_menu` / `voice_opt_toggle:<key>` | voice opts | **admin** |
 | `menu_notes` / `note_*` | notes handlers | approved |
 | `menu_calendar` / `cal_*` | calendar handlers | approved |

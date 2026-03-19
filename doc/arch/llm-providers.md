@@ -1,6 +1,6 @@
 # Picoclaw — LLM Provider Abstraction
 
-**Version:** `2026.3.32`  
+**Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -31,7 +31,7 @@ ask_llm(prompt, timeout=60)
         └── "local"       → _ask_local()     ← HTTP: localhost:8081 (llama.cpp server)
         │
         ▼
-  [on error AND LLM_LOCAL_FALLBACK=true AND provider != "local"]
+  [on error AND (LLM_LOCAL_FALLBACK=true OR flag-file exists) AND provider != "local"]
         │
         └── _ask_local()  ← automatic offline fallback
               → response prefixed with "⚠️ [local fallback]"
@@ -50,7 +50,7 @@ ask_llm(prompt, timeout=60)
 
 ### 19.3 Offline Fallback (Feature 3.2)
 
-When `LLM_LOCAL_FALLBACK=true` in `bot.env` and the primary provider fails (timeout, network error, credential error), `ask_llm()` automatically retries via the local llama.cpp server.
+When `LLM_LOCAL_FALLBACK=true` in `bot.env` **or** the file `~/.picoclaw/llm_fallback_enabled` exists, and the primary provider fails (timeout, network error, credential error), `ask_llm()` automatically retries via the local llama.cpp server.
 
 **Fallback conditions:** Any `subprocess.TimeoutExpired`, `FileNotFoundError`, `requests.RequestException`, or generic `Exception` caught from the primary provider function.
 
@@ -60,7 +60,7 @@ When `LLM_LOCAL_FALLBACK=true` in `bot.env` and the primary provider fails (time
 <answer from local model>
 ```
 
-**Suppressed if:** `LLM_LOCAL_FALLBACK` is not set / not `"true"`, or the primary provider is already `"local"`.
+**Suppressed if:** neither `LLM_LOCAL_FALLBACK` is `"true"` nor the flag file `~/.picoclaw/llm_fallback_enabled` exists; or the primary provider is already `"local"`.
 
 ### 19.4 Local LLM Service (`picoclaw-llm.service`)
 
@@ -112,7 +112,30 @@ LLM_PROVIDER=picoclaw
 # LLAMA_CPP_MODEL=qwen2-0.5b-q4.gguf
 ```
 
-### 19.6 Switching Providers
+### 19.6 Runtime Fallback Toggle (Admin Panel)
+
+The fallback can be toggled from the Telegram Admin panel **without restarting the service**.
+
+**Mechanism:** Admin panel → 🤖 Switch LLM → 📡 Local Fallback
+- Toggle writes/removes `~/.picoclaw/llm_fallback_enabled` (flag file)
+- `ask_llm()` checks `os.path.exists(LLM_FALLBACK_FLAG_FILE)` at each call
+- No env-var changes, no service restart needed
+
+To check or change from SSH:
+```bash
+# Check: file present = ON, absent = OFF
+ls ~/.picoclaw/llm_fallback_enabled
+
+# Toggle ON (create flag file):
+touch ~/.picoclaw/llm_fallback_enabled
+
+# Toggle OFF (remove flag file):
+rm -f ~/.picoclaw/llm_fallback_enabled
+```
+
+> Both `LLM_LOCAL_FALLBACK=true` (static, env-var, requires restart) and the flag file (runtime, toggleable via Admin Panel) activate the offline fallback. The flag file takes precedence at runtime and persists across service restarts.
+
+### 19.7 Switching Providers
 
 **Via `bot.env`** (permanent, requires service restart):
 ```bash
@@ -124,7 +147,7 @@ sudo systemctl restart picoclaw-telegram
 
 **Active model within `picoclaw` provider** (no restart): Admin panel → 🤖 Switch LLM. This only affects the model selection within the picoclaw/OpenRouter backend and writes to `active_model.txt`.
 
-### 19.7 Adding a New Provider
+### 19.8 Adding a New Provider
 
 1. Add required env-var constants to `src/core/bot_config.py`
 2. Add `_ask_<provider>(prompt, timeout) -> str` function to `src/core/bot_llm.py`

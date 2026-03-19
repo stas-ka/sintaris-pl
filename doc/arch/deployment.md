@@ -62,6 +62,7 @@
   registrations.json            ← registration records (pending/approved/blocked)
   last_notified_version.txt     ← last BOT_VERSION admin notification
   active_model.txt              ← admin-selected LLM model name
+  llm_fallback_enabled          ← LLM fallback flag file; presence=ON, absent=OFF (toggle from Admin Panel)
   notes/<chat_id>/<slug>.md     ← per-user Markdown notes
   calendar/<chat_id>.json       ← per-user calendar events
   mail_creds/<chat_id>.json     ← per-user IMAP credentials (chmod 600)
@@ -123,6 +124,10 @@
 | `VOSK_MODEL_DE_PATH` | `~/.picoclaw/vosk-model-small-de` | `VOSK_MODEL_DE_PATH` | Vosk German STT model directory |
 | `PIPER_MODEL_DE` | `~/.picoclaw/de_DE-thorsten-medium.onnx` | `PIPER_MODEL_DE` | Piper German TTS voice model |
 | `PICOCLAW_BIN` | `/usr/bin/picoclaw` | `PICOCLAW_BIN` | picoclaw Go binary |
+| `LLM_PROVIDER` | `"picoclaw"` | `LLM_PROVIDER` | Active LLM backend (`picoclaw`/`openai`/`yandexgpt`/`gemini`/`anthropic`/`local`) |
+| `LLAMA_CPP_URL` | `http://127.0.0.1:8081` | `LLAMA_CPP_URL` | Local llama.cpp server endpoint |
+| `LLM_LOCAL_FALLBACK` | `false` | `LLM_LOCAL_FALLBACK` | Set `true` to enable static auto-fallback to local LLM |
+| `LLM_FALLBACK_FLAG_FILE` | `~/.picoclaw/llm_fallback_enabled` | — | Flag file; presence=fallback ON (runtime toggle, no restart needed) |
 
 ### `voice_assistant.py` CONFIG
 

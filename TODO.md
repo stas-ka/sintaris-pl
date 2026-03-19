@@ -83,7 +83,7 @@ OpenRouter ✅ · OpenAI direct ✅ · YandexGPT ✅ · Gemini ✅ · Anthropic 
 - [x] 14 provider constants added to `src/core/bot_config.py`
 - [x] `picoclaw` (default) provider wraps existing OpenRouter CLI — all existing behaviour unchanged
 
-### 3.2 Local LLM — Offline Fallback ✅ Implemented (v2026.3.32)
+### 3.2 Local LLM — Offline Fallback ✅ Implemented (v2026.3.43)
 Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-mini.
 → See: `doc/hardware-performance-analysis.md` §8.9
 - [x] `picoclaw-llm.service` systemd unit — llama-server on port 8081, `qwen2-0.5b-q4.gguf`, 4 threads, ctx 2048
