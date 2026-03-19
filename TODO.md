@@ -299,3 +299,40 @@ Before implementaion of memories shall be analyse how can be implemented . here 
 
 ## 19. Using OpenClaw instead PicoClaw
 → [Hardware Requirements Report §4.3 + §6](doc/hw-requirements-report.md) — OpenClaw configurations (Pi 5, RK3588, Jetson); full local AI stack
+
+---
+
+## 20. Copilot Performance Optimization 🔄
+
+Reduce context-window consumption so Copilot sessions sustain 8–10 turns without compaction.  
+→ [Analysis & Proposals](concept/copilot_optimization.md) | [Vibe Coding Guidelines](doc/vibe-coding-guidelines.md)
+
+**Root causes:** auto-loaded instructions too large, duplicate deploy steps in 4 locations, "ALWAYS read" pulls 39 KB docs, `safe-update.instructions.md` scoped to `**`.
+
+### 20.1 Quick wins (< 2 h total) 🔲
+
+- [x] **P-4** Split `doc/architecture.md` into `doc/arch/*.md` (8 topic files) — ✅ done
+- [x] **P-3** Replace "ALWAYS read bot-code-map.md" with "search it" instruction — ✅ done
+- [x] **P-8** Add `doc/quick-ref.md` — single 3 KB always-read index — ✅ done
+- [x] **P-2** Slim `copilot-instructions.md` — remove T01–T21 table and duplicate patterns — ✅ done
+- [ ] **P-1** Fix `safe-update.instructions.md` `applyTo: "**"` → narrow to `bot_db.py,migrate_to_db.py,bot_state.py,bot_config.py`
+- [ ] **P-7** Move accounting task from `INSTRUCTIONS.md` to `concept/` — separate unrelated content
+- [ ] **P-6** Shorten `bot-deploy.instructions.md` — replace full `pscp`/`plink` blocks with pointer to `/taris-deploy-to-target`
+
+### 20.2 Medium effort (2–4 h each) 🔲
+
+- [ ] **P-6b** Shorten `safe-update.instructions.md` — compress to checklist + pointer to SKILL.md (~1 KB)
+- [ ] **P-6c** Shorten `bot-coding.instructions.md` — keep only the top-5 patterns, pointer to `dev-patterns.md`
+- [ ] **P-9** Update `doc/copilot-skills-guide.md` — add `#file:` section-anchor examples and `@workspace` warning
+- [ ] **P-10** Add token-budget review table to `doc/vibe-coding-guidelines.md` sprint checklist
+
+### 20.3 Larger refactors (4–8 h each) 🔲
+
+- [ ] **P-5** Split `src/bot_web.py` (83 KB) into `bot_web_app.py` + `bot_web_api.py` + `bot_web_render.py` (~25–40 KB each)
+- [ ] **P-11** Review all `doc/todo/*.md` specs — ensure each links back to its TODO.md section and is < 10 KB
+
+### 20.4 Guidelines & Process 🔲
+
+- [x] **G-1** Create `doc/vibe-coding-guidelines.md` — artifact structuring rules, session habits, naming conventions — ✅ done
+- [ ] **G-2** Add quarterly review reminder: measure baseline tokens, turns-before-compaction from `doc/vibe-coding-protocol.md`
+- [ ] **G-3** Add optimization item to session-start checklist in `AGENTS.md`
