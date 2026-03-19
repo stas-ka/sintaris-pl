@@ -21,8 +21,10 @@ from core.bot_config import (
     PICOCLAW_CONFIG, ACTIVE_MODEL_FILE,
     RELEASE_NOTES_FILE, LAST_NOTIFIED_FILE, BOT_VERSION,
     _VOICE_OPTS_DEFAULTS,
+    _LOG_FILE, _ASSISTANT_LOG_FILE, _SECURITY_LOG_FILE, _VOICE_LOG_FILE, _DATASTORE_LOG_FILE,
     log,
 )
+from core.bot_logger import tail_log
 from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _escape_md, _send_menu,
@@ -94,7 +96,8 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton("🤖  Switch LLM",     callback_data="admin_llm_menu"),
         InlineKeyboardButton("⚡  Voice Opts",      callback_data="voice_opts_menu"),
         InlineKeyboardButton("📝  Release Notes",   callback_data="admin_changelog"),
-        InlineKeyboardButton("🔙  Menu",            callback_data="menu"),
+        InlineKeyboardButton("�  Logs",            callback_data="admin_logs_menu"),
+        InlineKeyboardButton("�🔙  Menu",            callback_data="menu"),
     )
     return kb
 
@@ -487,6 +490,43 @@ def _handle_admin_changelog(chat_id: int) -> None:
                              reply_markup=_admin_keyboard())
         except Exception as e2:
             log.error(f"[Changelog] send failed for {chat_id}: {e2}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Log viewer
+# ─────────────────────────────────────────────────────────────────────────────
+
+_LOG_CATEGORIES = [
+    ("main",      "📄  Main log",      _LOG_FILE),
+    ("assistant", "🤖  Assistant",     _ASSISTANT_LOG_FILE),
+    ("security",  "🔐  Security",      _SECURITY_LOG_FILE),
+    ("voice",     "🎙  Voice",         _VOICE_LOG_FILE),
+    ("datastore", "🗄  Datastore",     _DATASTORE_LOG_FILE),
+]
+
+
+def _handle_admin_logs_menu(chat_id: int) -> None:
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup(row_width=1)
+    for key, label, _ in _LOG_CATEGORIES:
+        kb.add(InlineKeyboardButton(label, callback_data=f"admin_logs_show:{key}"))
+    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+    bot.send_message(chat_id, _t(chat_id, "admin_logs_title"), reply_markup=kb)
+
+
+def _handle_admin_logs_show(chat_id: int, category: str) -> None:
+    path = next((p for k, _, p in _LOG_CATEGORIES if k == category), None)
+    if path is None:
+        bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard())
+        return
+    lines = tail_log(path, n=50)
+    header = _t(chat_id, "admin_logs_header", n=50, cat=category)
+    text = f"{header}\n\n```\n{lines or _t(chat_id, 'admin_logs_empty')}\n```"
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=_admin_keyboard())
+    except Exception:
+        bot.send_message(chat_id, f"{header}\n\n{lines or _t(chat_id, 'admin_logs_empty')}",
+                         reply_markup=_admin_keyboard())
 
 
 # ─────────────────────────────────────────────────────────────────────────────

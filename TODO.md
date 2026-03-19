@@ -145,12 +145,11 @@ Baseline: Pi 3 B+ ~115 s total; target <25 s with all opts ON.
 
 ## 6. Infrastructure & Operations
 
-### 6.1 Logging & Monitoring 🔲
-- [ ] create and describe logging and monitoring concept
-- [ ] Structured log categories: `assistant.log`, `security.log`, `voice.log`, `datastore.log`
-- [ ] Admin Telegram UI: view last N log lines per category
-- [ ] Log rotation (`logrotate` config)
-- [ ] notification Administrator about critical , fatal error via telegrma and storing protocols on target
+### 6.1 Logging & Monitoring ✅ Implemented (v2026.3.42)
+- [x] Structured log categories: `assistant.log`, `security.log`, `voice.log`, `datastore.log` (`src/core/bot_logger.py`)
+- [x] Admin Telegram UI: 📊 Logs button — tail last 50 lines per category
+- [x] Log rotation (`src/services/picoclaw-logrotate`) — daily, 7 days, compress, copytruncate
+- [x] Telegram alert handler: CRITICAL/ERROR forwarded to admins on startup
 - [ ] create skill to download logs 
 
 ### 6.2 Host–Project Synchronization 🔲

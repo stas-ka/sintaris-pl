@@ -1,0 +1,13 @@
+/home/stas/.picoclaw/telegram_bot.log
+/home/stas/.picoclaw/assistant.log
+/home/stas/.picoclaw/security.log
+/home/stas/.picoclaw/voice.log
+/home/stas/.picoclaw/datastore.log
+{
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

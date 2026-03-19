@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.42",
+    "date":    "2026-4-1",
+    "title":   "Logging & Monitoring (§6.1)",
+    "notes":   "- Structured category loggers: assistant.log, security.log, voice.log, datastore.log\n- Admin panel: 📊 Logs button with live tail (last 50 lines) per category\n- Telegram alert handler: CRITICAL/ERROR events forwarded to admins automatically\n- Logrotate drop-in config for all 5 log files (daily, 7 days, compress, copytruncate)"
+  },
+  {
     "version": "2026.3.41",
     "date":    "2026-3-25",
     "title":   "Fix System Chat LLM routing",

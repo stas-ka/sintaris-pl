@@ -138,7 +138,7 @@ DOCS_DIR            = os.environ.get("DOCS_DIR",
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.41"
+BOT_VERSION        = "2026.3.42"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
@@ -230,7 +230,11 @@ if not _WEB_ONLY:
 # Logging — set up once here; all modules use getLogger("pico-tgbot")
 # ─────────────────────────────────────────────────────────────────────────────
 
-_LOG_FILE = os.path.expanduser("~/.picoclaw/telegram_bot.log")
+_LOG_FILE           = os.path.expanduser("~/.picoclaw/telegram_bot.log")
+_ASSISTANT_LOG_FILE = os.path.expanduser("~/.picoclaw/assistant.log")
+_SECURITY_LOG_FILE  = os.path.expanduser("~/.picoclaw/security.log")
+_VOICE_LOG_FILE     = os.path.expanduser("~/.picoclaw/voice.log")
+_DATASTORE_LOG_FILE = os.path.expanduser("~/.picoclaw/datastore.log")
 _log_handlers: list = [logging.StreamHandler()]
 try:
     os.makedirs(os.path.dirname(_LOG_FILE), exist_ok=True)

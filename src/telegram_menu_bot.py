@@ -27,6 +27,7 @@ from core.bot_config import (
 import core.bot_state as _st
 
 from core.bot_instance import bot
+from core.bot_logger import configure_alert_handler, attach_alerts_to_main_log
 
 # ─── Shared utilities ─────────────────────────────────────────────────────────
 from telegram.bot_access import (
@@ -59,6 +60,7 @@ from telegram.bot_admin import (
     _notify_admins_new_registration, _notify_admins_new_version,
     _handle_voice_opts_menu, _handle_voice_opt_toggle,
     _handle_admin_changelog,
+    _handle_admin_logs_menu, _handle_admin_logs_show,
     _handle_admin_llm_menu, _handle_set_llm,
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _admin_keyboard,
@@ -409,6 +411,19 @@ def callback_handler(call):
     elif data == "admin_changelog":
         if _is_admin(cid):
             _handle_admin_changelog(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Log viewer ─────────────────────────────────────────────────────────
+    elif data == "admin_logs_menu":
+        if _is_admin(cid):
+            _handle_admin_logs_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_logs_show:"):
+        if _is_admin(cid):
+            _handle_admin_logs_show(cid, data[len("admin_logs_show:"):])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -1021,6 +1036,8 @@ def main() -> None:
     _st.load_conversation_history()
     _cleanup_orphaned_tts()
     _notify_admins_new_version()
+    configure_alert_handler(bot.send_message, ADMIN_USERS)
+    attach_alerts_to_main_log()
     _cal_reschedule_all()
     threading.Thread(target=_cal_morning_briefing_loop, daemon=True).start()
 
