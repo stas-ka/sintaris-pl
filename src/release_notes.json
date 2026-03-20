@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.7",
+    "date":    "2026-4-7",
+    "title":   "System Chat LLM error handling improvements",
+    "notes":   "- System Chat now shows specific error messages for 402/401/429/503/timeout/missing binary\n- Empty LLM response now shows actionable message instead of silent failure\n- Calendar console docstring update"
+  },
+  {
     "version": "2026.4.6",
     "date":    "2026-4-6",
     "title":   "Switch to free OpenRouter model; enhanced LLM error logging",

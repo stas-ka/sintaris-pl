@@ -10,6 +10,7 @@ Responsibilities:
 
 import hashlib
 import re
+import subprocess
 import threading
 import time
 import unicodedata
@@ -27,7 +28,7 @@ from telegram.bot_access import (
     _t, _is_admin, _is_allowed, _is_developer, _with_lang, _escape_md, _truncate,
     _safe_edit, _back_keyboard, _run_subprocess,
 )
-from core.bot_llm import ask_llm as _ask_builtin_llm
+from core.bot_llm import ask_llm as _ask_builtin_llm, ask_llm_or_raise as _ask_llm_strict
 from telegram.bot_users import (
     _list_notes_for, _load_note_text, _save_note_file, _delete_note_file,
     _slug, _find_registration, _upsert_registration, _set_reg_lang,
@@ -587,9 +588,38 @@ def _handle_system_message(chat_id: int, user_text: str) -> None:
     msg = bot.send_message(chat_id, "⏳ Generating command…")
 
     def _run():
-        cmd_text = _ask_builtin_llm(prompt, timeout=45)
+        try:
+            cmd_text = _ask_llm_strict(prompt, timeout=45)
+        except subprocess.TimeoutExpired:
+            bot.edit_message_text("❌ LLM timed out (>45 s). Try again later.",
+                                  chat_id, msg.message_id)
+            return
+        except FileNotFoundError:
+            bot.edit_message_text("❌ LLM binary not found — check bot config.",
+                                  chat_id, msg.message_id)
+            return
+        except Exception as exc:
+            err_str = str(exc)
+            if "402" in err_str or "Payment Required" in err_str:
+                display = "❌ LLM unavailable — payment or quota issue. Contact admin."
+                md = None
+            elif "401" in err_str or "Unauthorized" in err_str:
+                display = "❌ LLM authentication failed — check API key. Contact admin."
+                md = None
+            elif "429" in err_str or "Too Many Requests" in err_str:
+                display = "❌ LLM rate limit exceeded. Try again in a moment."
+                md = None
+            elif "503" in err_str or "Service Unavailable" in err_str:
+                display = "❌ LLM service temporarily unavailable. Try again later."
+                md = None
+            else:
+                display = f"❌ LLM error: `{err_str[:100]}`"
+                md = "Markdown"
+            bot.edit_message_text(display, chat_id, msg.message_id, parse_mode=md)
+            log.warning(f"[SystemChat] LLM error: {exc}")
+            return
         if not cmd_text:
-            bot.edit_message_text("❌ Could not generate a command. Try again.",
+            bot.edit_message_text("❌ LLM returned empty response. Try rephrasing.",
                                   chat_id, msg.message_id)
             return
 

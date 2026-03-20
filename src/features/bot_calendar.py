@@ -606,7 +606,11 @@ def _start_cal_console(chat_id: int) -> None:
 
 
 def _handle_cal_console(chat_id: int, text: str) -> None:
-    """Process a free-form calendar console command via LLM intent classification."""
+    """Process a free-form calendar console command via LLM intent classifier.
+
+    The LLM acts as a classifier only — Do NOT perform the action directly.
+    Returns JSON intent; local handlers execute the actual calendar operation.
+    """
     lang = _st._user_lang.get(chat_id, "ru")
     _st._user_mode.pop(chat_id, None)
 
