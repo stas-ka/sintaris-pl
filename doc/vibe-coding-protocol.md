@@ -900,3 +900,14 @@ Every ~3 months, measure baseline health:
 | 12:10 | Deploy v2026.4.5 + bump to v2026.4.6 on PI2; LLM still 402 — traced to `active_model.txt` containing `openai/gpt-4.1-mini` overriding `OPENAI_MODEL=google/gemma-3-4b-it:free` from bot.env; fix: echo `google/gemma-3-4b-it:free` into active_model.txt on PI2; LLM test `ask_llm_or_raise('Reply with exactly: ok')` → `SUCCESS: ok`; git commit hash `34115db` + push master | 2 | ~5 | claude-sonnet-4-6 | active_model.txt (PI2 runtime), src/core/bot_config.py, src/release_notes.json | done |
 
 **Session 59 total: 1 root-cause fix, ~5 turns — PI2 LLM 402 resolved; `active_model.txt` corrected to free model ✅ v2026.4.6 pushed ✅**
+
+## Session 60 — 2026-04-07 (UTC)
+
+**Focus:** TODO 8.2 Taris rename + TODO 8.3 Telegram offline regression test suite
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| — | TODO 8.2: Rename "Pico"/"Pico Bot"/"Pico Assistant" → "Taris" across codebase — 14 files, 21 replacements: README.md, AGENTS.md, src/strings.json, web templates (base.html, login.html, register.html, dashboard.html), static/manifest.json, .github/copilot-instructions.md, TODO.md, doc/quick-ref.md, doc/copilot-skills-guide.md, doc/arch/web-ui.md, doc/arch/deployment.md | 2 | ~3 | claude-sonnet-4.6 | 14 files | done |
+| — | TODO 8.3: Offline Telegram regression test suite — 8 classes, 31 tests, pytest 9.0.2; conftest passthrough-decorator two-mock architecture (WEB_ONLY=1 guard, _passthrough_deco side_effect for message_handler/callback_query_handler); covers TestCmdStart(4), TestCallbackMode(4), TestCallbackAdmin(9), TestCallbackMenu(3), TestVoiceHandler(3), TestTextHandlerNotes(2), TestTextHandlerAdmin(2), TestChatMode(3); voice_handler double-condition fix (_pending_error_protocol + msg.voice assert); 31/31 PASS in 0.22s | 4 | ~25 | claude-sonnet-4.6 | src/tests/telegram/conftest.py, src/tests/telegram/test_telegram_bot.py, src/tests/telegram/pytest.ini | done |
+
+**Session 60 total: 2 items, ~28 turns — Taris rename (14 files, 21 replacements) + 31/31 Telegram regression tests ✅**
