@@ -74,7 +74,7 @@ def list_models() -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ANSI_RE     = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-_SPINNER_RE  = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⣾⣽⣻⢿⡿⣟⣯⣷◐◑◒◓⠁⠂⠄⡀⢀⠠⠐⠈|/\\-]")
+_SPINNER_RE  = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⣾⣽⣻⢿⡿⣟⣯⣷◐◑◒◓⠁⠂⠄⡀⢀⠠⠐⠈]")  # ASCII |/\- removed: not spinner chars
 _PRINTF_WRAP = re.compile(r"^printf\s+['\"](.+)['\"]\s*$", re.DOTALL)
 _LOG_PREFIX  = re.compile(r"^(?:\d{4}[/-]\d{2}[/-]\d{2}|\d{8})[\sT]\d{2}:\d{2}:\d{2}\s*(?:INFO|DEBUG|WARN|ERROR)?\s*", re.MULTILINE)
 _PIPE_HEADER = re.compile(r"^(agent|picoclaw)\s*[|│]", re.MULTILINE | re.IGNORECASE)
@@ -96,6 +96,26 @@ def _clean_output(raw: str) -> str:
 # Provider clients
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _raise_if_http_error(text: str) -> None:
+    """Raise a descriptive RuntimeError if text contains a known HTTP error pattern.
+
+    The picoclaw binary may exit with rc=0 but embed the HTTP error message in
+    its stdout rather than setting a non-zero exit code.  Called on both the
+    rc!=0 (stderr) and rc=0 (stdout) paths in _ask_picoclaw so the caller
+    always receives a proper exception instead of an error string returned as
+    an LLM answer.
+    """
+    lo = text.lower()
+    if "payment required" in lo:
+        raise RuntimeError("picoclaw: 402 Payment Required")
+    if "too many requests" in lo:
+        raise RuntimeError("picoclaw: 429 Too Many Requests")
+    if "unauthorized" in lo and len(text) < 300:
+        raise RuntimeError("picoclaw: 401 Unauthorized")
+    if "service unavailable" in lo and len(text) < 300:
+        raise RuntimeError("picoclaw: 503 Service Unavailable")
+
+
 def _ask_picoclaw(prompt: str, timeout: int) -> str:
     """Call picoclaw CLI (wraps OpenRouter or configured LLM)."""
     model = get_active_model()
@@ -109,12 +129,16 @@ def _ask_picoclaw(prompt: str, timeout: int) -> str:
         cmd, capture_output=True, text=True, timeout=timeout, env=env,
     )
     if proc.returncode != 0:
-        log.warning(f"[LLM] picoclaw rc={proc.returncode}: {(proc.stderr or proc.stdout)[:300]}")
-        raise RuntimeError(f"picoclaw exited rc={proc.returncode}")
+        err_text = (proc.stderr or proc.stdout or "").strip()
+        log.warning(f"[LLM] picoclaw rc={proc.returncode}: {err_text[:300]}")
+        _raise_if_http_error(err_text)
+        raise RuntimeError(f"picoclaw exited rc={proc.returncode}: {err_text[:80]}")
     raw = proc.stdout or proc.stderr or ""
     result = _clean_output(raw)
     if not result:
         raise RuntimeError("picoclaw returned empty output")
+    # picoclaw may exit rc=0 but embed HTTP error text in stdout
+    _raise_if_http_error(result)
     return result
 
 
@@ -135,12 +159,22 @@ def _ask_openai(prompt: str, timeout: int) -> str:
         "Content-Type": "application/json",
         "Authorization": f"Bearer {OPENAI_API_KEY}",
     }
+    model_name = get_active_model() or OPENAI_MODEL
     body = {
-        "model": get_active_model() or OPENAI_MODEL,
+        "model": model_name,
         "messages": [{"role": "user", "content": prompt}],
     }
-    result = _http_post_json(url, headers, body, timeout)
-    return result["choices"][0]["message"]["content"].strip()
+    try:
+        result = _http_post_json(url, headers, body, timeout)
+        return result["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as exc:
+        err_body = ""
+        try:
+            err_body = exc.read(400).decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        log.error(f"[LLM] openai HTTP {exc.code} model='{model_name}': {err_body[:300]}")
+        raise RuntimeError(f"HTTP Error {exc.code}: {exc.reason}") from exc
 
 
 def _ask_yandexgpt(prompt: str, timeout: int) -> str:
@@ -260,6 +294,36 @@ def ask_llm(prompt: str, timeout: int = 60) -> str:
             log.error(f"[LLM] local fallback also failed: {exc2}")
 
     return ""
+
+
+def ask_llm_or_raise(prompt: str, timeout: int = 60) -> str:
+    """Call the configured LLM provider and raise on failure.
+
+    Unlike ``ask_llm()``, this propagates provider exceptions so callers can
+    show meaningful diagnostics to the user.  Use for interactive commands
+    (e.g. system chat) where a silent empty return masks the real error.
+
+    If local fallback is configured (Feature 3.2) and the primary provider
+    fails, the local llama.cpp server is tried first.  The original exception
+    is re-raised only when all available options have been exhausted.
+    """
+    provider = LLM_PROVIDER.lower()
+    fn = _DISPATCH.get(provider, _ask_picoclaw)
+    try:
+        return fn(prompt, timeout)
+    except Exception as primary_exc:
+        # Attempt local fallback if configured — same logic as ask_llm()
+        if (LLM_LOCAL_FALLBACK or os.path.exists(LLM_FALLBACK_FLAG_FILE)) and provider != "local":
+            log.warning(
+                f"[LLM] ask_llm_or_raise: trying local fallback after {provider} error: {primary_exc}"
+            )
+            try:
+                result = _ask_local(prompt, timeout)
+                if result:
+                    return f"⚠️ [local fallback]\n{result}"
+            except Exception as exc2:
+                log.error(f"[LLM] local fallback also failed: {exc2}")
+        raise  # Re-raise original exception when no fallback available/succeeded
 
 
 # ─────────────────────────────────────────────────────────────────────────────

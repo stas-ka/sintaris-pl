@@ -1,5 +1,35 @@
 [
   {
+    "version": "2026.4.6",
+    "date":    "2026-4-6",
+    "title":   "Switch to free OpenRouter model; enhanced LLM error logging",
+    "notes":   "- OPENAI_MODEL changed to google/gemma-3-4b-it:free (working free OpenRouter model)\n- _ask_openai now catches HTTPError explicitly and logs HTTP status + response body (up to 300 chars)\n- Fixes 402 Payment Required on every LLM call caused by auto model picking paid models with no credits"
+  },
+  {
+    "version": "2026.4.5",
+    "date":    "2026-4-5",
+    "title":   "Fix raw HTTP 402 error leaked through picoclaw rc=0 stdout path",
+    "notes":   "- Added _raise_if_http_error() helper in bot_llm.py\n- _ask_picoclaw now detects HTTP error patterns in stdout even when picoclaw exits rc=0\n- Also improves rc!=0 path: error text parsed for 402/429/401/503 patterns; full text included in RuntimeError message\n- System Chat and exception handler in bot_handlers.py correctly intercepts all these errors with user-friendly messages"
+  },
+  {
+    "version": "2026.4.4",
+    "date":    "2026-4-4",
+    "title":   "System Chat HTTP error handling + LLM fallback on 402/429/503",
+    "notes":   "- ask_llm_or_raise() now tries local llama.cpp fallback before raising (Feature 3.2)\n- System Chat shows user-friendly messages for HTTP 402/401/429/503 errors\n- Raw urllib.error.HTTPError strings no longer shown to users"
+  },
+  {
+    "version": "2026.4.3",
+    "date":    "2026-4-3",
+    "title":   "System Chat error messages fix + T26 regression guard",
+    "notes":   "- Fixed _SPINNER_RE stripping ASCII hyphen from bash commands (ls -la, df -h, etc.)\n- Added ask_llm_or_raise() to bot_llm.py for strict LLM failure handling\n- System Chat now shows specific error: timeout / binary not found / LLM error text\n- Added T26 regression test t_system_chat_clean_output (3 sub-tests)"
+  },
+  {
+    "version": "2026.4.2",
+    "date":    "2026-4-2",
+    "title":   "Copilot optimization complete (§20)",
+    "notes":   "- All quick-win Copilot optimization proposals P-1..P-9 complete\n- P-1: safe-update applyTo narrowed to specific files only\n- P-6: bot-deploy and safe-update instructions shortened, point to skills\n- P-7: accounting task moved from INSTRUCTIONS.md to concept/\n- P-9: #file: anchor pattern added to copilot-skills-guide.md\n- Updated implementation tracker in concept/copilot_optimization.md\n- P-5 (bot_web.py split) explicitly deferred to standalone sprint"
+  },
+  {
     "version": "2026.3.43",
     "date":    "2026-4-2",
     "title":   "Local LLM Fallback — Admin Panel toggle (§3.2 complete)",
