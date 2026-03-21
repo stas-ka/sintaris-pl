@@ -9,6 +9,12 @@
 [18.03.2026 20:05] SU: how much space i have on flash
 [18.03.2026 20:05] Smart PicoClaw Bot: ❌ Could not generate a command. Try again.
 [20.03.2026 06:28] Smart PicoClaw Bot: 📄 taris
+- [] PI2 missing Piper ONNX models (`ru_RU-irina-medium.onnx`, `.onnx.json`) — T01 `model_files_required` FAIL
+- [] PI1 missing `migrate_to_db.py` at expected path — T23 `db_migration_idempotent` FAIL
+- [] PI1 `taris-web.service` not running
+- [] German voice models absent on both PIs (`de_DE-thorsten-medium.onnx`, `vosk-model-small-de`)
+- [] PI2 has no Whisper model (`ggml-base.bin`) — Whisper tests SKIP
+- [] Vosk WER regression on short audio (`audio_2026-03-08_08-34-23.ogg`) — WER 0.70 vs threshold 0.35
 
 
 
@@ -141,6 +147,22 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 
 Baseline: Pi 3 B+ ~115 s total; target <25 s with all opts ON.
 → [Baseline measurements & full backlog](doc/todo/5-voice-pipeline.md)
+
+### 5.1 Whisper vs Vosk Decision ✅ Resolved (2026-03-21)
+
+Full regression test run on both PIs. **Vosk wins decisively** on Raspberry Pi hardware.
+→ [Test Protocol](doc/test-protocol-2026-03-21.md)
+
+| Metric | Vosk (PI1) | Whisper (PI1) |
+|---|---|---|
+| Avg latency | 4–14 s | 25–45 s |
+| WER (best) | 0.00 | 0.57 |
+| Hallucination | None | Severe on short audio |
+
+**Decision:** Keep Vosk as default STT. Whisper `whisper_stt` voice opt remains available but not recommended on Pi 3.
+- [x] Fix test_voice_regression.py Whisper model path (ggml-tiny → ggml-base)
+- [x] Run full regression on both PIs
+- [x] Create test protocol (`doc/test-protocol-2026-03-21.md`)
 
 ### 5.2 TTS Bottleneck 🔲
 
