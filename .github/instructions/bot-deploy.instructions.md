@@ -6,6 +6,15 @@ applyTo: "src/telegram_menu_bot.py,src/bot_*.py,src/strings.json,src/release_not
 
 Use this skill whenever deploying bot changes to the Pi.
 
+## ⚠️ Data Safety — Mandatory Rule
+
+> **DATA SHALL ALWAYS BE BACKED UP AND MIGRATED ON EVERY SOFTWARE CHANGE ON TARGETS.**
+>
+> - **Before any deploy**: verify `~/.taris/calendar/`, `~/.taris/notes/`, `~/.taris/mail_creds/`, `~/.taris/taris.db`, `~/.taris/bot.env` are present and non-empty on the target.
+> - **If changing data paths or service names**: migrate ALL user data from the old path to the new path BEFORE deploying new code.
+> - **If in doubt**: run Step 0.5 (backup) + Step 0.6 (data directory migration check) from the `/taris-deploy-to-target` skill first.
+> - **Data loss is never acceptable. Silent data loss is a critical bug.**
+
 ## Deployment Pipeline — MANDATORY ORDER
 
 > **RULE: Engineering before Production — always.**

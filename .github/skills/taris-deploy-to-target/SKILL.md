@@ -96,6 +96,36 @@ Expected to see: `bot.env`, `config.json`, `taris.db` (or `voice_opts.json`, `us
 
 ---
 
+### Step 0.6 — Data Directory Migration Check *(mandatory)*
+
+> ⚠️ **DATA SHALL ALWAYS BE BACKED UP AND MIGRATED ON EVERY SOFTWARE CHANGE ON TARGETS.**
+>
+> Before proceeding: verify all persistent user-data directories exist at the correct path on the target.
+> If you are deploying after a service rename (e.g. `picoclaw` → `taris`) or a path change — **migrate ALL user data from the old path to the new path NOW**.
+
+Check all data directories on the target:
+
+```bat
+plink -pw "%TPWD%" -batch stas@%THOST% ^
+  "for d in calendar notes contacts mail_creds error_protocols; do echo \"=== $d ==="; ls -la ~/.taris/$d/ 2>/dev/null || echo MISSING; done && ls -la ~/.taris/taris.db ~/.taris/bot.env ~/.taris/voice_opts.json 2>/dev/null || echo SOME_FILES_MISSING"
+```
+
+**Data directory reference:**
+
+| Directory / File | Contents | Action if missing or empty |
+|---|---|---|
+| `~/.taris/calendar/` | Per-user calendar events (JSON per user) | `cp -n ~/.picoclaw/calendar/*.json ~/.taris/calendar/ 2>/dev/null` |
+| `~/.taris/notes/` | Per-user Markdown notes | `cp -rn ~/.picoclaw/notes/. ~/.taris/notes/` |
+| `~/.taris/contacts/` | Per-user contact book (JSON) | `cp -rn ~/.picoclaw/contacts/. ~/.taris/contacts/` |
+| `~/.taris/mail_creds/` | IMAP credentials + digest cache | `cp -rn ~/.picoclaw/mail_creds/. ~/.taris/mail_creds/` |
+| `~/.taris/taris.db` | SQLite data store | restore from Step 0.5 backup |
+| `~/.taris/bot.env` | Token + allowed users | restore from Step 0.5 backup or re-create manually |
+| `~/.taris/voice_opts.json` | Voice optimisation flags | restore from Step 0.5 backup |
+
+**Do not proceed if any directory that held user data before is now missing or empty.**
+
+---
+
 ### Step 1 — Classify the change
 
 Ask or determine:
