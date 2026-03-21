@@ -52,7 +52,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core.bot_config import (
-    BOT_VERSION, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
+    BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, log,
 )
 from security.bot_auth import (
@@ -63,6 +63,8 @@ from security.bot_auth import (
 )
 from core.bot_llm import ask_llm, ask_llm_with_history, get_active_model, list_models, set_active_model
 from core.bot_prompts import PROMPTS, fmt_prompt
+from ui.bot_ui import UserContext
+from ui.screen_loader import load_screen
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
@@ -74,6 +76,19 @@ _CALENDAR_DIR = os.path.join(_TARIS_DIR, "calendar")
 BASE = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE / "web" / "templates"
 STATIC_DIR = BASE / "web" / "static"
+
+# ── Web i18n helper (for Screen DSL) ──────────────────────────────────────
+_WEB_STRINGS: dict = {}
+try:
+    with open(BASE / "strings.json", encoding="utf-8") as _f:
+        _WEB_STRINGS = json.load(_f)
+except Exception:
+    log.warning("[Web] Could not load strings.json for Screen DSL i18n")
+
+def _web_t(lang: str, key: str) -> str:
+    """Translate a string key for the web UI (Screen DSL)."""
+    text = _WEB_STRINGS.get(lang, _WEB_STRINGS.get("en", {})).get(key, key)
+    return text.replace("{bot_name}", BOT_NAME) if "{bot_name}" in text else text
 
 # ── Google OAuth2 (Gmail) ──────────────────────────────────────────────────
 _GMAIL_OAUTH_SCOPES = ["https://mail.google.com/"]
@@ -2131,6 +2146,23 @@ async def admin_reset_password(
     uname = account.get("username", user_id) if account else user_id
     log.info(f"[Admin] Password reset for user '{uname}' by admin '{user.get('username')}'")
     return Response(headers={"HX-Redirect": f"/admin?msg=Password+reset+for+{uname}"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dynamic Screen DSL route
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/screen/{screen_id}")
+async def dynamic_screen(request: Request, screen_id: str):
+    user = _require_auth(request)
+    account = find_account_by_id(user["sub"]) or {}
+    lang = account.get("language", "en")
+    role = user.get("role", "user")
+    ctx = UserContext(user_id=user["sub"], chat_id=0, lang=lang, role=role)
+    screen = load_screen(f"screens/{screen_id}.yaml", ctx, t_func=_web_t)
+    return templates.TemplateResponse(
+        "dynamic.html", _ctx(request, user, screen_id, screen=screen),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

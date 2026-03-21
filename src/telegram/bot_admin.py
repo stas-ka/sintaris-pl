@@ -97,8 +97,9 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton("🤖  Switch LLM",     callback_data="admin_llm_menu"),
         InlineKeyboardButton("⚡  Voice Opts",      callback_data="voice_opts_menu"),
         InlineKeyboardButton("📝  Release Notes",   callback_data="admin_changelog"),
-        InlineKeyboardButton("�  Logs",            callback_data="admin_logs_menu"),
-        InlineKeyboardButton("�🔙  Menu",            callback_data="menu"),
+        InlineKeyboardButton("📊  Logs",            callback_data="admin_logs_menu"),
+        InlineKeyboardButton("🔄  Reload Screens",  callback_data="reload_screens"),
+        InlineKeyboardButton("🔙  Menu",            callback_data="menu"),
     )
     return kb
 

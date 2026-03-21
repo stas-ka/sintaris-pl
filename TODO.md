@@ -370,7 +370,7 @@ Reduce context-window consumption so Copilot sessions sustain 8–10 turns witho
 
 ### 20.3 Larger refactors
 
-- [ ] **P-5** Split `src/bot_web.py` (83 KB) into `bot_web_app.py` + `bot_web_api.py` + `bot_web_render.py` (~25–40 KB each) — **deferred** (4–8 h, deployment risk; schedule as standalone sprint)
+- [x] **P-5** ~~Split `src/bot_web.py`~~ — **superseded by TODO 21** (Screen DSL + YAML Loader): declarative screen files naturally modularize UI without risky file split. Screen logic migrates to `src/screens/*.yaml`; `bot_web.py` gains a single `/dynamic/{screen_id}` route instead of N hardcoded render blocks.
 - [x] **P-11** Back-link footers added to all 9 `doc/todo/*.md` specs; `storage-architecture.md` noted as 18 KB (> 10 KB target, trimming deferred) — ✅ done
 
 ### 20.4 Guidelines & Process ✅ All done
@@ -381,7 +381,7 @@ Reduce context-window consumption so Copilot sessions sustain 8–10 turns witho
 
 ---
 
-## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader 🔲
+## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader �
 
 Extend the existing Screen DSL with a declarative file loader that reads screen
 definitions from YAML/JSON files. Zero RAM overhead; both renderers unchanged;
@@ -389,26 +389,26 @@ incremental migration from Python-coded screens.
 
 → [Research report](doc/research-dynamic-ui-scenarios.md) · [Spec](doc/todo/21-screen-dsl-loader.md)
 
-### 21.1 Phase 1 — Core Loader 🔲
+### 21.1 Phase 1 — Core Loader ✅ Implemented (v2026.4.10)
 
-- [ ] Create `src/ui/screen_loader.py` (~100 lines): `_WIDGET_BUILDERS` registry, `load_screen()`, all 10 widget builders
-- [ ] JSON support (stdlib `json`) + YAML support (optional `pyyaml`)
-- [ ] i18n key resolution via `t_func(lang, key)` parameter
-- [ ] Role-based widget visibility (`visible_roles: [admin]` in YAML)
-- [ ] Variable substitution in text and actions (`{var_name}` → `variables` dict)
-- [ ] `load_all_screens(dir)` for preload at startup
-- [ ] `reload_screens()` for hot-reload (clears `_screen_cache`)
-- [ ] Add `pyyaml` to `deploy/requirements.txt`
-- [ ] Unit tests: all 10 widget types, i18n resolution, role filtering, variable substitution
+- [x] Create `src/ui/screen_loader.py` (288 lines): `_WIDGET_BUILDERS` registry, `load_screen()`, all 10 widget builders
+- [x] JSON support (stdlib `json`) + YAML support (optional `pyyaml`)
+- [x] i18n key resolution via `t_func(lang, key)` parameter
+- [x] Role-based widget visibility (`visible_roles: [admin]` in YAML)
+- [x] Variable substitution in text and actions (`{var_name}` → `variables` dict)
+- [x] `load_all_screens(dir)` for preload at startup
+- [x] `reload_screens()` for hot-reload (clears `_screen_cache`)
+- [x] Add `pyyaml` to `deploy/requirements.txt`
+- [x] Unit tests: 53 tests across 9 test classes — all pass on PI2
 
-### 21.2 Phase 2 — Proof of Concept 🔲
+### 21.2 Phase 2 — Proof of Concept ✅ Implemented (v2026.4.10)
 
-- [ ] Create `src/screens/` directory for YAML/JSON screen definitions
-- [ ] Convert `help` screen to `screens/help.yaml`
-- [ ] Wire Telegram callback: `load_screen("screens/help.yaml", ctx, t_func=_t_by_lang)` + `render_screen()`
-- [ ] Add `GET /dynamic/{screen_id}` route in `bot_web.py` + `templates/dynamic.html`
-- [ ] Add `reload_screens` admin callback → "✅ Screens reloaded"
-- [ ] Smoke test: both channels render identical output from same YAML file
+- [x] Create `src/screens/` directory for YAML/JSON screen definitions
+- [x] Convert `help` screen to `screens/help.yaml`
+- [x] Wire Telegram callback: `load_screen("screens/help.yaml", ctx, t_func=_t_by_lang)` + `render_screen()`
+- [x] Add `GET /screen/{screen_id}` route in `bot_web.py` + `templates/dynamic.html`
+- [x] Add `reload_screens` admin callback → "✅ Screens reloaded"
+- [x] Smoke test: both services running v2026.4.10 on PI2, clean startup confirmed
 
 ### 21.3 Phase 3 — Main & Admin Menus 🔲
 

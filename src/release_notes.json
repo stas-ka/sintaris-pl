@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.10",
+    "date":    "2026-4-10",
+    "title":   "Screen DSL Loader - Phase 1 + Phase 2 (TODO 21)",
+    "notes":   "- New screen_loader.py: declarative Screen DSL loader (YAML/JSON)\n- 10 widget builders: button, button_row, card, text_input, toggle, audio_player, markdown, spinner, confirm, redirect\n- i18n key resolution via t_func(lang, key)\n- Role-based widget visibility (visible_roles filter)\n- Variable substitution in text and actions\n- Screen caching, reload_screens(), load_all_screens()\n- help.yaml: first declarative screen (role-aware help text)\n- Telegram: help callback renders via screen_loader + render_screen\n- Telegram: Admin panel 'Reload Screens' button\n- Web UI: GET /screen/{screen_id} dynamic route + dynamic.html template\n- 53 unit tests (51 pass, 2 skip without PyYAML)\n- P-5 (bot_web.py split) superseded by this approach"
+  },
+  {
     "version": "2026.4.9",
     "date":    "2026-4-9",
     "title":   "No-history emergency fallback + model switch to gemma-3-4b-it:free",

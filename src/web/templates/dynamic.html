@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ screen.title }}{% endblock %}
+{% block page_title %}{{ screen.title }}{% endblock %}
+
+{% block content %}
+<div class="screen-dynamic">
+  {% for widget in screen.widgets %}
+    {% set wtype = widget.__class__.__name__ %}
+
+    {% if wtype == 'MarkdownBlock' %}
+      <article class="screen-markdown">{{ widget.text | safe }}</article>
+
+    {% elif wtype == 'Card' %}
+      <article>
+        <header><strong>{{ widget.title }}</strong></header>
+        <p>{{ widget.body }}</p>
+        {% if widget.action %}
+          <footer><a href="/screen/{{ widget.action }}" role="button" class="outline">Open</a></footer>
+        {% endif %}
+      </article>
+
+    {% elif wtype == 'ButtonRow' %}
+      <div class="grid">
+        {% for btn in widget.buttons %}
+          <a href="/screen/{{ btn.action }}" role="button"
+             class="{% if btn.style == 'danger' %}secondary{% elif btn.style == 'ghost' %}outline{% endif %}">
+            {{ btn.label }}
+          </a>
+        {% endfor %}
+      </div>
+
+    {% elif wtype == 'Toggle' %}
+      <label>
+        <input type="checkbox" role="switch" {% if widget.value %}checked{% endif %}
+               hx-post="/screen/toggle/{{ widget.key }}" hx-swap="none">
+        {{ widget.label }}
+      </label>
+
+    {% elif wtype == 'TextInput' %}
+      <form action="/screen/{{ widget.action }}" method="post">
+        <input type="text" name="value" placeholder="{{ widget.placeholder }}">
+        <button type="submit">Submit</button>
+      </form>
+
+    {% elif wtype == 'Spinner' %}
+      <p aria-busy="true">{{ widget.label }}</p>
+
+    {% elif wtype == 'Confirm' %}
+      <article>
+        <p>{{ widget.text }}</p>
+        <footer>
+          <div class="grid">
+            <a href="/screen/{{ widget.action_yes }}" role="button">Yes</a>
+            <a href="/screen/{{ widget.action_no }}" role="button" class="secondary">No</a>
+          </div>
+        </footer>
+      </article>
+
+    {% elif wtype == 'AudioPlayer' %}
+      <figure>
+        <audio controls src="{{ widget.src }}"></audio>
+        {% if widget.caption %}<figcaption>{{ widget.caption }}</figcaption>{% endif %}
+      </figure>
+
+    {% endif %}
+  {% endfor %}
+</div>
+{% endblock %}

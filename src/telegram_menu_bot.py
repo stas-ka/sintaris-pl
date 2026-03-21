@@ -32,10 +32,15 @@ from core.bot_logger import configure_alert_handler, attach_alerts_to_main_log
 # ─── Shared utilities ─────────────────────────────────────────────────────────
 from telegram.bot_access import (
     _is_allowed, _is_admin, _is_guest,
-    _deny, _set_lang, _send_menu,
+    _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
 )
+
+# ─── Screen DSL ───────────────────────────────────────────────────────────────
+from ui.bot_ui import UserContext
+from ui.screen_loader import load_screen, reload_screens
+from ui.render_telegram import render_screen
 
 # ─── Data layer ───────────────────────────────────────────────────────────────
 from telegram.bot_users import (
@@ -296,15 +301,11 @@ def callback_handler(call):
 
     # ── Help ───────────────────────────────────────────────────────────────
     elif data == "help":
-        if _is_admin(cid):
-            key = "help_text_admin"
-        elif _is_guest(cid):
-            key = "help_text_guest"
-        else:
-            key = "help_text"
-        bot.send_message(cid, _t(cid, key),
-                         parse_mode="Markdown",
-                         reply_markup=_back_keyboard())
+        role = "admin" if _is_admin(cid) else "guest" if _is_guest(cid) else "user"
+        ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role=role)
+        screen = load_screen("screens/help.yaml", ctx,
+                             t_func=lambda _lang_arg, key: _t(cid, key))
+        render_screen(screen, cid, bot)
     # ── User profile ───────────────────────────────────────────────────────────
     elif data == "profile":
         if not _is_allowed(cid): return _deny(cid)
@@ -424,6 +425,14 @@ def callback_handler(call):
     elif data == "admin_changelog":
         if _is_admin(cid):
             _handle_admin_changelog(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Screen DSL reload ──────────────────────────────────────────────────
+    elif data == "reload_screens":
+        if _is_admin(cid):
+            reload_screens()
+            bot.send_message(cid, "✅ Screens reloaded")
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
