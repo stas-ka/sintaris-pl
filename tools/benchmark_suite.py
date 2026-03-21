@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-benchmark_suite.py — Picoclaw unified performance benchmark orchestrator.
+benchmark_suite.py — Taris unified performance benchmark orchestrator.
 
 Runs one or both benchmark suites (storage / menus) on one or more platforms
 (local dev, PI1, PI2), then prints a cross-platform comparison summary.
@@ -39,13 +39,13 @@ PI_TARGETS: dict[str, dict] = {
     "pi1": {
         "host":       "OpenClawPI",
         "user":       "stas",
-        "remote_dir": "/home/stas/.picoclaw/tools",
+        "remote_dir": "/home/stas/.taris/tools",
         "pw_env":     "HOSTPWD",
     },
     "pi2": {
         "host":       "OpenClawPI2",
         "user":       "stas",
-        "remote_dir": "/home/stas/.picoclaw/tools",
+        "remote_dir": "/home/stas/.taris/tools",
         "pw_env":     "HOSTPWD2",
     },
 }
@@ -327,7 +327,7 @@ def _print_comparison(results_path: Path, suite_filter: str | None = None) -> No
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Picoclaw unified performance benchmark runner + comparison printer.",
+        description="Taris unified performance benchmark runner + comparison printer.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

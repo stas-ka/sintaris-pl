@@ -184,5 +184,5 @@ Each entry structure:
 |---|---|
 | `plink` / `pscp` not found | Ensure PuTTY tools are on `PATH` |
 | Pi deploy fails | Check `HOSTPWD` / `HOSTPWD2` env vars; verify Pi is reachable |
-| Menu benchmark import error | Run from workspace root: `cd d:\Projects\workspace\picoclaw && python tools\...` |
+| Menu benchmark import error | Run from workspace root: `cd d:\Projects\workspace\taris && python tools\...` |
 | `ggml` / ONNX warnings in menus | Expected — bot patched to use mock LLM; warnings are non-fatal |

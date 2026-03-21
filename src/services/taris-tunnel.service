@@ -10,7 +10,7 @@ User=stas
 
 # ── All tunnel config lives in tunnel.env — written by setup_tunnel_key.sh ──
 # Fields: VPS_HOST, VPS_USER, REMOTE_PORT, LOCAL_PORT, SSH_KEY
-EnvironmentFile=/home/stas/.picoclaw/tunnel.env
+EnvironmentFile=/home/stas/.taris/tunnel.env
 
 # AUTOSSH_GATETIME=0 means autossh won't give up on the first failed attempt
 Environment=AUTOSSH_GATETIME=0

@@ -92,14 +92,14 @@ py -m pytest src/tests/ui/test_ui.py -v --tb=short --browser chromium --base-url
 
 ```bat
 rem Telegram bot service journal — verify version + polling started
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-telegram -n 20 --no-pager"
-plink -pw "%HOSTPWD2%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegram -n 20 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-telegram -n 20 --no-pager"
+plink -pw "%HOSTPWD2%" -batch stas@OpenClawPI2 "journalctl -u taris-telegram -n 20 --no-pager"
 ```
 
 **Expected journal output (PASS):**
 ```
 [INFO] Version      : 2026.X.Y
-[INFO] DB init OK   : /home/stas/.picoclaw/pico.db
+[INFO] DB init OK   : /home/stas/.taris/taris.db
 [INFO] Polling Telegram…
 ```
 
@@ -107,7 +107,7 @@ Any `ERROR` or `Traceback` in the last 20 lines = FAIL. Check the failing servic
 
 ```bat
 rem Web service smoke check
-plink -pw "%HOSTPWD2%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-web -n 20 --no-pager"
+plink -pw "%HOSTPWD2%" -batch stas@OpenClawPI2 "journalctl -u taris-web -n 20 --no-pager"
 ```
 
 **Expected (PASS):** `Uvicorn running on https://0.0.0.0:8080`

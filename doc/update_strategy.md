@@ -1,6 +1,6 @@
 # Update & Deployment Strategy
 
-**Scope:** picoclaw Telegram bot (`telegram_menu_bot.py`) on Raspberry Pi 3 B+ (single-host, single-service deployment).
+**Scope:** taris Telegram bot (`telegram_menu_bot.py`) on Raspberry Pi 3 B+ (single-host, single-service deployment).
 
 ---
 
@@ -49,12 +49,12 @@ Add a `--notify` mode to `src/setup/update.sh` or a standalone `src/setup/notify
 
 ```bash
 # Notify all users, then wait for grace period, then restart
-python3 ~/.picoclaw/notify_maintenance.py --message "🔧 Bot update in 30 seconds. Short interruption." --wait 30
-echo "$HOSTPWD" | sudo -S systemctl restart picoclaw-telegram
+python3 ~/.taris/notify_maintenance.py --message "🔧 Bot update in 30 seconds. Short interruption." --wait 30
+echo "$HOSTPWD" | sudo -S systemctl restart taris-telegram
 ```
 
 `notify_maintenance.py` should:
-1. Read `~/.picoclaw/registrations.json` for all `approved` users.
+1. Read `~/.taris/registrations.json` for all `approved` users.
 2. Send each user a Telegram message via the Bot API (`requests.post` to `api.telegram.org`).
 3. Wait for the configured grace period (default: 30 s).
 4. Exit with code 0 — restart is triggered by the calling script.
@@ -89,22 +89,22 @@ The existing release-notes notification mechanism (`last_notified_version.txt`) 
 
 ```bat
 rem 1. Deploy files
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\release_notes.json   stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\strings.json         stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\release_notes.json   stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\strings.json         stas@OpenClawPI:/home/stas/.taris/
 
 rem 2. Restart service
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram"
 
 rem 3. Verify
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-telegram -n 15 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-telegram -n 15 --no-pager"
 ```
 
 ### 4.2 Full update via update.sh (executes on Pi)
 
 ```bash
 # Run on Pi (or invoke via plink)
-bash /home/stas/.picoclaw/update.sh
+bash /home/stas/.taris/update.sh
 ```
 
 This handles: file sync, diff-based service unit updates, daemon-reload, service restarts.
@@ -127,12 +127,12 @@ Every deployed state is a git commit. To roll back:
 
 ```bat
 rem Find the last good commit
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "git -C /home/stas/.picoclaw log --oneline -10"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "git -C /home/stas/.taris log --oneline -10"
 
 rem Roll back bot to previous version
 git checkout <prev-commit-hash> -- src/telegram_menu_bot.py
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@OpenClawPI:/home/stas/.picoclaw/
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram"
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@OpenClawPI:/home/stas/.taris/
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram"
 ```
 
 ### 5.2 Tagged releases
@@ -156,7 +156,7 @@ git checkout v2026.3.15-rc1 -- src/telegram_menu_bot.py src/release_notes.json
 Before each deploy, optionally save the current bot:
 
 ```bash
-plink ... "cp ~/.picoclaw/telegram_menu_bot.py ~/.picoclaw/telegram_menu_bot.py.bak"
+plink ... "cp ~/.taris/telegram_menu_bot.py ~/.taris/telegram_menu_bot.py.bak"
 ```
 
 ---
@@ -257,6 +257,6 @@ When updating the **bot only** (Python file changes):
 5. **Tag** — `git tag -a vYYYY.M.D -m "release message" && git push --tags`
 6. **Notify users** *(when notify script is available)* — `python3 notify_maintenance.py --wait 30`
 7. **Deploy** — `pscp` bot + companion files → Pi
-8. **Restart** — `echo $HOSTPWD | sudo -S systemctl restart picoclaw-telegram`
-9. **Verify** — `journalctl -u picoclaw-telegram -n 20 --no-pager` — check for startup + release note sent
+8. **Restart** — `echo $HOSTPWD | sudo -S systemctl restart taris-telegram`
+9. **Verify** — `journalctl -u taris-telegram -n 20 --no-pager` — check for startup + release note sent
 10. **Confirm** — open Telegram, verify bot responds and admin received changelog notification

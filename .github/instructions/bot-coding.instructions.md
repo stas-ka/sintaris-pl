@@ -4,7 +4,7 @@ applyTo: "src/*.py,src/bot_*.py,src/strings.json"
 
 # Bot Coding Patterns — Skill
 
-Exact patterns for adding features to the picoclaw bot. Always check `doc/bot-code-map.md` first to find the relevant function by name/line.
+Exact patterns for adding features to the taris bot. Always check `doc/bot-code-map.md` first to find the relevant function by name/line.
 
 ## Adding a Voice Opt Toggle (6 steps)
 
@@ -91,7 +91,7 @@ def _handle_admin_something(chat_id):
 ## Subprocess Pattern
 
 ```python
-out, rc = _run_subprocess(["/usr/bin/picoclaw", "agent", "-m", prompt], timeout=60)
+out, rc = _run_subprocess(["/usr/bin/taris", "agent", "-m", prompt], timeout=60)
 if rc != 0: log.warning(f"[MyFeature] exit {rc}: {out[:120]}")
 ```
 

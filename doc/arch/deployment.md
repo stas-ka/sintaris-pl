@@ -1,4 +1,4 @@
-# Picoclaw — Deployment, File Layout & Configuration
+# Taris — Deployment, File Layout & Configuration
 
 **Version:** `2026.3.28`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -8,13 +8,13 @@
 ## 12. File Layout on Pi
 
 ```
-/home/stas/.picoclaw/
+/home/stas/.taris/
   telegram_menu_bot.py          ← entry point (v2026.3.28)
   bot_config.py                 ← constants, env loading, logging
   bot_state.py                  ← mutable runtime state dicts
   bot_instance.py               ← TeleBot singleton
   bot_security.py               ← 3-layer prompt injection guard
-  bot_access.py                 ← access control, i18n, keyboards, _ask_picoclaw
+  bot_access.py                 ← access control, i18n, keyboards, _ask_taris
   bot_users.py                  ← registration + notes file I/O
   bot_voice.py                  ← full voice pipeline: STT/TTS/VAD + multi-part TTS
   bot_calendar.py               ← smart calendar: CRUD, NL parser, reminders, briefing
@@ -26,7 +26,7 @@
   voice_assistant.py            ← standalone voice daemon
   strings.json                  ← i18n UI strings (ru / de / en — 115 keys)
   release_notes.json            ← versioned changelog
-  config.json                   ← picoclaw LLM config (model_list, agents)
+  config.json                   ← taris LLM config (model_list, agents)
   bot.env                       ← BOT_TOKEN + ALLOWED_USERS + ADMIN_USERS
   gmail_digest.py               ← legacy shared digest cron (deprecated)
 
@@ -85,13 +85,13 @@
 /dev/shm/piper/                   ← optional tmpfs model copy (voice_opt: tmpfs_model)
 /usr/local/bin/piper              ← Piper wrapper script
 /usr/local/share/piper/           ← Piper binary + bundled libs
-/usr/bin/picoclaw                 ← picoclaw Go binary (from .deb)
+/usr/bin/picoclaw                 ← taris Go binary (from .deb)
 
 /etc/systemd/system/
-  picoclaw-gateway.service
-  picoclaw-voice.service
-  picoclaw-telegram.service
-  picoclaw-web.service          ← FastAPI web UI (uvicorn HTTPS :8080)
+  taris-gateway.service
+  taris-voice.service
+  taris-telegram.service
+  taris-web.service          ← FastAPI web UI (uvicorn HTTPS :8080)
 ```
 
 ---
@@ -104,11 +104,11 @@
 |---|---|---|---|
 | `BOT_VERSION` | `"2026.3.28"` | — | Version string; bump on every user-visible change |
 | `PIPER_BIN` | `/usr/local/bin/piper` | `PIPER_BIN` | Piper TTS wrapper binary |
-| `PIPER_MODEL` | `~/.picoclaw/ru_RU-irina-medium.onnx` | `PIPER_MODEL` | Default Piper voice model |
-| `PIPER_MODEL_LOW` | `~/.picoclaw/ru_RU-irina-low.onnx` | `PIPER_MODEL_LOW` | Low-quality Piper model |
+| `PIPER_MODEL` | `~/.taris/ru_RU-irina-medium.onnx` | `PIPER_MODEL` | Default Piper voice model |
+| `PIPER_MODEL_LOW` | `~/.taris/ru_RU-irina-low.onnx` | `PIPER_MODEL_LOW` | Low-quality Piper model |
 | `WHISPER_BIN` | `/usr/local/bin/whisper-cpp` | `WHISPER_BIN` | whisper.cpp binary |
-| `WHISPER_MODEL` | `~/.picoclaw/ggml-base.bin` | `WHISPER_MODEL` | Whisper model file |
-| `VOSK_MODEL_PATH` | `~/.picoclaw/vosk-model-small-ru` | `VOSK_MODEL_PATH` | Vosk model directory |
+| `WHISPER_MODEL` | `~/.taris/ggml-base.bin` | `WHISPER_MODEL` | Whisper model file |
+| `VOSK_MODEL_PATH` | `~/.taris/vosk-model-small-ru` | `VOSK_MODEL_PATH` | Vosk model directory |
 | `VOICE_SAMPLE_RATE` | `16000` | — | Base STT decode rate (Hz) |
 | `VOICE_CHUNK_SIZE` | `4000` | — | Frames per processing chunk (250 ms) |
 | `VOICE_SILENCE_TIMEOUT` | `4.0` | — | Silence timeout for voice recording (s) |
@@ -116,27 +116,27 @@
 | `TTS_MAX_CHARS` | `600` | — | Real-time voice TTS cap (~25 s on Pi 3) |
 | `TTS_CHUNK_CHARS` | `1200` | — | Per-part "Read aloud" cap (~55 s on Pi 3) |
 | `VOICE_TIMING_DEBUG` | `false` | `VOICE_TIMING_DEBUG=1` | Per-stage latency log output |
-| `NOTES_DIR` | `~/.picoclaw/notes` | `NOTES_DIR` | Base dir for note files |
-| `CALENDAR_DIR` | `~/.picoclaw/calendar` | `CALENDAR_DIR` | Base dir for calendar files |
-| `MAIL_CREDS_DIR` | `~/.picoclaw/mail_creds` | `MAIL_CREDS_DIR` | Base dir for mail credentials |
-| `REGISTRATIONS_FILE` | `~/.picoclaw/registrations.json` | `REGISTRATIONS_FILE` | User registration records |
+| `NOTES_DIR` | `~/.taris/notes` | `NOTES_DIR` | Base dir for note files |
+| `CALENDAR_DIR` | `~/.taris/calendar` | `CALENDAR_DIR` | Base dir for calendar files |
+| `MAIL_CREDS_DIR` | `~/.taris/mail_creds` | `MAIL_CREDS_DIR` | Base dir for mail credentials |
+| `REGISTRATIONS_FILE` | `~/.taris/registrations.json` | `REGISTRATIONS_FILE` | User registration records |
 | `STRINGS_FILE` | `strings.json` next to script | `STRINGS_FILE` | i18n UI text file (ru / de / en) |
-| `VOSK_MODEL_DE_PATH` | `~/.picoclaw/vosk-model-small-de` | `VOSK_MODEL_DE_PATH` | Vosk German STT model directory |
-| `PIPER_MODEL_DE` | `~/.picoclaw/de_DE-thorsten-medium.onnx` | `PIPER_MODEL_DE` | Piper German TTS voice model |
-| `PICOCLAW_BIN` | `/usr/bin/picoclaw` | `PICOCLAW_BIN` | picoclaw Go binary |
-| `LLM_PROVIDER` | `"picoclaw"` | `LLM_PROVIDER` | Active LLM backend (`picoclaw`/`openai`/`yandexgpt`/`gemini`/`anthropic`/`local`) |
+| `VOSK_MODEL_DE_PATH` | `~/.taris/vosk-model-small-de` | `VOSK_MODEL_DE_PATH` | Vosk German STT model directory |
+| `PIPER_MODEL_DE` | `~/.taris/de_DE-thorsten-medium.onnx` | `PIPER_MODEL_DE` | Piper German TTS voice model |
+| `TARIS_BIN` | `/usr/bin/picoclaw` | `TARIS_BIN` | taris Go binary |
+| `LLM_PROVIDER` | `"taris"` | `LLM_PROVIDER` | Active LLM backend (`taris`/`openai`/`yandexgpt`/`gemini`/`anthropic`/`local`) |
 | `LLAMA_CPP_URL` | `http://127.0.0.1:8081` | `LLAMA_CPP_URL` | Local llama.cpp server endpoint |
 | `LLM_LOCAL_FALLBACK` | `false` | `LLM_LOCAL_FALLBACK` | Set `true` to enable static auto-fallback to local LLM |
-| `LLM_FALLBACK_FLAG_FILE` | `~/.picoclaw/llm_fallback_enabled` | — | Flag file; presence=fallback ON (runtime toggle, no restart needed) |
+| `LLM_FALLBACK_FLAG_FILE` | `~/.taris/llm_fallback_enabled` | — | Flag file; presence=fallback ON (runtime toggle, no restart needed) |
 
 ### `voice_assistant.py` CONFIG
 
 | Key | Default | Env Override | Description |
 |---|---|---|---|
-| `vosk_model_path` | `/home/stas/.picoclaw/vosk-model-small-ru` | `VOSK_MODEL_PATH` | Vosk model directory |
+| `vosk_model_path` | `/home/stas/.taris/vosk-model-small-ru` | `VOSK_MODEL_PATH` | Vosk model directory |
 | `piper_bin` | `/usr/local/bin/piper` | `PIPER_BIN` | Piper TTS binary |
-| `piper_model` | `/home/stas/.picoclaw/ru_RU-irina-medium.onnx` | `PIPER_MODEL` | Piper voice model |
-| `picoclaw_bin` | `/usr/bin/picoclaw` | `PICOCLAW_BIN` | picoclaw binary |
+| `piper_model` | `/home/stas/.taris/ru_RU-irina-medium.onnx` | `PIPER_MODEL` | Piper voice model |
+| `taris_bin` | `/usr/bin/picoclaw` | `TARIS_BIN` | taris binary |
 | `audio_target` | `auto` | `AUDIO_TARGET` | Microphone selection |
 | `sample_rate` | `16000` | — | Audio capture rate (Hz) |
 | `chunk_size` | `4000` | — | Frames per processing chunk |
@@ -176,6 +176,6 @@ Three-tier backup strategy:
 | Constant | `BOT_VERSION = "2026.3.28"` in `bot_config.py` |
 | Format | `YYYY.M.D` (no zero-padding) |
 | Changelog source | `release_notes.json` (deployed alongside bot) |
-| Tracking file | `~/.picoclaw/last_notified_version.txt` (auto-created) |
+| Tracking file | `~/.taris/last_notified_version.txt` (auto-created) |
 | Trigger | On startup: if `BOT_VERSION != last_notified`, send release entry to all admins |
 | Admin view | Admin panel → 📝 Release Notes shows full changelog |

@@ -1,0 +1,18 @@
+[Unit]
+Description=Taris Web UI (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stas
+WorkingDirectory=/home/stas/.taris
+ExecStart=/usr/bin/python3 /home/stas/.taris/bot_web.py
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/stas/.taris/bot.env
+Environment=TARIS_BIN=/usr/bin/picoclaw
+
+[Install]
+WantedBy=multi-user.target

@@ -204,19 +204,19 @@ use my ...deploy-to-target skill for deplyment and testing
 
 ```bat
 rem Step 12 — Deploy to PI2
-pscp -pw "%HOSTPWD%" src\prompts.json stas@OpenClawPI2:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\core\bot_config.py src\core\bot_llm.py src\core\bot_prompts.py stas@OpenClawPI2:/home/stas/.picoclaw/core/
-pscp -pw "%HOSTPWD%" src\security\bot_security.py stas@OpenClawPI2:/home/stas/.picoclaw/security/
-pscp -pw "%HOSTPWD%" src\telegram\bot_access.py src\telegram\bot_handlers.py stas@OpenClawPI2:/home/stas/.picoclaw/telegram/
-pscp -pw "%HOSTPWD%" src\features\bot_mail_creds.py src\features\bot_calendar.py stas@OpenClawPI2:/home/stas/.picoclaw/features/
-pscp -pw "%HOSTPWD%" src\bot_web.py stas@OpenClawPI2:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\release_notes.json stas@OpenClawPI2:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\prompts.json stas@OpenClawPI2:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\core\bot_config.py src\core\bot_llm.py src\core\bot_prompts.py stas@OpenClawPI2:/home/stas/.taris/core/
+pscp -pw "%HOSTPWD%" src\security\bot_security.py stas@OpenClawPI2:/home/stas/.taris/security/
+pscp -pw "%HOSTPWD%" src\telegram\bot_access.py src\telegram\bot_handlers.py stas@OpenClawPI2:/home/stas/.taris/telegram/
+pscp -pw "%HOSTPWD%" src\features\bot_mail_creds.py src\features\bot_calendar.py stas@OpenClawPI2:/home/stas/.taris/features/
+pscp -pw "%HOSTPWD%" src\bot_web.py stas@OpenClawPI2:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\release_notes.json stas@OpenClawPI2:/home/stas/.taris/
 
 rem Step 13 — Restart & smoke
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI2 "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram picoclaw-web && sleep 5 && journalctl -u picoclaw-telegram -n 15 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI2 "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram taris-web && sleep 5 && journalctl -u taris-telegram -n 15 --no-pager"
 
 rem Step 14 — Voice regression tests
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI2 "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI2 "python3 /home/stas/.taris/tests/test_voice_regression.py"
 
 rem Step 15 — Web UI Playwright tests
 py -m pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080 --browser chromium
@@ -226,7 +226,7 @@ py -m pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080 --br
 
 ## Acceptance Criteria
 
-- [ ] `journalctl -u picoclaw-telegram` shows `Version : 2026.3.34` and `Polling Telegram…`
+- [ ] `journalctl -u taris-telegram` shows `Version : 2026.3.34` and `Polling Telegram…`
 - [ ] All T01–T13 voice regression tests PASS (T07/T08 still use same logic, just loaded from PROMPTS)
 - [ ] Web UI Playwright: all TestAuth, TestDashboard, TestChat, TestCalendar, TestNotes tests PASS
 - [ ] Changing a prompt template in `prompts.json` and restarting the service immediately reflects the change without code modification

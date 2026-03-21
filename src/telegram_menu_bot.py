@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-telegram_menu_bot.py — Picoclaw Telegram Menu Bot (entry point)
+telegram_menu_bot.py — Taris Telegram Menu Bot (entry point)
 
 This file registers all Telegram handlers and launches the bot.
 All business logic lives in the bot_* modules:
@@ -8,7 +8,7 @@ All business logic lives in the bot_* modules:
   bot_config.py    — Constants, env loading, logging
   bot_state.py     — Mutable runtime state, voice_opts, dynamic-users I/O
   bot_instance.py  — Shared TeleBot singleton
-  bot_access.py    — Access control, i18n, keyboards, text utils, picoclaw
+  bot_access.py    — Access control, i18n, keyboards, text utils, taris
   bot_users.py     — Registration + notes file I/O (pure data layer)
   bot_voice.py     — Full voice pipeline (STT/TTS/VAD)
   bot_admin.py     — Admin panel handlers (LLM, changelog, voice opts, users)
@@ -20,7 +20,7 @@ import threading
 
 # ─── Core ────────────────────────────────────────────────────────────────────
 from core.bot_config import (
-    BOT_VERSION, PICOCLAW_BIN, DIGEST_SCRIPT,
+    BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
     PIPER_MODEL_TMPFS, LLM_PROVIDER,
     log,
 )
@@ -222,9 +222,9 @@ def cmd_status(message):
     active_model = _get_active_model() or "default"
 
     services = [
-        ("🤖 Telegram Bot",    "picoclaw-telegram"),
-        ("🌐 AI Gateway",      "picoclaw-gateway"),
-        ("🎤 Voice Assistant", "picoclaw-voice"),
+        ("🤖 Telegram Bot",    "taris-telegram"),
+        ("🌐 AI Gateway",      "taris-gateway"),
+        ("🎤 Voice Assistant", "taris-voice"),
     ]
     svc_lines = []
     for label, svc_name in services:
@@ -241,7 +241,7 @@ def cmd_status(message):
         role = "👤 Full"
 
     text = (
-        f"🖥️ *Pico Bot Status*\n\n"
+        f"🖥️ *Taris Bot Status*\n\n"
         f"🎯 *Mode:* `{mode}`\n"
         f"🤖 *LLM:* `{LLM_PROVIDER}` › `{active_model}`\n"
         f"👤 *Role:* {role}\n\n"
@@ -1022,7 +1022,7 @@ def main() -> None:
     log.info(f"  Admin users  : {sorted(ADMIN_USERS)}")
     log.info(f"  Allowed users: {sorted(ALLOWED_USERS)}")
     log.info(f"  Guest users  : {sorted(_st._dynamic_users)}")
-    log.info(f"  picoclaw     : {PICOCLAW_BIN}")
+    log.info(f"  taris     : {TARIS_BIN}")
     log.info(f"  Digest script: {DIGEST_SCRIPT}")
     active_opts = [k for k, v in _st._voice_opts.items() if v]
     log.info(f"  Voice opts   : {active_opts or 'all OFF (stable defaults)'}")

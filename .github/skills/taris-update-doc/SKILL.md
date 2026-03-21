@@ -57,7 +57,7 @@ When in doubt, run `all`.
 
 Then run:
 ```bat
-cd /d d:\Projects\workspace\picoclaw
+cd /d d:\Projects\workspace\taris
 git diff --name-only HEAD
 ```
 
@@ -298,7 +298,7 @@ Both must return with no output (exit code 0).
 
 Also verify `strings.json` key coverage:
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test i18n"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --test i18n"
 ```
 All three languages must have identical key sets (T13).
 
@@ -309,7 +309,7 @@ All three languages must have identical key sets (T13).
 Stage and commit all documentation changes:
 
 ```bat
-cd /d d:\Projects\workspace\picoclaw
+cd /d d:\Projects\workspace\taris
 git add doc/ README.md TODO.md src/strings.json .github/copilot-instructions.md .github/prompts/ .github/skills/
 git commit -m "docs: sync documentation with vX.Y.Z changes"
 ```
@@ -326,7 +326,7 @@ Use `feat: <feature> + docs:` for commits that include both code and documentati
 | `strings.json` parses | `python3 -c "import json,sys; json.load(sys.stdin)" < src/strings.json` exits 0 | Fix JSON syntax error before committing |
 | `release_notes.json` parses | Same check | Fix JSON syntax error |
 | T13 i18n key coverage | All 3 languages have identical key sets | Add missing keys to `ru`, `en`, `de` |
-| No raw hardcoded bot name in changed doc | No "PicoClaw" / "picoclaw" in user-facing text (use `{bot_name}`) | Replace with `{bot_name}` placeholder |
+| No raw hardcoded bot name in changed doc | No "PicoClaw" / "taris" in user-facing text (use `{bot_name}`) | Replace with `{bot_name}` placeholder |
 | `TODO.md` has no stale completed items | All `[x]` bullets collapsed to `✅ Implemented (vX.Y.Z)` | Collapse to one line |
 | All `doc/todo/*.md` spec files linked | Every spec file has a `→ [Full spec]()` back-link in `TODO.md` | Add missing back-link |
 | `doc/arch/` version headers updated | All edited topic files have updated `**Version:**` | Update version line |

@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# setup_ssl.sh — Generate self-signed TLS certificate for Pico Bot Web UI
+# setup_ssl.sh — Generate self-signed TLS certificate for Taris Bot Web UI
 # =============================================================================
-# Creates ~/.picoclaw/ssl/key.pem + cert.pem with correct Subject Alternative
+# Creates ~/.taris/ssl/key.pem + cert.pem with correct Subject Alternative
 # Names (SAN) so modern browsers accept the certificate without errors once
 # the cert is imported into the OS/browser trusted root store.
 #
@@ -14,13 +14,13 @@
 #   bash setup_ssl.sh
 #
 # After running, download cert.pem to Windows and install as Trusted Root CA:
-#   From Windows: pscp stas@<HOST>:/home/stas/.picoclaw/ssl/cert.pem <hostname>.crt
+#   From Windows: pscp stas@<HOST>:/home/stas/.taris/ssl/cert.pem <hostname>.crt
 #   Then: certutil -addstore -f "Root" <hostname>.crt
 # =============================================================================
 
 set -euo pipefail
 
-SSL_DIR="/home/stas/.picoclaw/ssl"
+SSL_DIR="/home/stas/.taris/ssl"
 mkdir -p "$SSL_DIR"
 
 HOSTNAME_SHORT=$(hostname -s)
@@ -44,7 +44,7 @@ fi
 SAN="DNS:${HOSTNAME_SHORT},DNS:${HOSTNAME_FQDN},DNS:localhost,IP:127.0.0.1,${IPSANS%,}"
 
 echo "=============================================="
-echo " Pico Bot — SSL Certificate Setup"
+echo " Taris Bot — SSL Certificate Setup"
 echo "=============================================="
 echo "  Hostname : ${HOSTNAME_SHORT}"
 echo "  FQDN     : ${HOSTNAME_FQDN}"

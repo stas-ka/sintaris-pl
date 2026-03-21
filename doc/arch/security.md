@@ -1,4 +1,4 @@
-# Picoclaw — Security Architecture
+# Taris — Security Architecture
 
 **Version:** `2026.3.28`  
 → Architecture index: [architecture.md](../architecture.md)

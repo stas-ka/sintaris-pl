@@ -1,4 +1,4 @@
-# Picoclaw Bot — Architecture
+# Taris Bot — Architecture
 
 **Version:** `2026.3.32` · **Last updated:** March 2026
 

@@ -38,7 +38,7 @@
 
 ### Problem
 
-The Picoclaw bot currently exists only as a Telegram bot. All user identity is tied to Telegram `chat_id`. The LLM backend is hardcoded to PicoClaw CLI (`picoclaw agent -m`). To become a reusable platform — one that can render in Telegram, on the web, and eventually in other messengers, while connecting to different LLM backends — we need:
+The Taris bot currently exists only as a Telegram bot. All user identity is tied to Telegram `chat_id`. The LLM backend is hardcoded to PicoClaw CLI (`taris agent -m`). To become a reusable platform — one that can render in Telegram, on the web, and eventually in other messengers, while connecting to different LLM backends — we need:
 
 1. **Standalone web authentication** — users log in via username/password, no Telegram required.
 2. **Unified identity** — a user who uses Telegram can also log into the web and see the same data (notes, calendar, mail config, preferences).
@@ -266,9 +266,9 @@ Web user opens Profile → "Link Telegram"
 | `iat` | Issued-at timestamp |
 | `exp` | Expiry: `iat + 24 hours` |
 
-Token is stored in an HTTP-only, Secure, SameSite=Lax cookie named `pico_token`.
+Token is stored in an HTTP-only, Secure, SameSite=Lax cookie named `taris_token`.
 
-Secret key: generated once on first start, stored in `~/.picoclaw/web_secret.key` (32 random bytes, base64-encoded).
+Secret key: generated once on first start, stored in `~/.taris/web_secret.key` (32 random bytes, base64-encoded).
 
 ### 2.4 Session Management
 
@@ -278,7 +278,7 @@ FastAPI uses a JWT cookie for session state. A `get_current_user` dependency ext
 from fastapi import Depends, Request, HTTPException
 
 async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("pico_token")
+    token = request.cookies.get("taris_token")
     if not token:
         raise HTTPException(status_code=303, headers={"Location": "/login"})
     payload = _decode_jwt(token)
@@ -333,7 +333,7 @@ Today, user identity is spread across multiple files keyed by `chat_id`:
 
 ### 3.2 Target State — Unified Accounts
 
-A single `~/.picoclaw/accounts.json` becomes the source of truth:
+A single `~/.taris/accounts.json` becomes the source of truth:
 
 ```json
 {
@@ -439,8 +439,8 @@ from pathlib import Path
 from typing import Optional
 from bot_config import log
 
-ACCOUNTS_FILE = os.path.expanduser("~/.picoclaw/accounts.json")
-WEB_SECRET_FILE = os.path.expanduser("~/.picoclaw/web_secret.key")
+ACCOUNTS_FILE = os.path.expanduser("~/.taris/accounts.json")
+WEB_SECRET_FILE = os.path.expanduser("~/.taris/web_secret.key")
 
 def _gen_user_id() -> str: ...
 def _load_accounts() -> list[dict]: ...
@@ -459,9 +459,9 @@ def _resolve_user(*, chat_id=None, user_id=None) -> Optional[dict]: ...
 
 ### 4.2 Create `src/bot_llm.py` — Pluggable LLM Backend
 
-New module — abstracts the LLM call away from PicoClaw CLI. All business logic calls `ask_llm()` instead of `_ask_picoclaw()`.
+New module — abstracts the LLM call away from PicoClaw CLI. All business logic calls `ask_llm()` instead of `_ask_taris()`.
 
-**Current state:** `_ask_picoclaw()` in `bot_access.py` is the only function that calls the LLM — via subprocess to `/usr/bin/picoclaw agent -m "..."`. All other modules are already LLM-agnostic.
+**Current state:** `_ask_taris()` in `bot_access.py` is the only function that calls the LLM — via subprocess to `/usr/bin/picoclaw agent -m "..."`. All other modules are already LLM-agnostic.
 
 ```python
 # bot_llm.py — Pluggable LLM backend abstraction
@@ -471,19 +471,19 @@ New module — abstracts the LLM call away from PicoClaw CLI. All business logic
 
 import os, subprocess, requests, json
 from typing import Optional
-from bot_config import log, PICOCLAW_BIN, PICOCLAW_CONFIG
+from bot_config import log, TARIS_BIN, TARIS_CONFIG
 
 # ── Backend selection ────────────────────────────────────
 
-LLM_BACKEND = os.environ.get("LLM_BACKEND", "picoclaw_cli")
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "taris_cli")
 # Supported values:
-#   "picoclaw_cli"     — subprocess: picoclaw agent -m  (default, current behaviour)
-#   "picoclaw_gateway" — HTTP POST to PicoClaw Gateway (port 18790)
+#   "taris_cli"     — subprocess: taris agent -m  (default, current behaviour)
+#   "taris_gateway" — HTTP POST to PicoClaw Gateway (port 18790)
 #   "openclaw_gateway" — HTTP POST to OpenClaw Gateway (port 18789)
 #   "openai_direct"    — Direct OpenAI-compatible API call
 
-PICOCLAW_GATEWAY_URL = os.environ.get(
-    "PICOCLAW_GATEWAY_URL", "http://127.0.0.1:18790/v1/chat/completions")
+TARIS_GATEWAY_URL = os.environ.get(
+    "TARIS_GATEWAY_URL", "http://127.0.0.1:18790/v1/chat/completions")
 OPENCLAW_GATEWAY_URL = os.environ.get(
     "OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789/v1/chat/completions")
 OPENAI_API_URL = os.environ.get(
@@ -502,10 +502,10 @@ def ask_llm(prompt: str, timeout: int = None) -> str:
     t = timeout or LLM_TIMEOUT
     backend = LLM_BACKEND.lower().strip()
 
-    if backend == "picoclaw_cli":
-        return _ask_picoclaw_cli(prompt, t)
-    elif backend == "picoclaw_gateway":
-        return _ask_gateway(PICOCLAW_GATEWAY_URL, prompt, t)
+    if backend == "taris_cli":
+        return _ask_taris_cli(prompt, t)
+    elif backend == "taris_gateway":
+        return _ask_gateway(TARIS_GATEWAY_URL, prompt, t)
     elif backend == "openclaw_gateway":
         return _ask_gateway(OPENCLAW_GATEWAY_URL, prompt, t)
     elif backend == "openai_direct":
@@ -516,11 +516,11 @@ def ask_llm(prompt: str, timeout: int = None) -> str:
 
 # ── Backend implementations ──────────────────────────────
 
-def _ask_picoclaw_cli(prompt: str, timeout: int) -> str:
-    """Subprocess: picoclaw agent -m '...' (current default)."""
+def _ask_taris_cli(prompt: str, timeout: int) -> str:
+    """Subprocess: taris agent -m '...' (current default)."""
     try:
         r = subprocess.run(
-            [PICOCLAW_BIN, "agent", "-m", prompt],
+            [TARIS_BIN, "agent", "-m", prompt],
             capture_output=True, text=True, timeout=timeout,
             env={**os.environ, "NO_COLOR": "1"},
         )
@@ -528,7 +528,7 @@ def _ask_picoclaw_cli(prompt: str, timeout: int) -> str:
     except subprocess.TimeoutExpired:
         return "⚠️ LLM timeout"
     except Exception as e:
-        log.error(f"[LLM] picoclaw_cli error: {e}")
+        log.error(f"[LLM] taris_cli error: {e}")
         return f"❌ {e}"
 
 def _ask_gateway(url: str, prompt: str, timeout: int) -> str:
@@ -546,7 +546,7 @@ def _ask_gateway(url: str, prompt: str, timeout: int) -> str:
         return f"❌ {e}"
 
 def _ask_openai_direct(prompt: str, timeout: int) -> str:
-    """Direct OpenAI-compatible API call (no picoclaw/openclaw binary needed)."""
+    """Direct OpenAI-compatible API call (no taris/openclaw binary needed)."""
     api_key = os.environ.get("OPENAI_API_KEY") or _get_shared_openai_key()
     if not api_key:
         return "❌ No OPENAI_API_KEY configured"
@@ -566,7 +566,7 @@ def _ask_openai_direct(prompt: str, timeout: int) -> str:
 
 def _clean_output(text: str) -> str:
     """Strip ANSI / spinner artefacts from CLI output."""
-    # Same logic as current _clean_picoclaw_output()
+    # Same logic as current _clean_taris_output()
     ...
 
 def _get_active_model() -> Optional[str]:
@@ -578,18 +578,18 @@ def _get_shared_openai_key() -> Optional[str]:
     ...
 ```
 
-**Migration path:** In `bot_access.py`, replace `_ask_picoclaw()` with a thin wrapper:
+**Migration path:** In `bot_access.py`, replace `_ask_taris()` with a thin wrapper:
 
 ```python
 # bot_access.py — after migration
 from bot_llm import ask_llm
 
-def _ask_picoclaw(prompt, timeout=60):
+def _ask_taris(prompt, timeout=60):
     """Backward-compatible wrapper — delegates to bot_llm."""
     return ask_llm(prompt, timeout)
 ```
 
-All existing callers (`_handle_chat_message`, `_handle_voice_message`, `_finish_cal_add`, etc.) continue to work unchanged. Gradually replace `_ask_picoclaw()` calls with `ask_llm()` in subsequent phases.
+All existing callers (`_handle_chat_message`, `_handle_voice_message`, `_finish_cal_add`, etc.) continue to work unchanged. Gradually replace `_ask_taris()` calls with `ask_llm()` in subsequent phases.
 
 ### 4.3 Migrate Existing Users
 
@@ -600,7 +600,7 @@ Write a one-time migration function `_migrate_from_legacy()`:
 3. Read `users.json` (dynamic guests) — create accounts.
 4. For each account, rename data directories (`notes/<chat_id>/` → `notes/<user_id>/`).
 5. Write `accounts.json`.
-6. Write `~/.picoclaw/.migration_done` marker to prevent re-running.
+6. Write `~/.taris/.migration_done` marker to prevent re-running.
 
 ### 4.4 Add to Dependency Chain
 
@@ -742,7 +742,7 @@ def _notes_user_dir(user_ref) -> Path:
 | 4 | `src/bot_actions.py` | ✅ New — 3 proof-of-concept screen handlers |
 | 5 | `src/render_telegram.py` | ✅ New — Screen → Telegram API |
 | 6 | `src/bot_config.py` | ✅ Modified — add `ACCOUNTS_FILE`, `WEB_SECRET_FILE`, `LLM_BACKEND` |
-| 7 | `src/bot_access.py` | ✅ Modified — `_ask_picoclaw()` delegates to `bot_llm.ask_llm()` |
+| 7 | `src/bot_access.py` | ✅ Modified — `_ask_taris()` delegates to `bot_llm.ask_llm()` |
 | 8 | `src/bot_users.py` | ✅ Modified — accept `user_id` |
 | 9 | `src/bot_calendar.py` | ✅ Modified — accept `user_id` |
 | 10 | `src/bot_mail_creds.py` | ✅ Modified — accept `user_id` |
@@ -784,7 +784,7 @@ WEB_HOST = "0.0.0.0"
 # ── Auth dependency ─────────────────────────────────────────
 
 async def get_current_user(request: Request) -> dict | None:
-    token = request.cookies.get("pico_token")
+    token = request.cookies.get("taris_token")
     if not token:
         return None
     try:
@@ -811,7 +811,7 @@ async def login_submit(request: Request, username: str = Form(), password: str =
         return templates.TemplateResponse("login.html",
             {"request": request, "error": "Invalid credentials"})
     resp = RedirectResponse("/", status_code=303)
-    resp.set_cookie("pico_token", _issue_jwt(acc), httponly=True, samesite="lax")
+    resp.set_cookie("taris_token", _issue_jwt(acc), httponly=True, samesite="lax")
     return resp
 
 @app.get("/register")
@@ -838,7 +838,7 @@ async def chat_page(request: Request, user=Depends(require_auth)):
 @app.post("/api/chat/send")
 async def chat_send(request: Request, user=Depends(require_auth)):
     data = await request.json()
-    reply = _ask_picoclaw(data["message"])
+    reply = _ask_taris(data["message"])
     return HTMLResponse(f'<div class="msg bot">{reply}</div>')  # HTMX swap
 
 # ── Notes (HTMX partial renders) ──────────────────────────────
@@ -920,19 +920,19 @@ sudo apt install caddy
 # Forward 443 → 8080, auto-TLS via Let's Encrypt or self-signed
 ```
 
-### 5.6 Create `src/services/picoclaw-web.service`
+### 5.6 Create `src/services/taris-web.service`
 
 ```ini
 [Unit]
 Description=PicoUI Web Interface (FastAPI)
-After=network.target picoclaw-telegram.service
+After=network.target taris-telegram.service
 
 [Service]
 Type=simple
 User=stas
-WorkingDirectory=/home/stas/.picoclaw
+WorkingDirectory=/home/stas/.taris
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=/home/stas/.picoclaw/bot.env
+EnvironmentFile=/home/stas/.taris/bot.env
 ExecStart=/usr/bin/python3 -m uvicorn bot_web:app --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=5
@@ -955,7 +955,7 @@ WantedBy=multi-user.target
 | 6 | `src/templates/chat.html` | ✅ New — HTMX chat |
 | 7 | `src/templates/notes.html` | ✅ New — HTMX CRUD + live preview |
 | 8 | `src/static/style.css` | ✅ New — 500-line dark theme |
-| 9 | `src/services/picoclaw-web.service` | ✅ New — systemd unit |
+| 9 | `src/services/taris-web.service` | ✅ New — systemd unit |
 | 10 | `src/bot_auth.py` | ✅ Modified — add JWT issue/decode helpers |
 
 ### 5.8 Verification
@@ -1104,7 +1104,7 @@ TTS outputs served as OGG via FastAPI:
 ```python
 @app.get("/api/audio/{audio_id}")
 async def get_audio(audio_id: str, user=Depends(require_auth)):
-    path = Path(f"~/.picoclaw/audio_cache/{audio_id}.ogg").expanduser()
+    path = Path(f"~/.taris/audio_cache/{audio_id}.ogg").expanduser()
     return FileResponse(path, media_type="audio/ogg")
 ```
 
@@ -1128,7 +1128,7 @@ Browser MediaRecorder (WebM Opus)
  [VAD filter] → [Vosk STT / Whisper] → transcript
       │
       ▼
- _ask_picoclaw(transcript) → LLM response
+ _ask_taris(transcript) → LLM response
       │
       ▼
  _tts_to_ogg(response) → OGG file
@@ -1315,7 +1315,7 @@ Not all widgets map 1:1 to every platform. Renderers handle missing capabilities
 
 ### 9.5 Integration with PicoClaw Gateway Channels
 
-PicoClaw's gateway (`picoclaw gateway`) already supports Telegram, WhatsApp, Discord, Feishu, and Slack via its own channel drivers (configured in `~/.picoclaw/config.json`). Two integration strategies:
+PicoClaw's gateway (`taris gateway`) already supports Telegram, WhatsApp, Discord, Feishu, and Slack via its own channel drivers (configured in `~/.taris/config.json`). Two integration strategies:
 
 **Strategy A — Direct renderers (recommended for full UI control):**
 Each messenger gets its own Python renderer. The bot connects directly to each platform API. Full Screen DSL support, custom keyboards, rich widgets.
@@ -1330,7 +1330,7 @@ Route messages through PicoClaw or OpenClaw gateway. The gateway handles multi-c
 1. Create `src/render_<channel>.py` implementing the `render(screen, target, client)` interface.
 2. Map each widget type to the platform's equivalent (or degraded fallback).
 3. Create an entry-point adapter (e.g., `bot_<channel>.py`) that receives platform events and calls `bot_actions` → `render`.
-4. Add a systemd service file to `src/services/picoclaw-<channel>.service`.
+4. Add a systemd service file to `src/services/taris-<channel>.service`.
 5. Update `bot_config.py` with channel-specific constants.
 6. Add to this roadmap's renderer table (§9.2).
 
@@ -1644,9 +1644,9 @@ src/
 
   ── Services ──
   services/
-    picoclaw-telegram.service
-    picoclaw-voice.service
-    picoclaw-web.service    ← NEW — FastAPI/uvicorn
+    taris-telegram.service
+    taris-voice.service
+    taris-web.service    ← NEW — FastAPI/uvicorn
 ```
 
 ### Runtime Files on Pi
@@ -1655,11 +1655,11 @@ New files introduced:
 
 | File | Purpose |
 |---|---|
-| `~/.picoclaw/accounts.json` | Unified user identity store |
-| `~/.picoclaw/web_secret.key` | JWT signing secret (generated once) |
-| `~/.picoclaw/link_codes.json` | Temporary Telegram↔Web link codes |
-| `~/.picoclaw/.migration_done` | Marker: legacy→unified migration completed |
-| `~/.picoclaw/audio_cache/` | TTS audio cache for web playback |
+| `~/.taris/accounts.json` | Unified user identity store |
+| `~/.taris/web_secret.key` | JWT signing secret (generated once) |
+| `~/.taris/link_codes.json` | Temporary Telegram↔Web link codes |
+| `~/.taris/.migration_done` | Marker: legacy→unified migration completed |
+| `~/.taris/audio_cache/` | TTS audio cache for web playback |
 
 ---
 
@@ -1678,7 +1678,7 @@ NiceGUI can be added as an alternative (or replacement) web frontend, reusing th
 
 1. Create `src/render_nicegui.py` — translates `Screen` objects to `ui.*` calls.
 2. Create `src/bot_web_nicegui.py` — NiceGUI app entry point using `render_nicegui`.
-3. Add `picoclaw-web-nicegui.service` — runs on a different port (e.g. 8081).
+3. Add `taris-web-nicegui.service` — runs on a different port (e.g. 8081).
 4. Both FastAPI and NiceGUI web servers can coexist, sharing the same data layer.
 
 ### NiceGUI-specific widgets to port
@@ -1790,27 +1790,27 @@ The pluggable LLM backend (`bot_llm.py`) enables AI-native CRM capabilities:
 
 ```
 systemd
-  ├── picoclaw-telegram.service
+  ├── taris-telegram.service
   │     └── python3 telegram_menu_bot.py
   │           ├── telebot polling thread
   │           ├── calendar reminder threads
   │           └── mail refresh threads
   │
-  ├── picoclaw-web.service               ← NEW (FastAPI)
+  ├── taris-web.service               ← NEW (FastAPI)
   │     └── uvicorn bot_web:app
   │           ├── ASGI worker
   │           ├── HTMX partial responses
   │           └── SSE streams (optional, for LLM chat)
   │
-  ├── picoclaw-voice.service
+  ├── taris-voice.service
   │     └── python3 voice_assistant.py
   │
-  └── picoclaw-gateway.service (disabled)
+  └── taris-gateway.service (disabled)
 ```
 
 ### 14.2 Shared State Between Processes
 
-Both `picoclaw-telegram` and `picoclaw-web` need access to the same data:
+Both `taris-telegram` and `taris-web` need access to the same data:
 
 | Data | Storage | Concurrency |
 |---|---|---|
@@ -1827,22 +1827,22 @@ Since both processes are single-threaded for writes and write rarely, file-level
 
 ```bat
 rem Deploy web server files
-pscp -pw "%HOSTPWD%" src\bot_auth.py src\bot_web.py src\bot_ui.py stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_actions.py src\render_telegram.py stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_auth.py src\bot_web.py src\bot_ui.py stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\bot_actions.py src\render_telegram.py stas@OpenClawPI:/home/stas/.taris/
 
 rem Deploy templates + static assets
-pscp -pw "%HOSTPWD%" -r src\templates stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" -r src\static stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" -r src\templates stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" -r src\static stas@OpenClawPI:/home/stas/.taris/
 
 rem Deploy service
-pscp -pw "%HOSTPWD%" src\services\picoclaw-web.service stas@OpenClawPI:/tmp/
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S cp /tmp/picoclaw-web.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now picoclaw-web"
+pscp -pw "%HOSTPWD%" src\services\taris-web.service stas@OpenClawPI:/tmp/
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S cp /tmp/taris-web.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now taris-web"
 
 rem Install Python dependencies
 plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "pip3 install fastapi uvicorn[standard] jinja2 bcrypt PyJWT python-multipart"
 
 rem Verify
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "systemctl status picoclaw-web --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "systemctl status taris-web --no-pager"
 ```
 
 ### 14.4 Network Access
@@ -1883,7 +1883,7 @@ FastAPI is significantly lighter than NiceGUI (~25 MB vs ~60 MB), leaving more h
 | R7 | HTTPS required for secure cookies | Can't deploy auth without TLS | Use Tailscale built-in HTTPS (free, automatic) |
 | R8 | Dual-renderer drift (Web shows different data than Telegram) | User confusion | Both renderers call same action handlers; automated smoke test |
 | R9 | HTMX partial rendering complexity grows | Hard to maintain | Keep partials small; one partial per action; documented patterns (§10) |
-| R10 | Multi-backend LLM complexity (4 backends to maintain) | Bug surface grows | All backends share `ask_llm()` interface; integration tests per backend; start with picoclaw_cli, add others on demand |
+| R10 | Multi-backend LLM complexity (4 backends to maintain) | Bug surface grows | All backends share `ask_llm()` interface; integration tests per backend; start with taris_cli, add others on demand |
 | R11 | CRM scope creep — building features before customer need | Wasted effort | CRM modules (C1+) added only per concrete customer project, never speculatively |
 | R12 | OpenClaw gateway dependency on external project | Breaking API changes | Pin gateway API version; abstract behind `bot_llm.py`; PicoClaw CLI as always-available fallback |
 
@@ -1903,7 +1903,7 @@ FastAPI is significantly lighter than NiceGUI (~25 MB vs ~60 MB), leaving more h
 | D8 | **NiceGUI as future enhancement** (§11) | Lower priority; valuable for complex admin UIs; can reuse `bot_actions.py` | NiceGUI-first: higher RAM, fewer mockups ready |
 | D9 | **Screen DSL as abstraction layer** | Write once, render in both channels; type-safe; testable; future-proof | Direct Jinja2 rendering: faster initially but duplicates Telegram logic |
 | D10 | **Self-hosted vendor assets** | Pi may not have internet; CDN adds latency | CDN-only: simpler but fragile offline |
-| D11 | **Pluggable LLM backend (`bot_llm.py`)** | PicoClaw CLI is current default; OpenClaw/OpenAI needed for flexibility and CRM projects | Hardcode picoclaw: locks to one backend forever |
+| D11 | **Pluggable LLM backend (`bot_llm.py`)** | PicoClaw CLI is current default; OpenClaw/OpenAI needed for flexibility and CRM projects | Hardcode taris: locks to one backend forever |
 | D12 | **Multi-channel renderer pattern** (§9) | Screen DSL enables adding WhatsApp/Discord/Slack as thin renderers; no business logic duplication | Per-channel full implementation: massive code duplication |
 | D13 | **CRM-ready core architecture** (§13) | Current features (users, notes, calendar, mail) already map to CRM primitives; designing for extensibility costs nothing now | Build CRM later from scratch: loses existing foundation |
 
@@ -1914,7 +1914,7 @@ FastAPI is significantly lighter than NiceGUI (~25 MB vs ~60 MB), leaving more h
 | Phase | Prerequisites | New files | Modified files | Dependencies added |
 |---|---|---|---|---|
 | **P0** | None | `bot_auth.py`, `bot_llm.py`, `bot_ui.py`, `bot_actions.py`, `render_telegram.py` | `bot_config.py`, `bot_access.py`, `bot_users.py`, `bot_calendar.py`, `bot_mail_creds.py`, `bot_handlers.py` | `bcrypt`, `PyJWT` |
-| **P1** | P0 | `bot_web.py`, `templates/*`, `static/*`, `picoclaw-web.service` | `bot_auth.py` | `fastapi`, `uvicorn`, `jinja2`, `python-multipart` |
+| **P1** | P0 | `bot_web.py`, `templates/*`, `static/*`, `taris-web.service` | `bot_auth.py` | `fastapi`, `uvicorn`, `jinja2`, `python-multipart` |
 | **P2** | P1 | `templates/calendar.html`, `templates/mail.html`, `templates/admin.html` | `bot_web.py`, `bot_actions.py` | None |
 | **P3** | P2 | `templates/voice.html`, `static/voice.js`, `static/sw.js` | `bot_web.py` | `pywebpush` (optional) |
 | **P4** | P3 | `static/manifest.json` | All handler modules simplified | None |
@@ -1945,7 +1945,7 @@ pip3 install pywebpush
 # On the Pi, after deployment:
 
 # 1. Start web server
-sudo systemctl start picoclaw-web
+sudo systemctl start taris-web
 
 # 2. Open browser
 # http://openclawpi:8080/register → create account → wait for admin approval

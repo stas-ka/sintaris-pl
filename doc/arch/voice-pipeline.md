@@ -1,4 +1,4 @@
-# Picoclaw — Voice Pipeline Architecture
+# Taris — Voice Pipeline Architecture
 
 **Version:** `2026.3.28`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -34,7 +34,7 @@
 |---|---|
 | Library | `vosk` 0.3.45 (Python binding for Kaldi-based ASR) |
 | Model | `vosk-model-small-ru-0.22` (48 MB) |
-| Model path | `/home/stas/.picoclaw/vosk-model-small-ru/` |
+| Model path | `/home/stas/.taris/vosk-model-small-ru/` |
 | Language | Russian |
 | Mode | Streaming (real-time chunk processing) |
 | Word timestamps | Enabled (`SetWords(True)`) |
@@ -53,15 +53,15 @@ Implemented in `voice_assistant.py` using Python's `difflib.SequenceMatcher`:
 
 When triggered: hotword stream killed → beep plays → fresh Vosk recognizer records command phrase → stream restarts after response is spoken.
 
-### 2.4 LLM — picoclaw + OpenRouter
+### 2.4 LLM — taris + OpenRouter
 
 | Property | Value |
 |---|---|
 | Binary | `/usr/bin/picoclaw` (sipeed/picoclaw v0.2.0 aarch64 deb) |
-| Invocation | `picoclaw agent -m "<recognized text>"` |
+| Invocation | `taris agent -m "<recognized text>"` |
 | LLM provider | OpenRouter (`openrouter.ai`) |
 | Default model | `openrouter/openai/gpt-4o-mini` |
-| Config file | `/home/stas/.picoclaw/config.json` |
+| Config file | `/home/stas/.taris/config.json` |
 | Timeout | 60 seconds |
 
 ### 2.5 Text-to-Speech — Piper
@@ -113,7 +113,7 @@ Telegram OGG Opus voice note
  + _wrap_user_input(transcript)            ← L2: [USER]…[/USER]
       │
       ▼
- _ask_picoclaw(prompt, timeout=60)         ← subprocess: picoclaw agent -m
+ _ask_taris(prompt, timeout=60)         ← subprocess: taris agent -m
       │
       ▼
  bot.send_message()                        ← text reply shown immediately
@@ -181,9 +181,9 @@ return bytes (OGG)
 ```
 tmpfs_model ON  AND  /dev/shm/piper/...onnx exists  →  tmpfs (fastest)
     ↓ else
-piper_low_model ON  AND  ~/.picoclaw/ru_RU-irina-low.onnx exists  →  low model
+piper_low_model ON  AND  ~/.taris/ru_RU-irina-low.onnx exists  →  low model
     ↓ else
-default:  ~/.picoclaw/ru_RU-irina-medium.onnx
+default:  ~/.taris/ru_RU-irina-medium.onnx
 ```
 
 ### 5.4 STT — Vosk vs Whisper

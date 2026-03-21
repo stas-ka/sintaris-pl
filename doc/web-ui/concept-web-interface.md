@@ -1,4 +1,4 @@
-# Concept: Unified Web + Telegram Interface for Pico Bot
+# Concept: Unified Web + Telegram Interface for Taris Bot
 
 **Version:** 1.0 (Implemented) · **Date:** March 2026 · **Status:** ✅ All phases shipped (v2026.3.28)  
 **Goal:** Add a web UI alongside the existing Telegram bot so both channels share a single codebase for business logic and UI definitions.
@@ -25,7 +25,7 @@
 
 ## 1. Problem Statement
 
-The Pico Bot is currently accessible **only via Telegram**. All user interaction — menus, buttons, text input, voice, multi-step wizards — is hard-wired to `pyTelegramBotAPI` objects (`InlineKeyboardMarkup`, `bot.send_message()`, `bot.send_voice()`, etc.).
+The Taris Bot is currently accessible **only via Telegram**. All user interaction — menus, buttons, text input, voice, multi-step wizards — is hard-wired to `pyTelegramBotAPI` objects (`InlineKeyboardMarkup`, `bot.send_message()`, `bot.send_voice()`, etc.).
 
 This means:
 - Users without a Telegram account cannot use the bot.
@@ -95,7 +95,7 @@ The bot's business logic (data I/O, LLM calls, access control, i18n) is **alread
 │                                                                 │
 │  bot_config · bot_state · bot_users · bot_security              │
 │  bot_calendar (storage) · bot_mail_creds (IMAP)                 │
-│  bot_voice (STT/TTS) · _t() i18n · _ask_picoclaw()             │
+│  bot_voice (STT/TTS) · _t() i18n · _ask_taris()             │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
@@ -356,7 +356,7 @@ The existing `_tts_to_ogg()` pipeline produces OGG Opus bytes — these can be s
 │    ├── bot_users.*                ← reused by web       │
 │    ├── bot_calendar.*             ← reused by web       │
 │    ├── bot_voice._tts_to_ogg()    ← reused by web       │
-│    └── _ask_picoclaw()            ← reused by web       │
+│    └── _ask_taris()            ← reused by web       │
 │                                                         │
 │  Telegram Bot (existing, unchanged initially)           │
 │    └── pyTelegramBotAPI polling loop                    │
@@ -441,7 +441,7 @@ FastAPI with uvicorn adds only ~30 MB — well within budget.
 3. ✅ `src/static/` — Pico CSS + HTMX + Alpine.js local copies; `manifest.json` PWA support.
 4. ✅ Routes: `GET /`, `POST /api/chat/send`, auth flows, `/api/audio/`, notes CRUD, calendar, admin, `/settings`.
 5. ✅ Screens: Main Menu (dashboard), Free Chat (HTMX), Notes (list + view + create + edit + delete).
-6. ✅ `src/services/picoclaw-web.service` deployed and running.
+6. ✅ `src/services/taris-web.service` deployed and running.
 7. ✅ Accessible on Pi at HTTPS :8080; tunnelled to `https://agents.sintaris.net/picoassist2/`.
 
 ### Phase 2 — Calendar + Mail + Admin ✅ Complete
@@ -715,9 +715,9 @@ All components described in this concept document are deployed on **OpenClawPI2*
 | LLM backend abstraction | `src/bot_llm.py` | ✅ Implemented |
 | Jinja2 HTML templates (12 files) | `src/templates/*.html` | ✅ Implemented |
 | Custom CSS | `src/static/style.css` | ✅ Implemented |
-| systemd service unit | `src/services/picoclaw-web.service` | ✅ Deployed |
+| systemd service unit | `src/services/taris-web.service` | ✅ Deployed |
 | VPS nginx reverse proxy | `src/setup/nginx-vps.conf` | ✅ Deployed |
-| autossh tunnel service | `src/services/picoclaw-tunnel.service` | ✅ Deployed |
+| autossh tunnel service | `src/services/taris-tunnel.service` | ✅ Deployed |
 
 ### 12.2 Public Endpoints
 

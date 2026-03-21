@@ -1,0 +1,13 @@
+/home/stas/.taris/telegram_bot.log
+/home/stas/.taris/assistant.log
+/home/stas/.taris/security.log
+/home/stas/.taris/voice.log
+/home/stas/.taris/datastore.log
+{
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

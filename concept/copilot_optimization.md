@@ -1,4 +1,4 @@
-# Copilot Optimization Proposal — picoclaw
+# Copilot Optimization Proposal — taris
 
 **Date:** 2026-03-16 (updated 2026-03-19)  
 **Author:** GitHub Copilot (analysis) / stas-ka (owner)  
@@ -150,10 +150,10 @@ Remove these sections from `.github/copilot-instructions.md` and replace with on
 **Proposed new structure for `copilot-instructions.md`** (~2 KB, ~500 tokens):
 
 ```markdown
-# Copilot Instructions — picoclaw workspace
+# Copilot Instructions — taris workspace
 
 ## Project
-picoclaw is a Raspberry Pi–based Telegram bot + offline voice assistant (ru/de/en).
+taris is a Raspberry Pi–based Telegram bot + offline voice assistant (ru/de/en).
 Source: `src/`. Targets: OpenClawPI2 (test) → OpenClawPI (production).
 
 ## Reference Documents (read on demand — do NOT pre-load all)
@@ -274,7 +274,7 @@ Similarly, if `AGENTS.md` is used as a session-state file by Copilot agents, spl
 Create `doc/quick-ref.md` (~3 KB, ~750 tokens) as the **only** document that copilot-instructions.md tells Copilot to always check:
 
 ```markdown
-# picoclaw Quick Reference
+# taris Quick Reference
 
 ## Module Map (one-liner per file)
 bot_config → bot_state → bot_instance → ... → telegram_menu_bot

@@ -1,5 +1,5 @@
 [Unit]
-Description=Pico Russian Voice Assistant
+Description=Taris Russian Voice Assistant
 After=network.target sound.target
 Wants=pipewire.service pipewire-pulse.service
 
@@ -10,7 +10,7 @@ Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PIPEWIRE_RUNTIME_DIR=/run/user/1000
 Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
 Environment=HOME=/home/stas
-ExecStart=/usr/bin/python3 /home/stas/.picoclaw/voice_assistant.py
+ExecStart=/usr/bin/python3 /home/stas/.taris/voice_assistant.py
 Restart=on-failure
 RestartSec=10
 

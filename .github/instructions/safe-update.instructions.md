@@ -18,9 +18,9 @@ Full commands → `/taris-deploy-to-target` skill or `doc/quick-ref.md` §Deploy
 
 **Condensed checklist:**
 1. Create backup on Pi → expect `BACKUP_OK`
-2. Verify backup contents (bot.env, pico.db, config.json present)
+2. Verify backup contents (bot.env, taris.db, config.json present)
 3. Download backup: `pscp … backup\snapshots\%BNAME%\` — **DO NOT PROCEED** until local
-4. Stop services: `systemctl stop picoclaw-telegram picoclaw-web picoclaw-voice`
+4. Stop services: `systemctl stop taris-telegram taris-web taris-voice`
 5. Deploy changed files (see `doc/quick-ref.md` §Deploy Pipeline for pscp commands)
 6. Run migration if schema changed: `python3 migrate_to_db.py → MIGRATION_OK`
 7. Start services + verify journal: `[INFO] Version : X.Y.Z` + `Polling Telegram…`

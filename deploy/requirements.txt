@@ -1,4 +1,4 @@
-# Pico Bot — Python package dependencies
+# Taris Bot — Python package dependencies
 # Install with: pip3 install --break-system-packages -r requirements.txt
 # Generated from OpenClawPI (pip3 freeze, project-relevant packages only)
 # Last updated: 2026-03-15

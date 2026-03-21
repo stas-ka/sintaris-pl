@@ -20,7 +20,7 @@ TG_TOKEN       = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TG_CHAT_ID     = os.environ.get('TELEGRAM_CHAT_ID',  '994963580')
 MAX_BODY_CHARS     = 600   # per email sent to LLM
 HOURS_BACK        = 24
-LAST_DIGEST_FILE  = Path.home() / '.picoclaw' / 'last_digest.txt'
+LAST_DIGEST_FILE  = Path.home() / '.taris' / 'last_digest.txt'
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

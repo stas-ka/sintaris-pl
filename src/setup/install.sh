@@ -3,7 +3,7 @@
 # install.sh — Full Fresh-Install Bootstrap  (§6.3.2)
 # =============================================================================
 # Bootstraps a bare Raspberry Pi OS (Bookworm, aarch64) into a fully working
-# Pico Bot installation: picoclaw binary, Telegram bot, Gmail digest, voice
+# Taris Bot installation: taris binary, Telegram bot, Gmail digest, voice
 # assistant (RB-TalkingPI), and all systemd services.
 #
 # Run ONCE on a freshly imaged Pi:
@@ -11,7 +11,7 @@
 #
 # Prerequisites:
 #   - Pi connected to internet
-#   - User "stas" exists (or adjust PICOCLAW_USER below)
+#   - User "stas" exists (or adjust TARIS_USER below)
 #   - SSH access enabled
 # =============================================================================
 
@@ -20,8 +20,8 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration — edit to match your environment
 # ---------------------------------------------------------------------------
-PICOCLAW_USER="stas"
-PICOCLAW_DIR="/home/${PICOCLAW_USER}/.picoclaw"
+TARIS_USER="stas"
+TARIS_DIR="/home/${TARIS_USER}/.taris"
 SYSTEMD_DIR="/etc/systemd/system"
 PIPER_VERSION="1.2.0"
 PIPER_ARCH="aarch64"
@@ -33,10 +33,10 @@ PICOCLAW_DEB_URL="https://github.com/sipeed/picoclaw/releases/latest/download/pi
 # ---------------------------------------------------------------------------
 
 echo "=============================================="
-echo " Pico Bot — Full Install Bootstrap"
+echo " Taris Bot — Full Install Bootstrap"
 echo "=============================================="
-echo "  Pi user    : ${PICOCLAW_USER}"
-echo "  Picoclaw   : ${PICOCLAW_DIR}"
+echo "  Pi user    : ${TARIS_USER}"
+echo "  Taris   : ${TARIS_DIR}"
 echo ""
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -75,15 +75,15 @@ pip3 install --break-system-packages --quiet \
 echo "  Python packages installed."
 
 # ---------------------------------------------------------------------------
-# Step 3 — picoclaw Go binary
+# Step 3 — taris Go binary
 # ---------------------------------------------------------------------------
 echo ""
-echo "[3/9] Installing picoclaw binary..."
-wget -q "${PICOCLAW_DEB_URL}" -O /tmp/picoclaw_aarch64.deb
-dpkg -i /tmp/picoclaw_aarch64.deb
-rm /tmp/picoclaw_aarch64.deb
-picoclaw version
-echo "  picoclaw installed."
+echo "[3/9] Installing taris binary..."
+wget -q "${TARIS_DEB_URL}" -O /tmp/taris_aarch64.deb
+dpkg -i /tmp/taris_aarch64.deb
+rm /tmp/taris_aarch64.deb
+taris version
+echo "  taris installed."
 
 # ---------------------------------------------------------------------------
 # Step 4 — Piper TTS
@@ -105,18 +105,18 @@ chmod +x /usr/local/bin/piper
 echo "  Piper TTS installed."
 
 # ---------------------------------------------------------------------------
-# Step 5 — Picoclaw working directory + models
+# Step 5 — Taris working directory + models
 # ---------------------------------------------------------------------------
 echo ""
-echo "[5/9] Creating picoclaw directory and downloading models..."
-mkdir -p "${PICOCLAW_DIR}"
-chown "${PICOCLAW_USER}:${PICOCLAW_USER}" "${PICOCLAW_DIR}"
+echo "[5/9] Creating taris directory and downloading models..."
+mkdir -p "${TARIS_DIR}"
+chown "${TARIS_USER}:${TARIS_USER}" "${TARIS_DIR}"
 
 # Vosk Russian model
-if [[ ! -d "${PICOCLAW_DIR}/vosk-model-small-ru" ]]; then
+if [[ ! -d "${TARIS_DIR}/vosk-model-small-ru" ]]; then
   wget -q "${VOSK_MODEL_URL}" -O /tmp/vosk-model.zip
-  unzip -q /tmp/vosk-model.zip -d "${PICOCLAW_DIR}/"
-  mv "${PICOCLAW_DIR}/vosk-model-small-ru-0.22" "${PICOCLAW_DIR}/vosk-model-small-ru" 2>/dev/null || true
+  unzip -q /tmp/vosk-model.zip -d "${TARIS_DIR}/"
+  mv "${TARIS_DIR}/vosk-model-small-ru-0.22" "${TARIS_DIR}/vosk-model-small-ru" 2>/dev/null || true
   rm /tmp/vosk-model.zip
   echo "  Vosk model downloaded."
 else
@@ -124,25 +124,25 @@ else
 fi
 
 # Piper Russian voice (Irina medium)
-if [[ ! -f "${PICOCLAW_DIR}/ru_RU-irina-medium.onnx" ]]; then
-  wget -q "${PIPER_VOICE_URL}" -O "${PICOCLAW_DIR}/ru_RU-irina-medium.onnx"
+if [[ ! -f "${TARIS_DIR}/ru_RU-irina-medium.onnx" ]]; then
+  wget -q "${PIPER_VOICE_URL}" -O "${TARIS_DIR}/ru_RU-irina-medium.onnx"
   # .onnx.json metadata
-  wget -q "${PIPER_VOICE_URL}.json" -O "${PICOCLAW_DIR}/ru_RU-irina-medium.onnx.json" 2>/dev/null || true
+  wget -q "${PIPER_VOICE_URL}.json" -O "${TARIS_DIR}/ru_RU-irina-medium.onnx.json" 2>/dev/null || true
   echo "  Piper voice model downloaded."
 else
   echo "  Piper voice model already present."
 fi
 
-chown -R "${PICOCLAW_USER}:${PICOCLAW_USER}" "${PICOCLAW_DIR}"
+chown -R "${TARIS_USER}:${TARIS_USER}" "${TARIS_DIR}"
 
 # ---------------------------------------------------------------------------
-# Step 6 — picoclaw onboard (initialize config)
+# Step 6 — taris onboard (initialize config)
 # ---------------------------------------------------------------------------
 echo ""
-echo "[6/9] Initialising picoclaw workspace..."
-if [[ ! -f "${PICOCLAW_DIR}/config.json" ]]; then
-  sudo -u "${PICOCLAW_USER}" picoclaw onboard || true
-  echo "  picoclaw workspace initialised."
+echo "[6/9] Initialising taris workspace..."
+if [[ ! -f "${TARIS_DIR}/config.json" ]]; then
+  sudo -u "${TARIS_USER}" taris onboard || true
+  echo "  taris workspace initialised."
 else
   echo "  config.json already exists, skipping onboard."
 fi
@@ -158,7 +158,7 @@ SRC_DIR="$(realpath "${SCRIPT_DIR}/..")"
 for f in telegram_menu_bot.py gmail_digest.py voice_assistant.py \
           strings.json release_notes.json; do
   if [[ -f "${SRC_DIR}/${f}" ]]; then
-    cp "${SRC_DIR}/${f}" "${PICOCLAW_DIR}/${f}"
+    cp "${SRC_DIR}/${f}" "${TARIS_DIR}/${f}"
     echo "  Deployed: ${f}"
   else
     echo "  [!] Not found (skip): ${SRC_DIR}/${f}"
@@ -167,12 +167,12 @@ done
 
 # bot.env — copy template if secrets file not present
 BOT_ENV_TEMPLATE="${SRC_DIR}/setup/bot.env.example"
-if [[ ! -f "${PICOCLAW_DIR}/bot.env" ]] && [[ -f "${BOT_ENV_TEMPLATE}" ]]; then
-  cp "${BOT_ENV_TEMPLATE}" "${PICOCLAW_DIR}/bot.env"
+if [[ ! -f "${TARIS_DIR}/bot.env" ]] && [[ -f "${BOT_ENV_TEMPLATE}" ]]; then
+  cp "${BOT_ENV_TEMPLATE}" "${TARIS_DIR}/bot.env"
   echo "  bot.env created from template — fill in secrets before starting services!"
 fi
 
-chown -R "${PICOCLAW_USER}:${PICOCLAW_USER}" "${PICOCLAW_DIR}"
+chown -R "${TARIS_USER}:${TARIS_USER}" "${TARIS_DIR}"
 
 # ---------------------------------------------------------------------------
 # Step 8 — Install systemd service units
@@ -180,7 +180,7 @@ chown -R "${PICOCLAW_USER}:${PICOCLAW_USER}" "${PICOCLAW_DIR}"
 echo ""
 echo "[8/9] Installing systemd services..."
 SERVICES_DIR="${SRC_DIR}/services"
-SERVICES=(picoclaw-gateway picoclaw-telegram picoclaw-voice)
+SERVICES=(taris-gateway taris-telegram taris-voice)
 
 for svc in "${SERVICES[@]}"; do
   SVC_FILE="${SERVICES_DIR}/${svc}.service"
@@ -206,12 +206,12 @@ done
 # ---------------------------------------------------------------------------
 echo ""
 echo "[9/9] Installing cron jobs..."
-CRON_JOB="0 19 * * * python3 ${PICOCLAW_DIR}/gmail_digest.py >> ${PICOCLAW_DIR}/digest.log 2>&1"
-CURRENT_CRONTAB=$(sudo -u "${PICOCLAW_USER}" crontab -l 2>/dev/null || true)
+CRON_JOB="0 19 * * * python3 ${TARIS_DIR}/gmail_digest.py >> ${TARIS_DIR}/digest.log 2>&1"
+CURRENT_CRONTAB=$(sudo -u "${TARIS_USER}" crontab -l 2>/dev/null || true)
 if echo "${CURRENT_CRONTAB}" | grep -qF "gmail_digest.py"; then
   echo "  Gmail digest cron already present."
 else
-  (echo "${CURRENT_CRONTAB}"; echo "${CRON_JOB}") | sudo -u "${PICOCLAW_USER}" crontab -
+  (echo "${CURRENT_CRONTAB}"; echo "${CRON_JOB}") | sudo -u "${TARIS_USER}" crontab -
   echo "  Gmail digest cron installed (19:00 daily)."
 fi
 
@@ -222,16 +222,16 @@ echo " Installation complete."
 echo "=============================================="
 echo ""
 echo " Next steps:"
-echo "  1. Fill in secrets: ${PICOCLAW_DIR}/bot.env"
+echo "  1. Fill in secrets: ${TARIS_DIR}/bot.env"
 echo "     Required: BOT_TOKEN, ALLOWED_USER, ADMIN_USERS, OPENROUTER_API_KEY"
 echo ""
-echo "  2. Fill in picoclaw config: ${PICOCLAW_DIR}/config.json"
+echo "  2. Fill in taris config: ${TARIS_DIR}/config.json"
 echo "     Required: model_list with API key"
 echo ""
 echo "  3. (Voice) Physically attach RB-TalkingPI HAT and reboot:"
 echo "     sudo reboot"
 echo ""
 echo "  4. Start services:"
-echo "     sudo systemctl start picoclaw-telegram"
-echo "     sudo systemctl start picoclaw-gateway"
-echo "     sudo systemctl start picoclaw-voice   # after reboot with RB-TalkingPI"
+echo "     sudo systemctl start taris-telegram"
+echo "     sudo systemctl start taris-gateway"
+echo "     sudo systemctl start taris-voice   # after reboot with RB-TalkingPI"

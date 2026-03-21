@@ -42,7 +42,7 @@ CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
 
 # ---------------------------------------------------------------------------
 echo "=============================================="
-echo " Pico Bot — Full Image Backup"
+echo " Taris Bot — Full Image Backup"
 echo "=============================================="
 echo "  Source device : ${DEVICE}"
 echo "  Destination   : ${ARCHIVE_PATH}"

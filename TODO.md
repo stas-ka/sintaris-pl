@@ -1,4 +1,4 @@
-# Pico Bot — TODO & Roadmap
+# Taris Bot — TODO & Roadmap
 
 **Legend:** ✅ Done · 🔄 In progress · 🔲 Planned · 💡 Idea / future
 
@@ -26,9 +26,9 @@
 | 0.6 System Chat no role guards | `ADMIN_ALLOWED_CMDS` / `DEVELOPER_ALLOWED_CMDS` + `_classify_cmd_class()` | v2026.3.30 |
 | 0.7 Add new Contact cancel shows "btn_cancel" | Added missing `btn_cancel` i18n key to ru/en/de in `strings.json` | v2026.3.31 |
 | 0.8 Profile change password error | Fixed `account["id"]` → `account["user_id"]` key in `_finish_profile_change_pw()` | v2026.3.31 |
-| 0.9 Telegram-Web link code HTTP 500 on `/register` | Codes persisted to `~/.picoclaw/web_link_codes.json`; shared between Telegram and Web services | v2026.3.33 |
+| 0.9 Telegram-Web link code HTTP 500 on `/register` | Codes persisted to `~/.taris/web_link_codes.json`; shared between Telegram and Web services | v2026.3.33 |
 | 0.10 OpenAI model selection ignored active model | Fixed default `OPENAI_MODEL` + model catalog align in `bot_config.py` / `bot_llm.py`; admin model switch now reflected correctly | v2026.3.40 |
-| 0.11 System Chat bypassed multi-LLM dispatch | `_handle_system_message()` now calls `ask_llm()` (bot_llm.py) instead of legacy `_ask_picoclaw()` | v2026.3.41 |
+| 0.11 System Chat bypassed multi-LLM dispatch | `_handle_system_message()` now calls `ask_llm()` (bot_llm.py) instead of legacy `_ask_taris()` | v2026.3.41 |
 ---
 
 ## 1. Open Issues &amp; Roadmap
@@ -90,18 +90,18 @@ Role validation on every command/callback, security event logging, configurable 
 ### 3.1 Multi-LLM Provider Support ✅ Implemented (v2026.3.32)
 OpenRouter ✅ · OpenAI direct ✅ · YandexGPT ✅ · Gemini ✅ · Anthropic ✅ · local llama.cpp ✅
 
-- [x] `LLM_PROVIDER` env-var switch in `bot.env` (`picoclaw` | `openai` | `yandexgpt` | `gemini` | `anthropic` | `local`)
+- [x] `LLM_PROVIDER` env-var switch in `bot.env` (`taris` | `openai` | `yandexgpt` | `gemini` | `anthropic` | `local`)
 - [x] `_DISPATCH` table + `ask_llm(prompt, timeout)` entry point in `src/core/bot_llm.py`
 - [x] OpenAI direct client `_ask_openai()` — `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`
 - [x] YandexGPT client `_ask_yandexgpt()` — `YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI`
 - [x] Gemini client `_ask_gemini()` — `GEMINI_API_KEY`, `GEMINI_MODEL`
 - [x] Anthropic client `_ask_anthropic()` — `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
 - [x] 14 provider constants added to `src/core/bot_config.py`
-- [x] `picoclaw` (default) provider wraps existing OpenRouter CLI — all existing behaviour unchanged
+- [x] `taris` (default) provider wraps existing OpenRouter CLI — all existing behaviour unchanged
 
 Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-mini.
 → See: `doc/hardware-performance-analysis.md` §8.9
-- [x] `picoclaw-llm.service` systemd unit — llama-server on port 8081, `qwen2-0.5b-q4.gguf`, 4 threads, ctx 2048
+- [x] `taris-llm.service` systemd unit — llama-server on port 8081, `qwen2-0.5b-q4.gguf`, 4 threads, ctx 2048
 - [x] `_ask_local()` client — OpenAI-compatible `/v1/chat/completions` against `LLAMA_CPP_URL` (default `http://127.0.0.1:8081`)
 - [x] `LLM_LOCAL_FALLBACK=true` env-var — enables automatic fallback when primary provider fails
 - [x] `ask_llm()` catches all primary errors; retries via `_ask_local()` when fallback enabled
@@ -127,7 +127,7 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 - [ ] Embed documents with `all-MiniLM-L6-v2` fro local RAG
 - [ ] Vector similarity search → inject top-k context into LLM prompt
 - [ ] Commands: `/rag_on`, `/rag_off`
-- [ ] Storage: `~/.picoclaw/knowledge_base/` (documents + `embeddings.db`)
+- [ ] Storage: `~/.taris/knowledge_base/` (documents + `embeddings.db`)
 - [ ] configuration to use local knowledges for integrated RAG with local LLM and remote llm and remote RAG knowledge  service.
 - [ ] settings for configuration of local RAG service via Admin panel
 
@@ -163,7 +163,7 @@ Baseline: Pi 3 B+ ~115 s total; target <25 s with all opts ON.
 ### 6.1 Logging & Monitoring ✅ Implemented (v2026.3.42)
 - [x] Structured log categories: `assistant.log`, `security.log`, `voice.log`, `datastore.log` (`src/core/bot_logger.py`)
 - [x] Admin Telegram UI: 📊 Logs button — tail last 50 lines per category
-- [x] Log rotation (`src/services/picoclaw-logrotate`) — daily, 7 days, compress, copytruncate
+- [x] Log rotation (`src/services/taris-logrotate`) — daily, 7 days, compress, copytruncate
 - [x] Telegram alert handler: CRITICAL/ERROR forwarded to admins on startup
 - [ ] create skill to download logs from target
 
@@ -258,7 +258,7 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 - [ ] `src/core/bot_db.py` extended — add `documents` table; vec_embeddings created dynamically
 - [ ] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target
 - [x] `src/setup/migrate_to_db.py` — JSON → adapter migration (Phase 3, idempotent)
-- [ ] `src/setup/migrate_sqlite_to_pg.py` — pico.db → PostgreSQL (Phase 5)
+- [ ] `src/setup/migrate_sqlite_to_pg.py` — taris.db → PostgreSQL (Phase 5)
 - [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
 ### 9.1 Storing of user data in the local database not in files
 - [] all existed user data shall be migrated to database. create scripts for migration and migrate data.
@@ -358,3 +358,60 @@ Reduce context-window consumption so Copilot sessions sustain 8–10 turns witho
 - [x] **G-1** Create `doc/vibe-coding-guidelines.md` — artifact structuring rules, session habits, naming conventions — ✅ done
 - [x] **G-2** Add quarterly review section to `doc/vibe-coding-protocol.md` — ✅ done
 - [x] **G-3** Add context-optimization bullet to session-start checklist in `AGENTS.md` — ✅ done
+
+---
+
+## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader 🔲
+
+Extend the existing Screen DSL with a declarative file loader that reads screen
+definitions from YAML/JSON files. Zero RAM overhead; both renderers unchanged;
+incremental migration from Python-coded screens.
+
+→ [Research report](doc/research-dynamic-ui-scenarios.md) · [Spec](doc/todo/21-screen-dsl-loader.md)
+
+### 21.1 Phase 1 — Core Loader 🔲
+
+- [ ] Create `src/ui/screen_loader.py` (~100 lines): `_WIDGET_BUILDERS` registry, `load_screen()`, all 10 widget builders
+- [ ] JSON support (stdlib `json`) + YAML support (optional `pyyaml`)
+- [ ] i18n key resolution via `t_func(lang, key)` parameter
+- [ ] Role-based widget visibility (`visible_roles: [admin]` in YAML)
+- [ ] Variable substitution in text and actions (`{var_name}` → `variables` dict)
+- [ ] `load_all_screens(dir)` for preload at startup
+- [ ] `reload_screens()` for hot-reload (clears `_screen_cache`)
+- [ ] Add `pyyaml` to `deploy/requirements.txt`
+- [ ] Unit tests: all 10 widget types, i18n resolution, role filtering, variable substitution
+
+### 21.2 Phase 2 — Proof of Concept 🔲
+
+- [ ] Create `src/screens/` directory for YAML/JSON screen definitions
+- [ ] Convert `help` screen to `screens/help.yaml`
+- [ ] Wire Telegram callback: `load_screen("screens/help.yaml", ctx, t_func=_t_by_lang)` + `render_screen()`
+- [ ] Add `GET /dynamic/{screen_id}` route in `bot_web.py` + `templates/dynamic.html`
+- [ ] Add `reload_screens` admin callback → "✅ Screens reloaded"
+- [ ] Smoke test: both channels render identical output from same YAML file
+
+### 21.3 Phase 3 — Main & Admin Menus 🔲
+
+- [ ] Convert main menu to `screens/main_menu.yaml` (with `visible_roles` for admin button row)
+- [ ] Convert admin menu to `screens/admin_menu.yaml`
+- [ ] Test: regular user sees filtered menu; admin sees full menu
+
+### 21.4 Phase 4 — Feature Screens 🔲
+
+- [ ] Convert notes list + note view + note edit screens
+- [ ] Convert calendar event list screen
+- [ ] Convert mail digest screen
+- [ ] Convert settings/profile screen
+
+### 21.5 Phase 5 — Validation & Docs 🔲
+
+- [ ] Create `src/screens/screen.schema.json` JSON Schema
+- [ ] Add schema validation in `_load_file()` — log warning on invalid files
+- [ ] Document screen file format as new section in `doc/dev-patterns.md`
+- [ ] Update `doc/bot-code-map.md` with `screen_loader.py` entry
+
+### 21.6 Phase 6 — Visual Editor (OpenClaw only) 🔲
+
+- [ ] Admin panel page: CodeMirror YAML editor + live preview pane
+- [ ] `PUT /admin/screens/{id}` route to save edited YAML to `src/screens/`
+- [ ] Auto-trigger `reload_screens()` on save

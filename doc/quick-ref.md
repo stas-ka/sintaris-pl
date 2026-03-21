@@ -1,4 +1,4 @@
-# picoclaw Quick Reference
+# taris Quick Reference
 
 **Always-read** — 3 KB index. Read this before any task. For full details, follow the links.
 
@@ -29,7 +29,7 @@ ui/bot_actions ← ui/render_telegram · bot_web
 | i18n string lookup | `telegram/bot_access.py` | `_t(chat_id, key)` |
 | Access guard | `telegram/bot_access.py` | `_is_allowed()` / `_is_admin()` |
 | Send menu | `telegram/bot_access.py` | `_send_menu(chat_id)` |
-| Ask LLM | `telegram/bot_access.py` | `_ask_picoclaw(prompt)` |
+| Ask LLM | `telegram/bot_access.py` | `_ask_taris(prompt)` |
 | Notes CRUD | `telegram/bot_users.py` | `_save_note_file()` / `_list_notes_for()` |
 | Registration | `telegram/bot_users.py` | `_upsert_registration()` |
 | TTS synthesis | `features/bot_voice.py` | `_tts_to_ogg(text)` |
@@ -69,7 +69,7 @@ _t(chat_id, "my_key", value=42)     # with format kwargs
 | `strings.json` | T13, T17 |
 | `features/bot_calendar.py` | T20, T21 |
 | `bot_web.py` / `templates/` / `static/` | Web UI Playwright |
-| Any deploy | Smoke: `journalctl -u picoclaw-telegram -n 20` |
+| Any deploy | Smoke: `journalctl -u taris-telegram -n 20` |
 
 Full test reference → `doc/test-suite.md`
 
@@ -79,13 +79,13 @@ Full test reference → `doc/test-suite.md`
 
 ```bat
 rem Voice regression — all T01–T21
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py"
 
 rem Web UI Playwright
 py -m pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080 --browser chromium
 
 rem Smoke check after deploy
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-telegram -n 20 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-telegram -n 20 --no-pager"
 ```
 
 ---
@@ -102,11 +102,11 @@ plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-telegram -n
 
 ```bat
 rem Incremental deploy (changed files — include subdir in path)
-rem core/: pscp -pw "%HOSTPWD%" src\core\<changed>.py stas@<HOST>:/home/stas/.picoclaw/core/
-rem telegram/: pscp -pw "%HOSTPWD%" src\telegram\<changed>.py stas@<HOST>:/home/stas/.picoclaw/telegram/
-rem features/: pscp -pw "%HOSTPWD%" src\features\<changed>.py stas@<HOST>:/home/stas/.picoclaw/features/
-rem root entries: pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@<HOST>:/home/stas/.picoclaw/
-plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+rem core/: pscp -pw "%HOSTPWD%" src\core\<changed>.py stas@<HOST>:/home/stas/.taris/core/
+rem telegram/: pscp -pw "%HOSTPWD%" src\telegram\<changed>.py stas@<HOST>:/home/stas/.taris/telegram/
+rem features/: pscp -pw "%HOSTPWD%" src\features\<changed>.py stas@<HOST>:/home/stas/.taris/features/
+rem root entries: pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py stas@<HOST>:/home/stas/.taris/
+plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 Full deploy steps → `.github/instructions/bot-deploy.instructions.md`

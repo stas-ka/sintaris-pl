@@ -1,6 +1,6 @@
-# Picoclaw Bot — Developer Patterns & Conventions
+# Taris Bot — Developer Patterns & Conventions
 
-This document describes the exact patterns used across the picoclaw codebase.
+This document describes the exact patterns used across the taris codebase.
 The bot is split into 20 modules (`bot_*.py`, `render_telegram.py`, `bot_web.py`, etc.).
 Follow these patterns precisely when adding features to keep the codebase consistent.
 
@@ -8,7 +8,7 @@ Follow these patterns precisely when adding features to keep the codebase consis
 
 ## 1. Adding a Voice Opt Toggle
 
-Voice opts are feature flags that persist in `~/.picoclaw/voice_opts.json`.
+Voice opts are feature flags that persist in `~/.taris/voice_opts.json`.
 All default to `False` so existing behaviour is never changed.
 
 ### Step 1 — Add constant (if the opt needs a path/binary)
@@ -275,25 +275,25 @@ Never use class instances — the bot is single-threaded sequential handlers.
 ### Full deploy (all bot modules — required for first-time or major refactor)
 
 ```bat
-pscp -pw "%HOSTPWD%" src\bot_config.py src\bot_state.py src\bot_instance.py stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_access.py src\bot_users.py src\bot_voice.py    stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_admin.py  src\bot_handlers.py                  stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py                                stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\release_notes.json  src\strings.json                stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_config.py src\bot_state.py src\bot_instance.py stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\bot_access.py src\bot_users.py src\bot_voice.py    stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\bot_admin.py  src\bot_handlers.py                  stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py                                stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\release_notes.json  src\strings.json                stas@OpenClawPI:/home/stas/.taris/
 ```
 
 ### Incremental deploy (only changed files)
 
 ```bat
 rem Example: only bot_admin.py + release notes changed
-pscp -pw "%HOSTPWD%" src\bot_admin.py stas@OpenClawPI:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\release_notes.json stas@OpenClawPI:/home/stas/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_admin.py stas@OpenClawPI:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\release_notes.json stas@OpenClawPI:/home/stas/.taris/
 ```
 
 ### Restart and verify
 
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 Expected log after clean start:
@@ -319,8 +319,8 @@ All target-side sources belong in `src/`. Never in `.credentials/` or root.
 
 When adding a `.service` file, deploy it in the same operation:
 ```bat
-pscp -pw "%HOSTPWD%" src\services\picoclaw-new.service stas@OpenClawPI:/tmp/
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S cp /tmp/picoclaw-new.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now picoclaw-new"
+pscp -pw "%HOSTPWD%" src\services\taris-new.service stas@OpenClawPI:/tmp/
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S cp /tmp/taris-new.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now taris-new"
 ```
 
 ---
@@ -330,9 +330,9 @@ plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S cp /tmp/p
 ```
 tmpfs_model enabled AND /dev/shm/piper/... exists → use tmpfs path  (fastest)
     ↓ else
-piper_low_model enabled AND ~/.picoclaw/ru_RU-irina-low.onnx exists → use low model
+piper_low_model enabled AND ~/.taris/ru_RU-irina-low.onnx exists → use low model
     ↓ else
-default → ~/.picoclaw/ru_RU-irina-medium.onnx
+default → ~/.taris/ru_RU-irina-medium.onnx
 ```
 
 When adding a new model priority level, insert it between the existing checks
@@ -561,7 +561,7 @@ async def my_feature_action(request: Request,
 
 ### Auth guard
 
-Every protected route uses the `Depends(get_current_user)` FastAPI dependency (defined in `bot_web.py`). It reads the `pico_token` JWT cookie and raises `401` on failure. Admin-only routes additionally check `user.is_admin`:
+Every protected route uses the `Depends(get_current_user)` FastAPI dependency (defined in `bot_web.py`). It reads the `taris_token` JWT cookie and raises `401` on failure. Admin-only routes additionally check `user.is_admin`:
 
 ```python
 @app.post("/admin/my-admin-action")

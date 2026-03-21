@@ -32,7 +32,7 @@ from core.bot_config import (
 from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _lang, _safe_edit, _back_keyboard, _voice_back_keyboard,
-    _escape_tts, _escape_md, _truncate, _with_lang_voice, _ask_picoclaw,
+    _escape_tts, _escape_md, _truncate, _with_lang_voice, _ask_taris,
     _is_guest,
 )
 from telegram.bot_users import (
@@ -627,7 +627,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
     """
     Process a Telegram voice note:
       OGG → ffmpeg decode (16 kHz PCM) → [VAD] → [Whisper|Vosk] STT
-        → [notes cmd] or [picoclaw LLM] → text + Piper TTS OGG.
+        → [notes cmd] or [taris LLM] → text + Piper TTS OGG.
 
     Runs in a background thread so the Telegram handler returns immediately.
     """
@@ -939,7 +939,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                                _t(chat_id, "audio_na"), parse_mode="Markdown")
             return
 
-        # ── Show transcript, call picoclaw ─────────────────────────────────────
+        # ── Show transcript, call taris ─────────────────────────────────────
         # Strip [?word] markers for display — clean text shown to user,
         # but full text with markers is sent to LLM so it can fill gaps.
         _clean_text = re.sub(r'\[\?([^\]]*)\]', r'\1', text).strip()
@@ -949,7 +949,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
 
         # ── Save last transcript for web UI display ────────────────────────────
         try:
-            _last_t_path = Path(os.path.expanduser("~/.picoclaw")) / "last_transcript.txt"
+            _last_t_path = Path(os.path.expanduser("~/.taris")) / "last_transcript.txt"
             _last_t_path.write_text(
                 f"[telegram] {time.strftime('%Y-%m-%d %H:%M')}  {_clean_text}",
                 encoding="utf-8",
@@ -969,7 +969,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             return
 
         _ts = time.time()
-        response = _ask_picoclaw(_with_lang_voice(chat_id, text), timeout=90)
+        response = _ask_taris(_with_lang_voice(chat_id, text), timeout=90)
         _timing["LLM"] = time.time() - _ts
 
         if not response:
@@ -989,14 +989,14 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         try:
             bot.send_message(
                 chat_id,
-                f"🤖 *Picoclaw:*\n{_escape_md(_truncate(response))}{_fmt_timing()}",
+                f"🤖 *Taris:*\n{_escape_md(_truncate(response))}{_fmt_timing()}",
                 parse_mode="Markdown",
                 reply_markup=_voice_back_keyboard(chat_id),
             )
         except Exception:
             bot.send_message(
                 chat_id,
-                f"Picoclaw:\n{_truncate(response)}{_fmt_timing()}",
+                f"Taris:\n{_truncate(response)}{_fmt_timing()}",
                 reply_markup=_voice_back_keyboard(chat_id),
             )
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""migrate_to_db.py — Idempotent JSON → SQLite migration for picoclaw.
+"""migrate_to_db.py — Idempotent JSON → SQLite migration for taris.
 
-Reads all legacy JSON data files from ~/.picoclaw/ and writes them into the
-picoclaw SQLite database (pico.db).  Safe to run multiple times — every
+Reads all legacy JSON data files from ~/.taris/ and writes them into the
+taris SQLite database (taris.db).  Safe to run multiple times — every
 INSERT uses INSERT OR IGNORE or INSERT OR REPLACE so existing rows are not
 duplicated.
 
-Usage (on Pi, from ~/.picoclaw/ directory):
+Usage (on Pi, from ~/.taris/ directory):
     python3 setup/migrate_to_db.py            # apply migration
     python3 setup/migrate_to_db.py --dry-run  # print what would happen, no writes
 
-Usable on both PI1 and PI2 — reads/writes ~/.picoclaw/pico.db.
+Usable on both PI1 and PI2 — reads/writes ~/.taris/taris.db.
 
 Skipped sources:
   contacts — already live in SQLite (bot_contacts.py uses get_db() directly).
@@ -22,7 +22,7 @@ Password encryption:
   the password is encrypted before being written to mail_creds.password_enc.
   Otherwise it is stored as-is with a warning.
 
-  Generate a key once and store it in ~/.picoclaw/bot.env:
+  Generate a key once and store it in ~/.taris/bot.env:
       python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 """
 
@@ -63,9 +63,9 @@ log = logging.getLogger("migrate")
 # ---------------------------------------------------------------------------
 # DB path — matches store.py / bot_db.py defaults
 # ---------------------------------------------------------------------------
-_PICOCLAW_DIR = Path(os.path.expanduser("~/.picoclaw"))
-DB_PATH = Path(os.environ.get("STORE_DB_PATH", str(_PICOCLAW_DIR / "pico.db")))
-ACCOUNTS_FILE = _PICOCLAW_DIR / "accounts.json"
+_TARIS_DIR = Path(os.path.expanduser("~/.taris"))
+DB_PATH = Path(os.environ.get("STORE_DB_PATH", str(_TARIS_DIR / "taris.db")))
+ACCOUNTS_FILE = _TARIS_DIR / "accounts.json"
 
 
 # ============================================================
@@ -467,7 +467,7 @@ def _migrate_tts_pending(conn: sqlite3.Connection, dry_run: bool) -> int:
 def main() -> int:
     global DB_PATH
     parser = argparse.ArgumentParser(
-        description="Migrate picoclaw JSON files → SQLite (pico.db). Idempotent.",
+        description="Migrate taris JSON files → SQLite (taris.db). Idempotent.",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -475,16 +475,16 @@ def main() -> int:
     )
     parser.add_argument(
         "--db", default=str(DB_PATH),
-        help=f"Path to pico.db (default: {DB_PATH})",
+        help=f"Path to taris.db (default: {DB_PATH})",
     )
     args = parser.parse_args()
 
     DB_PATH = Path(args.db)
 
     mode = "DRY-RUN" if args.dry_run else "APPLY"
-    log.info(f"=== picoclaw JSON → SQLite migration ({mode}) ===")
+    log.info(f"=== taris JSON → SQLite migration ({mode}) ===")
     log.info(f"    DB:          {DB_PATH}")
-    log.info(f"    picoclaw dir: {_PICOCLAW_DIR}")
+    log.info(f"    taris dir: {_TARIS_DIR}")
 
     if not DB_PATH.exists() and not args.dry_run:
         log.error(f"Database {DB_PATH} does not exist.  Run the bot once first so init_db() creates the schema.")
@@ -526,7 +526,7 @@ def main() -> int:
         log.info("-" * 33)
         log.info(f"  {'TOTAL':<23} {sum(results.values()):>6}")
         log.info(
-            f"\n{'[DRY-RUN — no data written]' if args.dry_run else '[Done — data written to pico.db]'}"
+            f"\n{'[DRY-RUN — no data written]' if args.dry_run else '[Done — data written to taris.db]'}"
         )
 
     except Exception as exc:

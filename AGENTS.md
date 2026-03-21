@@ -1,4 +1,4 @@
-# Agent Memory — picoclaw
+# Agent Memory — taris
 
 
 This file stores persistent state for AI coding agents. See `.github/copilot-instructions.md` for full workspace instructions.

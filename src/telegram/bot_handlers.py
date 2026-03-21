@@ -4,7 +4,7 @@ bot_handlers.py — User-facing message handlers.
 Responsibilities:
   - Mail digest (show last + refresh)
   - System chat (natural language → bash → confirm → run)
-  - Free chat (picoclaw LLM)
+  - Free chat (taris LLM)
   - Notes UI (menu, list, create, open, edit, delete)
 """
 

@@ -1,4 +1,4 @@
-# Pico Bot — Project-essential apt packages
+# Taris Bot — Project-essential apt packages
 # Install with: sudo apt-get install -y $(grep -v '#' packages.txt | tr '\n' ' ')
 # Generated from OpenClawPI (Raspberry Pi 3 B+, Raspberry Pi OS Bookworm aarch64)
 # Last updated: 2026-03-07

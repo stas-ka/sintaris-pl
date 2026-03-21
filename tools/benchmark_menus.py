@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-benchmark_menus.py — Menu navigation performance benchmark for picoclaw.
+benchmark_menus.py — Menu navigation performance benchmark for taris.
 
 Simulates user-facing Telegram menu handler calls with no real network I/O.
 All bot.send_message() / bot.edit_message_text() calls are replaced with no-ops.
@@ -67,7 +67,7 @@ ALL_TEST_USERS = [
 # STEP 1 — Create temp directory and set env vars BEFORE any src imports
 # bot_config.py reads constants from os.environ at module import time.
 # ══════════════════════════════════════════════════════════════════════════════
-_TMPDIR      = tempfile.mkdtemp(prefix="picoclaw_benchmenus_")
+_TMPDIR      = tempfile.mkdtemp(prefix="taris_benchmenus_")
 _NOTES_DIR   = os.path.join(_TMPDIR, "notes")
 _CAL_DIR     = os.path.join(_TMPDIR, "calendar")
 _REGS_FILE   = os.path.join(_TMPDIR, "registrations.json")
@@ -101,7 +101,7 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PARENT_DIR = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
 _SRC = os.path.join(_PARENT_DIR, "src")
 if not os.path.isdir(os.path.join(_SRC, "core")):
-    # Pi layout: modules are directly in parent dir (e.g. ~/.picoclaw/core/)
+    # Pi layout: modules are directly in parent dir (e.g. ~/.taris/core/)
     _SRC = _PARENT_DIR
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -110,7 +110,7 @@ import core.bot_db as bot_db  # noqa: E402
 
 # Redirect DB_PATH and force fresh thread-local connections
 bot_db.DB_PATH = _DB_FILE
-bot_db._PICOCLAW_DIR = _TMPDIR
+bot_db._TARIS_DIR = _TMPDIR
 bot_db._local = threading.local()  # reset so next get_db() opens temp file
 
 # Initialize schema in the temp DB now (before other modules use it)

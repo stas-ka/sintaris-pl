@@ -1,4 +1,4 @@
-# Pico Bot — User Guide
+# Taris Bot — User Guide
 
 **@smartpico_bot** is a Telegram bot running on Raspberry Pi that provides AI chat, mail digest, system management, and voice interaction.
 
@@ -94,12 +94,12 @@ Full system management. Visible only to **Admin** users.
 
 #### AI / LLM
 - **🤖 Switch LLM** — Change the active language model. Set `LLM_PROVIDER` in `bot.env`:
-  - **picoclaw** (default) — OpenRouter via `picoclaw agent`; access to 100+ models
+  - **taris** (default) — OpenRouter via `taris agent`; access to 100+ models
   - **openai** — direct ChatGPT API; models: gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview
   - **yandexgpt** — Yandex Cloud LLM API (`YANDEXGPT_API_KEY`)
   - **gemini** — Google Gemini API (`GEMINI_API_KEY`)
   - **anthropic** — Anthropic Claude API (`ANTHROPIC_API_KEY`)
-  - **local** — fully offline llama.cpp inference via `picoclaw-llm.service`; set `LLM_LOCAL_FALLBACK=true` for auto-fallback
+  - **local** — fully offline llama.cpp inference via `taris-llm.service`; set `LLM_LOCAL_FALLBACK=true` for auto-fallback
 - OpenAI API key is entered once and stored persistently.
 
 #### Voice Pipeline
@@ -246,7 +246,7 @@ Voice recognition and speech synthesis run **fully offline** on the Pi — no cl
 
 | Problem | Likely cause | Fix |
 |---------|-------------|-----|
-| Bot doesn't respond | Service stopped | Admin: `sudo systemctl restart picoclaw-telegram` |
+| Bot doesn't respond | Service stopped | Admin: `sudo systemctl restart taris-telegram` |
 | Voice reply missing audio | Piper not installed | Run `setup_voice.sh` |
 | Mail digest fails | Gmail credentials expired | Check IMAP App Password in `bot.env` |
 | "Admins only" on System Chat | You are a guest user | Ask admin to upgrade your access |
@@ -254,7 +254,7 @@ Voice recognition and speech synthesis run **fully offline** on the Pi — no cl
 | Button press does nothing | Markdown parse error | Update bot to latest version |
 | Registration pending forever | Admin hasn't approved | Ask admin to check Pending Requests in admin panel |
 | `/start` shows wrong menu | Role mismatch in `bot.env` | Check `ALLOWED_USERS` / `ADMIN_USERS` in `bot.env` |
-| Web UI shows `502 Bad Gateway` | Pi tunnel disconnected | Check `systemctl status picoclaw-tunnel` on the Pi |
+| Web UI shows `502 Bad Gateway` | Pi tunnel disconnected | Check `systemctl status taris-tunnel` on the Pi |
 | Web login fails (wrong password) | Wrong web credentials | Use Telegram linking to re-register with correct creds |
 | Browser shows SSL certificate warning | Self-signed cert on local access | Accept / add exception; public URL has a valid cert |
 | Link code expired | Codes are valid 15 minutes | Tap 🔗 Link to Web again to get a fresh code |

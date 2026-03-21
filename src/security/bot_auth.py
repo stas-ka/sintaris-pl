@@ -2,7 +2,7 @@
 bot_auth.py — Web authentication: accounts, passwords, JWT tokens.
 
 Provides:
-  - Account CRUD backed by ~/.picoclaw/accounts.json
+  - Account CRUD backed by ~/.taris/accounts.json
   - bcrypt password hashing (work factor 12)
   - PyJWT token create / verify (HS256, 24 h expiry)
   - Optional Telegram linking (chat_id ↔ user_id)
@@ -24,13 +24,13 @@ from core.bot_config import log
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PICOCLAW_DIR = os.path.expanduser("~/.picoclaw")
-ACCOUNTS_FILE = os.path.join(_PICOCLAW_DIR, "accounts.json")
-_SECRET_FILE  = os.path.join(_PICOCLAW_DIR, "web_secret.key")
+_TARIS_DIR = os.path.expanduser("~/.taris")
+ACCOUNTS_FILE = os.path.join(_TARIS_DIR, "accounts.json")
+_SECRET_FILE  = os.path.join(_TARIS_DIR, "web_secret.key")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
-COOKIE_NAME = "pico_token"
+COOKIE_NAME = "taris_token"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JWT secret — generated once, persisted

@@ -1,6 +1,6 @@
 # SQLite Data Layer — Spec
 
-**Goal:** Migrate from per-user JSON files to `~/.picoclaw/pico.db`.  
+**Goal:** Migrate from per-user JSON files to `~/.taris/taris.db`.  
 `src/bot_db.py` skeleton exists (v2026.3.30); migration pending.
 
 ---
@@ -18,7 +18,7 @@
 | Voice opts flags | ✅ **SQLite** | Per-user row in `voice_opts` table |
 | TTS orphan tracker | ✅ **SQLite** | ACID guarantees for cleanup state |
 | Bot secrets (`bot.env`) | ✅ **files** | Version-controlled template, never in DB |
-| picoclaw config (`config.json`) | ✅ **files** | Owned by picoclaw binary |
+| taris config (`config.json`) | ✅ **files** | Owned by taris binary |
 | LLM model selection (`active_model.txt`) | ✅ **files** | Single global value, rarely changes |
 | Voice/audio model files (`.onnx`, Vosk) | ✅ **files** | Binary blobs, no query benefit |
 | Error protocol bundles | 🔀 **hybrid** | Files on disk; manifest metadata row in SQLite |
@@ -30,8 +30,8 @@
 
 | Environment | Path |
 |---|---|
-| Pi (production) | `~/.picoclaw/pico.db` |
-| Local dev / tests | `~/.picoclaw/pico_test.db` or `:memory:` |
+| Pi (production) | `~/.taris/taris.db` |
+| Local dev / tests | `~/.taris/pico_test.db` or `:memory:` |
 
 ---
 
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS tts_pending (
 | **Phase 2** — Dual-write | New writes go to both DB and legacy files; reads from DB with file fallback | Zero |
 | **Phase 3** — Migrate existing data | `migrate_to_db.py` reads all JSON files, inserts into DB (idempotent) | Low |
 | **Phase 4** — DB-only reads | Remove file fallback; legacy files kept as read-only backup | Low |
-| **Phase 5** — Archive legacy files | Move old JSONs to `~/.picoclaw/legacy_json_backup/` | Zero |
+| **Phase 5** — Archive legacy files | Move old JSONs to `~/.taris/legacy_json_backup/` | Zero |
 
 **Migration checklist:**
 - [x] `src/bot_db.py` created — `get_db()`, `init_db()`, schema SQL (v2026.3.30)
@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS tts_pending (
 # Dependency: bot_config → bot_db → bot_state → …
 import sqlite3, threading
 
-_DB_PATH = os.path.join(PICOCLAW_DIR, 'pico.db')
+_DB_PATH = os.path.join(TARIS_DIR, 'taris.db')
 _local = threading.local()  # per-thread connection (telebot uses threadpool)
 
 def get_db() -> sqlite3.Connection: ...          # thread-local connection, creates if needed

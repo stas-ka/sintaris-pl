@@ -2,11 +2,11 @@
 bot_mail_creds.py — Per-user mail credential management and personalised digest runner.
 
 Features:
-  • Per-user credential storage: ~/.picoclaw/mail_creds/<chat_id>.json  (chmod 600)
+  • Per-user credential storage: ~/.taris/mail_creds/<chat_id>.json  (chmod 600)
   • GDPR (EU Reg. 2016/679) + Russian 152-FZ consent gate before any credential setup
   • Supported providers: Gmail, Yandex Mail, Mail.ru, Custom IMAP
-  • Per-user digest: inline IMAP fetch + LLM summarisation via _ask_picoclaw()
-  • Per-user last-digest cache: ~/.picoclaw/mail_creds/<chat_id>_last_digest.txt
+  • Per-user digest: inline IMAP fetch + LLM summarisation via _ask_taris()
+  • Per-user last-digest cache: ~/.taris/mail_creds/<chat_id>_last_digest.txt
   • Full credential lifecycle: setup wizard → test connection → view → delete
 
 Dependency chain:  bot_config → bot_state → bot_instance → bot_access → bot_mail_creds
@@ -39,7 +39,7 @@ from core.store import store
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS
 from telegram.bot_access import (
-    _t, _escape_md, _truncate, _back_keyboard, _send_menu, _ask_picoclaw,
+    _t, _escape_md, _truncate, _back_keyboard, _send_menu, _ask_taris,
     _is_guest,
 )
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -287,7 +287,7 @@ def _fetch_and_summarize(chat_id: int) -> str:
         return f"📭 Email Digest — {today}\nNo new emails in the last 24 hours."
 
     prompt  = _build_digest_prompt(inbox, spam)
-    summary = _ask_picoclaw(prompt, timeout=90)
+    summary = _ask_taris(prompt, timeout=90)
     if not summary:
         return (
             f"📧 Digest — {today}\n"

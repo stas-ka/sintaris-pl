@@ -1,10 +1,10 @@
 ---
 name: taris-deploy-to-target
-description: 'Deploy picoclaw bot to Raspberry Pi targets (OpenClawPI2 / OpenClawPI). Use when: deploying bot updates, pushing new features, deploying service files, restarting services, verifying deployment, running post-deploy tests, safe update with backup, incremental file deploy, full module deploy, release version bump, checking journal logs after restart. Deployment OpenClawPi2 in first step (edevelopment and test target) onyly successed tests and after confirmation of user is deployment and test of OpenClawPI target is allowed'
+description: 'Deploy taris bot to Raspberry Pi targets (OpenClawPI2 / OpenClawPI). Use when: deploying bot updates, pushing new features, deploying service files, restarting services, verifying deployment, running post-deploy tests, safe update with backup, incremental file deploy, full module deploy, release version bump, checking journal logs after restart. Deployment OpenClawPi2 in first step (edevelopment and test target) onyly successed tests and after confirmation of user is deployment and test of OpenClawPI target is allowed'
 argument-hint: 'Which files changed? (e.g. all, bot_admin.py, strings.json) and target (pi2/pi1/both)'
 ---
 
-# Deploy to Target — Picoclaw Raspberry Pi
+# Deploy to Target — Taris Raspberry Pi
 
 ## When to Use
 
@@ -64,11 +64,11 @@ rem PI2: set THOST=OpenClawPI2 & set TPWD=%TARGET2PWD%
 rem PI1: set THOST=OpenClawPI  & set TPWD=%HOSTPWD%
 
 for /f %%i in ('powershell -c "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%i
-for /f %%v in ('plink -pw "%TPWD%" -batch stas@%THOST% "grep BOT_VERSION /home/stas/.picoclaw/bot_config.py | head -1 | cut -d'"' -f2"') do set VER=%%v
-set BNAME=picoclaw_backup_%THOST%_v%VER%_%TS%
+for /f %%v in ('plink -pw "%TPWD%" -batch stas@%THOST% "grep BOT_VERSION /home/stas/.taris/bot_config.py | head -1 | cut -d'"' -f2"') do set VER=%%v
+set BNAME=taris_backup_%THOST%_v%VER%_%TS%
 
 plink -pw "%TPWD%" -batch stas@%THOST% ^
-  "tar czf /tmp/%BNAME%.tar.gz -C /home/stas/.picoclaw ^
+  "tar czf /tmp/%BNAME%.tar.gz -C /home/stas/.taris ^
     --exclude=vosk-model-small-ru --exclude=vosk-model-small-de ^
     --exclude='*.onnx' --exclude='ggml-*.bin' ^
     . 2>/dev/null && echo BACKUP_OK"
@@ -90,7 +90,7 @@ plink -pw "%TPWD%" -batch stas@%THOST% ^
   "tar tzf /tmp/%BNAME%.tar.gz | grep -E '\.(json|db|txt|env)$' | head -20"
 ```
 
-Expected to see: `bot.env`, `config.json`, `pico.db` (or `voice_opts.json`, `users.json`). **Do not proceed until the backup is confirmed on local disk.**
+Expected to see: `bot.env`, `config.json`, `taris.db` (or `voice_opts.json`, `users.json`). **Do not proceed until the backup is confirmed on local disk.**
 
 > ✅ Keep the last 3 backup archives in `backup/snapshots/`; delete older ones after a successful deploy.
 
@@ -116,8 +116,8 @@ Replace `<files>` with the changed files. Always restart after.
 
 ```bat
 rem PI2 (always first)
-pscp -pw "%TARGET2PWD%" src\<file1.py> src\<file2.py> stas@OpenClawPI2:/home/stas/.picoclaw/
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+pscp -pw "%TARGET2PWD%" src\<file1.py> src\<file2.py> stas@OpenClawPI2:/home/stas/.taris/
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl restart taris-telegram && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 **Expected journal output (success):**
@@ -128,7 +128,7 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S sy
 
 If `strings.json` or `release_notes.json` changed, also deploy those:
 ```bat
-pscp -pw "%TARGET2PWD%" src\strings.json src\release_notes.json stas@OpenClawPI2:/home/stas/.picoclaw/
+pscp -pw "%TARGET2PWD%" src\strings.json src\release_notes.json stas@OpenClawPI2:/home/stas/.taris/
 ```
 
 ---
@@ -139,22 +139,22 @@ Use after a major refactor or first-time deploy to a target. Modules live in pac
 
 ```bat
 rem Create package dirs on target (idempotent)
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "mkdir -p ~/.picoclaw/core ~/.picoclaw/security ~/.picoclaw/telegram ~/.picoclaw/features ~/.picoclaw/ui"
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "touch ~/.picoclaw/core/__init__.py ~/.picoclaw/security/__init__.py ~/.picoclaw/telegram/__init__.py ~/.picoclaw/features/__init__.py ~/.picoclaw/ui/__init__.py"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "mkdir -p ~/.taris/core ~/.taris/security ~/.taris/telegram ~/.taris/features ~/.taris/ui"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "touch ~/.taris/core/__init__.py ~/.taris/security/__init__.py ~/.taris/telegram/__init__.py ~/.taris/features/__init__.py ~/.taris/ui/__init__.py"
 
 rem Deploy Python packages
-pscp -pw "%TARGET2PWD%" src\core\*.py stas@OpenClawPI2:/home/stas/.picoclaw/core/
-pscp -pw "%TARGET2PWD%" src\security\*.py stas@OpenClawPI2:/home/stas/.picoclaw/security/
-pscp -pw "%TARGET2PWD%" src\telegram\*.py stas@OpenClawPI2:/home/stas/.picoclaw/telegram/
-pscp -pw "%TARGET2PWD%" src\features\*.py stas@OpenClawPI2:/home/stas/.picoclaw/features/
-pscp -pw "%TARGET2PWD%" src\ui\*.py stas@OpenClawPI2:/home/stas/.picoclaw/ui/
+pscp -pw "%TARGET2PWD%" src\core\*.py stas@OpenClawPI2:/home/stas/.taris/core/
+pscp -pw "%TARGET2PWD%" src\security\*.py stas@OpenClawPI2:/home/stas/.taris/security/
+pscp -pw "%TARGET2PWD%" src\telegram\*.py stas@OpenClawPI2:/home/stas/.taris/telegram/
+pscp -pw "%TARGET2PWD%" src\features\*.py stas@OpenClawPI2:/home/stas/.taris/features/
+pscp -pw "%TARGET2PWD%" src\ui\*.py stas@OpenClawPI2:/home/stas/.taris/ui/
 
 rem Deploy entry points + data
-pscp -pw "%TARGET2PWD%" src\telegram_menu_bot.py src\bot_web.py src\voice_assistant.py src\gmail_digest.py stas@OpenClawPI2:/home/stas/.picoclaw/
-pscp -pw "%TARGET2PWD%" src\strings.json src\release_notes.json stas@OpenClawPI2:/home/stas/.picoclaw/
+pscp -pw "%TARGET2PWD%" src\telegram_menu_bot.py src\bot_web.py src\voice_assistant.py src\gmail_digest.py stas@OpenClawPI2:/home/stas/.taris/
+pscp -pw "%TARGET2PWD%" src\strings.json src\release_notes.json stas@OpenClawPI2:/home/stas/.taris/
 
 rem Restart
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl restart picoclaw-telegram picoclaw-web && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl restart taris-telegram taris-web && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 ---
@@ -164,11 +164,11 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S sy
 Use when `bot_web.py`, templates, or static assets changed.
 
 ```bat
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "mkdir -p ~/.picoclaw/web/templates ~/.picoclaw/web/static"
-pscp -pw "%TARGET2PWD%" src\bot_web.py stas@OpenClawPI2:/home/stas/.picoclaw/
-pscp -pw "%TARGET2PWD%" src\web\templates\*.html stas@OpenClawPI2:/home/stas/.picoclaw/web/templates/
-pscp -pw "%TARGET2PWD%" src\web\static\style.css src\web\static\manifest.json stas@OpenClawPI2:/home/stas/.picoclaw/web/static/
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl restart picoclaw-telegram picoclaw-web && sleep 3 && journalctl -u picoclaw-telegram -n 5 --no-pager && journalctl -u picoclaw-web -n 5 --no-pager"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "mkdir -p ~/.taris/web/templates ~/.taris/web/static"
+pscp -pw "%TARGET2PWD%" src\bot_web.py stas@OpenClawPI2:/home/stas/.taris/
+pscp -pw "%TARGET2PWD%" src\web\templates\*.html stas@OpenClawPI2:/home/stas/.taris/web/templates/
+pscp -pw "%TARGET2PWD%" src\web\static\style.css src\web\static\manifest.json stas@OpenClawPI2:/home/stas/.taris/web/static/
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl restart taris-telegram taris-web && sleep 3 && journalctl -u taris-telegram -n 5 --no-pager && journalctl -u taris-web -n 5 --no-pager"
 ```
 
 ---
@@ -178,7 +178,7 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S sy
 Required after any change to `src/services/*.service`. Run for the affected service name.
 
 ```bat
-set SVCNAME=picoclaw-telegram
+set SVCNAME=taris-telegram
 pscp -pw "%TARGET2PWD%" src\services\%SVCNAME%.service stas@OpenClawPI2:/tmp/%SVCNAME%.service
 plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S cp /tmp/%SVCNAME%.service /etc/systemd/system/%SVCNAME%.service && sudo systemctl daemon-reload && sudo systemctl restart %SVCNAME%"
 plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u %SVCNAME% -n 10 --no-pager"
@@ -194,7 +194,7 @@ Required when data format, schema, or new modules are added. See full protocol i
 
 **Stop services — BEFORE deploying files (prevents race condition):**
 ```bat
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl stop picoclaw-telegram picoclaw-web 2>/dev/null; echo STOPPED"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl stop taris-telegram taris-web 2>/dev/null; echo STOPPED"
 ```
 
 **Deploy files** (pscp commands from the relevant deploy section above).
@@ -202,13 +202,13 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S sy
 **Run migration if schema changed:**
 ```bat
 plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 ^
-  "python3 /home/stas/.picoclaw/migrate_to_db.py --source=/home/stas/.picoclaw && echo MIGRATION_OK"
+  "python3 /home/stas/.taris/migrate_to_db.py --source=/home/stas/.taris && echo MIGRATION_OK"
 ```
 Expected: `MIGRATION_OK`. If not — **rollback immediately** (restore from backup in `backup/snapshots/`).
 
 **Restart services:**
 ```bat
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl start picoclaw-telegram picoclaw-web && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S systemctl start taris-telegram taris-web && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 ---
@@ -218,7 +218,7 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "echo %TARGET2PWD% | sudo -S sy
 Check the journal after restart:
 
 ```bat
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegram -n 20 --no-pager"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u taris-telegram -n 20 --no-pager"
 ```
 
 ✅ **Pass criteria:**
@@ -229,7 +229,7 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegra
 ❌ **If startup fails:**
 ```bat
 rem Check full error
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegram -n 50 --no-pager | grep -i error"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u taris-telegram -n 50 --no-pager | grep -i error"
 ```
 
 ---
@@ -239,7 +239,7 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegra
 ### Voice regression tests (mandatory if voice files changed)
 
 ```bat
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "python3 /home/stas/.taris/tests/test_voice_regression.py"
 ```
 
 Tests T01–T21 cover: model files, STT/TTS pipelines, i18n coverage, bot name injection, calendar/note callbacks.
@@ -270,7 +270,7 @@ If `BOT_VERSION` was changed, always:
 
 3. Deploy both files, restart, verify admin notification in journal:
    ```bat
-   plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegram -n 20 --no-pager | grep -i release"
+   plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u taris-telegram -n 20 --no-pager | grep -i release"
    ```
    Expected: `[ReleaseNotes] notified admin 994963580 (v2026.X.Y)`
 
@@ -300,8 +300,8 @@ rem ... run Step 0.5 backup commands here ...
 
 **Then deploy:**
 ```bat
-pscp -pw "%HOSTPWD%" src\<changed-files> stas@OpenClawPI:/home/stas/.picoclaw/
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+pscp -pw "%HOSTPWD%" src\<changed-files> stas@OpenClawPI:/home/stas/.taris/
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 ---
@@ -310,16 +310,16 @@ plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "echo %HOSTPWD% | sudo -S systemctl
 
 ```bat
 rem Check service status
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "systemctl status picoclaw-telegram picoclaw-web --no-pager"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "systemctl status taris-telegram taris-web --no-pager"
 
 rem Check current deployed version
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "grep BOT_VERSION /home/stas/.picoclaw/bot_config.py"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "grep BOT_VERSION /home/stas/.taris/bot_config.py"
 
 rem Tail live log
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u picoclaw-telegram -f --no-pager"
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u taris-telegram -f --no-pager"
 
-rem Check all picoclaw services
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "systemctl list-units picoclaw-* --no-pager"
+rem Check all taris services
+plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "systemctl list-units taris-* --no-pager"
 ```
 
 ---
@@ -328,11 +328,11 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "systemctl list-units picoclaw-
 
 | Changed file(s) | Services to restart |
 |---|---|
-| `bot_*.py`, `telegram_menu_bot.py` | `picoclaw-telegram` |
-| `bot_web.py`, `web/templates/`, `web/static/` | `picoclaw-telegram picoclaw-web` |
-| `voice_assistant.py` | `picoclaw-voice` |
+| `bot_*.py`, `telegram_menu_bot.py` | `taris-telegram` |
+| `bot_web.py`, `web/templates/`, `web/static/` | `taris-telegram taris-web` |
+| `voice_assistant.py` | `taris-voice` |
 | `src/services/*.service` | the changed service (+ `daemon-reload`) |
-| `strings.json`, `release_notes.json` | `picoclaw-telegram` |
+| `strings.json`, `release_notes.json` | `taris-telegram` |
 
 ## VPS Deployment (separate concern)
 

@@ -29,7 +29,7 @@ hard-coded Python UI logic. The goal is a single screen definition that renders
 on Telegram, Web UI, and any future channel, while remaining editable by
 non-developers and loadable without application restarts.
 
-**Key finding:** The existing picoclaw Screen DSL (`bot_ui.py`) already provides
+**Key finding:** The existing taris Screen DSL (`bot_ui.py`) already provides
 the correct abstraction layer — channel-agnostic `Screen` objects with 10 widget
 types and dedicated renderers. The best strategy is to **extend this DSL with a
 JSON/YAML loader** rather than adopting a third-party framework, because:
@@ -50,7 +50,7 @@ defined in JSON/YAML files that are loaded at startup or hot-reloaded at runtime
 
 ### 2.1 Existing Screen DSL Architecture
 
-Picoclaw implements a **channel-agnostic Screen DSL** in `src/ui/bot_ui.py` (145 lines):
+Taris implements a **channel-agnostic Screen DSL** in `src/ui/bot_ui.py` (145 lines):
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -409,7 +409,7 @@ data-focused. No Telegram channel support.
 
 ### 5.8 Built-in UI Implementation (Baseline)
 
-The current picoclaw implementation with hard-coded Python screens as the baseline
+The current taris implementation with hard-coded Python screens as the baseline
 for comparison. This is the "do nothing" option.
 
 **Characteristics:**
@@ -978,7 +978,7 @@ YAML files. Old screens can be migrated one at a time.
 Every evaluated third-party framework (NiceGUI, Flet, Reflex, Streamlit, Gradio,
 Taipy) fails on at least two critical requirements:
 
-1. **No Telegram support** — all are web-only frameworks. Picoclaw's core use
+1. **No Telegram support** — all are web-only frameworks. Taris's core use
    case is a Telegram bot with a complementary web UI. No framework provides
    `InlineKeyboardMarkup` rendering from the same definition.
 
@@ -1044,7 +1044,7 @@ migrate screens as needed.
 
 This solution directly addresses all requirements (R1–R18), costs minimal
 development effort, and preserves the battle-tested dual-channel architecture
-that makes picoclaw unique among Telegram bot platforms.
+that makes taris unique among Telegram bot platforms.
 
 ---
 

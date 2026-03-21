@@ -29,12 +29,12 @@ git diff --name-only HEAD~1 HEAD
 
 ### Voice regression (default safety net)
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py"
 ```
 
 ### Single test group (replace `tts` with the group name from T01–T21)
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test tts"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --test tts"
 ```
 
 ### Web UI tests (run locally, target must be reachable)

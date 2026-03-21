@@ -6,7 +6,7 @@
 #
 # What it does:
 #   1. Reads BOT_VERSION from src/bot_config.py
-#   2. Packages all bot source files into picoclaw-bot.tar.gz
+#   2. Packages all bot source files into taris-bot.tar.gz
 #   3. Generates SHA256 checksum
 #   4. Uploads package + version.txt + checksum to cloud.dev2null.de
 #
@@ -19,8 +19,8 @@
 #   CLOUD_HOST        cloud.dev2null.de
 #   CLOUD_USER        username for SSH login
 #   CLOUD_PWD         password (if no SSH key)
-#   CLOUD_DEPLOY_PATH /path/on/server/to/picoclaw/web/dir
-#   CLOUD_DEPLOY_URL  https://cloud.dev2null.de/picoclaw  (for verify step)
+#   CLOUD_DEPLOY_PATH /path/on/server/to/taris/web/dir
+#   CLOUD_DEPLOY_URL  https://cloud.dev2null.de/taris  (for verify step)
 #   CLOUD_SSH_KEY     (optional) path to private key file
 # =============================================================================
 
@@ -45,8 +45,8 @@ fail() { echo -e "${R}[ERROR]${N} $*"; exit 1; }
 CLOUD_HOST="${CLOUD_HOST:-cloud.dev2null.de}"
 CLOUD_USER="${CLOUD_USER:-}"
 CLOUD_PWD="${CLOUD_PWD:-}"
-CLOUD_DEPLOY_PATH="${CLOUD_DEPLOY_PATH:-/var/www/html/picoclaw}"
-CLOUD_DEPLOY_URL="${CLOUD_DEPLOY_URL:-https://${CLOUD_HOST}/picoclaw}"
+CLOUD_DEPLOY_PATH="${CLOUD_DEPLOY_PATH:-/var/www/html/taris}"
+CLOUD_DEPLOY_URL="${CLOUD_DEPLOY_URL:-https://${CLOUD_HOST}/taris}"
 CLOUD_SSH_KEY="${CLOUD_SSH_KEY:-}"
 
 [[ -z "${CLOUD_USER}" ]]        && fail "CLOUD_USER not set in .env"
@@ -57,13 +57,13 @@ BOT_VERSION=$(grep -m1 'BOT_VERSION' "${SRC_DIR}/bot_config.py" \
   | sed 's/.*"\(.*\)".*/\1/')
 [[ -z "${BOT_VERSION}" ]] && fail "Could not read BOT_VERSION from bot_config.py"
 
-PKG_NAME="picoclaw-bot.tar.gz"
+PKG_NAME="taris-bot.tar.gz"
 PKG_PATH="${REPO_ROOT}/deploy/${PKG_NAME}"
 mkdir -p "${REPO_ROOT}/deploy"
 
 echo ""
 echo "=============================================="
-echo "  Pico Bot — Publish Release"
+echo "  Taris Bot — Publish Release"
 echo "=============================================="
 echo "  Version : ${BOT_VERSION}"
 echo "  Server  : ${CLOUD_USER}@${CLOUD_HOST}:${CLOUD_DEPLOY_PATH}"
@@ -176,11 +176,11 @@ echo "=============================================="
 ok "Release ${BOT_VERSION} published!"
 echo ""
 echo "  Update Pi1:  plink -pw \"\$HOSTPWD\" -batch stas@OpenClawPI \\"
-echo "    \"sudo bash /home/stas/.picoclaw/update_from_cloud.sh\""
+echo "    \"sudo bash /home/stas/.taris/update_from_cloud.sh\""
 echo ""
 echo "  Update Pi2:  plink -pw \"\$TARGET2PWD\" -batch stas@OpenClawPI2 \\"
-echo "    \"sudo bash /home/stas/.picoclaw/update_from_cloud.sh\""
+echo "    \"sudo bash /home/stas/.taris/update_from_cloud.sh\""
 echo ""
 echo "  Or on the Pi directly:"
-echo "    sudo bash ~/.picoclaw/update_from_cloud.sh"
+echo "    sudo bash ~/.taris/update_from_cloud.sh"
 echo "=============================================="

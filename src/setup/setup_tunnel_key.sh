@@ -8,15 +8,15 @@
 #   1. Installs autossh
 #   2. Generates a dedicated ed25519 SSH key for the VPS tunnel
 #   3. Prints the public key → paste it into install_vps.sh on the VPS
-#   4. Copies the picoclaw-tunnel.service file and sets the correct port
+#   4. Copies the taris-tunnel.service file and sets the correct port
 #      (Pi1=8081, Pi2=8082, auto-detected from hostname)
 #   5. Enables and starts the tunnel service
 
 set -euo pipefail
 
-PICOCLAW_DIR="/home/stas/.picoclaw"
+TARIS_DIR="/home/stas/.taris"
 SSH_KEY="/home/stas/.ssh/vps_tunnel_key"
-SERVICE_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/services/picoclaw-tunnel.service"
+SERVICE_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/services/taris-tunnel.service"
 HOSTNAME_VAL="$(hostname)"
 
 # ── Load .env from repo root if available (dev machine or Pi with repo cloned) ─
@@ -78,19 +78,19 @@ read -r -p "Press ENTER when you have added the key to the VPS..."
 
 # ── [4] Create and install systemd service ────────────────────────────────────
 echo ""
-echo "=== [4/4] Installing picoclaw-tunnel.service ==="
+echo "=== [4/4] Installing taris-tunnel.service ==="
 
 # Use the service file from src/services/ if available, else download or fail
 if [[ ! -f "${SERVICE_SRC}" ]]; then
     echo "  WARNING: service file not found at ${SERVICE_SRC}"
-    echo "  Please ensure picoclaw-tunnel.service exists in src/services/"
+    echo "  Please ensure taris-tunnel.service exists in src/services/"
     echo "  Then re-run this script."
     exit 1
 fi
 
 # Write tunnel.env for the systemd EnvironmentFile (overwrite with correct values)
-TUNNEL_ENV="${PICOCLAW_DIR}/tunnel.env"
-mkdir -p "${PICOCLAW_DIR}"
+TUNNEL_ENV="${TARIS_DIR}/tunnel.env"
+mkdir -p "${TARIS_DIR}"
 cat > "${TUNNEL_ENV}" <<EOF
 VPS_HOST=${VPS_HOST}
 VPS_USER=${VPS_USER}
@@ -101,10 +101,10 @@ EOF
 chmod 600 "${TUNNEL_ENV}"
 echo "  Written ${TUNNEL_ENV}"
 
-sudo cp "${SERVICE_SRC}" /etc/systemd/system/picoclaw-tunnel.service
+sudo cp "${SERVICE_SRC}" /etc/systemd/system/taris-tunnel.service
 sudo systemctl daemon-reload
-sudo systemctl enable picoclaw-tunnel
-sudo systemctl restart picoclaw-tunnel
+sudo systemctl enable taris-tunnel
+sudo systemctl restart taris-tunnel
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
@@ -112,8 +112,8 @@ echo " ✅  Tunnel service installed and started!"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "Check status:"
-echo "  systemctl status picoclaw-tunnel"
-echo "  journalctl -u picoclaw-tunnel -n 20 --no-pager"
+echo "  systemctl status taris-tunnel"
+echo "  journalctl -u taris-tunnel -n 20 --no-pager"
 echo ""
 echo "After both Pis are connected, test from the internet:"
 if [[ "${REMOTE_PORT}" == "8081" ]]; then

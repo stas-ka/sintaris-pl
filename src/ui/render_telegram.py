@@ -47,7 +47,7 @@ from ui.bot_ui import (
 if TYPE_CHECKING:
     from telebot import TeleBot
 
-log = logging.getLogger("pico-tgbot")
+log = logging.getLogger("taris-tgbot")
 
 # Map UI style names to emoji prefixes (optional visual differentiation)
 _STYLE_PREFIX: dict[str, str] = {

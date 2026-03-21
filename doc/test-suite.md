@@ -1,4 +1,4 @@
-# Picoclaw — Test Suite Overview
+# taris — Test Suite Overview
 
 **Purpose:** This document is the single reference for Copilot (and human developers) on *which tests exist*, *where they live*, *what triggers them*, and *how to run them*.  
 Use it any time a user says "test the software", "run tests", or asks whether something is covered.
@@ -43,36 +43,36 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 ## 2. Category A — Voice Regression Tests
 
 **File:** `src/tests/test_voice_regression.py`  
-**Deploy path on Pi:** `~/.picoclaw/tests/test_voice_regression.py`  
-**Fixture audio:** `src/tests/voice/*.ogg` → `~/.picoclaw/tests/voice/`  
-**Ground truth:** `src/tests/voice/ground_truth.json` → `~/.picoclaw/tests/voice/ground_truth.json`  
-**Baseline file (Pi only):** `~/.picoclaw/tests/voice/results/baseline.json`
+**Deploy path on Pi:** `~/.taris/tests/test_voice_regression.py`  
+**Fixture audio:** `src/tests/voice/*.ogg` → `~/.taris/tests/voice/`  
+**Ground truth:** `src/tests/voice/ground_truth.json` → `~/.taris/tests/voice/ground_truth.json`  
+**Baseline file (Pi only):** `~/.taris/tests/voice/results/baseline.json`
 
 ### 2.1 Run commands
 
 ```bat
 rem Standard run — all tests
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py"
 
 rem Verbose — show per-test detail
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --verbose"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --verbose"
 
 rem Run only tests matching a name fragment (e.g. only TTS tests)
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test tts"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --test tts"
 
 rem Save current run as new regression baseline
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --set-baseline"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --set-baseline"
 
 rem Compare two saved result files
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --compare 2026-03-07_17-00-00.json 2026-03-10_10-00-00.json"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --compare 2026-03-07_17-00-00.json 2026-03-10_10-00-00.json"
 ```
 
 ### 2.2 Deploy test assets (run once, or when fixtures change)
 
 ```bat
-pscp -pw "%HOSTPWD%" src\tests\test_voice_regression.py stas@OpenClawPI:/home/stas/.picoclaw/tests/
-pscp -pw "%HOSTPWD%" src\tests\voice\ground_truth.json  stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
-pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
+pscp -pw "%HOSTPWD%" src\tests\test_voice_regression.py stas@OpenClawPI:/home/stas/.taris/tests/
+pscp -pw "%HOSTPWD%" src\tests\voice\ground_truth.json  stas@OpenClawPI:/home/stas/.taris/tests/voice/
+pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/stas/.taris/tests/voice/
 ```
 
 ### 2.3 Exit codes
@@ -121,7 +121,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T21 | `calendar_console_classifier` | Console uses JSON intent classifier with `add` default, not general LLM (Bug 0.5) | After fixing calendar console "add" routing |
 | T22 | `db_voice_opts_roundtrip` | SQLite store: write + read voice opts round-trip via `store_sqlite.py` | After changing `store_sqlite.py` or voice opts persistence |
 | T23 | `db_migration_idempotent` | `migrate_to_db.py` run twice on same DB — row count stable, no duplicates | After changing migration script or DB schema |
-| T24 | `rag_lr_products_fts` | FTS5 query for LR product keywords (алоэ, Mind Master, витамин, цинк, LR LIFETAKT) returns ≥2 expected keywords; SKIP if `pico.db`/`doc_chunks` absent | After uploading a knowledge document; after changing FTS5 index or `store_sqlite.search_fts()` |
+| T24 | `rag_lr_products_fts` | FTS5 query for LR product keywords (алоэ, Mind Master, витамин, цинк, LR LIFETAKT) returns ≥2 expected keywords; SKIP if `taris.db`/`doc_chunks` absent | After uploading a knowledge document; after changing FTS5 index or `store_sqlite.search_fts()` |
 | T24 | `rag_lr_products_llm` | Full RAG pipeline: chunks → LLM answer → LLM-as-judge verifies topical similarity (set `LLM_JUDGE=1`); SKIP otherwise | When `LLM_JUDGE=1` is set; after changing RAG prompt logic |
 | T25 | `web_link_code:generate` | Generated code is 6 uppercase alphanumeric chars | After changing `generate_web_link_code()` |
 | T25 | `web_link_code:validate` | `validate_web_link_code()` returns correct chat_id | After changing validate logic |
@@ -164,14 +164,15 @@ py -m pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080 --br
 rem Run only one test class
 py -m pytest src/tests/ui/test_ui.py::TestAuth -v --base-url https://openclawpi2:8080
 
-rem Run via conftest default (uses PICO_BASE_URL env var or default https://openclawpi2:8080)
+rem Run via conftest default (uses TARIS_BASE_URL env var or default https://openclawpi2:8080)
 py -m pytest src/tests/ui/ -v
 
 rem Override credentials via env vars
-set PICO_ADMIN_USER=admin
-set PICO_ADMIN_PASS=admin
-set PICO_USER=stas
-set PICO_USER_PASS=zusammen20192
+set TARIS_BASE_URL=https://openclawpi2:8080
+set TARIS_ADMIN_USER=admin
+set TARIS_ADMIN_PASS=admin
+set TARIS_USER=stas
+set TARIS_USER_PASS=zusammen20192
 py -m pytest src/tests/ui/ -v
 ```
 
@@ -179,11 +180,11 @@ py -m pytest src/tests/ui/ -v
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PICO_BASE_URL` | `https://openclawpi2:8080` | Target Pi base URL |
-| `PICO_ADMIN_USER` | `admin` | Admin username |
-| `PICO_ADMIN_PASS` | `admin` | Admin password |
-| `PICO_USER` | `stas` | Regular user username |
-| `PICO_USER_PASS` | `zusammen20192` | Regular user password |
+| `TARIS_BASE_URL` | `https://openclawpi2:8080` | Target Pi base URL |
+| `TARIS_ADMIN_USER` | `admin` | Admin username |
+| `TARIS_ADMIN_PASS` | `admin` | Admin password |
+| `TARIS_USER` | `stas` | Regular user username |
+| `TARIS_USER_PASS` | `zusammen20192` | Regular user password |
 
 ### 3.3 Test classes and what they cover
 
@@ -255,13 +256,13 @@ playwright install chromium
 
 ```bat
 rem Run TTS hardware test
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "bash /home/stas/.picoclaw/tests/test_tts.sh"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "bash /home/stas/.taris/tests/test_tts.sh"
 
 rem Run mic capture test (Python)
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_mic.py"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_mic.py"
 
 rem Run ALSA direct test
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "bash /home/stas/.picoclaw/tests/test_alsa_direct.sh"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "bash /home/stas/.taris/tests/test_alsa_direct.sh"
 ```
 
 ### 4.4 When to run
@@ -283,7 +284,7 @@ Run hardware audio tests when:
 Captures 1 second of audio from the default/USB input device, reports levels and sample rate. Use when diagnosing a microphone that appears connected but produces no data.
 
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_mic.py"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_mic.py"
 ```
 
 Expected output includes `MIC_OK`. If `ERROR:` appears, the input device or sounddevice library has a problem.
@@ -300,20 +301,20 @@ Expected output includes `MIC_OK`. If `ERROR:` appears, the input device or soun
 
 ```bat
 rem After deploying telegram_menu_bot.py
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-telegram -n 20 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-telegram -n 20 --no-pager"
 ```
 
 **Pass criteria:**
 ```
 [INFO] Version      : 2026.X.Y
-[INFO] DB init OK   : /home/stas/.picoclaw/pico.db
+[INFO] DB init OK   : /home/stas/.taris/taris.db
 [INFO] Polling Telegram…
 ```
 
 ### 6.2 Web UI smoke check
 
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-web -n 20 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-web -n 20 --no-pager"
 ```
 
 Expected: `Uvicorn running on https://0.0.0.0:8080`
@@ -321,7 +322,7 @@ Expected: `Uvicorn running on https://0.0.0.0:8080`
 ### 6.3 Voice assistant smoke check
 
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-voice -n 20 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-voice -n 20 --no-pager"
 ```
 
 Expected: `[Voice] Ready — say "Пико" to activate`
@@ -329,7 +330,7 @@ Expected: `[Voice] Ready — say "Пико" to activate`
 ### 6.4 LLM gateway smoke check
 
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u picoclaw-gateway -n 20 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "journalctl -u taris-gateway -n 20 --no-pager"
 ```
 
 ### 6.5 When to run
@@ -350,13 +351,13 @@ Run smoke tests after every deployment. They are the fastest sanity check — if
 
 ```bat
 rem Run all 31 offline Telegram tests
-cd d:\Projects\workspace\picoclaw\src\tests\telegram && py -m pytest test_telegram_bot.py -v
+cd d:\Projects\workspace\taris\src\tests\telegram && py -m pytest test_telegram_bot.py -v
 
 rem Run a single class
-cd d:\Projects\workspace\picoclaw\src\tests\telegram && py -m pytest test_telegram_bot.py::TestCallbackAdmin -v
+cd d:\Projects\workspace\taris\src\tests\telegram && py -m pytest test_telegram_bot.py::TestCallbackAdmin -v
 
 rem Run with coverage (optional)
-cd d:\Projects\workspace\picoclaw\src\tests\telegram && py -m pytest test_telegram_bot.py -v --tb=short
+cd d:\Projects\workspace\taris\src\tests\telegram && py -m pytest test_telegram_bot.py -v --tb=short
 ```
 
 ### 6b.2 Test classes and what they cover
@@ -441,11 +442,11 @@ Tests T24 validate the RAG pipeline. They gracefully SKIP when no knowledge docu
 
 **Run command for T24 only:**
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test rag_lr"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --test rag_lr"
 ```
 **With LLM judge:**
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "LLM_JUDGE=1 python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test rag_lr"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "LLM_JUDGE=1 python3 /home/stas/.taris/tests/test_voice_regression.py --test rag_lr"
 ```
 
 ### Web link code tests
@@ -463,7 +464,7 @@ Test T25 validates the Telegram↔Web account linking pipeline (`generate_web_li
 
 **Run command for T25 only:**
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.picoclaw/tests/test_voice_regression.py --test web_link_code --verbose"
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py --test web_link_code --verbose"
 ```
 
 ---
@@ -519,6 +520,6 @@ Copilot:
   1. Check what files changed since last deploy
   2. If voice-related → deploy + run test_voice_regression.py on Pi1
   3. If UI-related → run pytest src/tests/ui/ --base-url https://openclawpi2:8080
-  4. Always finish with smoke check: journalctl -u picoclaw-telegram -n 20
+  4. Always finish with smoke check: journalctl -u taris-telegram -n 20
   5. Report: "All 21 voice tests PASS, smoke OK ✅" or list failures
 ```

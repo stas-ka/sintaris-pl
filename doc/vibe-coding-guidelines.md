@@ -1,4 +1,4 @@
-# Vibe Coding Guidelines — picoclaw / Taris
+# Vibe Coding Guidelines — taris / Taris
 
 **Audience:** Any developer using GitHub Copilot (VS Code Chat or CLI agent) on this project.  
 **Goal:** Keep each Copilot session productive across 8–10 turns without hitting context-window limits.

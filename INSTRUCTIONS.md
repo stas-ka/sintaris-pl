@@ -1,4 +1,4 @@
-# Agent Instructions — picoclaw
+# Agent Instructions — taris
 
 > For workspace and bot development instructions, see `.github/copilot-instructions.md`. For current bot state, see `AGENTS.md`.
 

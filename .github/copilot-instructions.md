@@ -1,4 +1,4 @@
-# Copilot Instructions — picoclaw workspace
+# Copilot Instructions — taris workspace
 
 ## Available Skills (Prompt Files)
 
@@ -21,7 +21,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 
 ## Project
 
-picoclaw is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/German/English). Bot source lives in `src/`. The Pi target host is `OpenClawPI`. All secrets are in `.credentials/` (git-ignored).
+taris is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/German/English). Bot source lives in `src/`. The Pi target host is `OpenClawPI`. All secrets are in `.credentials/` (git-ignored).
 
 ## Reference Docs — Read on Demand
 
@@ -38,7 +38,7 @@ picoclaw is a Raspberry Pi–based Telegram bot + offline voice assistant (Russi
 ## Workspace Layout
 
 ```
-picoclaw/
+taris/
   src/            ← ALL target-side sources (Python, shell, services, tests)
     setup/        ← shell scripts (run on Pi)
     services/     ← systemd .service units
@@ -60,7 +60,7 @@ picoclaw/
 
 ## Mandatory Rules
 
-- **Secrets:** never hard-code; keep in `.credentials/.pico_env` and `.env` only.
+- **Secrets:** never hard-code; keep in `.credentials/.taris_env` and `.env` only.
 - **Source files:** all target-side sources go in `src/`; `.credentials/` holds secrets only.
 - **Version bump:** `BOT_VERSION = "YYYY.M.D"` + prepend entry in `src/release_notes.json`. Never use `\_` in JSON strings.
 - **Strings:** add to all three languages (`ru`, `en`, `de`) in `src/strings.json`.

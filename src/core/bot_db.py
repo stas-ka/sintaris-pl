@@ -1,5 +1,5 @@
 """
-bot_db.py — SQLite data layer for picoclaw.
+bot_db.py — SQLite data layer for taris.
 
 Provides a thread-local connection and init_db() which creates all tables
 using CREATE TABLE IF NOT EXISTS (safe to call on every startup).
@@ -14,8 +14,8 @@ import os
 from core.bot_config import log
 
 # ── Database file path ────────────────────────────────────────────────────────
-_PICOCLAW_DIR = os.path.expanduser("~/.picoclaw")
-DB_PATH = os.path.join(_PICOCLAW_DIR, "pico.db")
+_TARIS_DIR = os.path.expanduser("~/.taris")
+DB_PATH = os.path.join(_TARIS_DIR, "taris.db")
 
 # Thread-local storage for per-thread connections
 _local = threading.local()
@@ -169,7 +169,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS doc_chunks USING fts5(
 def get_db() -> sqlite3.Connection:
     """Return a thread-local SQLite connection, creating it if needed."""
     if not getattr(_local, "conn", None):
-        os.makedirs(_PICOCLAW_DIR, exist_ok=True)
+        os.makedirs(_TARIS_DIR, exist_ok=True)
         _local.conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         _local.conn.row_factory = sqlite3.Row
     return _local.conn

@@ -1,4 +1,4 @@
-# Hardware Requirements Report — Picoclaw Personal Assistant
+# Hardware Requirements Report — Taris Personal Assistant
 
 **Date:** March 2026  
 **Author:** Analysis for GitHub issue "Requirements to HW to run this software"  
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This report analyses the resource requirements of the Picoclaw personal assistant software for three hardware realizations, covering both currently implemented functions and functions planned in the roadmap. Resource estimates are provided in RAM, ROM/Storage, CPU load, and TOPS (for neural inference), and are derived from real benchmark measurements on Pi 3 B+ where available.
+This report analyses the resource requirements of the Taris personal assistant software for three hardware realizations, covering both currently implemented functions and functions planned in the roadmap. Resource estimates are provided in RAM, ROM/Storage, CPU load, and TOPS (for neural inference), and are derived from real benchmark measurements on Pi 3 B+ where available.
 
 A key performance target drives the hardware selection: **voice commands of up to 3 seconds must receive a full voice reply within 1–2 seconds** (see §0 for the full pipeline budget analysis). This target requires dedicated NPU or GPU acceleration and cannot be met on Cortex-A53 class hardware. Raspberry Pi boards below Pi 5 are unsuitable for this target; the analysis includes a wide range of non-Raspberry-Pi boards with integrated GPU/NPU.
 
@@ -104,7 +104,7 @@ To achieve ≤2 s voice response with cloud LLM, two stages must be accelerated:
 | Python + pyTelegramBotAPI | ~60 MB | Telegram bot process |
 | Vosk STT model (small-ru, 48 MB) | ~180 MB | Loaded on first voice message |
 | Piper ONNX TTS (medium, 66 MB) | ~150 MB | Cold-loaded; ~10–15 s from microSD |
-| picoclaw Go binary | ~30 MB | Short-lived subprocess |
+| taris Go binary | ~30 MB | Short-lived subprocess |
 | FastAPI web server (uvicorn) | ~25 MB | Always-on |
 | ffmpeg subprocesses | ~20 MB | Per voice note (×2 instances) |
 | **Total** | **~715 MB** | Leaves ~285 MB for OS page cache |
@@ -184,7 +184,7 @@ To achieve ≤2 s voice response with cloud LLM, two stages must be accelerated:
 | FastAPI web server | ~25 MB | Web UI |
 | Vosk STT (small-ru) | ~180 MB | Always-warm |
 | Piper ONNX (medium) in tmpfs | ~150 MB | RAM-resident after startup |
-| picoclaw Go binary | ~30 MB | |
+| taris Go binary | ~30 MB | |
 | Local LLM — Phi-3-mini 3.8B Q4 | ~2,500 MB | Via llama.cpp; Pi 5 can hold in RAM |
 | RAG embedding model (MiniLM-L6) | ~90 MB | For local knowledge base |
 | **Total (with local LLM)** | **~3,385 MB** | ✅ Fits in 8 GB |
@@ -374,7 +374,7 @@ Representative boards: **Beelink SER8 (Ryzen 9 8945HS)**, **Minisforum UM790 Pro
 
 | Function | Source | RAM (MB) | ROM/Storage | CPU % (active) | Latency | PicoClaw | ZeroClaw | OpenClaw |
 |---|---|---|---|---|---|---|---|---|
-| **picoclaw Go binary** (OpenRouter API) | `/usr/bin/picoclaw` | 30 | ~15 MB binary | 5–10% | 1–3 s (network) | ✅ | ✅ | ✅ |
+| **taris Go binary** (OpenRouter API) | `/usr/bin/picoclaw` | 30 | ~15 MB binary | 5–10% | 1–3 s (network) | ✅ | ✅ | ✅ |
 | **OpenRouter cloud LLM** (gpt-4o-mini) | `src/core/bot_llm.py` | — (cloud) | — | <1% (network wait) | 1–3 s | ✅ | ✅ | ✅ |
 | **OpenAI direct API** | `bot_llm.py` | — (cloud) | — | <1% | 1–5 s | ✅ | ✅ | ✅ |
 

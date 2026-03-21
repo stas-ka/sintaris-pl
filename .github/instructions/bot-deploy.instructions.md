@@ -26,16 +26,16 @@ Full deploy commands with package paths → `/taris-deploy-to-target` skill.
 
 ```bat
 rem Incremental — only changed files (use package subdirectory)
-rem core/:     pscp -pw "%HOSTPWD%" src\core\<file>.py stas@<HOST>:/home/stas/.picoclaw/core/
-rem telegram/: pscp -pw "%HOSTPWD%" src\telegram\<file>.py stas@<HOST>:/home/stas/.picoclaw/telegram/
-rem features/: pscp -pw "%HOSTPWD%" src\features\<file>.py stas@<HOST>:/home/stas/.picoclaw/features/
-pscp -pw "%HOSTPWD%" src\release_notes.json src\strings.json stas@<HOST>:/home/stas/.picoclaw/
+rem core/:     pscp -pw "%HOSTPWD%" src\core\<file>.py stas@<HOST>:/home/stas/.taris/core/
+rem telegram/: pscp -pw "%HOSTPWD%" src\telegram\<file>.py stas@<HOST>:/home/stas/.taris/telegram/
+rem features/: pscp -pw "%HOSTPWD%" src\features\<file>.py stas@<HOST>:/home/stas/.taris/features/
+pscp -pw "%HOSTPWD%" src\release_notes.json src\strings.json stas@<HOST>:/home/stas/.taris/
 ```
 
 ## 3 — Restart and Verify
 
 ```bat
-plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram && sleep 3 && journalctl -u picoclaw-telegram -n 12 --no-pager"
+plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram && sleep 3 && journalctl -u taris-telegram -n 12 --no-pager"
 ```
 
 Expected: `[INFO] Version : 2026.X.Y` + `[INFO] Polling Telegram…`
@@ -50,18 +50,18 @@ plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S cp /tmp/<name
 ## 5 — UI Changes (both Telegram + Web UI)
 
 ```bat
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py src\strings.json stas@<HOST>:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\telegram\bot_access.py stas@<HOST>:/home/stas/.picoclaw/telegram/
-pscp -pw "%HOSTPWD%" src\bot_web.py stas@<HOST>:/home/stas/.picoclaw/
-pscp -pw "%HOSTPWD%" src\web\templates\*.html stas@<HOST>:/home/stas/.picoclaw/web/templates/
-pscp -pw "%HOSTPWD%" src\web\static\style.css src\web\static\manifest.json stas@<HOST>:/home/stas/.picoclaw/web/static/
-plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl restart picoclaw-telegram picoclaw-web"
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py src\strings.json stas@<HOST>:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\telegram\bot_access.py stas@<HOST>:/home/stas/.taris/telegram/
+pscp -pw "%HOSTPWD%" src\bot_web.py stas@<HOST>:/home/stas/.taris/
+pscp -pw "%HOSTPWD%" src\web\templates\*.html stas@<HOST>:/home/stas/.taris/web/templates/
+pscp -pw "%HOSTPWD%" src\web\static\style.css src\web\static\manifest.json stas@<HOST>:/home/stas/.taris/web/static/
+plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl restart taris-telegram taris-web"
 ```
 
 ## Runtime Files (auto-created on Pi — do NOT commit)
 
 | File | Purpose |
 |---|---|
-| `~/.picoclaw/bot.env` | `BOT_TOKEN` + `ALLOWED_USERS` (set manually) |
-| `~/.picoclaw/voice_opts.json` | Per-user voice flags |
-| `~/.picoclaw/pico.db` | SQLite data store |
+| `~/.taris/bot.env` | `BOT_TOKEN` + `ALLOWED_USERS` (set manually) |
+| `~/.taris/voice_opts.json` | Per-user voice flags |
+| `~/.taris/taris.db` | SQLite data store |

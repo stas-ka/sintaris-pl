@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# update_from_cloud.sh — Update Pico Bot from cloud.dev2null.de
+# update_from_cloud.sh — Update Taris Bot from cloud.dev2null.de
 # =============================================================================
 # Downloads the latest release package from the deploy server and applies it.
 # Safe: verifies checksum, backs up current files, and can roll back on failure.
@@ -20,12 +20,12 @@
 set -euo pipefail
 
 # ── defaults ─────────────────────────────────────────────────────────────────
-PICOCLAW_USER="${PICOCLAW_USER:-stas}"
-PICOCLAW_DIR="/home/${PICOCLAW_USER}/.picoclaw"
+TARIS_USER="${TARIS_USER:-stas}"
+TARIS_DIR="/home/${TARIS_USER}/.taris"
 SYSTEMD_DIR="/etc/systemd/system"
-BACKUP_DIR="/tmp/picoclaw-backup"
+BACKUP_DIR="/tmp/taris-backup"
 
-CLOUD_DEPLOY_URL="${CLOUD_DEPLOY_URL:-https://cloud.dev2null.de/picoclaw}"
+CLOUD_DEPLOY_URL="${CLOUD_DEPLOY_URL:-https://cloud.dev2null.de/taris}"
 CLOUD_DEPLOY_TOKEN="${CLOUD_DEPLOY_TOKEN:-}"
 
 FORCE=false
@@ -52,15 +52,15 @@ done
   fail "Run as root: sudo bash $0"
 
 # ── load bot.env for optional CLOUD_DEPLOY_URL override ──────────────────────
-if [[ -f "${PICOCLAW_DIR}/bot.env" ]]; then
+if [[ -f "${TARIS_DIR}/bot.env" ]]; then
   # shellcheck disable=SC1091
   source <(grep -E '^(CLOUD_DEPLOY_URL|CLOUD_DEPLOY_TOKEN)=' \
-    "${PICOCLAW_DIR}/bot.env" 2>/dev/null || true)
+    "${TARIS_DIR}/bot.env" 2>/dev/null || true)
 fi
 
 echo ""
 echo "=============================================="
-echo "  Pico Bot — Update from Cloud"
+echo "  Taris Bot — Update from Cloud"
 echo "=============================================="
 echo "  Server : ${CLOUD_DEPLOY_URL}"
 echo ""
@@ -79,8 +79,8 @@ AVAILABLE_VERSION=$(_curl "${CLOUD_DEPLOY_URL}/version.txt" | tr -d '[:space:]')
   || fail "Cannot reach ${CLOUD_DEPLOY_URL}/version.txt — is the server up?"
 
 INSTALLED_VERSION="none"
-if [[ -f "${PICOCLAW_DIR}/installed_version.txt" ]]; then
-  INSTALLED_VERSION=$(cat "${PICOCLAW_DIR}/installed_version.txt" | tr -d '[:space:]')
+if [[ -f "${TARIS_DIR}/installed_version.txt" ]]; then
+  INSTALLED_VERSION=$(cat "${TARIS_DIR}/installed_version.txt" | tr -d '[:space:]')
 fi
 
 echo "  Installed : ${INSTALLED_VERSION}"
@@ -102,7 +102,7 @@ if [[ "${AVAILABLE_VERSION}" == "${INSTALLED_VERSION}" && "${FORCE}" == "false" 
 fi
 
 # ── Step 2: download package ──────────────────────────────────────────────────
-PKG_NAME="picoclaw-bot.tar.gz"
+PKG_NAME="taris-bot.tar.gz"
 PKG_URL="${CLOUD_DEPLOY_URL}/${PKG_NAME}"
 PKG_PATH="/tmp/${PKG_NAME}"
 SHA_URL="${PKG_URL}.sha256"
@@ -135,11 +135,11 @@ BOT_FILES=(
   installed_version.txt
 )
 for f in "${BOT_FILES[@]}"; do
-  [[ -f "${PICOCLAW_DIR}/${f}" ]] && cp "${PICOCLAW_DIR}/${f}" "${BACKUP_DIR}/"
+  [[ -f "${TARIS_DIR}/${f}" ]] && cp "${TARIS_DIR}/${f}" "${BACKUP_DIR}/"
 done
 
 if [[ -d "${SYSTEMD_DIR}" ]]; then
-  for svc in picoclaw-telegram picoclaw-voice; do
+  for svc in taris-telegram taris-voice; do
     [[ -f "${SYSTEMD_DIR}/${svc}.service" ]] && \
       cp "${SYSTEMD_DIR}/${svc}.service" "${BACKUP_DIR}/"
   done
@@ -148,7 +148,7 @@ ok "Backed up to ${BACKUP_DIR}"
 
 # ── Step 5: extract and apply ─────────────────────────────────────────────────
 info "Extracting package..."
-EXTRACT_DIR="/tmp/picoclaw-update"
+EXTRACT_DIR="/tmp/taris-update"
 rm -rf "${EXTRACT_DIR}" && mkdir -p "${EXTRACT_DIR}"
 tar -xzf "${PKG_PATH}" -C "${EXTRACT_DIR}" \
   || fail "Failed to extract ${PKG_PATH}"
@@ -157,18 +157,18 @@ tar -xzf "${PKG_PATH}" -C "${EXTRACT_DIR}" \
 SRC_IN_PKG="${EXTRACT_DIR}"
 if [[ -d "${EXTRACT_DIR}/src" ]]; then
   SRC_IN_PKG="${EXTRACT_DIR}/src"
-elif [[ -d "${EXTRACT_DIR}/picoclaw/src" ]]; then
-  SRC_IN_PKG="${EXTRACT_DIR}/picoclaw/src"
+elif [[ -d "${EXTRACT_DIR}/taris/src" ]]; then
+  SRC_IN_PKG="${EXTRACT_DIR}/taris/src"
 fi
 
-info "Deploying bot files to ${PICOCLAW_DIR}..."
+info "Deploying bot files to ${TARIS_DIR}..."
 for f in telegram_menu_bot.py bot_config.py bot_state.py bot_instance.py \
           bot_security.py bot_access.py bot_users.py bot_voice.py bot_calendar.py \
           bot_admin.py bot_handlers.py bot_mail_creds.py bot_email.py \
           gmail_digest.py voice_assistant.py strings.json release_notes.json; do
   SRC="${SRC_IN_PKG}/${f}"
   if [[ -f "${SRC}" ]]; then
-    cp "${SRC}" "${PICOCLAW_DIR}/${f}"
+    cp "${SRC}" "${TARIS_DIR}/${f}"
     info "  → ${f}"
   else
     warn "  Not in package: ${f}"
@@ -179,7 +179,7 @@ done
 RELOAD_NEEDED=false
 SERVICES_IN_PKG="${SRC_IN_PKG}/services"
 if [[ -d "${SERVICES_IN_PKG}" ]]; then
-  for svc in picoclaw-telegram picoclaw-voice; do
+  for svc in taris-telegram taris-voice; do
     SVC_SRC="${SERVICES_IN_PKG}/${svc}.service"
     SVC_DST="${SYSTEMD_DIR}/${svc}.service"
     if [[ -f "${SVC_SRC}" ]]; then
@@ -193,8 +193,8 @@ if [[ -d "${SERVICES_IN_PKG}" ]]; then
 fi
 
 # mark installed version
-echo "${AVAILABLE_VERSION}" > "${PICOCLAW_DIR}/installed_version.txt"
-chown -R "${PICOCLAW_USER}:${PICOCLAW_USER}" "${PICOCLAW_DIR}"
+echo "${AVAILABLE_VERSION}" > "${TARIS_DIR}/installed_version.txt"
+chown -R "${TARIS_USER}:${TARIS_USER}" "${TARIS_DIR}"
 ok "Files deployed"
 
 # ── Step 6: reload + restart services ─────────────────────────────────────────
@@ -202,7 +202,7 @@ info "Restarting services..."
 [[ "${RELOAD_NEEDED}" == "true" ]] && systemctl daemon-reload
 
 FAILED=false
-for svc in picoclaw-telegram picoclaw-voice; do
+for svc in taris-telegram taris-voice; do
   if systemctl is-active --quiet "${svc}" 2>/dev/null || \
      systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
     if ! systemctl restart "${svc}" 2>/dev/null; then
@@ -217,15 +217,15 @@ done
 # ── rollback on failure ───────────────────────────────────────────────────────
 if [[ "${FAILED}" == "true" ]]; then
   warn "Applying rollback from ${BACKUP_DIR}..."
-  cp "${BACKUP_DIR}"/*.py "${BACKUP_DIR}"/*.json "${PICOCLAW_DIR}/" 2>/dev/null || true
+  cp "${BACKUP_DIR}"/*.py "${BACKUP_DIR}"/*.json "${TARIS_DIR}/" 2>/dev/null || true
   [[ -f "${BACKUP_DIR}/installed_version.txt" ]] && \
-    cp "${BACKUP_DIR}/installed_version.txt" "${PICOCLAW_DIR}/"
-  for svc in picoclaw-telegram picoclaw-voice; do
+    cp "${BACKUP_DIR}/installed_version.txt" "${TARIS_DIR}/"
+  for svc in taris-telegram taris-voice; do
     [[ -f "${BACKUP_DIR}/${svc}.service" ]] && \
       cp "${BACKUP_DIR}/${svc}.service" "${SYSTEMD_DIR}/"
   done
   systemctl daemon-reload
-  for svc in picoclaw-telegram picoclaw-voice; do
+  for svc in taris-telegram taris-voice; do
     systemctl restart "${svc}" 2>/dev/null || true
   done
   fail "Update failed — rolled back to ${INSTALLED_VERSION}"
@@ -238,7 +238,7 @@ rm -rf "${EXTRACT_DIR}"
 # ── verify ────────────────────────────────────────────────────────────────────
 echo ""
 sleep 3
-journalctl -u picoclaw-telegram -n 5 --no-pager 2>/dev/null | \
+journalctl -u taris-telegram -n 5 --no-pager 2>/dev/null | \
   grep -E 'Version|Polling|ERROR' || true
 
 echo ""

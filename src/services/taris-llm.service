@@ -1,5 +1,5 @@
 [Unit]
-Description=Picoclaw Local LLM Server (llama.cpp)
+Description=Taris Local LLM Server (llama.cpp)
 Documentation=https://github.com/ggerganov/llama.cpp
 After=network.target
 
@@ -7,9 +7,9 @@ After=network.target
 Type=simple
 User=stas
 # Model path and port are configurable via EnvironmentFile
-EnvironmentFile=-/home/stas/.picoclaw/bot.env
+EnvironmentFile=-/home/stas/.taris/bot.env
 ExecStart=/usr/local/bin/llama-server \
-    --model /home/stas/.picoclaw/models/qwen2-0.5b-q4.gguf \
+    --model /home/stas/.taris/models/qwen2-0.5b-q4.gguf \
     --host 127.0.0.1 \
     --port 8081 \
     --ctx-size 2048 \

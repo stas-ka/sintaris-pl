@@ -1,4 +1,4 @@
-# Hardware Performance Analysis — Picoclaw Voice Assistant
+# Hardware Performance Analysis — Taris Voice Assistant
 
 **Date:** March 2026  
 **Target device:** Raspberry Pi 3 B+ (BCM2837B0, 4× Cortex-A53 @ 1.4 GHz, 1 GB LPDDR2)  
@@ -26,7 +26,7 @@
 | Python + pyTelegramBotAPI | ~60 MB | Bot process baseline |
 | Vosk model (small-ru) | ~180 MB | Loaded into memory on first voice message |
 | Piper ONNX (medium) | ~150 MB | Cold-loaded per TTS call; ~10–15 s from microSD |
-| picoclaw Go binary | ~30 MB | Short-lived subprocess |
+| taris Go binary | ~30 MB | Short-lived subprocess |
 | ffmpeg subprocesses (×2) | ~20 MB | Per voice note |
 | **Total** | **~690 MB** | Leaves ~310 MB for OS page cache & buffers |
 
@@ -41,7 +41,7 @@ With 1 GB RAM, the system is operating with very little headroom. When all compo
 | Download OGG from Telegram | Telegram API | ~0.2 s | Network I/O (none) |
 | OGG → 16 kHz PCM (ffmpeg) | ffmpeg subprocess | ~1 s | Minimal CPU |
 | Speech-to-Text | Vosk `vosk-model-small-ru` | **~15 s** | CPU — single Cortex-A53 core, no SIMD |
-| LLM call (picoclaw → OpenRouter) | Go subprocess + HTTPS | ~2 s | Network I/O (fine) |
+| LLM call (taris → OpenRouter) | Go subprocess + HTTPS | ~2 s | Network I/O (fine) |
 | TTS synthesis | Piper `ru_RU-irina-medium` ONNX | **~40 s** | ONNX model load from SD (~15 s) + inference (~25 s) |
 | PCM → OGG Opus (ffmpeg) | ffmpeg | ~0.3 s | Minimal |
 | **Total** | | **~58 s** | ❌ target: <15 s |
@@ -139,10 +139,10 @@ If GPU memory is reduced to 16 MB and zram is active, you may have enough headro
 
 ```bash
 sudo mkdir -p /dev/shm/piper
-cp ~/.picoclaw/ru_RU-irina-medium.onnx /dev/shm/piper/
+cp ~/.taris/ru_RU-irina-medium.onnx /dev/shm/piper/
 ```
 
-Then set `PIPER_MODEL=/dev/shm/piper/ru_RU-irina-medium.onnx` in `picoclaw-telegram.service`. RAM reads are ~10× faster than microSD reads.
+Then set `PIPER_MODEL=/dev/shm/piper/ru_RU-irina-medium.onnx` in `taris-telegram.service`. RAM reads are ~10× faster than microSD reads.
 
 **Expected gain:** Model load time: 15 s → 1–2 s. Combined with `warm_piper` opt this eliminates the cold-start entirely.
 
@@ -153,12 +153,12 @@ The low-quality variant of the same Russian Irina voice is approximately half th
 ```bash
 # Download low quality model
 wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/low/ru_RU-irina-low.onnx \
-     -O ~/.picoclaw/ru_RU-irina-low.onnx
+     -O ~/.taris/ru_RU-irina-low.onnx
 wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/low/ru_RU-irina-low.onnx.json \
-     -O ~/.picoclaw/ru_RU-irina-low.onnx.json
+     -O ~/.taris/ru_RU-irina-low.onnx.json
 ```
 
-Set `PIPER_MODEL` in `picoclaw-telegram.service` to the low model. Speech quality remains acceptable for conversational / notification use.
+Set `PIPER_MODEL` in `taris-telegram.service` to the low model. Speech quality remains acceptable for conversational / notification use.
 
 **Expected TTS saving:** ~10 s (inference time halves).
 
@@ -244,7 +244,7 @@ At 5–7 tok/s for a 3B model, a 100-token Russian response takes ~15–20 s. Co
 Recommended stack for local LLM:
 - **Runtime:** `llama.cpp` — optimised ARM NEON kernels, no Python overhead
 - **Model:** `Phi-3-mini-4k-instruct` (3.8B) or `Llama-3.2-3B-Instruct` in GGUF Q4_K_M
-- **Server:** `llama.cpp` HTTP server replacing the `picoclaw agent` subprocess call,  
+- **Server:** `llama.cpp` HTTP server replacing the `taris agent` subprocess call,  
   invoked via `http://localhost:8080/v1/chat/completions` (OpenAI-compatible endpoint)
 
 ```bash
@@ -311,7 +311,7 @@ from sentence_transformers import SentenceTransformer
 import requests
 
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
-db = PersistentClient(path="~/.picoclaw/rag_db")
+db = PersistentClient(path="~/.taris/rag_db")
 collection = db.get_or_create_collection("docs")
 
 def rag_query(query: str) -> str:
@@ -376,13 +376,13 @@ All services are portable without code changes. Only the HAT driver section need
 sudo bash /tmp/setup_voice.sh
 
 # 2. Copy model cache (optional — setup_voice.sh downloads fresh)
-rsync -av stas@OldPi:~/.picoclaw/ru_RU-irina-medium.onnx ~/.picoclaw/
+rsync -av stas@OldPi:~/.taris/ru_RU-irina-medium.onnx ~/.taris/
 
 # 3. Restore services
 sudo cp src/services/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable picoclaw-telegram picoclaw-voice picoclaw-gateway
-sudo systemctl start  picoclaw-telegram picoclaw-voice picoclaw-gateway
+sudo systemctl enable taris-telegram taris-voice taris-gateway
+sudo systemctl start  taris-telegram taris-voice taris-gateway
 
 # 4. Apply GPU memory tuning
 echo "gpu_mem=16" | sudo tee -a /boot/firmware/config.txt
@@ -397,7 +397,7 @@ sudo sed -i 's/#\?ALGO=.*/ALGO=lz4/' /etc/default/zramswap
 sudo systemctl restart zramswap
 
 # 7. (Pi 5 with NVMe) copy ONNX to fast storage path
-#    Update PIPER_MODEL env in picoclaw-telegram.service accordingly
+#    Update PIPER_MODEL env in taris-telegram.service accordingly
 ```
 
 ---
@@ -437,15 +437,15 @@ pip3 install openvino==2023.3.0   # last confirmed aarch64-compatible release
 
 # Convert Piper ONNX to OpenVINO IR (run once on any x86 machine or Pi)
 pip install openvino-dev
-mo --input_model ~/.picoclaw/ru_RU-irina-medium.onnx \
-   --output_dir ~/.picoclaw/piper_ov/ \
+mo --input_model ~/.taris/ru_RU-irina-medium.onnx \
+   --output_dir ~/.taris/piper_ov/ \
    --model_name irina_medium
 
 # Run inference with NCS2 as device
 python3 - <<'EOF'
 from openvino.runtime import Core
 ie = Core()
-model = ie.read_model("~/.picoclaw/piper_ov/irina_medium.xml")
+model = ie.read_model("~/.taris/piper_ov/irina_medium.xml")
 compiled = ie.compile_model(model, "MYRIAD")   # MYRIAD = NCS2
 EOF
 ```
@@ -529,8 +529,8 @@ Not an accelerator, but specifically eliminates the single largest measured bott
 
 ```bash
 # Boot from USB SSD (optional) OR just store model files on it:
-cp ~/.picoclaw/ru_RU-irina-medium.onnx /mnt/usb_ssd/piper/
-# Update PIPER_MODEL in picoclaw-telegram.service:
+cp ~/.taris/ru_RU-irina-medium.onnx /mnt/usb_ssd/piper/
+# Update PIPER_MODEL in taris-telegram.service:
 # Environment=PIPER_MODEL=/mnt/usb_ssd/piper/ru_RU-irina-medium.onnx
 ```
 
@@ -692,7 +692,7 @@ dmesg | tail -20
 ```bash
 sudo fdisk /dev/sda
 # Create a single primary partition: n → p → 1 → defaults → w
-sudo mkfs.ext4 /dev/sda1 -L picoclaw-data
+sudo mkfs.ext4 /dev/sda1 -L taris-data
 ```
 
 If the drive already has a Windows NTFS partition and you want to keep data:
@@ -721,32 +721,32 @@ sudo mount -a
 #### 4. Copy the Piper model to the SSD
 
 ```bash
-sudo mkdir -p /mnt/ssd/picoclaw
-cp ~/.picoclaw/ru_RU-irina-medium.onnx /mnt/ssd/picoclaw/
-cp ~/.picoclaw/ru_RU-irina-medium.onnx.json /mnt/ssd/picoclaw/
+sudo mkdir -p /mnt/ssd/taris
+cp ~/.taris/ru_RU-irina-medium.onnx /mnt/ssd/taris/
+cp ~/.taris/ru_RU-irina-medium.onnx.json /mnt/ssd/taris/
 ```
 
 #### 5. Update the `PIPER_MODEL` environment variable
 
-In `~/.picoclaw/bot.env` (bot's EnvironmentFile):
+In `~/.taris/bot.env` (bot's EnvironmentFile):
 ```bash
-echo 'PIPER_MODEL=/mnt/ssd/picoclaw/ru_RU-irina-medium.onnx' >> ~/.picoclaw/bot.env
+echo 'PIPER_MODEL=/mnt/ssd/taris/ru_RU-irina-medium.onnx' >> ~/.taris/bot.env
 ```
 
 Then restart:
 ```bash
-sudo systemctl restart picoclaw-telegram
+sudo systemctl restart taris-telegram
 ```
 
 #### 6. (Optional) Enable `tmpfs_model` bot opt for maximum speed
 
-Once the SSD is set up and `PIPER_MODEL` points to `/mnt/ssd/picoclaw/…`, toggle the `tmpfs_model` opt in the bot's Admin → Voice Opts menu. The startup copy will now take **~2–3 s** (from SSD) instead of ~30 s (from microSD). After the copy, every TTS call reads from RAM.
+Once the SSD is set up and `PIPER_MODEL` points to `/mnt/ssd/taris/…`, toggle the `tmpfs_model` opt in the bot's Admin → Voice Opts menu. The startup copy will now take **~2–3 s** (from SSD) instead of ~30 s (from microSD). After the copy, every TTS call reads from RAM.
 
 #### 7. (Optional) Move Vosk model to SSD
 
 ```bash
-mv ~/.picoclaw/vosk-model-small-ru /mnt/ssd/picoclaw/
-ln -s /mnt/ssd/picoclaw/vosk-model-small-ru ~/.picoclaw/vosk-model-small-ru
+mv ~/.taris/vosk-model-small-ru /mnt/ssd/taris/
+ln -s /mnt/ssd/taris/vosk-model-small-ru ~/.taris/vosk-model-small-ru
 ```
 
 Vosk loads its 48 MB model on first voice message; moving it to SSD cuts that load from ~5 s to ~1–2 s.
@@ -916,9 +916,9 @@ wget -q "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/ma
 #### Systemd service for the local LLM server
 
 ```ini
-# /etc/systemd/system/picoclaw-llm.service
+# /etc/systemd/system/taris-llm.service
 [Unit]
-Description=Picoclaw Local LLM Fallback (llama.cpp)
+Description=Taris Local LLM Fallback (llama.cpp)
 After=network.target
 
 [Service]
@@ -936,15 +936,15 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl enable picoclaw-llm
-sudo systemctl start picoclaw-llm
+sudo systemctl enable taris-llm
+sudo systemctl start taris-llm
 ```
 
 ---
 
 #### 8.9.6 Fallback Integration in the Bot
 
-The current bot calls `picoclaw agent -m "..."` which routes through OpenRouter. A minimal fallback can intercept the subprocess failure and redirect to the local `llama.cpp` server:
+The current bot calls `taris agent -m "..."` which routes through OpenRouter. A minimal fallback can intercept the subprocess failure and redirect to the local `llama.cpp` server:
 
 ```python
 import requests
@@ -952,18 +952,18 @@ import requests
 LOCAL_LLM_URL = "http://127.0.0.1:8080/v1/chat/completions"
 LOCAL_LLM_TIMEOUT = 180   # 3 min — generous for Pi 3 slow inference
 
-def _call_picoclaw(prompt: str) -> str:
-    """Try picoclaw (OpenRouter). On failure, fall back to local llama.cpp."""
+def _call_taris(prompt: str) -> str:
+    """Try taris (OpenRouter). On failure, fall back to local llama.cpp."""
     try:
         result = subprocess.run(
-            [PICOCLAW_BIN, "agent", "-m", prompt],
+            [TARIS_BIN, "agent", "-m", prompt],
             capture_output=True, text=True, timeout=30
         )
         if result.returncode == 0 and result.stdout.strip():
-            return _clean_picoclaw_output(result.stdout)
-        raise RuntimeError(f"picoclaw rc={result.returncode}")
+            return _clean_taris_output(result.stdout)
+        raise RuntimeError(f"taris rc={result.returncode}")
     except Exception as primary_err:
-        log.warning(f"[LLM] picoclaw failed: {primary_err}; trying local fallback")
+        log.warning(f"[LLM] taris failed: {primary_err}; trying local fallback")
         try:
             resp = requests.post(LOCAL_LLM_URL,
                 json={

@@ -1,4 +1,4 @@
-# Picoclaw — Multilanguage Support
+# Taris — Multilanguage Support
 
 **Version:** `2026.3.28`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -81,14 +81,14 @@ For voice input with uncertain words `[?word]`, an additional STT-correction hin
 
 ```
 STT: _get_vosk_model(lang)
-        lang == "de"  →  VOSK_MODEL_DE_PATH  (~/.picoclaw/vosk-model-small-de)
-        else          →  VOSK_MODEL_PATH      (~/.picoclaw/vosk-model-small-ru)
+        lang == "de"  →  VOSK_MODEL_DE_PATH  (~/.taris/vosk-model-small-de)
+        else          →  VOSK_MODEL_PATH      (~/.taris/vosk-model-small-ru)
         fallback: log warning + use Russian model
 
 TTS: _piper_model_path(lang)
         lang == "de"
           tmpfs_model ON  →  PIPER_MODEL_DE_TMPFS  (/dev/shm/piper/de_DE-thorsten-medium.onnx)
-          else            →  PIPER_MODEL_DE         (~/.picoclaw/de_DE-thorsten-medium.onnx)
+          else            →  PIPER_MODEL_DE         (~/.taris/de_DE-thorsten-medium.onnx)
           not found       →  log warning + fall back to Russian model
         else
           → standard RU model priority chain (tmpfs → low → medium)

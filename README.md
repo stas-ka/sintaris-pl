@@ -1,4 +1,4 @@
-# picoclaw — Raspberry Pi Voice Assistant
+# taris — Raspberry Pi Voice Assistant
 
 Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://github.com/sipeed/picoclaw) + OpenRouter. Listens for the wake word **"Пико"**, sends your Russian voice command to an LLM, and speaks the response back — entirely offline except the LLM API call.
 
@@ -9,8 +9,8 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - Offline Russian TTS via Piper (natural female voice, ~1–3 s latency)
 - LLM via OpenRouter (100+ models, free tier available)
 - **OpenAI ChatGPT sub-menu** — switch between gpt-4o, gpt-4o-mini, o3-mini, o1, gpt-4.5-preview directly from the admin panel; manage API keys inline
-- **Multi-LLM provider support** — switch between picoclaw (OpenRouter), OpenAI, YandexGPT, Google Gemini, Anthropic Claude, or local llama.cpp via `LLM_PROVIDER` in `bot.env`; all providers managed from the admin panel
-- **Offline LLM fallback** — `picoclaw-llm.service` runs a quantised model (Qwen2-0.5B / Phi-3-mini) on-device; auto-fallback enabled via `LLM_LOCAL_FALLBACK=true` or Admin Panel (📡 Local Fallback); flag file `~/.picoclaw/llm_fallback_enabled` — no restart needed; fallback responses prefixed with ⚠️ `[local fallback]`
+- **Multi-LLM provider support** — switch between taris (OpenRouter), OpenAI, YandexGPT, Google Gemini, Anthropic Claude, or local llama.cpp via `LLM_PROVIDER` in `bot.env`; all providers managed from the admin panel
+- **Offline LLM fallback** — `taris-llm.service` runs a quantised model (Qwen2-0.5B / Phi-3-mini) on-device; auto-fallback enabled via `LLM_LOCAL_FALLBACK=true` or Admin Panel (📡 Local Fallback); flag file `~/.taris/llm_fallback_enabled` — no restart needed; fallback responses prefixed with ⚠️ `[local fallback]`
 - **On-demand Voice Session via Telegram** — tap the 🎤 button, send a voice message; bot transcribes with Vosk (offline), sends to LLM, replies with text + Piper TTS voice note
 - **Voice works in all modes** — voice messages are routed into the active flow (note creation, note edit, or chat)
 - **Voice pipeline optimization flags** — 10 optional toggles in the admin panel (silence strip, low sample rate, Piper warm-up, parallel TTS, per-user audio toggle, tmpfs model, VAD pre-filter, Whisper STT, Piper low model, persistent Piper)
@@ -40,7 +40,7 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently
 - **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
 - **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`
-- **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `pico.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends
+- **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `taris.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends
 - **sqlite-vec vector search** — optional SQLite extension enabling KNN embedding search and local RAG; installed via `pip3 install sqlite-vec`; enabled automatically when present (see `src/setup/install_sqlite_vec.sh`)
 - **Backup & Recovery system** — full SD card image backup + Nextcloud WebDAV upload; fresh-install bootstrap and incremental update scripts
 - Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7)
@@ -123,8 +123,8 @@ cat /etc/os-release | grep VERSION_CODENAME   # should print: bookworm
 
 `[Win]` Clone the repo and create your local credentials file:
 ```bat
-git clone https://github.com/yourusername/picoclaw.git
-cd picoclaw
+git clone https://github.com/yourusername/taris.git
+cd taris
 ```
 
 Copy `.env.example` (if present) or create `.env` manually:
@@ -146,30 +146,30 @@ GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 
 ---
 
-### Step 3 — Install the picoclaw binary on the Pi
+### Step 3 — Install the taris binary on the Pi
 
-`[Pi]` Download and install the picoclaw Go binary:
+`[Pi]` Download and install the taris Go binary:
 ```bash
 # [Pi] — for 64-bit (aarch64):
 wget -q https://github.com/sipeed/picoclaw/releases/latest/download/picoclaw_aarch64.deb \
-     -O /tmp/picoclaw_aarch64.deb
-sudo dpkg -i /tmp/picoclaw_aarch64.deb
-picoclaw version   # should print v0.2.0 or newer
+     -O /tmp/taris_aarch64.deb
+sudo dpkg -i /tmp/taris_aarch64.deb
+taris version   # should print v0.2.0 or newer
 ```
 
-For 32-bit Pi OS (armv7), use `picoclaw_armhf.deb` instead.
+For 32-bit Pi OS (armv7), use `taris_armhf.deb` instead.
 
-Then initialise the picoclaw workspace:
+Then initialise the taris workspace:
 ```bash
 # [Pi]
-picoclaw onboard   # creates ~/.picoclaw/ with default config.json
+taris onboard   # creates ~/.taris/ with default config.json
 ```
 
 ---
 
-### Step 4 — Configure picoclaw with your API key
+### Step 4 — Configure taris with your API key
 
-`[Pi]` Edit `~/.picoclaw/config.json`. The minimum required config:
+`[Pi]` Edit `~/.taris/config.json`. The minimum required config:
 
 ```json
 {
@@ -199,12 +199,12 @@ picoclaw onboard   # creates ~/.picoclaw/ with default config.json
 ```
 
 > Get a free OpenRouter key at: https://openrouter.ai/keys  
-> The reference config with all options is in [`backup/device/picoclaw-config.json`](backup/device/picoclaw-config.json).
+> The reference config with all options is in [`backup/device/taris-config.json`](backup/device/taris-config.json).
 
 Test the LLM connection:
 ```bash
 # [Pi]
-picoclaw agent -m "Привет! Как дела?"
+taris agent -m "Привет! Как дела?"
 # Should print an LLM response within a few seconds
 ```
 
@@ -215,23 +215,23 @@ picoclaw agent -m "Привет! Как дела?"
 `[Win]` Copy all Python source files and assets to the Pi:
 ```bat
 rem Copy Telegram bot modules (20-module split)
-pscp -pw "%HOSTPWD%" src\bot_config.py src\bot_state.py src\bot_instance.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_security.py src\bot_access.py src\bot_users.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_voice.py src\bot_calendar.py                     %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_admin.py src\bot_handlers.py src\bot_mail_creds.py %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_email.py src\bot_error_protocol.py               %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py src\voice_assistant.py           %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_config.py src\bot_state.py src\bot_instance.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" src\bot_security.py src\bot_access.py src\bot_users.py   %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" src\bot_voice.py src\bot_calendar.py                     %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" src\bot_admin.py src\bot_handlers.py src\bot_mail_creds.py %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" src\bot_email.py src\bot_error_protocol.py               %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" src\telegram_menu_bot.py src\voice_assistant.py           %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
 
 rem Copy Web UI modules
-pscp -pw "%HOSTPWD%" src\bot_web.py src\bot_auth.py src\bot_llm.py            %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" src\bot_ui.py src\bot_actions.py src\render_telegram.py  %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\bot_web.py src\bot_auth.py src\bot_llm.py            %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" src\bot_ui.py src\bot_actions.py src\render_telegram.py  %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
 
 rem Copy i18n and changelog
-pscp -pw "%HOSTPWD%" src\strings.json src\release_notes.json                  %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" src\strings.json src\release_notes.json                  %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
 
 rem Copy Web UI templates and static assets
-pscp -pw "%HOSTPWD%" -r src\templates %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
-pscp -pw "%HOSTPWD%" -r src\static    %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.picoclaw/
+pscp -pw "%HOSTPWD%" -r src\templates %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
+pscp -pw "%HOSTPWD%" -r src\static    %HOSTUSER%@%TARGETHOST%:/home/%HOSTUSER%/.taris/
 
 rem Copy setup scripts to /tmp for execution
 pscp -pw "%HOSTPWD%" src\setup\setup_voice.sh         %HOSTUSER%@%TARGETHOST%:/tmp/
@@ -253,12 +253,12 @@ The script installs:
 - `vosk` Python package + `vosk-model-small-ru-0.22` (48 MB STT model)
 - Piper TTS binary to `/usr/local/bin/piper` + `ru_RU-irina-medium.onnx` voice (66 MB)
 - `ffmpeg` — required for PCM→OGG Opus conversion used by the Telegram Voice Session
-- `picoclaw-voice.service` systemd unit → starts the voice assistant on boot
+- `taris-voice.service` systemd unit → starts the voice assistant on boot
 
 Verify the service was installed:
 ```bash
 # [Pi]
-systemctl status picoclaw-voice --no-pager
+systemctl status taris-voice --no-pager
 ```
 
 #### Step 6a — RB-TalkingPI HAT (I²S mic, optional)
@@ -282,14 +282,14 @@ If using a USB mic, no reboot is needed.
 
 ### Step 7 — Configure secrets for services
 
-`[Pi]` Create `/home/<user>/.picoclaw/bot.env` with Telegram credentials (read by `picoclaw-telegram.service` via `EnvironmentFile=`):
+`[Pi]` Create `/home/<user>/.taris/bot.env` with Telegram credentials (read by `taris-telegram.service` via `EnvironmentFile=`):
 ```bash
 # [Pi]
-cat > ~/.picoclaw/bot.env << 'EOF'
+cat > ~/.taris/bot.env << 'EOF'
 BOT_TOKEN=123456789:ABCdef...
 ALLOWED_USER=<your_telegram_chat_id>
 EOF
-chmod 600 ~/.picoclaw/bot.env
+chmod 600 ~/.taris/bot.env
 ```
 
 For Gmail digest, set credentials as environment variables (or use a cron wrapper that sources `.pico_env`):
@@ -306,9 +306,9 @@ export GMAIL_PASSWORD=xxxx xxxx xxxx xxxx   # Gmail App Password (16 chars, no s
 
 ---
 
-### Step 8 — Install the picoclaw gateway service
+### Step 8 — Install the taris gateway service
 
-`[Pi]` The gateway exposes picoclaw to Telegram, Discord, and other channels natively. Run:
+`[Pi]` The gateway exposes taris to Telegram, Discord, and other channels natively. Run:
 ```bash
 # [Pi]
 sudo bash /tmp/setup_gateway.sh
@@ -317,11 +317,11 @@ sudo bash /tmp/setup_gateway.sh
 Verify:
 ```bash
 # [Pi]
-systemctl status picoclaw-gateway --no-pager
-journalctl -u picoclaw-gateway -n 20 --no-pager
+systemctl status taris-gateway --no-pager
+journalctl -u taris-gateway -n 20 --no-pager
 ```
 
-> **Note**: The Telegram channel in `config.json` is set to `"enabled": false` by default — the Telegram menu bot (Step 9) handles Telegram instead. Enable it only if you want the raw picoclaw gateway Telegram mode.
+> **Note**: The Telegram channel in `config.json` is set to `"enabled": false` by default — the Telegram menu bot (Step 9) handles Telegram instead. Enable it only if you want the raw taris gateway Telegram mode.
 
 ---
 
@@ -337,14 +337,14 @@ sudo bash /tmp/deploy_telegram_bot.sh
 
 The script:
 1. Installs `pyTelegramBotAPI` via pip3
-2. Disables the built-in picoclaw Telegram channel in `config.json` (to avoid token conflict)
-3. Installs `picoclaw-telegram.service` systemd unit and starts it
+2. Disables the built-in taris Telegram channel in `config.json` (to avoid token conflict)
+3. Installs `taris-telegram.service` systemd unit and starts it
 
 Verify:
 ```bash
 # [Pi]
-systemctl status picoclaw-telegram --no-pager
-journalctl -u picoclaw-telegram -n 20 --no-pager
+systemctl status taris-telegram --no-pager
+journalctl -u taris-telegram -n 20 --no-pager
 # Should show: "Polling Telegram…"
 ```
 
@@ -361,7 +361,7 @@ The digest script reads INBOX and Spam via IMAP, summarises with OpenRouter, and
 # [Pi]
 crontab -e
 # Add this line:
-0 19 * * * python3 /home/<user>/.picoclaw/gmail_digest.py >> /home/<user>/.picoclaw/digest.log 2>&1
+0 19 * * * python3 /home/<user>/.taris/gmail_digest.py >> /home/<user>/.taris/digest.log 2>&1
 ```
 
 Test manually:
@@ -369,14 +369,14 @@ Test manually:
 # [Pi]
 OPENROUTER_KEY=sk-or-... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... \
 GMAIL_USER=you@gmail.com GMAIL_PASSWORD="xxxx xxxx xxxx xxxx" \
-  python3 ~/.picoclaw/gmail_digest.py
+  python3 ~/.taris/gmail_digest.py
 # Should print a digest and send it to Telegram
 ```
 
 Or from Windows:
 ```bat
 rem [Win]
-plink -pw "%HOSTPWD%" -batch %HOSTUSER%@%TARGETHOST% "python3 ~/.picoclaw/gmail_digest.py"
+plink -pw "%HOSTPWD%" -batch %HOSTUSER%@%TARGETHOST% "python3 ~/.taris/gmail_digest.py"
 ```
 
 ---
@@ -385,10 +385,10 @@ plink -pw "%HOSTPWD%" -batch %HOSTUSER%@%TARGETHOST% "python3 ~/.picoclaw/gmail_
 
 `[Pi]`
 ```bash
-sudo systemctl start picoclaw-voice
+sudo systemctl start taris-voice
 
 # Follow logs in real time:
-tail -f ~/.picoclaw/voice.log
+tail -f ~/.taris/voice.log
 ```
 
 You should hear (and see in the log):
@@ -404,10 +404,10 @@ Say **"Пико"** — wait for the beep — then ask your question in Russian. 
 
 `[Pi]`
 ```bash
-systemctl status picoclaw-gateway  --no-pager
-systemctl status picoclaw-voice    --no-pager
-systemctl status picoclaw-telegram --no-pager
-systemctl status picoclaw-web      --no-pager
+systemctl status taris-gateway  --no-pager
+systemctl status taris-voice    --no-pager
+systemctl status taris-telegram --no-pager
+systemctl status taris-web      --no-pager
 ```
 
 All four should show `active (running)`. Services are enabled at boot (`systemctl enable` is called by the install scripts). The Web UI is accessible at `https://<hostname>:8080`.
@@ -420,8 +420,8 @@ The default username throughout is `stas`. To use a different user (e.g., `pi`):
 
 1. Edit paths in `voice_assistant.py` CONFIG section on the Pi:
    ```python
-   "vosk_model_path": "/home/pi/.picoclaw/vosk-model-small-ru",
-   "piper_model":     "/home/pi/.picoclaw/ru_RU-irina-medium.onnx",
+   "vosk_model_path": "/home/pi/.taris/vosk-model-small-ru",
+   "piper_model":     "/home/pi/.taris/ru_RU-irina-medium.onnx",
    ```
 
 2. Edit the service units in `src/services/` before deploying:
@@ -450,7 +450,7 @@ Then redeploy and restart the service.
 
 ## Changing the LLM Model
 
-Edit `~/.picoclaw/config.json` on the Pi. Any OpenRouter model works:
+Edit `~/.taris/config.json` on the Pi. Any OpenRouter model works:
 
 ```json
 { "model": "openrouter/anthropic/claude-3.5-haiku" }
@@ -462,7 +462,7 @@ Full model list: https://openrouter.ai/models
 
 Restart the gateway after changing:
 ```bash
-sudo systemctl restart picoclaw-gateway
+sudo systemctl restart taris-gateway
 ```
 
 ---
@@ -474,15 +474,15 @@ Download another Piper Russian voice from Hugging Face:
 ```bash
 # Alternative: ruslan (male, medium)
 wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/ruslan/medium/ru_RU-ruslan-medium.onnx \
-     -O ~/.picoclaw/ru_RU-ruslan-medium.onnx
+     -O ~/.taris/ru_RU-ruslan-medium.onnx
 wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/ruslan/medium/ru_RU-ruslan-medium.onnx.json \
-     -O ~/.picoclaw/ru_RU-ruslan-medium.onnx.json
+     -O ~/.taris/ru_RU-ruslan-medium.onnx.json
 ```
 
 Set the new voice in `voice_assistant.py` CONFIG or via env:
 ```bash
-# In /etc/systemd/system/picoclaw-voice.service:
-Environment=PIPER_MODEL=/home/stas/.picoclaw/ru_RU-ruslan-medium.onnx
+# In /etc/systemd/system/taris-voice.service:
+Environment=PIPER_MODEL=/home/stas/.taris/ru_RU-ruslan-medium.onnx
 ```
 
 All available Piper voices: https://rhasspy.github.io/piper-samples/
@@ -496,7 +496,7 @@ List available PipeWire sources on the Pi:
 XDG_RUNTIME_DIR=/run/user/1000 pactl list sources short
 ```
 
-Set the source in `/etc/systemd/system/picoclaw-voice.service`:
+Set the source in `/etc/systemd/system/taris-voice.service`:
 ```ini
 Environment=AUDIO_TARGET=alsa_input.usb-your-mic-name.mono-fallback
 ```
@@ -509,27 +509,27 @@ Or set `AUDIO_TARGET=auto` to use the PipeWire default source.
 
 ```bash
 # Voice assistant
-sudo systemctl start   picoclaw-voice
-sudo systemctl stop    picoclaw-voice
-sudo systemctl restart picoclaw-voice
-sudo systemctl status  picoclaw-voice --no-pager
-tail -f ~/.picoclaw/voice.log
+sudo systemctl start   taris-voice
+sudo systemctl stop    taris-voice
+sudo systemctl restart taris-voice
+sudo systemctl status  taris-voice --no-pager
+tail -f ~/.taris/voice.log
 
-# Telegram gateway (picoclaw native LLM channel)
-sudo systemctl start   picoclaw-gateway
-sudo systemctl restart picoclaw-gateway
-journalctl -u picoclaw-gateway -n 30 --no-pager
+# Telegram gateway (taris native LLM channel)
+sudo systemctl start   taris-gateway
+sudo systemctl restart taris-gateway
+journalctl -u taris-gateway -n 30 --no-pager
 
 # Telegram menu bot (20-module bot)
-sudo systemctl start   picoclaw-telegram
-sudo systemctl restart picoclaw-telegram
-journalctl -u picoclaw-telegram -n 30 --no-pager
+sudo systemctl start   taris-telegram
+sudo systemctl restart taris-telegram
+journalctl -u taris-telegram -n 30 --no-pager
 
 # FastAPI Web UI (HTTPS port 8080)
-sudo systemctl start   picoclaw-web
-sudo systemctl restart picoclaw-web
-sudo systemctl stop    picoclaw-web
-journalctl -u picoclaw-web -n 30 --no-pager
+sudo systemctl start   taris-web
+sudo systemctl restart taris-web
+sudo systemctl stop    taris-web
+journalctl -u taris-web -n 30 --no-pager
 # Web UI accessible at: https://<hostname>:8080
 ```
 
@@ -540,14 +540,14 @@ journalctl -u picoclaw-web -n 30 --no-pager
 ```bash
 # Test TTS only (no mic needed):
 echo "Привет, я Пико!" | piper \
-    --model ~/.picoclaw/ru_RU-irina-medium.onnx \
+    --model ~/.taris/ru_RU-irina-medium.onnx \
     --output-raw | aplay -r22050 -fS16_LE -c1 -
 
 # Test mic capture (replace hw:1,0 with your device from arecord -l):
 arecord -D hw:1,0 -f S16_LE -r 16000 -c 1 -d 3 test.wav && aplay test.wav
 
 # Test LLM directly:
-picoclaw agent -m "Сколько будет два плюс два?"
+taris agent -m "Сколько будет два плюс два?"
 
 # Check PipeWire audio sources:
 XDG_RUNTIME_DIR=/run/user/1000 pactl list sources short
@@ -623,17 +623,17 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 │   │   └── manifest.json         ← PWA manifest (icons, theme_color, shortcuts)
 │   ├── setup/                    ← installation & fix scripts (run on Pi)
 │   │   ├── setup_voice.sh        ← full voice stack installer
-│   │   ├── setup_gateway.sh      ← picoclaw gateway service installer
+│   │   ├── setup_gateway.sh      ← taris gateway service installer
 │   │   ├── deploy_telegram_bot.sh← Telegram menu bot deploy
 │   │   ├── fix_implicit_fb.sh    ← USB audio snd-usb-audio quirk fix
 │   │   ├── fix_usb_audio_quirk.sh
 │   │   ├── fix_webcam_vol.sh
 │   │   ├── piper_wrapper.sh      ← Piper TTS wrapper script
-│   │   └── bot.env.example       ← template for /home/stas/.picoclaw/bot.env
+│   │   └── bot.env.example       ← template for /home/stas/.taris/bot.env
 │   ├── services/                 ← systemd unit files
-│   │   ├── picoclaw-telegram.service ← Telegram menu bot daemon
-│   │   ├── picoclaw-web.service      ← FastAPI Web UI (uvicorn HTTPS :8080)
-│   │   └── picoclaw-voice.service    ← voice assistant daemon
+│   │   ├── taris-telegram.service ← Telegram menu bot daemon
+│   │   ├── taris-web.service      ← FastAPI Web UI (uvicorn HTTPS :8080)
+│   │   └── taris-voice.service    ← voice assistant daemon
 │   └── tests/                    ← hardware diagnostic scripts
 │       ├── test_tts.sh
 │       ├── test_mic.py
@@ -641,7 +641,7 @@ See [`doc/architecture.md`](doc/architecture.md) for the full component architec
 │       ├── check_kernel_audio.sh
 │       └── ...
 ├── backup/device/                ← sanitized Pi config snapshot
-│   ├── picoclaw-config.json
+│   ├── taris-config.json
 │   ├── crontab
 │   ├── systemd/
 │   └── modprobe.d/
@@ -694,7 +694,7 @@ These files are read by GitHub Copilot (and similar AI tools) to understand the 
 | `.github/copilot-instructions.md` | ✅ | **Primary AI workflow rules.** Covers deployment protocol (always test on PI2 first), voice regression test requirements, UI sync rule (Telegram + Web UI must change together), bot versioning SOP, and the safe-update protocol. Loaded automatically by VS Code Copilot for every request in this workspace. |
 | `.github/agents/su-first-copilot-agent.agent.md` | ❌ | Local-only VS Code Copilot custom agent definition — "SU first Copilot Agent" — used to review and test PicoClaw. The entire `.github/agents/` directory is gitignored so agent definitions are not shared via the repository. |
 | `AGENTS.md` | ✅ | **Persistent AI session memory.** Contains remote host access tables, current `BOT_VERSION`, implemented feature summaries, calendar/web context, and the Vibe Coding Protocol rules. Intended to be read at the start of every AI assistant session to restore operational context without re-reading all code. |
-| `INSTRUCTIONS.md` | ✅ | **AI agent quick reference.** Project summary, PI1/PI2 host connection commands, full `src/` module list with one-liners, key services table (including `picoclaw-tunnel.service`), and the Quick Deploy command block. Lighter than the full copilot instructions — loaded as context by the custom Copilot agent. |
+| `INSTRUCTIONS.md` | ✅ | **AI agent quick reference.** Project summary, PI1/PI2 host connection commands, full `src/` module list with one-liners, key services table (including `taris-tunnel.service`), and the Quick Deploy command block. Lighter than the full copilot instructions — loaded as context by the custom Copilot agent. |
 | `TODO.md` | ✅ | **Single source of truth for planned and in-progress work.** Contains known bugs, feature roadmap, and completed items. Check this at the start of each development session. |
 
 ### VS Code workspace settings
@@ -721,17 +721,17 @@ certutil -addstore -f "Root" OpenClawPI2.crt
 Two places:
 
 1. systemd journal (live / recent logs):
-plink -pw "PASSWORD" -batch user@targethost "journalctl -u picoclaw-telegram -n 50 --no-pager"
+plink -pw "PASSWORD" -batch user@targethost "journalctl -u taris-telegram -n 50 --no-pager"
 
 Add --since "18:00" to filter by time:
-plink -pw "PASSWORD" -batch user@targethost "journalctl -u picoclaw-telegram --since '18:00' --no-pager"
+plink -pw "PASSWORD" -batch user@targethost "journalctl -u taris-telegram --since '18:00' --no-pager"
 
 2. Log file on Pi:
-plink -pw "pw "PASSWORD" -batch user@targethost "tail -50 /home/stas/.picoclaw/telegram_bot.log"
+plink -pw "pw "PASSWORD" -batch user@targethost "tail -50 /home/stas/.taris/telegram_bot.log"
 Other service logs:
 rem Web UI
-plink -pw "PASSWORD" -batch user@targethost "journalctl -u picoclaw-web -n 30 --no-pager"
+plink -pw "PASSWORD" -batch user@targethost "journalctl -u taris-web -n 30 --no-pager"
 
 rem Voice assistant
-plink -pw "PASSWORD" -batch user@targethost "journalctl -u picoclaw-voice -n 30 --no-pager"
+plink -pw "PASSWORD" -batch user@targethost "journalctl -u taris-voice -n 30 --no-pager"
 

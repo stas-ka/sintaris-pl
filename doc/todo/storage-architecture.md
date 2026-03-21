@@ -24,9 +24,9 @@
 
 | Platform | DB Backend | Vector Extension | Binary Files Root | Max Practical Vectors |
 |---|---|---|---|---|
-| **ZeroClaw** (Pi Zero 2W, 512 MB) | SQLite | `sqlite-vec` | `~/.picoclaw/files/` | ~10k (cosine, 384-dim) |
-| **PicoClaw** (Pi 3 B+, 1 GB) | SQLite | `sqlite-vec` | `~/.picoclaw/files/` | ~50k (cosine, 384-dim) |
-| **OpenClaw** (Pi 5 / RK3588 / Jetson) | PostgreSQL | `pgvector` | `/data/picoclaw/files/` or S3-compat | millions |
+| **ZeroClaw** (Pi Zero 2W, 512 MB) | SQLite | `sqlite-vec` | `~/.taris/files/` | ~10k (cosine, 384-dim) |
+| **PicoClaw** (Pi 3 B+, 1 GB) | SQLite | `sqlite-vec` | `~/.taris/files/` | ~50k (cosine, 384-dim) |
+| **OpenClaw** (Pi 5 / RK3588 / Jetson) | PostgreSQL | `pgvector` | `/data/taris/files/` or S3-compat | millions |
 
 ### 2.1 What goes in DB vs on disk
 
@@ -48,7 +48,7 @@
 | Raw document blobs (PDF, DOCX) | — | — | ✅ original in `/files/docs/` |
 | Bot secrets / API tokens | — | — | ✅ `bot.env` only |
 | LLM / voice model binaries | — | — | ✅ `.onnx`, Vosk dirs |
-| picoclaw `config.json` | — | — | ✅ picoclaw-owned |
+| taris `config.json` | — | — | ✅ taris-owned |
 | Static assets (CSS, JS, templates) | — | — | ✅ source tree |
 
 ---
@@ -125,7 +125,7 @@ def create_store() -> DataStore:
         return PostgresStore(dsn=os.environ["STORE_PG_DSN"])
     from core.store_sqlite import SQLiteStore
     db_path = os.path.expanduser(
-        os.environ.get("STORE_DB_PATH", "~/.picoclaw/pico.db"))
+        os.environ.get("STORE_DB_PATH", "~/.taris/taris.db"))
     return SQLiteStore(db_path=db_path)
 
 # Module-level singleton — imported by all feature modules
@@ -160,7 +160,7 @@ It ships as a Python wheel (`pip install sqlite-vec`) and runs on ARM aarch64 wi
 import sqlite3
 import sqlite_vec
 
-conn = sqlite3.connect("pico.db")
+conn = sqlite3.connect("taris.db")
 sqlite_vec.load(conn)   # registers the vec0 virtual table module
 ```
 
@@ -304,8 +304,8 @@ OpenClaw has the compute to run multimodal embedding models (CLIP, LLaVA, Floren
 Binary files are always on disk. The DB stores only the relative path.
 
 ```
-~/.picoclaw/files/           (PicoClaw / ZeroClaw)
-/data/picoclaw/files/        (OpenClaw — can be NVMe or S3 mount)
+~/.taris/files/           (PicoClaw / ZeroClaw)
+/data/taris/files/        (OpenClaw — can be NVMe or S3 mount)
 
   audio/
     <chat_id>/
@@ -326,7 +326,7 @@ The DB record stores `file_path = "docs/<chat_id>/<uuid>.pdf"` relative to `STOR
 
 ## 7. Configuration
 
-In `~/.picoclaw/bot.env`:
+In `~/.taris/bot.env`:
 
 ```bash
 # ── Storage backend ───────────────────────────────────────────────────
@@ -334,13 +334,13 @@ In `~/.picoclaw/bot.env`:
 STORE_BACKEND=sqlite
 
 # SQLite settings (STORE_BACKEND=sqlite)
-STORE_DB_PATH=~/.picoclaw/pico.db
+STORE_DB_PATH=~/.taris/taris.db
 
 # PostgreSQL settings (STORE_BACKEND=postgres)
-STORE_PG_DSN=postgresql://picoclaw:secret@localhost:5432/picoclaw
+STORE_PG_DSN=postgresql://taris:secret@localhost:5432/taris
 
 # File storage root
-STORE_FILES_ROOT=~/.picoclaw/files
+STORE_FILES_ROOT=~/.taris/files
 
 # Vector search: on | off
 # Set off on ZeroClaw if sqlite-vec wheel not installed
@@ -394,7 +394,7 @@ This plan extends the existing §9 plan. Phase 1 is already complete.
 | `src/setup/install_sqlite_vec.sh` | Install `sqlite-vec` Python wheel on Pi target |
 | `src/setup/install_postgres.sh` | Install PostgreSQL + pgvector on OpenClaw target |
 | `src/setup/migrate_to_db.py` | JSON → adapter (Phase 3, idempotent) |
-| `src/setup/migrate_sqlite_to_pg.py` | SQLite `pico.db` → PostgreSQL (Phase 5) |
+| `src/setup/migrate_sqlite_to_pg.py` | SQLite `taris.db` → PostgreSQL (Phase 5) |
 
 ---
 
@@ -434,7 +434,7 @@ CREATE INDEX IF NOT EXISTS idx_docs_chat ON documents(chat_id);
 
 | ID | Test | What it validates |
 |---|---|---|
-| T22 | `sqlite_schema` | All 10 tables present in `pico.db`; column names match spec |
+| T22 | `sqlite_schema` | All 10 tables present in `taris.db`; column names match spec |
 | T23 | `migration_idempotent` | `migrate_to_db.py` run twice produces same row counts |
 | T24 | `vector_search_basic` | `upsert_embedding` + `search_similar` returns expected top-1 match (SQLite) |
 | T25 | `store_adapter_contract` | Both SQLiteStore and PostgresStore pass the same contract test suite |

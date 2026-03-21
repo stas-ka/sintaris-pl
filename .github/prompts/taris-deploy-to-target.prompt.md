@@ -1,6 +1,6 @@
 ---
 mode: agent
-description: Deploy picoclaw software to a Raspberry Pi target (PI2 first, then PI1).
+description: Deploy taris software to a Raspberry Pi target (PI2 first, then PI1).
 ---
 
 # Deploy to Target (`/taris-deploy-to-target`)
@@ -46,11 +46,11 @@ Before any deploy, run a quick data backup:
 ```bat
 plink -pw "PASS" -batch stas@HOST ^
   "TS=$(date +%%Y%%m%%d_%%H%%M%%S); ^
-   tar czf /tmp/picoclaw_predeploy_${TS}.tar.gz ^
+   tar czf /tmp/taris_predeploy_${TS}.tar.gz ^
    -C /home/stas ^
-   .picoclaw/pico.db .picoclaw/*.json .picoclaw/bot.env .picoclaw/config.json ^
-   --exclude='.picoclaw/*/__pycache__' 2>/dev/null; ^
-   ls -lh /tmp/picoclaw_predeploy_${TS}.tar.gz"
+   .taris/taris.db .taris/*.json .taris/bot.env .taris/config.json ^
+   --exclude='.taris/*/__pycache__' 2>/dev/null; ^
+   ls -lh /tmp/taris_predeploy_${TS}.tar.gz"
 ```
 
 ---
@@ -63,38 +63,38 @@ Deploy all source packages to the target. Use exact paths from `bot-deploy.instr
 
 ```bat
 rem core package
-pscp -pw "PASS" -r src\core stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\core stas@HOST:/home/stas/.taris/
 
 rem telegram package
-pscp -pw "PASS" -r src\telegram stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\telegram stas@HOST:/home/stas/.taris/
 
 rem features package
-pscp -pw "PASS" -r src\features stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\features stas@HOST:/home/stas/.taris/
 
 rem security package
-pscp -pw "PASS" -r src\security stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\security stas@HOST:/home/stas/.taris/
 
 rem ui package
-pscp -pw "PASS" -r src\ui stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\ui stas@HOST:/home/stas/.taris/
 
 rem web templates + static
-pscp -pw "PASS" -r src\web stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\web stas@HOST:/home/stas/.taris/
 ```
 
 **Entry point files** (root-level, copy individually):
 
 ```bat
-pscp -pw "PASS" src\telegram_menu_bot.py stas@HOST:/home/stas/.picoclaw/
-pscp -pw "PASS" src\bot_web.py stas@HOST:/home/stas/.picoclaw/
-pscp -pw "PASS" src\voice_assistant.py stas@HOST:/home/stas/.picoclaw/
-pscp -pw "PASS" src\gmail_digest.py stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" src\telegram_menu_bot.py stas@HOST:/home/stas/.taris/
+pscp -pw "PASS" src\bot_web.py stas@HOST:/home/stas/.taris/
+pscp -pw "PASS" src\voice_assistant.py stas@HOST:/home/stas/.taris/
+pscp -pw "PASS" src\gmail_digest.py stas@HOST:/home/stas/.taris/
 ```
 
 **Data files**:
 
 ```bat
-pscp -pw "PASS" src\strings.json stas@HOST:/home/stas/.picoclaw/
-pscp -pw "PASS" src\release_notes.json stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" src\strings.json stas@HOST:/home/stas/.taris/
+pscp -pw "PASS" src\release_notes.json stas@HOST:/home/stas/.taris/
 ```
 
 ---
@@ -102,7 +102,7 @@ pscp -pw "PASS" src\release_notes.json stas@HOST:/home/stas/.picoclaw/
 ## Step 3 — Deploy setup scripts
 
 ```bat
-pscp -pw "PASS" -r src\setup stas@HOST:/home/stas/.picoclaw/
+pscp -pw "PASS" -r src\setup stas@HOST:/home/stas/.taris/
 ```
 
 ---
@@ -113,14 +113,14 @@ Only if any `.service` file changed since last deploy:
 
 ```bat
 rem Copy to tmp then move to system dir with sudo
-pscp -pw "PASS" src\services\picoclaw-telegram.service stas@HOST:/tmp/
-pscp -pw "PASS" src\services\picoclaw-web.service stas@HOST:/tmp/
-pscp -pw "PASS" src\services\picoclaw-voice.service stas@HOST:/tmp/
+pscp -pw "PASS" src\services\taris-telegram.service stas@HOST:/tmp/
+pscp -pw "PASS" src\services\taris-web.service stas@HOST:/tmp/
+pscp -pw "PASS" src\services\taris-voice.service stas@HOST:/tmp/
 
 plink -pw "PASS" -batch stas@HOST ^
-  "echo PASS | sudo -S cp /tmp/picoclaw-telegram.service /etc/systemd/system/ && ^
-   echo PASS | sudo -S cp /tmp/picoclaw-web.service /etc/systemd/system/ && ^
-   echo PASS | sudo -S cp /tmp/picoclaw-voice.service /etc/systemd/system/ && ^
+  "echo PASS | sudo -S cp /tmp/taris-telegram.service /etc/systemd/system/ && ^
+   echo PASS | sudo -S cp /tmp/taris-web.service /etc/systemd/system/ && ^
+   echo PASS | sudo -S cp /tmp/taris-voice.service /etc/systemd/system/ && ^
    echo PASS | sudo -S systemctl daemon-reload && ^
    echo 'Service files deployed'"
 ```
@@ -131,9 +131,9 @@ plink -pw "PASS" -batch stas@HOST ^
 
 ```bat
 plink -pw "PASS" -batch stas@HOST ^
-  "echo PASS | sudo -S systemctl restart picoclaw-telegram picoclaw-web && ^
+  "echo PASS | sudo -S systemctl restart taris-telegram taris-web && ^
    sleep 4 && ^
-   journalctl -u picoclaw-telegram -n 15 --no-pager"
+   journalctl -u taris-telegram -n 15 --no-pager"
 ```
 
 **Pass criteria** in journal:
@@ -149,13 +149,13 @@ If ANY of these lines is missing, STOP. Do not proceed to PI1. Report the error.
 
 ```bat
 rem Check telegram bot service
-plink -pw "PASS" -batch stas@HOST "systemctl is-active picoclaw-telegram"
+plink -pw "PASS" -batch stas@HOST "systemctl is-active taris-telegram"
 
 rem Check web service
-plink -pw "PASS" -batch stas@HOST "systemctl is-active picoclaw-web"
+plink -pw "PASS" -batch stas@HOST "systemctl is-active taris-web"
 
 rem Confirm version on target
-plink -pw "PASS" -batch stas@HOST "grep BOT_VERSION ~/.picoclaw/core/bot_config.py"
+plink -pw "PASS" -batch stas@HOST "grep BOT_VERSION ~/.taris/core/bot_config.py"
 ```
 
 ---
@@ -187,7 +187,7 @@ Then ask:
 ### Service fails to start
 
 ```bat
-plink -pw "PASS" -batch stas@HOST "journalctl -u picoclaw-telegram -n 30 --no-pager"
+plink -pw "PASS" -batch stas@HOST "journalctl -u taris-telegram -n 30 --no-pager"
 ```
 
 Common causes:
@@ -199,7 +199,7 @@ Common causes:
 
 ```bat
 plink -pw "PASS" -batch stas@HOST ^
-  "cd ~/.picoclaw && python3 -c 'from core.bot_config import BOT_VERSION; print(BOT_VERSION)'"
+  "cd ~/.taris && python3 -c 'from core.bot_config import BOT_VERSION; print(BOT_VERSION)'"
 ```
 
 ---

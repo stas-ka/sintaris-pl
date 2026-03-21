@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Picoclaw Russian Voice Assistant — Installation Script
+# Taris Russian Voice Assistant — Installation Script
 # =============================================================================
 # Installs:
 #   1. Vosk STT + vosk-model-small-ru (48MB) — offline Russian speech recognition
@@ -8,7 +8,7 @@
 #   3. sounddevice + libportaudio2 — audio capture
 #   4. ffmpeg — PCM→OGG Opus conversion for Telegram voice notes
 #   5. RB-TalkingPI I2S driver setup (Joy-IT / Google AIY HAT)
-#   6. picoclaw-voice.service systemd unit
+#   6. taris-voice.service systemd unit
 #
 # Based on KIM-ASSISTANT analysis:
 #   - KIM uses Silero/PyTorch TTS (requires ~2GB RAM, unusable on Pi 3)
@@ -21,7 +21,7 @@
 
 set -e
 
-PICOCLAW_DIR="/home/stas/.picoclaw"
+TARIS_DIR="/home/stas/.taris"
 PIPER_VERSION="2.0.0"
 PIPER_ARCH="aarch64"
 VOSK_MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
@@ -31,7 +31,7 @@ PIPER_VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/r
 PIPER_VOICE_JSON_URL="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json"
 
 echo "=============================================="
-echo " Picoclaw Voice Assistant Setup"
+echo " Taris Voice Assistant Setup"
 echo " Target: Raspberry Pi 3 B+ (aarch64)"
 echo " TTS: Piper + ru_RU-irina-medium"
 echo " STT: Vosk + vosk-model-small-ru-0.22"
@@ -72,8 +72,8 @@ pip3 install --break-system-packages --quiet \
 # ------------------------------------------------------------------------------
 echo ""
 echo "[3/6] Downloading Vosk Russian model (48MB)..."
-if [ ! -d "${PICOCLAW_DIR}/vosk-model-small-ru" ]; then
-    cd "${PICOCLAW_DIR}"
+if [ ! -d "${TARIS_DIR}/vosk-model-small-ru" ]; then
+    cd "${TARIS_DIR}"
     wget -q --show-progress "${VOSK_MODEL_URL}" -O vosk-model-small-ru.zip
     unzip -q vosk-model-small-ru.zip
     # Rename extracted dir to consistent name
@@ -82,7 +82,7 @@ if [ ! -d "${PICOCLAW_DIR}/vosk-model-small-ru" ]; then
         mv "$extracted" vosk-model-small-ru
     fi
     rm -f vosk-model-small-ru.zip
-    echo "  Vosk model installed: ${PICOCLAW_DIR}/vosk-model-small-ru"
+    echo "  Vosk model installed: ${TARIS_DIR}/vosk-model-small-ru"
 else
     echo "  Vosk model already exists, skipping."
 fi
@@ -117,37 +117,37 @@ fi
 
 echo ""
 echo "[4b/6] Downloading Piper Russian voice (Irina, medium, ~66MB)..."
-if [ ! -f "${PICOCLAW_DIR}/ru_RU-irina-medium.onnx" ]; then
-    cd "${PICOCLAW_DIR}"
+if [ ! -f "${TARIS_DIR}/ru_RU-irina-medium.onnx" ]; then
+    cd "${TARIS_DIR}"
     wget -q --show-progress "${PIPER_VOICE_URL}" -O ru_RU-irina-medium.onnx
     wget -q "${PIPER_VOICE_JSON_URL}" -O ru_RU-irina-medium.onnx.json
-    echo "  Piper Russian voice installed: ${PICOCLAW_DIR}/ru_RU-irina-medium.onnx"
+    echo "  Piper Russian voice installed: ${TARIS_DIR}/ru_RU-irina-medium.onnx"
 else
     echo "  Piper Russian voice already exists, skipping."
 fi
 
 # Update symlink so voice_assistant.py default path resolves correctly
-ln -sf "${PICOCLAW_DIR}/ru_RU-irina-medium.onnx" "${PICOCLAW_DIR}/ru_RU-ruslan-medium.onnx" 2>/dev/null || true
+ln -sf "${TARIS_DIR}/ru_RU-irina-medium.onnx" "${TARIS_DIR}/ru_RU-ruslan-medium.onnx" 2>/dev/null || true
 
 # ── German voice models (optional — only if DE users present) ──
 echo ""
 echo "[4c/6] German voice models (optional)..."
-VOSK_DE_DIR="$HOME/.picoclaw/vosk-model-small-de"
+VOSK_DE_DIR="$HOME/.taris/vosk-model-small-de"
 if [ ! -d "$VOSK_DE_DIR" ]; then
     echo "⬇ Vosk German STT model (31 MB)..."
     wget -q --show-progress \
         "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip" \
         -O /tmp/vosk-model-small-de.zip
-    unzip -q /tmp/vosk-model-small-de.zip -d "$HOME/.picoclaw/"
-    mv "$HOME/.picoclaw/vosk-model-small-de-0.15" "$VOSK_DE_DIR"
+    unzip -q /tmp/vosk-model-small-de.zip -d "$HOME/.taris/"
+    mv "$HOME/.taris/vosk-model-small-de-0.15" "$VOSK_DE_DIR"
     rm /tmp/vosk-model-small-de.zip
     echo "✓ Vosk DE model installed."
 else
     echo "✓ Vosk DE model already present."
 fi
 
-PIPER_DE="$HOME/.picoclaw/de_DE-thorsten-medium.onnx"
-PIPER_DE_JSON="$HOME/.picoclaw/de_DE-thorsten-medium.onnx.json"
+PIPER_DE="$HOME/.taris/de_DE-thorsten-medium.onnx"
+PIPER_DE_JSON="$HOME/.taris/de_DE-thorsten-medium.onnx.json"
 if [ ! -f "$PIPER_DE" ]; then
     echo "⬇ Piper German TTS voice (Thorsten, medium, 66 MB)..."
     wget -q --show-progress \
@@ -220,41 +220,41 @@ fi
 echo ""
 echo "[6/6] Installing voice assistant service..."
 
-# voice_assistant.py should already be at PICOCLAW_DIR from pscp
+# voice_assistant.py should already be at TARIS_DIR from pscp
 # If not, we create a minimal placeholder
-if [ ! -f "${PICOCLAW_DIR}/voice_assistant.py" ]; then
-    echo "  ⚠  voice_assistant.py not found in ${PICOCLAW_DIR}"
-    echo "     Copy it first: pscp .credentials/voice_assistant.py stas@OpenClawPI:${PICOCLAW_DIR}/voice_assistant.py"
+if [ ! -f "${TARIS_DIR}/voice_assistant.py" ]; then
+    echo "  ⚠  voice_assistant.py not found in ${TARIS_DIR}"
+    echo "     Copy it first: pscp .credentials/voice_assistant.py stas@OpenClawPI:${TARIS_DIR}/voice_assistant.py"
 fi
 
-cat > /etc/systemd/system/picoclaw-voice.service << 'EOF'
+cat > /etc/systemd/system/taris-voice.service << 'EOF'
 [Unit]
-Description=Picoclaw Russian Voice Assistant
+Description=Taris Russian Voice Assistant
 Documentation=https://github.com/sipeed/picoclaw
-After=network.target sound.target picoclaw-gateway.service
-Wants=picoclaw-gateway.service
+After=network.target sound.target taris-gateway.service
+Wants=taris-gateway.service
 
 [Service]
 Type=simple
 User=stas
-WorkingDirectory=/home/stas/.picoclaw
-ExecStart=/usr/bin/python3 /home/stas/.picoclaw/voice_assistant.py
+WorkingDirectory=/home/stas/.taris
+ExecStart=/usr/bin/python3 /home/stas/.taris/voice_assistant.py
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/home/stas/.picoclaw/voice.log
-StandardError=append:/home/stas/.picoclaw/voice.log
+StandardOutput=append:/home/stas/.taris/voice.log
+StandardError=append:/home/stas/.taris/voice.log
 Environment=PYTHONUNBUFFERED=1
-Environment=VOSK_MODEL_PATH=/home/stas/.picoclaw/vosk-model-small-ru
+Environment=VOSK_MODEL_PATH=/home/stas/.taris/vosk-model-small-ru
 Environment=PIPER_BIN=/usr/local/bin/piper
-Environment=PIPER_MODEL=/home/stas/.picoclaw/ru_RU-irina-medium.onnx
-Environment=PICOCLAW_BIN=/usr/bin/picoclaw
+Environment=PIPER_MODEL=/home/stas/.taris/ru_RU-irina-medium.onnx
+Environment=TARIS_BIN=/usr/bin/picoclaw
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable picoclaw-voice.service
+systemctl enable taris-voice.service
 echo "  Service installed and enabled."
 
 # ------------------------------------------------------------------------------
@@ -280,9 +280,9 @@ echo "   arecord -D hw:1,0 -f S16_LE -r 16000 -c 1 test.wav  # test mic"
 echo "   aplay test.wav              # play back"
 echo ""
 echo " Start voice assistant:"
-echo "   sudo systemctl start picoclaw-voice"
-echo "   journalctl -u picoclaw-voice -f --no-pager"
+echo "   sudo systemctl start taris-voice"
+echo "   journalctl -u taris-voice -f --no-pager"
 echo ""
 echo " Test Piper TTS manually:"
-echo "   echo 'Привет, я Пико!' | piper --model ~/.picoclaw/ru_RU-irina-medium.onnx --output-raw | aplay -r22050 -fS16_LE -c1 -"
+echo "   echo 'Привет, я Пико!' | piper --model ~/.taris/ru_RU-irina-medium.onnx --output-raw | aplay -r22050 -fS16_LE -c1 -"
 echo ""

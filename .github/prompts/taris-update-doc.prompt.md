@@ -25,10 +25,10 @@ Before executing any step, read:
 
 ```bat
 rem List files changed since last commit
-git -C "d:\Projects\workspace\picoclaw" diff --name-only HEAD
+git -C "d:\Projects\workspace\taris" diff --name-only HEAD
 
 rem Or since a specific version tag
-git -C "d:\Projects\workspace\picoclaw" diff --name-only HEAD~1
+git -C "d:\Projects\workspace\taris" diff --name-only HEAD~1
 ```
 
 Use the output to determine which documentation areas are affected.
@@ -181,13 +181,13 @@ python -c "import json,sys; json.load(open('src/release_notes.json'))" && echo r
 ## Step 10 — Commit documentation changes
 
 ```bat
-git -C "d:\Projects\workspace\picoclaw" add doc/ README.md TODO.md .github/
-git -C "d:\Projects\workspace\picoclaw" commit -m "docs: sync with v$(python -c \"import sys; sys.path.insert(0,'src'); import importlib.util; spec=importlib.util.spec_from_file_location('bc','src/core/bot_config.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); print(m.BOT_VERSION)\")"
+git -C "d:\Projects\workspace\taris" add doc/ README.md TODO.md .github/
+git -C "d:\Projects\workspace\taris" commit -m "docs: sync with v$(python -c \"import sys; sys.path.insert(0,'src'); import importlib.util; spec=importlib.util.spec_from_file_location('bc','src/core/bot_config.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); print(m.BOT_VERSION)\")"
 ```
 
 Or provide the version explicitly:
 ```bat
-git -C "d:\Projects\workspace\picoclaw" commit -m "docs: sync with v2026.X.Y implementation"
+git -C "d:\Projects\workspace\taris" commit -m "docs: sync with v2026.X.Y implementation"
 ```
 
 ---

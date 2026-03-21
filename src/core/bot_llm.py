@@ -1,10 +1,10 @@
 """
 bot_llm.py — Pluggable LLM backend abstraction.
 
-Wraps the existing picoclaw CLI call in a clean interface that the web app
+Wraps the existing taris CLI call in a clean interface that the web app
 can import without pulling in Telegram dependencies.
 
-Feature 3.1: LLM_PROVIDER env-var switch (picoclaw | openai | yandexgpt | gemini | anthropic | local)
+Feature 3.1: LLM_PROVIDER env-var switch (taris | openai | yandexgpt | gemini | anthropic | local)
 Feature 3.2: Local llama.cpp offline fallback with LLM_LOCAL_FALLBACK=1
 """
 
@@ -33,8 +33,8 @@ from core.bot_config import (
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     OPENAI_MODEL,
-    PICOCLAW_BIN,
-    PICOCLAW_CONFIG,
+    TARIS_BIN,
+    TARIS_CONFIG,
     YANDEXGPT_API_KEY,
     YANDEXGPT_FOLDER_ID,
     YANDEXGPT_MAX_TOKENS,
@@ -61,23 +61,23 @@ def set_active_model(name: str) -> None:
 
 
 def list_models() -> list[dict]:
-    """Read model_list from picoclaw config.json."""
+    """Read model_list from taris config.json."""
     try:
-        cfg = json.loads(Path(PICOCLAW_CONFIG).read_text(encoding="utf-8"))
+        cfg = json.loads(Path(TARIS_CONFIG).read_text(encoding="utf-8"))
         return cfg.get("model_list", [])
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Output cleaning  (ported from telegram.bot_access._clean_picoclaw_output)
+# Output cleaning  (ported from telegram.bot_access._clean_taris_output)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ANSI_RE     = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _SPINNER_RE  = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⣾⣽⣻⢿⡿⣟⣯⣷◐◑◒◓⠁⠂⠄⡀⢀⠠⠐⠈]")  # ASCII |/\- removed: not spinner chars
 _PRINTF_WRAP = re.compile(r"^printf\s+['\"](.+)['\"]\s*$", re.DOTALL)
 _LOG_PREFIX  = re.compile(r"^(?:\d{4}[/-]\d{2}[/-]\d{2}|\d{8})[\sT]\d{2}:\d{2}:\d{2}\s*(?:INFO|DEBUG|WARN|ERROR)?\s*", re.MULTILINE)
-_PIPE_HEADER = re.compile(r"^(agent|picoclaw)\s*[|│]", re.MULTILINE | re.IGNORECASE)
+_PIPE_HEADER = re.compile(r"^(agent|taris)\s*[|│]", re.MULTILINE | re.IGNORECASE)
 
 
 def _clean_output(raw: str) -> str:
@@ -99,27 +99,27 @@ def _clean_output(raw: str) -> str:
 def _raise_if_http_error(text: str) -> None:
     """Raise a descriptive RuntimeError if text contains a known HTTP error pattern.
 
-    The picoclaw binary may exit with rc=0 but embed the HTTP error message in
+    The taris binary may exit with rc=0 but embed the HTTP error message in
     its stdout rather than setting a non-zero exit code.  Called on both the
-    rc!=0 (stderr) and rc=0 (stdout) paths in _ask_picoclaw so the caller
+    rc!=0 (stderr) and rc=0 (stdout) paths in _ask_taris so the caller
     always receives a proper exception instead of an error string returned as
     an LLM answer.
     """
     lo = text.lower()
     if "payment required" in lo:
-        raise RuntimeError("picoclaw: 402 Payment Required")
+        raise RuntimeError("taris: 402 Payment Required")
     if "too many requests" in lo:
-        raise RuntimeError("picoclaw: 429 Too Many Requests")
+        raise RuntimeError("taris: 429 Too Many Requests")
     if "unauthorized" in lo and len(text) < 300:
-        raise RuntimeError("picoclaw: 401 Unauthorized")
+        raise RuntimeError("taris: 401 Unauthorized")
     if "service unavailable" in lo and len(text) < 300:
-        raise RuntimeError("picoclaw: 503 Service Unavailable")
+        raise RuntimeError("taris: 503 Service Unavailable")
 
 
-def _ask_picoclaw(prompt: str, timeout: int) -> str:
-    """Call picoclaw CLI (wraps OpenRouter or configured LLM)."""
+def _ask_taris(prompt: str, timeout: int) -> str:
+    """Call taris CLI (wraps OpenRouter or configured LLM)."""
     model = get_active_model()
-    cmd = [PICOCLAW_BIN, "agent"]
+    cmd = [TARIS_BIN, "agent"]
     if model:
         cmd += ["--model", model]
     cmd += ["-m", prompt]
@@ -130,24 +130,47 @@ def _ask_picoclaw(prompt: str, timeout: int) -> str:
     )
     if proc.returncode != 0:
         err_text = (proc.stderr or proc.stdout or "").strip()
-        log.warning(f"[LLM] picoclaw rc={proc.returncode}: {err_text[:300]}")
+        log.warning(f"[LLM] taris rc={proc.returncode}: {err_text[:300]}")
         _raise_if_http_error(err_text)
-        raise RuntimeError(f"picoclaw exited rc={proc.returncode}: {err_text[:80]}")
+        raise RuntimeError(f"taris exited rc={proc.returncode}: {err_text[:80]}")
     raw = proc.stdout or proc.stderr or ""
     result = _clean_output(raw)
     if not result:
-        raise RuntimeError("picoclaw returned empty output")
-    # picoclaw may exit rc=0 but embed HTTP error text in stdout
+        raise RuntimeError("taris returned empty output")
+    # taris may exit rc=0 but embed HTTP error text in stdout
     _raise_if_http_error(result)
     return result
 
 
-def _http_post_json(url: str, headers: dict, body: dict, timeout: int) -> dict:
-    """Minimal JSON POST using stdlib urllib (no extra dependencies)."""
+def _http_post_json(url: str, headers: dict, body: dict, timeout: int, _retries: int = 2) -> dict:
+    """Minimal JSON POST using stdlib urllib (no extra dependencies).
+
+    Retries automatically on HTTP 429 (rate limit) with exponential backoff.
+    Respects the ``Retry-After`` response header when present.
+    """
+    import time as _time
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    last_exc: Exception = RuntimeError("no attempts made")
+    for attempt in range(_retries + 1):
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_exc = exc
+            if exc.code == 429 and attempt < _retries:
+                try:
+                    wait = int(exc.headers.get("Retry-After", 0)) or (5 * (attempt + 1))
+                except (ValueError, AttributeError):
+                    wait = 5 * (attempt + 1)
+                log.warning(
+                    f"[LLM] HTTP 429 rate limit (attempt {attempt + 1}/{_retries + 1}); "
+                    f"retrying in {wait}s"
+                )
+                _time.sleep(wait)
+                continue
+            raise
+    raise last_exc
 
 
 def _ask_openai(prompt: str, timeout: int) -> str:
@@ -252,7 +275,7 @@ def _ask_local(prompt: str, timeout: int) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _DISPATCH = {
-    "picoclaw":  _ask_picoclaw,
+    "taris":  _ask_taris,
     "openai":    _ask_openai,
     "yandexgpt": _ask_yandexgpt,
     "gemini":    _ask_gemini,
@@ -268,7 +291,7 @@ def ask_llm(prompt: str, timeout: int = 60) -> str:
     provider fails.  Fallback responses are prefixed with '⚠️ [local fallback]'.
     """
     provider = LLM_PROVIDER.lower()
-    fn = _DISPATCH.get(provider, _ask_picoclaw)
+    fn = _DISPATCH.get(provider, _ask_taris)
 
     try:
         return fn(prompt, timeout)
@@ -308,7 +331,7 @@ def ask_llm_or_raise(prompt: str, timeout: int = 60) -> str:
     is re-raised only when all available options have been exhausted.
     """
     provider = LLM_PROVIDER.lower()
-    fn = _DISPATCH.get(provider, _ask_picoclaw)
+    fn = _DISPATCH.get(provider, _ask_taris)
     try:
         return fn(prompt, timeout)
     except Exception as primary_exc:
@@ -349,7 +372,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
       - openai / anthropic / local  → native messages list
       - yandexgpt                   → "text" key instead of "content"
       - gemini                      → contents/parts with "user"/"model" roles
-      - picoclaw (default)          → formatted as plain-text transcript
+      - taris (default)          → formatted as plain-text transcript
     """
     provider = LLM_PROVIDER.lower()
     primary_error: Exception = RuntimeError("unknown")
@@ -436,9 +459,9 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
             result = _http_post_json(url, headers, {"contents": contents}, timeout)
             return result["candidates"][0]["content"]["parts"][0]["text"].strip()
 
-        else:  # picoclaw or unknown — format history as plain text
+        else:  # taris or unknown — format history as plain text
             prompt = _format_history_as_text(messages)
-            return _ask_picoclaw(prompt, timeout)
+            return _ask_taris(prompt, timeout)
 
     except subprocess.TimeoutExpired as exc:
         log.warning(f"[LLM] {provider} timed out ({timeout}s) in history call")
@@ -466,5 +489,17 @@ def ask_llm_with_history(messages: list, timeout: int = 60) -> str:
             return f"⚠️ [local fallback]\n{text}" if text else ""
         except Exception as exc2:
             log.error(f"[LLM] local fallback also failed in history call: {exc2}")
+
+    # Last-resort: strip history, send only the final user turn
+    try:
+        last_user = next(
+            (m["content"] for m in reversed(messages) if m.get("role") == "user"),
+            None,
+        )
+        if last_user:
+            log.warning("[LLM] trying no-history fallback after history call failure")
+            return ask_llm(last_user, timeout=timeout)
+    except Exception as exc3:
+        log.error(f"[LLM] no-history fallback also failed: {exc3}")
 
     return ""

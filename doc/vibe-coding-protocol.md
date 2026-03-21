@@ -1,4 +1,4 @@
-# Vibe Coding Protocol — picoclaw / Pico Bot
+# Vibe Coding Protocol — taris / Taris Bot
 
 Tracks every Copilot-assisted session: user request → implementation → commit.  
 Use this to analyse cost (time, requests) per feature over time.
@@ -216,7 +216,7 @@ Every ~3 months, measure baseline health:
 
 | Time | Request | Complexity | Requests used | Model | Files changed | Status |
 |------|---------|------------|---------------|-------|---------------|--------|
-| (prior) | §3.2 Admin Panel LLM fallback toggle via flag file (`llm_fallback_enabled`): `_handle_admin_llm_fallback_menu()`, `_handle_admin_llm_fallback_toggle()`, `LLM_FALLBACK_FLAG_FILE` constant, `📡 Local Fallback` admin button, deploy + verify v2026.3.43 on PI2 | 3 | ~12 | claude-sonnet-4.6 | core/bot_config.py, telegram/bot_admin.py, telegram_menu_bot.py, core/bot_llm.py, release_notes.json, src/services/picoclaw-telegram.service | done |
+| (prior) | §3.2 Admin Panel LLM fallback toggle via flag file (`llm_fallback_enabled`): `_handle_admin_llm_fallback_menu()`, `_handle_admin_llm_fallback_toggle()`, `LLM_FALLBACK_FLAG_FILE` constant, `📡 Local Fallback` admin button, deploy + verify v2026.3.43 on PI2 | 3 | ~12 | claude-sonnet-4.6 | core/bot_config.py, telegram/bot_admin.py, telegram_menu_bot.py, core/bot_llm.py, release_notes.json, src/services/taris-telegram.service | done |
 
 **Session 13 total: 1 item, ~12 requests**
 
@@ -391,8 +391,8 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| — | Fix HTTPS 'Not Secure' warning on both Pi targets: create setup_ssl.sh with SAN (hostname+all IPs+Tailscale), deploy+run on both Pis, restart picoclaw-web on Pi2, download certs for Windows trust store | 3 | ~6 | claude-sonnet-4.6 | src/setup/setup_ssl.sh | done |
-| — | Write doc/install-new-target.md: 13-step complete fresh-install guide (system pkgs, Python pkgs, picoclaw binary, Piper TTS, source deploy, voice models, bot.env, picoclaw config, SSL, systemd services, verify checklist) | 3 | ~2 | claude-sonnet-4.6 | doc/install-new-target.md | done |
+| — | Fix HTTPS 'Not Secure' warning on both Pi targets: create setup_ssl.sh with SAN (hostname+all IPs+Tailscale), deploy+run on both Pis, restart taris-web on Pi2, download certs for Windows trust store | 3 | ~6 | claude-sonnet-4.6 | src/setup/setup_ssl.sh | done |
+| — | Write doc/install-new-target.md: 13-step complete fresh-install guide (system pkgs, Python pkgs, taris binary, Piper TTS, source deploy, voice models, bot.env, taris config, SSL, systemd services, verify checklist) | 3 | ~2 | claude-sonnet-4.6 | doc/install-new-target.md | done |
 | — | copilot-instructions.md: backup naming rule → %BNAME% composite (host+version+timestamp); UI Sync Rule section for requiring Telegram+Web updates together | 2 | ~3 | claude-sonnet-4.6 | .github/copilot-instructions.md | done |
 
 **Session 18 total: 3 items, ~11 requests**
@@ -434,7 +434,7 @@ Every ~3 months, measure baseline health:
 | — | File Bug 0.6: Admin/Developer role guards for System Chat; expand §1.1 RBAC 4-role table; expand §1.3 Developer Role capability table | 3 | ~3 | claude-sonnet-4.6 | TODO.md | done |
 | — | Diagnose black login page (low contrast: card #1e1e1e on bg #121212) and "Not secure" SSL warning; fix login page CSS: radial gradient bg, #252535 card, accent purple border + box-shadow | 2 | ~5 | claude-sonnet-4.6 | src/static/style.css | done |
 | — | Show hostname on login + register pages: add `import socket`, `_HOSTNAME`, pass to all login/register template contexts; update login.html + register.html title + subtitle | 2 | ~4 | claude-sonnet-4.6 | src/bot_web.py, src/templates/login.html, src/templates/register.html | done |
-| — | VPS internet exposure: design reverse SSH autossh tunnel architecture (no Fritz.Box changes, dynamic IP irrelevant); create nginx-vps.conf with sub_filter path rewriting, install_vps.sh, picoclaw-tunnel.service, setup_tunnel_key.sh | 4 | ~6 | claude-sonnet-4.6 | src/setup/nginx-vps.conf, src/setup/install_vps.sh, src/setup/setup_tunnel_key.sh, src/services/picoclaw-tunnel.service | done |
+| — | VPS internet exposure: design reverse SSH autossh tunnel architecture (no Fritz.Box changes, dynamic IP irrelevant); create nginx-vps.conf with sub_filter path rewriting, install_vps.sh, taris-tunnel.service, setup_tunnel_key.sh | 4 | ~6 | claude-sonnet-4.6 | src/setup/nginx-vps.conf, src/setup/install_vps.sh, src/setup/setup_tunnel_key.sh, src/services/taris-tunnel.service | done |
 | 11:00 UTC | User settings page: language selector (EN/RU/DE) + change password form; add `change_password()` to bot_auth.py; add GET /settings + POST /settings/language + POST /settings/password routes; create settings.html; add ⚙️ Settings link in sidebar nav; deploy to both Pis | 3 | ~3 | claude-sonnet-4.6 | src/bot_auth.py, src/bot_web.py, src/templates/settings.html, src/templates/base.html | done |
 
 **Session 21 total: 6 items, ~21 requests**
@@ -449,7 +449,7 @@ Every ~3 months, measure baseline health:
 |---|---|---|---|---|---|---|
 | 21:00 UTC | Implement Telegram↔Web account linking: 6-char alphanumeric code with 15 min TTL, "🔗 Link to Web" button in Profile, /register optional link_code field, status=active + role inheritance on link, strings.json in ru/en/de | 4 | ~8 | claude-sonnet-4.6 | src/bot_state.py, src/bot_handlers.py, src/telegram_menu_bot.py, src/bot_web.py, src/templates/register.html, src/strings.json | done |
 | 21:10 UTC | Documentation: update roadmap Flow C with actual implementation details (vs old 6-digit/5-min/`/link` plan); mark Flow D as 🔲 Planned; update TODO.md Completed line; update roadmap "Updated:" header | 2 | ~3 | claude-sonnet-4.6 | doc/web-ui/roadmap-web-ui.md, TODO.md | done |
-| 21:15 UTC | Deploy to OpenClawPI2: upload 6 files (5 src + register.html template), restart picoclaw-telegram + picoclaw-web, verify both services active (v2026.3.28, Polling Telegram, TLS :8080) | 2 | ~2 | claude-sonnet-4.6 | — (remote deploy) | done |
+| 21:15 UTC | Deploy to OpenClawPI2: upload 6 files (5 src + register.html template), restart taris-telegram + taris-web, verify both services active (v2026.3.28, Polling Telegram, TLS :8080) | 2 | ~2 | claude-sonnet-4.6 | — (remote deploy) | done |
 
 **Session 22 total: 3 items, ~13 requests**
 
@@ -493,7 +493,7 @@ Every ~3 months, measure baseline health:
 | 05:00 UTC | Delete obsolete files: `temp/` dir (10 scripts), `PicoClaw Howto.md`, `src/telegram_menu_bot_original.py`, `src/gmail_auth.py`, `doc/web-ui/mockups-fastapi/`, `doc/web-ui/mockups-nicegui/`, `doc/web-ui/mockups-ru/`, `doc/web-ui/mockups-gen1/` | 1 | ~2 | claude-sonnet-4.6 | (deleted files) | done |
 | 05:10 UTC | Update `doc/bot-code-map.md`: full rewrite — 881 lines, 20 module sections with function tables, module dependency chain, Callback Data Key Reference table, Key Files on Pi section, Web UI route inventory (41 routes), Screen DSL dataclasses, bot_actions handlers | 4 | ~5 | claude-sonnet-4.6 | doc/bot-code-map.md | done |
 | 05:20 UTC | Update `doc/dev-patterns.md`: fix header (20-module split), complete sections 15–18 (Screen DSL Pattern, Adding a Web UI Route, Telegram↔Web Shared Action Pattern, Password Reset Pattern) | 3 | ~4 | claude-sonnet-4.6 | doc/dev-patterns.md | done |
-| 05:35 UTC | Update `README.md`: 5 stale sections fixed — (1) directory structure expanded to all 20 modules + web UI files; (2) Step 5 deploy commands updated from 3 files to full 20-module + web templates deploy; (3) Step 9 description changed from "3-mode interface" to full-featured 20-module description; (4) Step 12 verification added picoclaw-web service; (5) Service Management added picoclaw-web block | 3 | ~3 | claude-sonnet-4.6 | README.md | done |
+| 05:35 UTC | Update `README.md`: 5 stale sections fixed — (1) directory structure expanded to all 20 modules + web UI files; (2) Step 5 deploy commands updated from 3 files to full 20-module + web templates deploy; (3) Step 9 description changed from "3-mode interface" to full-featured 20-module description; (4) Step 12 verification added taris-web service; (5) Service Management added taris-web block | 3 | ~3 | claude-sonnet-4.6 | README.md | done |
 
 | 06:00 UTC | Implement admin password reset: `POST /admin/user/{user_id}/reset-password` route — admin-only, min 4 chars, bcrypt via `change_password()`; `HX-Redirect` with `msg`/`error` flash params; `admin_page` GET updated to extract + pass `msg`/`error`; `admin.html` updated: flash messages block, `x-data="{ openRows: {} }"` on `<tbody>`, 🔑 key button per user row (Alpine toggle), expandable inline password form row with HTMX submit; actions column widened 100→140px | 3 | ~8 | claude-sonnet-4.6 | src/bot_web.py, src/templates/admin.html | done |
 
@@ -519,7 +519,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| ~UTC | Commit and push all changes: update .gitignore (IDE/certs/backups/test-results), stage 69 files (new: bot_ui.py, bot_actions.py, render_telegram.py, manifest.json, picoclaw-tunnel.service, VPS setup scripts, settings.html, benchmark tools; modified: bot_auth.py + change_password(), bot_web.py + settings routes + admin reset, bot_state.py + account linking, templates; deleted: obsolete files/mockups), rebase on Copilot PR #4 (list-open-issues), resolve vibe-coding-protocol.md conflict, push 69b3a2a to origin/master | 2 | 4 | claude-sonnet-4.6 | .gitignore, doc/vibe-coding-protocol.md | done |
+| ~UTC | Commit and push all changes: update .gitignore (IDE/certs/backups/test-results), stage 69 files (new: bot_ui.py, bot_actions.py, render_telegram.py, manifest.json, taris-tunnel.service, VPS setup scripts, settings.html, benchmark tools; modified: bot_auth.py + change_password(), bot_web.py + settings routes + admin reset, bot_state.py + account linking, templates; deleted: obsolete files/mockups), rebase on Copilot PR #4 (list-open-issues), resolve vibe-coding-protocol.md conflict, push 69b3a2a to origin/master | 2 | 4 | claude-sonnet-4.6 | .gitignore, doc/vibe-coding-protocol.md | done |
 
 **Session 27 total: 1 item, 4 requests**
 
@@ -573,8 +573,8 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| ~10:00 UTC | Feature 3.1: rewrite `bot_llm.py` with 6 provider clients (picoclaw/openai/yandexgpt/gemini/anthropic/local); `LLM_PROVIDER` env-var switch + 14 provider constants in `bot_config.py`; stdlib-only urllib HTTP dispatch; `_DISPATCH` dict + `ask_llm()`; no new pip dependencies (Pi constraint) | 4 | ~6 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py | done |
-| ~10:30 UTC | Feature 3.2: local llama.cpp offline fallback — `LLM_LOCAL_FALLBACK` guard, `⚠️ [local fallback]` prefix on responses; create `picoclaw-llm.service` systemd unit (qwen2-0.5b-q4.gguf, port 8081, 4 threads); bump BOT_VERSION → 2026.3.32; prepend release_notes.json entry; mark TODO.md §3.1 + §3.2 ✅ | 3 | ~4 | claude-sonnet-4.6 | src/services/picoclaw-llm.service, src/release_notes.json, TODO.md | done |
+| ~10:00 UTC | Feature 3.1: rewrite `bot_llm.py` with 6 provider clients (taris/openai/yandexgpt/gemini/anthropic/local); `LLM_PROVIDER` env-var switch + 14 provider constants in `bot_config.py`; stdlib-only urllib HTTP dispatch; `_DISPATCH` dict + `ask_llm()`; no new pip dependencies (Pi constraint) | 4 | ~6 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py | done |
+| ~10:30 UTC | Feature 3.2: local llama.cpp offline fallback — `LLM_LOCAL_FALLBACK` guard, `⚠️ [local fallback]` prefix on responses; create `taris-llm.service` systemd unit (qwen2-0.5b-q4.gguf, port 8081, 4 threads); bump BOT_VERSION → 2026.3.32; prepend release_notes.json entry; mark TODO.md §3.1 + §3.2 ✅ | 3 | ~4 | claude-sonnet-4.6 | src/services/taris-llm.service, src/release_notes.json, TODO.md | done |
 
 **Session 32 total: 2 items, ~10 requests — Feature 3 complete. 6-provider LLM dispatch + local fallback ✅**
 
@@ -628,7 +628,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| ~09:30 UTC | PI2 safe-update: verify + download backup (`picoclaw_backup_OpenClawPI2_v2026.3.32`), stop services | 2 | ~2 | claude-sonnet-4-6 | — | done |
+| ~09:30 UTC | PI2 safe-update: verify + download backup (`taris_backup_OpenClawPI2_v2026.3.32`), stop services | 2 | ~2 | claude-sonnet-4-6 | — | done |
 | ~09:35 UTC | Deploy Phase 2c files to PI2: core (store_base, store, store_sqlite, bot_db, bot_state), features (bot_calendar, bot_mail_creds, bot_users, bot_web), migrate_to_db.py | 2 | ~3 | claude-sonnet-4-6 | — | done |
 | ~09:40 UTC | Fix `migrate_to_db.py` SyntaxError: `global DB_PATH` moved to top of `main()` before argparse block | 2 | ~4 | claude-sonnet-4-6 | src/setup/migrate_to_db.py | done |
 | ~09:45 UTC | Run migration on PI2: 41 rows (users 4, voice_opts 12, calendar_events 19, notes_index 6); start services; verified journal — `Version: 2026.3.32`, `Polling Telegram…` | 2 | ~3 | claude-sonnet-4-6 | — | done |
@@ -645,7 +645,7 @@ Every ~3 months, measure baseline health:
 |---|---|---|---|---|---|---|
 | ~10:00 UTC | Design and create `tools/benchmark_menus.py` — 13 TCs covering menu keyboard builders, notes list, admin panel, calendar menu, contacts (SQLite); temp-dir isolation, env var patching, `bot_db.DB_PATH` monkeypatch, mocked Telegram `send_message` | 4 | ~8 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
 | ~10:15 UTC | Fix `datetime.utcnow()` DeprecationWarning → `datetime.now(timezone.utc)` for Python 3.12+ compatibility | 1 | ~1 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
-| ~10:20 UTC | Fix `sys.path` auto-detection for Pi flat layout (`~/.picoclaw/core/`) vs dev `src/core/` — benchmark fails on PI1 with `ModuleNotFoundError: No module named 'core'` | 2 | ~3 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
+| ~10:20 UTC | Fix `sys.path` auto-detection for Pi flat layout (`~/.taris/core/`) vs dev `src/core/` — benchmark fails on PI1 with `ModuleNotFoundError: No module named 'core'` | 2 | ~3 | claude-sonnet-4-6 | tools/benchmark_menus.py | done |
 | ~10:30 UTC | Deploy benchmark to PI1 + PI2, run on both, download results (`bench_pi1_tmp.json`, `bench_pi2_tmp.json`), merge into `tools/benchmark_results.json` (now 6 entries: 3 storage_ops + 3 menu_navigation) | 2 | ~5 | claude-sonnet-4-6 | tools/benchmark_results.json | done |
 
 **Key findings:**
@@ -677,7 +677,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| ~UTC | Add sqlite-vec v0.1.7 to `deploy/requirements.txt`; create `src/setup/install_sqlite_vec.sh` (standalone installer with verify step: `sqlite_vec.load()` + `vec_version()`); update `src/setup/install.sh` Step 2 pip block; add Step 1b to `src/setup/update.sh` (upgrade + version print); update `README.md` (docs table + architecture bullets); `pip3 install sqlite-vec` on PI2, copy 3 scripts, restart `picoclaw-telegram`, verify journal: `[Store] sqlite-vec loaded — vector search enabled`; commit `4e23299` + push | 3 | ~5 | claude-sonnet-4.6 | deploy/requirements.txt, src/setup/install.sh, src/setup/install_sqlite_vec.sh (new), src/setup/update.sh, README.md | done |
+| ~UTC | Add sqlite-vec v0.1.7 to `deploy/requirements.txt`; create `src/setup/install_sqlite_vec.sh` (standalone installer with verify step: `sqlite_vec.load()` + `vec_version()`); update `src/setup/install.sh` Step 2 pip block; add Step 1b to `src/setup/update.sh` (upgrade + version print); update `README.md` (docs table + architecture bullets); `pip3 install sqlite-vec` on PI2, copy 3 scripts, restart `taris-telegram`, verify journal: `[Store] sqlite-vec loaded — vector search enabled`; commit `4e23299` + push | 3 | ~5 | claude-sonnet-4.6 | deploy/requirements.txt, src/setup/install.sh, src/setup/install_sqlite_vec.sh (new), src/setup/update.sh, README.md | done |
 
 **Session 39 total: 1 item, ~5 requests — sqlite-vec v0.1.7 installed on OpenClawPI2, vector search enabled ✅**
 
@@ -702,7 +702,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| — | Fix HTTP 500 on `/register` when entering Telegram link code: root cause = in-memory `_web_link_codes` dict invisible across processes (telegram service writes, web service reads — separate PIDs); fix = file-based storage via `~/.picoclaw/web_link_codes.json` with atomic write, TTL eviction, single-use validation; bumped to v2026.3.33; deployed PI2 then PI1 (both already on package structure v2026.3.32 — no migration needed); git commit `8e5a3b1` | 4 | ~8 | claude-sonnet-4.6 | src/core/bot_config.py, src/core/bot_state.py, src/release_notes.json | done |
+| — | Fix HTTP 500 on `/register` when entering Telegram link code: root cause = in-memory `_web_link_codes` dict invisible across processes (telegram service writes, web service reads — separate PIDs); fix = file-based storage via `~/.taris/web_link_codes.json` with atomic write, TTL eviction, single-use validation; bumped to v2026.3.33; deployed PI2 then PI1 (both already on package structure v2026.3.32 — no migration needed); git commit `8e5a3b1` | 4 | ~8 | claude-sonnet-4.6 | src/core/bot_config.py, src/core/bot_state.py, src/release_notes.json | done |
 
 **Session 41 total: 1 item, ~8 requests — Telegram↔Web link code cross-process fix ✅ commit 8e5a3b1**
 
@@ -734,7 +734,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
-| ~19:20 | Fix production bug: NL calendar input (e.g. "Тренировка в 19") always returned `cal_no_llm` error. Root cause: `bot_calendar.py` called `_ask_picoclaw()` (missing pipe-header handler, 20–30s timeouts silently swallowed). Fix: migrate all 4 calendar LLM call sites to `ask_llm(timeout=60)` from `bot_llm.py`. Bump to v2026.3.35. Deploy to PI2 (verified `Version : 2026.3.35`) + PI1 (verified `Version : 2026.3.35`). | 3 | ~15 | claude-sonnet-4.6 | src/features/bot_calendar.py, src/core/bot_config.py, src/release_notes.json | done |
+| ~19:20 | Fix production bug: NL calendar input (e.g. "Тренировка в 19") always returned `cal_no_llm` error. Root cause: `bot_calendar.py` called `_ask_taris()` (missing pipe-header handler, 20–30s timeouts silently swallowed). Fix: migrate all 4 calendar LLM call sites to `ask_llm(timeout=60)` from `bot_llm.py`. Bump to v2026.3.35. Deploy to PI2 (verified `Version : 2026.3.35`) + PI1 (verified `Version : 2026.3.35`). | 3 | ~15 | claude-sonnet-4.6 | src/features/bot_calendar.py, src/core/bot_config.py, src/release_notes.json | done |
 
 **Session 44 total: 1 item, ~15 requests — calendar LLM fix ✅ PI2 ✅ PI1 ✅**
 
@@ -744,9 +744,9 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
-| ~19:32 | Fix production bug: free chat mode returned raw picoclaw 402 error log to user. Root cause 1: `_ask_picoclaw()` in `bot_llm.py` returned `_clean_output(stdout)` even on non-zero returncode. Root cause 2: `_LOG_PREFIX` regex missed compact `YYYYMMDD HH:MM:SS` date format used by picoclaw logs. Fix: raise `RuntimeError` on rc!=0; extend `_LOG_PREFIX` to match both date formats. Bump to v2026.3.36. Deploy PI2 ✅ PI1 ✅. | 2 | ~5 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py, src/release_notes.json | done |
+| ~19:32 | Fix production bug: free chat mode returned raw taris 402 error log to user. Root cause 1: `_ask_taris()` in `bot_llm.py` returned `_clean_output(stdout)` even on non-zero returncode. Root cause 2: `_LOG_PREFIX` regex missed compact `YYYYMMDD HH:MM:SS` date format used by taris logs. Fix: raise `RuntimeError` on rc!=0; extend `_LOG_PREFIX` to match both date formats. Bump to v2026.3.36. Deploy PI2 ✅ PI1 ✅. | 2 | ~5 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py, src/release_notes.json | done |
 
-**Session 45 total: 1 item, ~5 requests — picoclaw 402 log-leak fix ✅ PI2 ✅ PI1 ✅**
+**Session 45 total: 1 item, ~5 requests — taris 402 log-leak fix ✅ PI2 ✅ PI1 ✅**
 
 ---
 
@@ -774,7 +774,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
-| ~09:00 | Fix Bug A: voice messages during `contact_add`, `contact_edit`, `contact_search`, `cal_edit_title/dt/remind` modes were silently forwarded to LLM instead of the correct handler. Added 4 routing blocks in `_handle_voice_message()` after `cal_console` block. Fix Bug B1: LLM calls failed on both PIs — picoclaw-gateway was crash-looping; switched to `LLM_PROVIDER=openai` with `OPENAI_BASE_URL=https://openrouter.ai/api/v1` (OpenRouter OpenAI-compat endpoint) in `bot.env` on PI1 and PI2. Fix Bug B2: `NameError: ACTIVE_MODEL_FILE` in `bot_admin.py` — added missing import. Updated PI2 `bot.env` with 4 LLM vars. Bump to v2026.3.39. Commit `b35df5e`. Deploy PI1 ✅ PI2 ✅. | 3 | ~18 | claude-sonnet-4.6 | src/features/bot_voice.py, src/telegram/bot_admin.py, src/core/bot_config.py, src/release_notes.json | done |
+| ~09:00 | Fix Bug A: voice messages during `contact_add`, `contact_edit`, `contact_search`, `cal_edit_title/dt/remind` modes were silently forwarded to LLM instead of the correct handler. Added 4 routing blocks in `_handle_voice_message()` after `cal_console` block. Fix Bug B1: LLM calls failed on both PIs — taris-gateway was crash-looping; switched to `LLM_PROVIDER=openai` with `OPENAI_BASE_URL=https://openrouter.ai/api/v1` (OpenRouter OpenAI-compat endpoint) in `bot.env` on PI1 and PI2. Fix Bug B2: `NameError: ACTIVE_MODEL_FILE` in `bot_admin.py` — added missing import. Updated PI2 `bot.env` with 4 LLM vars. Bump to v2026.3.39. Commit `b35df5e`. Deploy PI1 ✅ PI2 ✅. | 3 | ~18 | claude-sonnet-4.6 | src/features/bot_voice.py, src/telegram/bot_admin.py, src/core/bot_config.py, src/release_notes.json | done |
 
 **Session 48 total: 3 bugs fixed, ~18 requests — voice mode routing (contacts+cal-edit) + LLM provider switch to OpenRouter direct + ACTIVE_MODEL_FILE import ✅ PI1 ✅ PI2 ✅**
 
@@ -794,9 +794,9 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
-| ~19:00 | Fix System Chat "❌ Could not generate a command. Try again." bug: `_handle_system_message()` called `_ask_picoclaw()` (subprocess to picoclaw CLI binary), which hardcodes OpenRouter CLI ignoring `LLM_PROVIDER`. With `LLM_PROVIDER=openai` the binary fails → `None` returned → error shown. Fix: removed `_ask_picoclaw` import, added `from core.bot_llm import ask_llm as _ask_builtin_llm`, replaced call at line 539. Bump to v2026.3.41. Commit `7d60ced`. Deploy PI2 ✅ PI1 ✅. | 2 | ~5 | claude-sonnet-4.6 | src/telegram/bot_handlers.py, src/core/bot_config.py, src/release_notes.json | done |
+| ~19:00 | Fix System Chat "❌ Could not generate a command. Try again." bug: `_handle_system_message()` called `_ask_taris()` (subprocess to taris CLI binary), which hardcodes OpenRouter CLI ignoring `LLM_PROVIDER`. With `LLM_PROVIDER=openai` the binary fails → `None` returned → error shown. Fix: removed `_ask_taris` import, added `from core.bot_llm import ask_llm as _ask_builtin_llm`, replaced call at line 539. Bump to v2026.3.41. Commit `7d60ced`. Deploy PI2 ✅ PI1 ✅. | 2 | ~5 | claude-sonnet-4.6 | src/telegram/bot_handlers.py, src/core/bot_config.py, src/release_notes.json | done |
 
-**Session 50 total: 1 bug fixed, ~5 requests — System Chat LLM routing fixed (ask_llm replaces _ask_picoclaw) ✅ PI1 ✅ PI2 ✅**
+**Session 50 total: 1 bug fixed, ~5 requests — System Chat LLM routing fixed (ask_llm replaces _ask_taris) ✅ PI1 ✅ PI2 ✅**
 
 ---
 
@@ -804,7 +804,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
-| 06:26 UTC | Deploy all changes to PI2 (v2026.3.41). Resumed mid-deploy from conversation summary. Deployed: web/, entry points (telegram_menu_bot.py, bot_web.py, voice_assistant.py, gmail_digest.py), data files (strings.json, release_notes.json, prompts.json). Restarted picoclaw-telegram + picoclaw-web. Journal confirmed: Version 2026.3.41, Polling Telegram, Web UI v2026.3.41 on :8080. Both services active ✅ PI2 ✅. | 1 | ~3 | claude-sonnet-4.6 | src/web/*, src/telegram_menu_bot.py, src/bot_web.py, src/strings.json, src/release_notes.json | done |
+| 06:26 UTC | Deploy all changes to PI2 (v2026.3.41). Resumed mid-deploy from conversation summary. Deployed: web/, entry points (telegram_menu_bot.py, bot_web.py, voice_assistant.py, gmail_digest.py), data files (strings.json, release_notes.json, prompts.json). Restarted taris-telegram + taris-web. Journal confirmed: Version 2026.3.41, Polling Telegram, Web UI v2026.3.41 on :8080. Both services active ✅ PI2 ✅. | 1 | ~3 | claude-sonnet-4.6 | src/web/*, src/telegram_menu_bot.py, src/bot_web.py, src/strings.json, src/release_notes.json | done |
 
 **Session 51 total: 1 deployment, ~3 requests — Full PI2 deploy v2026.3.41 ✅**
 
@@ -823,7 +823,7 @@ Every ~3 months, measure baseline health:
 ## Session 53 — 2026-03-19
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
-| ~08:00 UTC | Implement §6.1 Logging & Monitoring: new `bot_logger.py` (4 structured category loggers, Telegram alert handler, `tail_log`); 4 log path constants in `bot_config.py`; admin Logs UI in `bot_admin.py` (📊 Logs button + `_handle_admin_logs_menu/show`); dispatch + `configure_alert_handler`/`attach_alerts_to_main_log` in `telegram_menu_bot.py`; 8 i18n keys × 3 langs in `strings.json`; `picoclaw-logrotate` (daily/7d/compress/copytruncate). Version bump to v2026.3.42. Deploy PI2 ✅. Commit `9032fd7`. | 4 | ~12 | claude-sonnet-4.6 | src/core/bot_logger.py, src/core/bot_config.py, src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/strings.json, src/release_notes.json, TODO.md, src/services/picoclaw-logrotate | done |
+| ~08:00 UTC | Implement §6.1 Logging & Monitoring: new `bot_logger.py` (4 structured category loggers, Telegram alert handler, `tail_log`); 4 log path constants in `bot_config.py`; admin Logs UI in `bot_admin.py` (📊 Logs button + `_handle_admin_logs_menu/show`); dispatch + `configure_alert_handler`/`attach_alerts_to_main_log` in `telegram_menu_bot.py`; 8 i18n keys × 3 langs in `strings.json`; `taris-logrotate` (daily/7d/compress/copytruncate). Version bump to v2026.3.42. Deploy PI2 ✅. Commit `9032fd7`. | 4 | ~12 | claude-sonnet-4.6 | src/core/bot_logger.py, src/core/bot_config.py, src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/strings.json, src/release_notes.json, TODO.md, src/services/taris-logrotate | done |
 
 **Session 53 total: §6.1 Logging & Monitoring fully implemented & deployed, v2026.3.42 live on PI2 ✅**
 
@@ -887,9 +887,9 @@ Every ~3 months, measure baseline health:
 
 **Session 57 total: 1 bug fix + version bump, ~7 turns — HTTP error user-friendly messages + LLM fallback path ✅ v2026.4.4 deployed to PI2 ✅**
 
-| ~12:00 UTC | | | | Deep analysis: picoclaw exits rc=0 with HTTP error in stdout — prior v2026.4.4 fix only covered exception path; added `_raise_if_http_error()` helper in bot_llm.py called on both rc!=0 (stderr) and rc=0 (stdout) paths; bump 2026.4.4 → 2026.4.5; prepend release_notes.json; deploy pending (creds not in shell) | Root cause trace + fix + version bump | 2 | ~5 | claude-sonnet-4-6 | src/core/bot_llm.py, src/core/bot_config.py, src/release_notes.json | done |
+| ~12:00 UTC | | | | Deep analysis: taris exits rc=0 with HTTP error in stdout — prior v2026.4.4 fix only covered exception path; added `_raise_if_http_error()` helper in bot_llm.py called on both rc!=0 (stderr) and rc=0 (stdout) paths; bump 2026.4.4 → 2026.4.5; prepend release_notes.json; deploy pending (creds not in shell) | Root cause trace + fix + version bump | 2 | ~5 | claude-sonnet-4-6 | src/core/bot_llm.py, src/core/bot_config.py, src/release_notes.json | done |
 
-**Session 58 total: 1 root-cause fix — picoclaw rc=0 HTTP error passthrough through stdout ✅ v2026.4.5 ready for deploy to PI2**
+**Session 58 total: 1 root-cause fix — taris rc=0 HTTP error passthrough through stdout ✅ v2026.4.5 ready for deploy to PI2**
 
 ## Session 59 — 2026-04-06 (UTC)
 
@@ -907,7 +907,7 @@ Every ~3 months, measure baseline health:
 
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
-| — | TODO 8.2: Rename "Pico"/"Pico Bot"/"Pico Assistant" → "Taris" across codebase — 14 files, 21 replacements: README.md, AGENTS.md, src/strings.json, web templates (base.html, login.html, register.html, dashboard.html), static/manifest.json, .github/copilot-instructions.md, TODO.md, doc/quick-ref.md, doc/copilot-skills-guide.md, doc/arch/web-ui.md, doc/arch/deployment.md | 2 | ~3 | claude-sonnet-4.6 | 14 files | done |
+| — | TODO 8.2: Rename "Pico"/"Taris Bot"/"Pico Assistant" → "Taris" across codebase — 14 files, 21 replacements: README.md, AGENTS.md, src/strings.json, web templates (base.html, login.html, register.html, dashboard.html), static/manifest.json, .github/copilot-instructions.md, TODO.md, doc/quick-ref.md, doc/copilot-skills-guide.md, doc/arch/web-ui.md, doc/arch/deployment.md | 2 | ~3 | claude-sonnet-4.6 | 14 files | done |
 | — | TODO 8.3: Offline Telegram regression test suite — 8 classes, 31 tests, pytest 9.0.2; conftest passthrough-decorator two-mock architecture (WEB_ONLY=1 guard, _passthrough_deco side_effect for message_handler/callback_query_handler); covers TestCmdStart(4), TestCallbackMode(4), TestCallbackAdmin(9), TestCallbackMenu(3), TestVoiceHandler(3), TestTextHandlerNotes(2), TestTextHandlerAdmin(2), TestChatMode(3); voice_handler double-condition fix (_pending_error_protocol + msg.voice assert); 31/31 PASS in 0.22s | 4 | ~25 | claude-sonnet-4.6 | src/tests/telegram/conftest.py, src/tests/telegram/test_telegram_bot.py, src/tests/telegram/pytest.ini | done |
 
 **Session 60 total: 2 items, ~28 turns — Taris rename (14 files, 21 replacements) + 31/31 Telegram regression tests ✅**

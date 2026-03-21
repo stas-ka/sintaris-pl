@@ -52,8 +52,8 @@
 | **Dual-renderer consistency** | Copilot may generate a Telegram button without the corresponding web template (or vice versa) | Screen DSL enforces: one Screen → both renderers. The agent/prompt must require both outputs. |
 | **Widget type selection** | May generate raw `bot.send_message()` instead of Screen objects when modifying old-style handlers | Custom instructions must say "NEVER call bot.send_message() directly — always return a Screen object" |
 | **i18n completeness** | May add a Russian string without the English/German equivalent | Prompt must require all 3 language keys |
-| **Picoclaw-specific patterns** | Fresh conversation may not know the callback dispatch pattern, voice opt toggle pattern | Solved by `.github/copilot-instructions.md` + `dev-patterns.md` (already loaded as context) |
-| **LLM backend switching** | Copilot doesn't know about `bot_llm.py` pluggable backends (PicoClaw CLI/Gateway, OpenClaw, OpenAI) | Agent prompt must include `bot_llm.py` interface; always call `ask_llm()`, never `_ask_picoclaw()` directly |
+| **Taris-specific patterns** | Fresh conversation may not know the callback dispatch pattern, voice opt toggle pattern | Solved by `.github/copilot-instructions.md` + `dev-patterns.md` (already loaded as context) |
+| **LLM backend switching** | Copilot doesn't know about `bot_llm.py` pluggable backends (PicoClaw CLI/Gateway, OpenClaw, OpenAI) | Agent prompt must include `bot_llm.py` interface; always call `ask_llm()`, never `_ask_taris()` directly |
 | **Multi-channel rendering** | May generate Telegram-specific code instead of using the Screen DSL + renderer pipeline | Agent rules enforce: generate Screen objects only — renderers handle channel differences |
 
 ### 1.4 Overall Copilot Readiness Score
@@ -161,7 +161,7 @@ You are PicoUI — a specialised agent for generating PicoUI Platform user inter
 3. Generate **i18n strings** in all 3 languages (ru/de/en) in `strings.json`
 4. Wire **callback dispatch** in `telegram_menu_bot.py`
 5. Migrate existing Telegram-coupled handlers to the Screen DSL
-6. Use **`ask_llm()`** from `bot_llm.py` for all LLM calls — never call `_ask_picoclaw()` directly
+6. Use **`ask_llm()`** from `bot_llm.py` for all LLM calls — never call `_ask_taris()` directly
 
 ## Rules
 - ALWAYS return a `Screen` object from action handlers — never call `bot.send_message()` directly
@@ -570,7 +570,7 @@ Aligned with the 5-phase plan in `roadmap-web-ui.md`.
 | 1.3 | Port `mockups-fastapi/` templates to live Jinja2 (Pico CSS dark theme) | Polished UI from day one |
 | 1.4 | Implement auth: login page + JWT session + Telegram Login Widget | Secure web access |
 | 1.5 | 5 core screens: Menu, Chat, Notes (list/view/edit) | Usable web interface |
-| 1.6 | Create `src/services/picoclaw-web.service` | Auto-start web server |
+| 1.6 | Create `src/services/taris-web.service` | Auto-start web server |
 
 ### P2 — Vibe-Code All Screens (Days 7–10)
 

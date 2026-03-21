@@ -27,9 +27,9 @@ def _load_env_file(path: str) -> None:
         pass
 
 
-# Load credentials: bot.env first, then .pico_env (bot.env takes priority via setdefault)
-_load_env_file(os.path.expanduser("~/.picoclaw/bot.env"))
-_load_env_file(os.path.expanduser("~/.picoclaw/.pico_env"))
+# Load credentials: bot.env first, then .taris_env (bot.env takes priority via setdefault)
+_load_env_file(os.path.expanduser("~/.taris/bot.env"))
+_load_env_file(os.path.expanduser("~/.taris/.taris_env"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -61,29 +61,29 @@ ALLOWED_USERS:   set[int] = _parse_allowed_users()
 ADMIN_USERS:     set[int] = _parse_admin_users()
 DEVELOPER_USERS: set[int] = _parse_developer_users()
 
-BOT_NAME = os.environ.get("BOT_NAME", "Pico")
+BOT_NAME = os.environ.get("BOT_NAME", "Taris")
 
 USERS_FILE          = os.environ.get("USERS_FILE",
-                          os.path.expanduser("~/.picoclaw/users.json"))
+                          os.path.expanduser("~/.taris/users.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
-                          os.path.expanduser("~/.picoclaw/registrations.json"))
-PICOCLAW_BIN        = os.environ.get("PICOCLAW_BIN", "/usr/bin/picoclaw")
-PICOCLAW_CONFIG     = os.environ.get("PICOCLAW_CONFIG",
-                          os.path.expanduser("~/.picoclaw/config.json"))
+                          os.path.expanduser("~/.taris/registrations.json"))
+TARIS_BIN        = os.environ.get("TARIS_BIN", "/usr/bin/taris")
+TARIS_CONFIG     = os.environ.get("TARIS_CONFIG",
+                          os.path.expanduser("~/.taris/config.json"))
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
-                          os.path.expanduser("~/.picoclaw/active_model.txt"))
+                          os.path.expanduser("~/.taris/active_model.txt"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LLM provider switching  (Feature 3.1 + 3.2)
-# Set LLM_PROVIDER in ~/.picoclaw/bot.env to switch backends.
+# Set LLM_PROVIDER in ~/.taris/bot.env to switch backends.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Primary provider: picoclaw | openai | yandexgpt | gemini | anthropic | local
-LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "picoclaw")
+# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local
+LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "taris")
 
 # Local llama.cpp fallback — enable with LLM_LOCAL_FALLBACK=1 (Feature 3.2)
 LLM_LOCAL_FALLBACK      = os.environ.get("LLM_LOCAL_FALLBACK", "0") == "1"
-LLM_FALLBACK_FLAG_FILE  = os.path.expanduser("~/.picoclaw/llm_fallback_enabled")  # runtime toggle
+LLM_FALLBACK_FLAG_FILE  = os.path.expanduser("~/.taris/llm_fallback_enabled")  # runtime toggle
 LLAMA_CPP_URL           = os.environ.get("LLAMA_CPP_URL",   "http://127.0.0.1:8081")
 LLAMA_CPP_MODEL     = os.environ.get("LLAMA_CPP_MODEL", "")
 
@@ -100,7 +100,7 @@ GEMINI_MODEL        = os.environ.get("GEMINI_MODEL",    "gemini-1.5-flash")
 ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL     = os.environ.get("ANTHROPIC_MODEL",   "claude-3-haiku-20240307")
 
-# Direct OpenAI (bypasses picoclaw, uses own key — Feature 3.1)
+# Direct OpenAI (bypasses taris, uses own key — Feature 3.1)
 OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
 OPENAI_MODEL        = os.environ.get("OPENAI_MODEL",    "gpt-4o-mini")
 OPENAI_BASE_URL     = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -117,59 +117,59 @@ CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"
 CONVERSATION_PERSIST      = os.environ.get("CONVERSATION_PERSIST", "0") == "1"
 CONVERSATION_HISTORY_FILE = os.environ.get(
     "CONVERSATION_HISTORY_FILE",
-    os.path.expanduser("~/.picoclaw/conversation_history.json"),
+    os.path.expanduser("~/.taris/conversation_history.json"),
 )
 
 DIGEST_SCRIPT       = os.environ.get("DIGEST_SCRIPT",
-                          os.path.expanduser("~/.picoclaw/gmail_digest.py"))
+                          os.path.expanduser("~/.taris/gmail_digest.py"))
 LAST_DIGEST_FILE    = os.environ.get("LAST_DIGEST_FILE",
-                          os.path.expanduser("~/.picoclaw/last_digest.txt"))
+                          os.path.expanduser("~/.taris/last_digest.txt"))
 NOTES_DIR           = os.environ.get("NOTES_DIR",
-                          os.path.expanduser("~/.picoclaw/notes"))
+                          os.path.expanduser("~/.taris/notes"))
 CALENDAR_DIR        = os.environ.get("CALENDAR_DIR",
-                          os.path.expanduser("~/.picoclaw/calendar"))
+                          os.path.expanduser("~/.taris/calendar"))
 MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
-                          os.path.expanduser("~/.picoclaw/mail_creds"))
+                          os.path.expanduser("~/.taris/mail_creds"))
 ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
-                          os.path.expanduser("~/.picoclaw/error_protocols"))
+                          os.path.expanduser("~/.taris/error_protocols"))
 DOCS_DIR            = os.environ.get("DOCS_DIR",
-                          os.path.expanduser("~/.picoclaw/docs"))
+                          os.path.expanduser("~/.taris/docs"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.7"
+BOT_VERSION        = "2026.4.9"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
 )
-LAST_NOTIFIED_FILE = os.path.expanduser("~/.picoclaw/last_notified_version.txt")
+LAST_NOTIFIED_FILE = os.path.expanduser("~/.taris/last_notified_version.txt")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice pipeline constants
 # ─────────────────────────────────────────────────────────────────────────────
 
 VOSK_MODEL_PATH    = os.environ.get("VOSK_MODEL_PATH",
-                         os.path.expanduser("~/.picoclaw/vosk-model-small-ru"))
+                         os.path.expanduser("~/.taris/vosk-model-small-ru"))
 VOSK_MODEL_DE_PATH = os.environ.get("VOSK_MODEL_DE_PATH",
-                         os.path.expanduser("~/.picoclaw/vosk-model-small-de"))
+                         os.path.expanduser("~/.taris/vosk-model-small-de"))
 PIPER_BIN          = os.environ.get("PIPER_BIN",  "/usr/local/bin/piper")
 PIPER_MODEL        = os.environ.get("PIPER_MODEL",
-                         os.path.expanduser("~/.picoclaw/ru_RU-irina-medium.onnx"))
+                         os.path.expanduser("~/.taris/ru_RU-irina-medium.onnx"))
 PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser(
-                             "~/.picoclaw/ru_RU-irina-medium.onnx")))
+                             "~/.taris/ru_RU-irina-medium.onnx")))
 PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
-                         os.path.expanduser("~/.picoclaw/ru_RU-irina-low.onnx"))
+                         os.path.expanduser("~/.taris/ru_RU-irina-low.onnx"))
 PIPER_MODEL_DE     = os.environ.get("PIPER_MODEL_DE",
-                         os.path.expanduser("~/.picoclaw/de_DE-thorsten-medium.onnx"))
+                         os.path.expanduser("~/.taris/de_DE-thorsten-medium.onnx"))
 PIPER_MODEL_DE_TMPFS = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser(
-                             "~/.picoclaw/de_DE-thorsten-medium.onnx")))
+                             "~/.taris/de_DE-thorsten-medium.onnx")))
 WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
 WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
-                         os.path.expanduser("~/.picoclaw/ggml-base.bin"))
+                         os.path.expanduser("~/.taris/ggml-base.bin"))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
 
 VOICE_SAMPLE_RATE     = 16000
@@ -189,12 +189,12 @@ _STRINGS_FILE = os.environ.get(
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice optimization feature flags
 # All OFF by default — enable via Admin → ⚡ Voice Opts menu.
-# Settings persist in ~/.picoclaw/voice_opts.json.
+# Settings persist in ~/.taris/voice_opts.json.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_VOICE_OPTS_FILE      = os.path.expanduser("~/.picoclaw/voice_opts.json")
-_WEB_LINK_CODES_FILE  = os.path.expanduser("~/.picoclaw/web_link_codes.json")
-_PENDING_TTS_FILE    = os.path.expanduser("~/.picoclaw/pending_tts.json")
+_VOICE_OPTS_FILE      = os.path.expanduser("~/.taris/voice_opts.json")
+_WEB_LINK_CODES_FILE  = os.path.expanduser("~/.taris/web_link_codes.json")
+_PENDING_TTS_FILE    = os.path.expanduser("~/.taris/pending_tts.json")
 _VOICE_OPTS_DEFAULTS: dict = {
     "silence_strip":     False,   # #1: strip leading/trailing silence (ffmpeg)
     "low_sample_rate":   False,   # #3: 8 kHz instead of 16 kHz for Vosk STT
@@ -220,7 +220,7 @@ _WEB_ONLY = os.environ.get("WEB_ONLY", "0").lower() in ("1", "true", "yes")
 
 if not _WEB_ONLY:
     if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN not set. Add it to ~/.picoclaw/bot.env")
+        raise RuntimeError("BOT_TOKEN not set. Add it to ~/.taris/bot.env")
     if not ALLOWED_USERS and not ADMIN_USERS:
         raise RuntimeError(
             "ALLOWED_USERS (or ALLOWED_USER / TELEGRAM_CHAT_ID) not set. "
@@ -228,24 +228,24 @@ if not _WEB_ONLY:
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Logging — set up once here; all modules use getLogger("pico-tgbot")
+# Logging — set up once here; all modules use getLogger("taris-tgbot")
 # ─────────────────────────────────────────────────────────────────────────────
 
-_LOG_FILE           = os.path.expanduser("~/.picoclaw/telegram_bot.log")
-_ASSISTANT_LOG_FILE = os.path.expanduser("~/.picoclaw/assistant.log")
-_SECURITY_LOG_FILE  = os.path.expanduser("~/.picoclaw/security.log")
-_VOICE_LOG_FILE     = os.path.expanduser("~/.picoclaw/voice.log")
-_DATASTORE_LOG_FILE = os.path.expanduser("~/.picoclaw/datastore.log")
+_LOG_FILE           = os.path.expanduser("~/.taris/telegram_bot.log")
+_ASSISTANT_LOG_FILE = os.path.expanduser("~/.taris/assistant.log")
+_SECURITY_LOG_FILE  = os.path.expanduser("~/.taris/security.log")
+_VOICE_LOG_FILE     = os.path.expanduser("~/.taris/voice.log")
+_DATASTORE_LOG_FILE = os.path.expanduser("~/.taris/datastore.log")
 _log_handlers: list = [logging.StreamHandler()]
 try:
     os.makedirs(os.path.dirname(_LOG_FILE), exist_ok=True)
     _log_handlers.append(logging.FileHandler(_LOG_FILE, encoding="utf-8"))
 except OSError:
-    pass  # dev environment without ~/.picoclaw/ — log to console only
+    pass  # dev environment without ~/.taris/ — log to console only
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=_log_handlers,
 )
-log = logging.getLogger("pico-tgbot")
+log = logging.getLogger("taris-tgbot")

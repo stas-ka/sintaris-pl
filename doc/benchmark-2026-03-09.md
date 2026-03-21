@@ -1,7 +1,7 @@
 # Voice Pipeline Benchmark — PI1 vs PI2 (2026-03-09)
 
 **Tested:** Both Pis running `bench_voice.py` in parallel  
-**Key change before this run:** `picoclaw-voice.service` **disabled on PI1** (was using ~30 MB RAM + caused 286 MB SD-backed swap)
+**Key change before this run:** `taris-voice.service` **disabled on PI1** (was using ~30 MB RAM + caused 286 MB SD-backed swap)
 
 ---
 
@@ -61,7 +61,7 @@
 
 ---
 
-### LLM call (picoclaw → OpenRouter)
+### LLM call (taris → OpenRouter)
 
 | Call | PI1 | PI2 |
 |---|---|---|
@@ -88,9 +88,9 @@
 
 ---
 
-## PI1 — Before vs After (picoclaw-voice disabled)
+## PI1 — Before vs After (taris-voice disabled)
 
-This benchmark was run **after** disabling `picoclaw-voice.service` on PI1.  
+This benchmark was run **after** disabling `taris-voice.service` on PI1.  
 Previous benchmarks (same session, voice service still running):
 
 | Metric | PI1 **before** | PI1 **after** |
@@ -115,7 +115,7 @@ Previous benchmarks (same session, voice service still running):
 |---|---|---|
 | `gpu_mem=16` in config.txt (both Pis) | +60 MB free RAM → more ONNX cache | Trivial |
 | CPU governor → `performance` (both Pis) | −5–10% across all CPU-bound stages | Trivial |
-| Disable `picoclaw-gateway.service` on PI1 (stuck `activating`) | Faster boot, no spurious activation | Trivial |
+| Disable `taris-gateway.service` on PI1 (stuck `activating`) | Faster boot, no spurious activation | Trivial |
 | USB SSD for Piper model (PI1 only) | Cold TTS load: 9.5 s → ~2 s | Low |
 
 See `doc/hardware-performance-analysis.md` for full analysis.

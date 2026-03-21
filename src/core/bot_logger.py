@@ -1,4 +1,4 @@
-"""Structured category loggers for picoclaw (§6.1 Logging & Monitoring).
+"""Structured category loggers for taris (§6.1 Logging & Monitoring).
 
 Four category loggers write to dedicated files alongside the main telegram_bot.log:
   - assistant_log  → assistant.log   (general bot activity)
@@ -15,7 +15,7 @@ Usage in any module:
     from core.bot_logger import security_log, voice_log, datastore_log
     security_log.warning("Injection attempt blocked: %s", text[:60])
 
-All four loggers also propagate to the root 'pico-tgbot' logger so records
+All four loggers also propagate to the root 'taris-tgbot' logger so records
 appear in telegram_bot.log as well (set propagate=False to silence that).
 """
 import logging
@@ -39,8 +39,8 @@ _QUEUE_LIMIT = 50   # max events buffered before configure() is called
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _make_logger(name: str, path: str) -> logging.Logger:
-    """Return a logger that writes to *path* and propagates to pico-tgbot."""
-    logger = logging.getLogger(f"pico.{name}")
+    """Return a logger that writes to *path* and propagates to taris-tgbot."""
+    logger = logging.getLogger(f"taris.{name}")
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
         try:
@@ -131,11 +131,11 @@ def configure_alert_handler(send_fn, admin_ids: list[int]) -> None:
 
 
 def attach_alerts_to_main_log() -> None:
-    """Attach the alert handler to the main pico-tgbot logger.
+    """Attach the alert handler to the main taris-tgbot logger.
 
     Call this from telegram_menu_bot.main() after configure_alert_handler().
     """
-    main_log = logging.getLogger("pico-tgbot")
+    main_log = logging.getLogger("taris-tgbot")
     if _alert_handler not in main_log.handlers:
         main_log.addHandler(_alert_handler)
     # Also attach to all category loggers

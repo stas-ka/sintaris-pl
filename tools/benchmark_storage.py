@@ -1,8 +1,8 @@
 """
-benchmark_storage.py — Picoclaw storage backend benchmark
+benchmark_storage.py — Taris storage backend benchmark
 
 Compares JSON-file-based storage vs SQLite for the operations that the
-picoclaw Telegram bot actually performs.
+taris Telegram bot actually performs.
 
 COMPLETELY STANDALONE — zero imports from src/. Safe to run on Windows dev
 machine (uses tempfile.mkdtemp() for all paths) and on the Pi target.
@@ -520,7 +520,7 @@ def save_json(results: list[dict], n: int, path: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Picoclaw storage benchmark")
+    parser = argparse.ArgumentParser(description="Taris storage benchmark")
     parser.add_argument("--iterations", "-n", type=int, default=DEFAULT_N,
                         help=f"Iterations per operation (default: {DEFAULT_N})")
     parser.add_argument("--output", "-o", default=DEFAULT_OUTPUT,
@@ -528,7 +528,7 @@ def main() -> None:
     args = parser.parse_args()
 
     tmpdir = tempfile.mkdtemp(prefix="picobench_")
-    print(f"\nPicoclaw storage benchmark — {args.iterations} iterations")
+    print(f"\nTaris storage benchmark — {args.iterations} iterations")
     print(f"  Temp dir: {tmpdir}")
     print()
 

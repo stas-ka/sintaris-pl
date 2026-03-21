@@ -1,4 +1,4 @@
-# Picoclaw — Telegram Bot Architecture
+# Taris — Telegram Bot Architecture
 
 **Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -7,7 +7,7 @@
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.43"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `picoclaw-telegram.service`
+**Version:** `BOT_VERSION = "2026.3.43"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
 
 The interactive Telegram bot is split into 14 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks. Shared Screen DSL modules (`bot_ui.py`, `bot_actions.py`, `render_telegram.py`) are used by both this channel and the Web UI channel.
 
@@ -33,7 +33,7 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_state.py` | Mutable runtime dicts, voice_opts I/O, dynamic_users I/O; `generate_web_link_code()` / `validate_web_link_code()` for Telegram↔Web account linking |
 | `bot_instance.py` | `bot = TeleBot(...)` singleton |
 | `bot_security.py` | 3-layer prompt injection guard; `SECURITY_PREAMBLE`; `_wrap_user_input()` |
-| `bot_access.py` | Access control, i18n `_t()`, keyboards, text utils, `_ask_picoclaw()` |
+| `bot_access.py` | Access control, i18n `_t()`, keyboards, text utils, `_ask_taris()` |
 | `bot_users.py` | Registration + notes file I/O (pure, no Telegram API calls) |
 | `bot_voice.py` | Full voice pipeline: STT/TTS/VAD, multi-part "Read aloud", orphan cleanup |
 | `bot_calendar.py` | Smart calendar: multi-event add, NL query, console, reminders, morning briefing, TTS |
@@ -74,13 +74,13 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | 🗑 Remove user | `admin_remove_user` | Remove a dynamic guest user |
 | 👥 Pending | `admin_pending_users` | Approve / block pending registrations |
 | 🤖 Switch LLM | `admin_llm_menu` | Select active model; OpenAI sub-menu with key entry |
-| 📡 Local Fallback | `admin_llm_fallback_menu` | Toggle `~/.picoclaw/llm_fallback_enabled`; shows ON/OFF status + URL/model |
+| 📡 Local Fallback | `admin_llm_fallback_menu` | Toggle `~/.taris/llm_fallback_enabled`; shows ON/OFF status + URL/model |
 | ⚡ Voice Opts | `voice_opts_menu` | Toggle 10 voice optimisation flags |
 | 📝 Release Notes | `admin_changelog` | Full versioned changelog from `release_notes.json` |
 
 ### 3.4 Voice Optimization Flags (`⚡ Voice Opts`)
 
-All `false` by default. Persisted in `~/.picoclaw/voice_opts.json`.
+All `false` by default. Persisted in `~/.taris/voice_opts.json`.
 
 | Flag | Effect |
 |---|---|
@@ -134,7 +134,7 @@ User sends text
   │     blocked → send warning, stop
   → SECURITY_PREAMBLE + lang instruction
     + _wrap_user_input(text)               ← L2: [USER]…[/USER]
-  → _ask_picoclaw(prompt, timeout=60)      ← subprocess: picoclaw agent -m
+  → _ask_taris(prompt, timeout=60)      ← subprocess: taris agent -m
   → bot.send_message(chat_id, response, parse_mode="Markdown")
 ```
 

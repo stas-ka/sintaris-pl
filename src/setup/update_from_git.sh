@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# update_from_git.sh — Update Pico Bot from a Git Repository
+# update_from_git.sh — Update Taris Bot from a Git Repository
 # =============================================================================
 # Clones or pulls the bot's Git repository, then deploys updated files.
 # Does NOT touch secrets (bot.env, config.json, gmail_credentials.json).
@@ -9,7 +9,7 @@
 # Later runs: sudo bash update_from_git.sh   (repo URL remembered)
 #
 # Options:
-#   --repo <url>     Git repo URL (saved to /etc/picoclaw-repo.conf on first run)
+#   --repo <url>     Git repo URL (saved to /etc/taris-repo.conf on first run)
 #   --branch <name>  Branch to track (default: main)
 #   --check          Show latest commit vs installed, do not update
 #   --force          Redeploy even if already at latest commit
@@ -18,12 +18,12 @@
 set -euo pipefail
 
 # ── defaults ──────────────────────────────────────────────────────────────────
-PICOCLAW_USER="${PICOCLAW_USER:-stas}"
-PICOCLAW_DIR="/home/${PICOCLAW_USER}/.picoclaw"
+TARIS_USER="${TARIS_USER:-stas}"
+TARIS_DIR="/home/${TARIS_USER}/.taris"
 SYSTEMD_DIR="/etc/systemd/system"
-BACKUP_DIR="/tmp/picoclaw-backup"
-REPO_CACHE_FILE="/etc/picoclaw-repo.conf"
-REPO_DIR="/opt/picoclaw-repo"
+BACKUP_DIR="/tmp/taris-backup"
+REPO_CACHE_FILE="/etc/taris-repo.conf"
+REPO_DIR="/opt/taris-repo"
 
 GIT_REPO=""
 GIT_BRANCH="main"
@@ -66,7 +66,7 @@ fi
 
 echo ""
 echo "=============================================="
-echo "  Pico Bot — Update from Git"
+echo "  Taris Bot — Update from Git"
 echo "=============================================="
 echo "  Repo   : ${GIT_REPO}"
 echo "  Branch : ${GIT_BRANCH}"
@@ -95,8 +95,8 @@ else
 fi
 
 INSTALLED_HASH="none"
-if [[ -f "${PICOCLAW_DIR}/installed_git_hash.txt" ]]; then
-  INSTALLED_HASH=$(cat "${PICOCLAW_DIR}/installed_git_hash.txt" | tr -d '[:space:]')
+if [[ -f "${TARIS_DIR}/installed_git_hash.txt" ]]; then
+  INSTALLED_HASH=$(cat "${TARIS_DIR}/installed_git_hash.txt" | tr -d '[:space:]')
 fi
 
 echo "  Installed : ${INSTALLED_HASH:0:12}"
@@ -137,24 +137,24 @@ BOT_FILES=(
   installed_git_hash.txt
 )
 for f in "${BOT_FILES[@]}"; do
-  [[ -f "${PICOCLAW_DIR}/${f}" ]] && cp "${PICOCLAW_DIR}/${f}" "${BACKUP_DIR}/"
+  [[ -f "${TARIS_DIR}/${f}" ]] && cp "${TARIS_DIR}/${f}" "${BACKUP_DIR}/"
 done
-for svc in picoclaw-telegram picoclaw-voice; do
+for svc in taris-telegram taris-voice; do
   [[ -f "${SYSTEMD_DIR}/${svc}.service" ]] && \
     cp "${SYSTEMD_DIR}/${svc}.service" "${BACKUP_DIR}/"
 done
 ok "Backed up to ${BACKUP_DIR}"
 
 # ── Step 5: deploy bot source files ──────────────────────────────────────────
-info "Deploying bot files to ${PICOCLAW_DIR}..."
+info "Deploying bot files to ${TARIS_DIR}..."
 DEPLOYED=0
 for f in telegram_menu_bot.py bot_config.py bot_state.py bot_instance.py \
           bot_security.py bot_access.py bot_users.py bot_voice.py bot_calendar.py \
           bot_admin.py bot_handlers.py bot_mail_creds.py bot_email.py \
           gmail_digest.py voice_assistant.py strings.json release_notes.json; do
   if [[ -f "${SRC_DIR}/${f}" ]]; then
-    if ! cmp -s "${SRC_DIR}/${f}" "${PICOCLAW_DIR}/${f}" 2>/dev/null; then
-      cp "${SRC_DIR}/${f}" "${PICOCLAW_DIR}/${f}"
+    if ! cmp -s "${SRC_DIR}/${f}" "${TARIS_DIR}/${f}" 2>/dev/null; then
+      cp "${SRC_DIR}/${f}" "${TARIS_DIR}/${f}"
       info "  → ${f} (changed)"
       ((DEPLOYED++))
     fi
@@ -170,7 +170,7 @@ SERVICES_DIR="${SRC_DIR}/services"
 [[ -d "${REPO_DIR}/src/services" ]] && SERVICES_DIR="${REPO_DIR}/src/services"
 
 if [[ -d "${SERVICES_DIR}" ]]; then
-  for svc in picoclaw-telegram picoclaw-voice; do
+  for svc in taris-telegram taris-voice; do
     SVC_SRC="${SERVICES_DIR}/${svc}.service"
     SVC_DST="${SYSTEMD_DIR}/${svc}.service"
     if [[ -f "${SVC_SRC}" ]] && ! cmp -s "${SVC_SRC}" "${SVC_DST}" 2>/dev/null; then
@@ -182,8 +182,8 @@ if [[ -d "${SERVICES_DIR}" ]]; then
 fi
 
 # record installed commit
-echo "${GIT_REMOTE_HASH}" > "${PICOCLAW_DIR}/installed_git_hash.txt"
-chown -R "${PICOCLAW_USER}:${PICOCLAW_USER}" "${PICOCLAW_DIR}"
+echo "${GIT_REMOTE_HASH}" > "${TARIS_DIR}/installed_git_hash.txt"
+chown -R "${TARIS_USER}:${TARIS_USER}" "${TARIS_DIR}"
 
 # ── Step 7: restart services ──────────────────────────────────────────────────
 if [[ "${DEPLOYED}" -gt 0 || "${RELOAD_NEEDED}" == "true" ]]; then
@@ -191,7 +191,7 @@ if [[ "${DEPLOYED}" -gt 0 || "${RELOAD_NEEDED}" == "true" ]]; then
   [[ "${RELOAD_NEEDED}" == "true" ]] && systemctl daemon-reload
 
   FAILED=false
-  for svc in picoclaw-telegram picoclaw-voice; do
+  for svc in taris-telegram taris-voice; do
     if systemctl is-active --quiet "${svc}" 2>/dev/null || \
        systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
       if ! systemctl restart "${svc}" 2>/dev/null; then
@@ -204,15 +204,15 @@ if [[ "${DEPLOYED}" -gt 0 || "${RELOAD_NEEDED}" == "true" ]]; then
 
   if [[ "${FAILED}" == "true" ]]; then
     warn "Applying rollback from ${BACKUP_DIR}..."
-    cp "${BACKUP_DIR}"/*.py "${BACKUP_DIR}"/*.json "${PICOCLAW_DIR}/" 2>/dev/null || true
+    cp "${BACKUP_DIR}"/*.py "${BACKUP_DIR}"/*.json "${TARIS_DIR}/" 2>/dev/null || true
     [[ -f "${BACKUP_DIR}/installed_git_hash.txt" ]] && \
-      cp "${BACKUP_DIR}/installed_git_hash.txt" "${PICOCLAW_DIR}/"
-    for svc in picoclaw-telegram picoclaw-voice; do
+      cp "${BACKUP_DIR}/installed_git_hash.txt" "${TARIS_DIR}/"
+    for svc in taris-telegram taris-voice; do
       [[ -f "${BACKUP_DIR}/${svc}.service" ]] && \
         cp "${BACKUP_DIR}/${svc}.service" "${SYSTEMD_DIR}/"
     done
     systemctl daemon-reload
-    for svc in picoclaw-telegram picoclaw-voice; do
+    for svc in taris-telegram taris-voice; do
       systemctl restart "${svc}" 2>/dev/null || true
     done
     fail "Update failed — rolled back to ${INSTALLED_HASH:0:12}"
@@ -224,7 +224,7 @@ fi
 # ── verify ────────────────────────────────────────────────────────────────────
 echo ""
 sleep 3
-journalctl -u picoclaw-telegram -n 5 --no-pager 2>/dev/null | \
+journalctl -u taris-telegram -n 5 --no-pager 2>/dev/null | \
   grep -E 'Version|Polling|ERROR' || true
 
 echo ""

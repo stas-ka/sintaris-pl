@@ -1,4 +1,4 @@
-# Picoclaw — Feature Domains
+# Taris — Feature Domains
 
 **Version:** `2026.3.28`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -24,9 +24,9 @@ User taps 📧 Mail → handle_digest_auth()
 
 | File | Contents |
 |---|---|
-| `~/.picoclaw/mail_creds/<chat_id>.json` | `{provider, email, password, imap_host, imap_port}` — chmod 600 |
-| `~/.picoclaw/mail_creds/<chat_id>_last_digest.txt` | Last digest text cache |
-| `~/.picoclaw/mail_creds/<chat_id>_target.txt` | SMTP send-to address |
+| `~/.taris/mail_creds/<chat_id>.json` | `{provider, email, password, imap_host, imap_port}` — chmod 600 |
+| `~/.taris/mail_creds/<chat_id>_last_digest.txt` | Last digest text cache |
+| `~/.taris/mail_creds/<chat_id>_target.txt` | SMTP send-to address |
 
 ### 7.3 Digest Pipeline
 
@@ -34,7 +34,7 @@ User taps 📧 Mail → handle_digest_auth()
 _fetch_and_summarize(chat_id)
   → IMAP4_SSL connect with stored creds
   → fetch INBOX + Spam/Junk (last 24h, max 50 each)
-  → _build_digest_prompt() → _ask_picoclaw(prompt, timeout=120)
+  → _build_digest_prompt() → _ask_taris(prompt, timeout=120)
   → cache to _last_digest_file(chat_id)
   → return summary text
 ```
@@ -59,7 +59,7 @@ Refresh runs in a background thread so the main bot thread is not blocked.
 ```
 User writes: "встреча с командой завтра в 11 утра"
   → _finish_cal_add(chat_id, text)
-  → _ask_picoclaw(): extract JSON {"events": [{title, dt}, ...]}
+  → _ask_taris(): extract JSON {"events": [{title, dt}, ...]}
   → 1 event → _show_cal_confirm(): review card
     → User taps ✅ → _cal_do_confirm_save()
     → _cal_add_event(): save to calendar JSON
@@ -84,7 +84,7 @@ User writes: "завтра в 10 команда, в 15 врач, в 19 ужин 
 ```
 User writes: "что у меня на следующей неделе?"
   → _handle_calendar_query(chat_id, text)
-  → _ask_picoclaw(): extract {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "label": "..."}
+  → _ask_taris(): extract {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "label": "..."}
   → filter _cal_load() by date range
   → display formatted list with countdown
 ```
@@ -119,7 +119,7 @@ User taps 🗑 Delete
 
 ### 8.7 Storage
 
-`~/.picoclaw/calendar/<chat_id>.json` — list of events: `[{id, title, dt_iso, remind_before_min, reminded}]`
+`~/.taris/calendar/<chat_id>.json` — list of events: `[{id, title, dt_iso, remind_before_min, reminded}]`
 
 ---
 

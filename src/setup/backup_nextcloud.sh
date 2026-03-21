@@ -18,7 +18,7 @@
 #   NEXTCLOUD_PASS    app_password
 #   NEXTCLOUD_REMOTE  /MicoBackups       (WebDAV path inside Nextcloud)
 #
-# Source secrets from ~/.picoclaw/bot.env if set:
+# Source secrets from ~/.taris/bot.env if set:
 #   NEXTCLOUD_URL=...
 #   NEXTCLOUD_USER=...
 #   NEXTCLOUD_PASS=...
@@ -29,7 +29,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Load configuration
 # ---------------------------------------------------------------------------
-BOT_ENV="${HOME}/.picoclaw/bot.env"
+BOT_ENV="${HOME}/.taris/bot.env"
 [[ -f "${BOT_ENV}" ]] && source "${BOT_ENV}"
 
 NEXTCLOUD_URL="${NEXTCLOUD_URL:-}"
@@ -48,7 +48,7 @@ check_config() {
   [[ -z "${NEXTCLOUD_PASS}"  ]] && missing+=("NEXTCLOUD_PASS")
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo "[!] Missing config variables: ${missing[*]}"
-    echo "    Set them in ~/.picoclaw/bot.env or export before running."
+    echo "    Set them in ~/.taris/bot.env or export before running."
     exit 1
   fi
 }
@@ -266,7 +266,7 @@ Category mapping:
   *bundle*, *recovery* → recovery/
   *.log*               → logs/
 
-Configuration (in ~/.picoclaw/bot.env or environment):
+Configuration (in ~/.taris/bot.env or environment):
   NEXTCLOUD_URL         https://cloud.example.com
   NEXTCLOUD_USER        username
   NEXTCLOUD_PASS        app_password

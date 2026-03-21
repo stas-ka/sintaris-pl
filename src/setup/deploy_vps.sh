@@ -42,7 +42,7 @@ SSH_KEY_PATH="${SSH_KEY_PATH:-~/.ssh/id_ed25519}"
 SSH_OPTS="-p ${SSH_PORT} -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=accept-new"
 SCP_OPTS="-P ${SSH_PORT} -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=accept-new"
 REMOTE="${SSH_USER}@${SSH_HOST}"
-REMOTE_TMP="/tmp/picoclaw-vps-setup"
+REMOTE_TMP="/tmp/taris-vps-setup"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"

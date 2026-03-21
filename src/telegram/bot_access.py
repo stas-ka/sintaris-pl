@@ -7,7 +7,7 @@ Provides:
   - Language detection and LLM prompt language injection
   - Shared keyboard builders (_menu_keyboard, _back_keyboard, etc.)
   - Text helpers (_truncate, _safe_edit, _run_subprocess, _escape_tts, _escape_md)
-  - LLM picoclaw integration (_ask_picoclaw, _get_active_model)
+  - LLM taris integration (_ask_taris, _get_active_model)
 """
 
 import json
@@ -21,7 +21,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.bot_config import (
     ADMIN_USERS, ALLOWED_USERS, DEVELOPER_USERS, BOT_NAME,
-    ACTIVE_MODEL_FILE, PICOCLAW_BIN,
+    ACTIVE_MODEL_FILE, TARIS_BIN,
     _STRINGS_FILE,
     log,
 )
@@ -251,13 +251,13 @@ def _get_active_model() -> str:
         return ""
 
 
-def _clean_picoclaw_output(text: str) -> str:
+def _clean_taris_output(text: str) -> str:
     """
-    Extract human-readable answer from picoclaw stdout.
+    Extract human-readable answer from taris stdout.
 
     Handles artefacts:
       1. Timestamp-prefixed log lines mixed into stdout
-      2. "Picoclaw:" section header line
+      2. "Taris:" section header line
       3. printf 'text' or printf "text" wrapper
       4. [emoji] bash -lc 'printf "text"' wrapper
     """
@@ -267,7 +267,7 @@ def _clean_picoclaw_output(text: str) -> str:
             continue
         if re.match(r"^\[?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", line):
             continue
-        if re.match(r"^Picoclaw\s*:?\s*$", line, re.IGNORECASE):
+        if re.match(r"^Taris\s*:?\s*$", line, re.IGNORECASE):
             continue
         clean_lines.append(line)
 
@@ -290,10 +290,10 @@ def _clean_picoclaw_output(text: str) -> str:
     return clean.replace("\\n", "\n")
 
 
-def _ask_picoclaw(prompt: str, timeout: int = 60) -> Optional[str]:
-    """Call picoclaw agent -m and return cleaned response text, or None on error."""
+def _ask_taris(prompt: str, timeout: int = 60) -> Optional[str]:
+    """Call taris agent -m and return cleaned response text, or None on error."""
     try:
-        cmd = [PICOCLAW_BIN, "agent"]
+        cmd = [TARIS_BIN, "agent"]
         active_model = _get_active_model()
         if active_model:
             cmd += ["--model", active_model]
@@ -307,13 +307,13 @@ def _ask_picoclaw(prompt: str, timeout: int = 60) -> Optional[str]:
         )
         out = result.stdout.strip()
         if result.returncode != 0 or not out:
-            log.error(f"[picoclaw] error rc={result.returncode}: {result.stderr[:300]}")
+            log.error(f"[taris] error rc={result.returncode}: {result.stderr[:300]}")
             return None
-        return _clean_picoclaw_output(out)
+        return _clean_taris_output(out)
     except subprocess.TimeoutExpired:
         return None
     except Exception as e:
-        log.error(f"[picoclaw] exception: {e}")
+        log.error(f"[taris] exception: {e}")
         return None
 
 

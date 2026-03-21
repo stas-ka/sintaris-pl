@@ -39,7 +39,7 @@ def create_store() -> DataStore:
 
     # Default: SQLite
     db_path = os.path.expanduser(
-        os.environ.get("STORE_DB_PATH", "~/.picoclaw/pico.db")
+        os.environ.get("STORE_DB_PATH", "~/.taris/taris.db")
     )
     log.info("[Store] Backend: SQLite (%s)", db_path)
     from core.store_sqlite import SQLiteStore

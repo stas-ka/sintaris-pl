@@ -7,7 +7,7 @@ Responsibilities:
   - Registration approval / blocking
   - Voice-optimization toggle menu
   - Release notes — load, format, version-change admin notification
-  - LLM model switcher (picoclaw models + OpenAI ChatGPT sub-menu)
+  - LLM model switcher (taris models + OpenAI ChatGPT sub-menu)
 """
 
 import re as _re
@@ -18,7 +18,7 @@ from pathlib import Path
 import core.bot_state as _st
 from core.bot_config import (
     ADMIN_USERS, ALLOWED_USERS,
-    PICOCLAW_CONFIG, ACTIVE_MODEL_FILE,
+    TARIS_CONFIG, ACTIVE_MODEL_FILE,
     RELEASE_NOTES_FILE, LAST_NOTIFIED_FILE, BOT_VERSION,
     LLM_LOCAL_FALLBACK, LLAMA_CPP_URL, LLAMA_CPP_MODEL, LLM_FALLBACK_FLAG_FILE,
     _VOICE_OPTS_DEFAULTS,
@@ -543,23 +543,23 @@ def _set_active_model(model_name: str) -> None:
         log.error(f"[LLM] Failed to write {ACTIVE_MODEL_FILE}: {e}")
 
 
-def _get_picoclaw_models() -> list[dict]:
-    """Read model_list from picoclaw config.json."""
+def _get_taris_models() -> list[dict]:
+    """Read model_list from taris config.json."""
     try:
-        cfg = json.loads(Path(PICOCLAW_CONFIG).read_text(encoding="utf-8"))
+        cfg = json.loads(Path(TARIS_CONFIG).read_text(encoding="utf-8"))
         return cfg.get("model_list", [])
     except Exception as e:
-        log.warning(f"[LLM] Cannot read picoclaw config: {e}")
+        log.warning(f"[LLM] Cannot read taris config: {e}")
         return []
 
 
 def _handle_admin_llm_menu(chat_id: int) -> None:
-    """Show LLM selection keyboard with available models from picoclaw config."""
-    models  = _get_picoclaw_models()
+    """Show LLM selection keyboard with available models from taris config."""
+    models  = _get_taris_models()
     current = _get_active_model()
 
     if not models:
-        bot.send_message(chat_id, "⚠️ Cannot read picoclaw config.json.",
+        bot.send_message(chat_id, "⚠️ Cannot read taris config.json.",
                          reply_markup=_admin_keyboard())
         return
 
@@ -601,7 +601,7 @@ def _handle_set_llm(chat_id: int, model_name: str) -> None:
     """Apply LLM model selection and confirm to user."""
     _set_active_model(model_name)
     if model_name:
-        models_map = {m["model_name"]: m for m in _get_picoclaw_models() if m.get("model_name")}
+        models_map = {m["model_name"]: m for m in _get_taris_models() if m.get("model_name")}
         m       = models_map.get(model_name, {})
         has_key = bool(m.get("api_key", "").strip())
         warn    = ("" if has_key else
@@ -634,7 +634,7 @@ _OPENAI_API_BASE = "https://api.openai.com/v1"
 
 def _get_shared_openai_key() -> str:
     """Return the first OpenAI api_key found in config.json, or ''."""
-    for m in _get_picoclaw_models():
+    for m in _get_taris_models():
         if "openai.com" in m.get("api_base", "") and m.get("api_key", "").strip():
             return m["api_key"].strip()
     return ""
@@ -643,7 +643,7 @@ def _get_shared_openai_key() -> str:
 def _save_openai_apikey(api_key: str) -> bool:
     """Set api_key for all openai.com models; add catalog entries if missing."""
     try:
-        p   = Path(PICOCLAW_CONFIG)
+        p   = Path(TARIS_CONFIG)
         cfg = json.loads(p.read_text(encoding="utf-8"))
         model_names = {m["model_name"] for m in cfg.get("model_list", []) if m.get("model_name")}
         for m in cfg.get("model_list", []):
@@ -667,7 +667,7 @@ def _save_openai_apikey(api_key: str) -> bool:
 
 def _handle_openai_llm_menu(chat_id: int) -> None:
     """Show OpenAI model selection keyboard with key status."""
-    models     = {m["model_name"]: m for m in _get_picoclaw_models() if m.get("model_name")}
+    models     = {m["model_name"]: m for m in _get_taris_models() if m.get("model_name")}
     shared_key = _get_shared_openai_key()
     current    = _get_active_model()
 
@@ -711,7 +711,7 @@ def _handle_llm_setkey_prompt(chat_id: int) -> None:
         "🔑 *Set OpenAI API Key*\n\n"
         "Paste your OpenAI API key in a message below.\n"
         "_It starts with_ `sk-proj-...` _or_ `sk-...`\n\n"
-        "_The key is stored in_ `~/.picoclaw/config.json` _on the Pi._\n"
+        "_The key is stored in_ `~/.taris/config.json` _on the Pi._\n"
         "_It applies to all OpenAI models (GPT-4o, GPT-4o-mini, o3-mini…)._",
         parse_mode="Markdown",
         reply_markup=kb,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_voice_regression.py — Voice pipeline regression tests for picoclaw-telegram.
+test_voice_regression.py — Voice pipeline regression tests for taris-telegram.
 
 Tests every voice-related function independently and saves timestamped results
 so latency and quality regressions are detected when bot_voice.py changes.
@@ -12,9 +12,9 @@ Usage (on Raspberry Pi):
     python3 test_voice_regression.py --test vosk  # run only tests matching name
 
 Deploy:
-    pscp -pw "..." src/tests/test_voice_regression.py stas@OpenClawPI:/home/stas/.picoclaw/tests/
-    pscp -pw "..." src/tests/voice/*.ogg stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
-    pscp -pw "..." src/tests/voice/ground_truth.json stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/
+    pscp -pw "..." src/tests/test_voice_regression.py stas@OpenClawPI:/home/stas/.taris/tests/
+    pscp -pw "..." src/tests/voice/*.ogg stas@OpenClawPI:/home/stas/.taris/tests/voice/
+    pscp -pw "..." src/tests/voice/ground_truth.json stas@OpenClawPI:/home/stas/.taris/tests/voice/
 
 Exit codes:
     0 — all tests passed (and no significant regression vs baseline)
@@ -41,12 +41,12 @@ from typing import Optional
 # Paths & constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-PICOCLAW_DIR   = Path(os.path.expanduser("~/.picoclaw"))
+TARIS_DIR   = Path(os.path.expanduser("~/.taris"))
 TESTS_DIR      = Path(__file__).parent.resolve()
 # Package-aware paths (new package layout)
-_PKG_CORE     = PICOCLAW_DIR / "core"
-_PKG_TELEGRAM = PICOCLAW_DIR / "telegram"
-_PKG_FEATURES = PICOCLAW_DIR / "features"
+_PKG_CORE     = TARIS_DIR / "core"
+_PKG_TELEGRAM = TARIS_DIR / "telegram"
+_PKG_FEATURES = TARIS_DIR / "features"
 VOICE_DIR      = TESTS_DIR / "voice"
 RESULTS_DIR    = VOICE_DIR / "results"
 GROUND_TRUTH   = VOICE_DIR / "ground_truth.json"
@@ -54,17 +54,17 @@ BASELINE_FILE  = RESULTS_DIR / "baseline.json"
 
 # Mirror bot_config.py defaults so tests use exactly the same paths
 PIPER_BIN         = os.environ.get("PIPER_BIN",  "/usr/local/bin/piper")
-PIPER_MODEL       = os.environ.get("PIPER_MODEL", str(PICOCLAW_DIR / "ru_RU-irina-medium.onnx"))
+PIPER_MODEL       = os.environ.get("PIPER_MODEL", str(TARIS_DIR / "ru_RU-irina-medium.onnx"))
 PIPER_MODEL_TMPFS = "/dev/shm/piper/" + Path(PIPER_MODEL).name
-PIPER_MODEL_LOW   = os.environ.get("PIPER_MODEL_LOW", str(PICOCLAW_DIR / "ru_RU-irina-low.onnx"))
+PIPER_MODEL_LOW   = os.environ.get("PIPER_MODEL_LOW", str(TARIS_DIR / "ru_RU-irina-low.onnx"))
 WHISPER_BIN       = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
-WHISPER_MODEL     = os.environ.get("WHISPER_MODEL", str(PICOCLAW_DIR / "ggml-tiny.bin"))
-VOSK_MODEL_PATH   = os.environ.get("VOSK_MODEL_PATH", str(PICOCLAW_DIR / "vosk-model-small-ru"))
+WHISPER_MODEL     = os.environ.get("WHISPER_MODEL", str(TARIS_DIR / "ggml-tiny.bin"))
+VOSK_MODEL_PATH   = os.environ.get("VOSK_MODEL_PATH", str(TARIS_DIR / "vosk-model-small-ru"))
 
-VOSK_MODEL_DE_PATH   = os.environ.get("VOSK_MODEL_DE_PATH",  str(PICOCLAW_DIR / "vosk-model-small-de"))
-PIPER_MODEL_DE       = os.environ.get("PIPER_MODEL_DE",      str(PICOCLAW_DIR / "de_DE-thorsten-medium.onnx"))
+VOSK_MODEL_DE_PATH   = os.environ.get("VOSK_MODEL_DE_PATH",  str(TARIS_DIR / "vosk-model-small-de"))
+PIPER_MODEL_DE       = os.environ.get("PIPER_MODEL_DE",      str(TARIS_DIR / "de_DE-thorsten-medium.onnx"))
 PIPER_MODEL_DE_TMPFS = "/dev/shm/piper/de_DE-thorsten-medium.onnx"
-STRINGS_FILE         = PICOCLAW_DIR / "strings.json"
+STRINGS_FILE         = TARIS_DIR / "strings.json"
 
 VOICE_SAMPLE_RATE   = 16000
 VOICE_CHUNK_SIZE    = 4000
@@ -73,7 +73,7 @@ STT_CONF_THRESHOLD  = 0.65    # must match bot_voice.py
 # Confidence marker regex — must be identical to bot_voice.py
 _CONF_MARKER_RE = re.compile(r'\[\?([^\]]*)\]')
 
-VOICE_OPTS_FILE = PICOCLAW_DIR / "voice_opts.json"
+VOICE_OPTS_FILE = TARIS_DIR / "voice_opts.json"
 
 # Colors (disabled if not a TTY)
 _TTY = sys.stdout.isatty()
@@ -458,7 +458,7 @@ def t_tts_escape(**_) -> list[TestResult]:
     """T08 — _escape_tts removes emoji and Markdown characters before Piper input."""
     cases = [
         ("*Привет* _мир_",              "Привет мир"),
-        ("🤖 Picoclaw:",                "Picoclaw:"),
+        ("🤖 Taris:",                "Taris:"),
         ("✅ Done! **bold**",           "Done! bold"),
         ("normal text",                 "normal text"),
         ("  spaces   everywhere  ",     "spaces everywhere"),
@@ -955,7 +955,7 @@ def t_bot_name_injection(**_) -> list[TestResult]:
 
     # 1) bot_config exports BOT_NAME
     try:
-        sys.path.insert(0, str(PICOCLAW_DIR))
+        sys.path.insert(0, str(TARIS_DIR))
         import importlib
         cfg = importlib.import_module("core.bot_config")
         importlib.reload(cfg)
@@ -1014,7 +1014,7 @@ def t_profile_resilience(**_) -> list[TestResult]:
     t0 = time.time()
     issues: list[str] = []
     handler_path = (_PKG_TELEGRAM / "bot_handlers.py" if (_PKG_TELEGRAM / "bot_handlers.py").exists()
-                     else PICOCLAW_DIR / "bot_handlers.py")
+                     else TARIS_DIR / "bot_handlers.py")
 
     if not handler_path.exists():
         return [TestResult("profile_resilience", "FAIL", time.time() - t0,
@@ -1065,7 +1065,7 @@ def t_note_edit_append_replace(**_) -> list[TestResult]:
 
     # 1) Functions exist in bot_handlers.py
     handler_path = (_PKG_TELEGRAM / "bot_handlers.py" if (_PKG_TELEGRAM / "bot_handlers.py").exists()
-                    else PICOCLAW_DIR / "bot_handlers.py")
+                    else TARIS_DIR / "bot_handlers.py")
     if not handler_path.exists():
         return [TestResult("note_edit_append_replace", "FAIL", time.time() - t0,
                            f"bot_handlers.py not found")]
@@ -1092,7 +1092,7 @@ def t_note_edit_append_replace(**_) -> list[TestResult]:
             issues.append("_start_note_edit does not offer Replace option")
 
     # 3) Callback dispatch in telegram_menu_bot.py
-    entry_path = PICOCLAW_DIR / "telegram_menu_bot.py"
+    entry_path = TARIS_DIR / "telegram_menu_bot.py"
     if entry_path.exists():
         entry_src = entry_path.read_text(encoding="utf-8")
         if "note_append:" not in entry_src:
@@ -1129,7 +1129,7 @@ def t_calendar_tts_call_signature(**_) -> list[TestResult]:
     issues: list[str] = []
 
     cal_path = (_PKG_FEATURES / "bot_calendar.py" if (_PKG_FEATURES / "bot_calendar.py").exists()
-                else PICOCLAW_DIR / "bot_calendar.py")
+                else TARIS_DIR / "bot_calendar.py")
     if not cal_path.exists():
         return [TestResult("calendar_tts_call_signature", "FAIL", time.time() - t0,
                            "bot_calendar.py not found")]
@@ -1195,7 +1195,7 @@ def t_calendar_console_classifier(**_) -> list[TestResult]:
     issues: list[str] = []
 
     cal_path = (_PKG_FEATURES / "bot_calendar.py" if (_PKG_FEATURES / "bot_calendar.py").exists()
-                else PICOCLAW_DIR / "bot_calendar.py")
+                else TARIS_DIR / "bot_calendar.py")
     if not cal_path.exists():
         return [TestResult("calendar_console_classifier", "FAIL", time.time() - t0,
                            "bot_calendar.py not found")]
@@ -1230,7 +1230,7 @@ def t_calendar_console_classifier(**_) -> list[TestResult]:
     else:
         issues.append("Missing classifier guardrail instructions (Do NOT refuse/perform)")
 
-    # 4) Must call _finish_cal_add for add intent (not _ask_picoclaw again)
+    # 4) Must call _finish_cal_add for add intent (not _ask_taris again)
     if "_finish_cal_add" in func_body:
         pass  # good — routes add intent to local handler
     else:
@@ -1263,7 +1263,7 @@ def t_db_voice_opts_roundtrip(**_) -> list[TestResult]:
             db_path = os.path.join(tmp, "test.db")
             os.environ["DB_FILE"] = db_path
             os.environ["WEB_ONLY"] = "1"
-            sys.path.insert(0, str(PICOCLAW_DIR))
+            sys.path.insert(0, str(TARIS_DIR))
             if "core.bot_db" in sys.modules:
                 import core.bot_db as _bot_db
                 importlib.reload(_bot_db)
@@ -1344,16 +1344,16 @@ def t_rag_lr_products(**_) -> list[TestResult]:
       rag_lr_products_llm  — only with LLM_JUDGE=1; runs full RAG prompt and uses
                              LLM-as-judge to confirm the answer covers expected topics.
 
-    SKIP if pico.db or doc_chunks table is absent (document not yet uploaded).
+    SKIP if taris.db or doc_chunks table is absent (document not yet uploaded).
     """
     import sqlite3 as _sql
     t0 = time.time()
     results: list[TestResult] = []
 
-    db_file = PICOCLAW_DIR / "pico.db"
+    db_file = TARIS_DIR / "taris.db"
     if not db_file.exists():
         return [TestResult("rag_lr_products_fts", "SKIP", time.time() - t0,
-                           "pico.db not found — RAG database not initialised")]
+                           "taris.db not found — RAG database not initialised")]
 
     # ── Step 1: FTS5 chunk retrieval ─────────────────────────────────────────
     QUERY       = "какие продукты LR ты можешь мне предложить"
@@ -1407,7 +1407,7 @@ def t_rag_lr_products(**_) -> list[TestResult]:
     if os.environ.get("LLM_JUDGE") == "1" and rows:
         t1 = time.time()
         try:
-            sys.path.insert(0, str(PICOCLAW_DIR))
+            sys.path.insert(0, str(TARIS_DIR))
             from core.bot_llm import ask_llm  # type: ignore
 
             ctx_text = "\n".join(r[0] for r in rows[:3])[:1600]
@@ -1472,7 +1472,7 @@ def t_web_link_code_roundtrip(**_) -> list[TestResult]:
     results: list[TestResult] = []
     CHAT_ID = 99999
 
-    sys.path.insert(0, str(PICOCLAW_DIR))
+    sys.path.insert(0, str(TARIS_DIR))
     try:
         import core.bot_state as _bs
     except ImportError as exc:
@@ -1653,8 +1653,8 @@ def t_system_chat_clean_output(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     # Live-import core.bot_llm so we test the actual deployed code.
-    if str(PICOCLAW_DIR) not in sys.path:
-        sys.path.insert(0, str(PICOCLAW_DIR))
+    if str(TARIS_DIR) not in sys.path:
+        sys.path.insert(0, str(TARIS_DIR))
     try:
         import importlib as _il
         bot_llm = _il.import_module("core.bot_llm")
@@ -1832,7 +1832,7 @@ def _save_baseline(results: list[TestResult]) -> None:
 
 
 def _read_bot_version() -> str:
-    ver_path = PICOCLAW_DIR / "bot_config.py"
+    ver_path = TARIS_DIR / "bot_config.py"
     try:
         for line in ver_path.read_text(encoding="utf-8").splitlines():
             if line.startswith("BOT_VERSION"):
@@ -1874,7 +1874,7 @@ def _compare_runs(a_path: Path, b_path: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Voice regression tests for picoclaw-telegram"
+        description="Voice regression tests for taris-telegram"
     )
     parser.add_argument("--set-baseline", action="store_true",
                         help="Save this run's timings as the new baseline")
@@ -1890,7 +1890,7 @@ def main() -> int:
         _compare_runs(RESULTS_DIR / args.compare[0], RESULTS_DIR / args.compare[1])
         return 0
 
-    print(f"\n{_B}Picoclaw Voice Regression Tests{_RST}  "
+    print(f"\n{_B}Taris Voice Regression Tests{_RST}  "
           f"(bot {_read_bot_version()}, {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
     print(f"Fixtures: {VOICE_DIR}")
     print(f"Results:  {RESULTS_DIR}\n")
@@ -1898,7 +1898,7 @@ def main() -> int:
     if not VOICE_DIR.exists():
         print(f"{_R}[ERROR] Fixture directory not found: {VOICE_DIR}{_RST}")
         print("Deploy with:  pscp -pw PWD src/tests/voice/*.ogg "
-              "stas@OpenClawPI:/home/stas/.picoclaw/tests/voice/")
+              "stas@OpenClawPI:/home/stas/.taris/tests/voice/")
         return 2
 
     gt = _load_gt()

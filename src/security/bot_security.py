@@ -131,7 +131,7 @@ _INJECTION_RULES: list[tuple[re.Pattern, str]] = [
     # ── File path / environment disclosure ───────────────────────────────────
     (re.compile(
         r"\b(cat|read|open|print|show|output)\b\s*.{0,40}"
-        r"(/etc/|/home/|bot\.env|\.env\b|\.picoclaw|config\.json)",
+        r"(/etc/|/home/|bot\.env|\.env\b|\.taris|config\.json)",
         re.I), "path disclosure"),
     (re.compile(
         r"\bbot\.env\b|\b/home/stas\b",

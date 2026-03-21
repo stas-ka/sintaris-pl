@@ -1,4 +1,4 @@
-# Picoclaw — LLM Provider Abstraction
+# Taris — LLM Provider Abstraction
 
 **Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -18,12 +18,12 @@ All LLM calls from both the Telegram bot and the Web UI route through a single e
 ```
 ask_llm(prompt, timeout=60)
         │
-        ├── reads LLM_PROVIDER from env (default: "picoclaw")
+        ├── reads LLM_PROVIDER from env (default: "taris")
         │
         ▼
    _DISPATCH[provider](prompt, timeout)
         │
-        ├── "picoclaw"    → _ask_picoclaw()  ← CLI subprocess: picoclaw agent -m
+        ├── "taris"    → _ask_taris()  ← CLI subprocess: taris agent -m
         ├── "openai"      → _ask_openai()    ← REST: api.openai.com (or OPENAI_BASE_URL)
         ├── "yandexgpt"   → _ask_yandexgpt() ← REST: llm.api.cloud.yandex.net
         ├── "gemini"      → _ask_gemini()    ← REST: generativelanguage.googleapis.com
@@ -41,16 +41,16 @@ ask_llm(prompt, timeout=60)
 
 | `LLM_PROVIDER` | Env vars required | Default model | Notes |
 |---|---|---|---|
-| `picoclaw` | *(default — uses `~/.picoclaw/config.json`)* | OpenRouter/gpt-4o-mini | Existing behaviour; model chosen via Admin panel |
+| `taris` | *(default — uses `~/.taris/config.json`)* | OpenRouter/gpt-4o-mini | Existing behaviour; model chosen via Admin panel |
 | `openai` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | `gpt-4o-mini` | Also works with any OpenAI-compatible API (Groq, Together, etc.) |
 | `yandexgpt` | `YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI` | `yandexgpt-lite` | Russian language optimised |
 | `gemini` | `GEMINI_API_KEY`, `GEMINI_MODEL` | `gemini-2.0-flash` | Google Generative AI |
 | `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `claude-3-5-haiku-20241022` | Anthropic Claude |
-| `local` | `LLAMA_CPP_URL` (default `http://127.0.0.1:8081`) | *(as loaded in llama-server)* | Fully offline; requires `picoclaw-llm.service` |
+| `local` | `LLAMA_CPP_URL` (default `http://127.0.0.1:8081`) | *(as loaded in llama-server)* | Fully offline; requires `taris-llm.service` |
 
 ### 19.3 Offline Fallback (Feature 3.2)
 
-When `LLM_LOCAL_FALLBACK=true` in `bot.env` **or** the file `~/.picoclaw/llm_fallback_enabled` exists, and the primary provider fails (timeout, network error, credential error), `ask_llm()` automatically retries via the local llama.cpp server.
+When `LLM_LOCAL_FALLBACK=true` in `bot.env` **or** the file `~/.taris/llm_fallback_enabled` exists, and the primary provider fails (timeout, network error, credential error), `ask_llm()` automatically retries via the local llama.cpp server.
 
 **Fallback conditions:** Any `subprocess.TimeoutExpired`, `FileNotFoundError`, `requests.RequestException`, or generic `Exception` caught from the primary provider function.
 
@@ -60,12 +60,12 @@ When `LLM_LOCAL_FALLBACK=true` in `bot.env` **or** the file `~/.picoclaw/llm_fal
 <answer from local model>
 ```
 
-**Suppressed if:** neither `LLM_LOCAL_FALLBACK` is `"true"` nor the flag file `~/.picoclaw/llm_fallback_enabled` exists; or the primary provider is already `"local"`.
+**Suppressed if:** neither `LLM_LOCAL_FALLBACK` is `"true"` nor the flag file `~/.taris/llm_fallback_enabled` exists; or the primary provider is already `"local"`.
 
-### 19.4 Local LLM Service (`picoclaw-llm.service`)
+### 19.4 Local LLM Service (`taris-llm.service`)
 
-**File:** `src/services/picoclaw-llm.service`  
-**Deployed to:** `/etc/systemd/system/picoclaw-llm.service` on Pi  
+**File:** `src/services/taris-llm.service`  
+**Deployed to:** `/etc/systemd/system/taris-llm.service` on Pi  
 **Port:** `8081` (separate from Web UI port 8080)
 
 | Configuration | Value |
@@ -83,8 +83,8 @@ Expected Pi 3 B+ performance: ~0.8–1.5 tok/s. A 80-token answer takes ~55–10
 ### 19.5 Configuration in `bot.env`
 
 ```bash
-# Select LLM provider (default: picoclaw — OpenRouter via CLI)
-LLM_PROVIDER=picoclaw
+# Select LLM provider (default: taris — OpenRouter via CLI)
+LLM_PROVIDER=taris
 
 # Enable offline fallback to local llama.cpp on provider failure
 # LLM_LOCAL_FALLBACK=true
@@ -117,20 +117,20 @@ LLM_PROVIDER=picoclaw
 The fallback can be toggled from the Telegram Admin panel **without restarting the service**.
 
 **Mechanism:** Admin panel → 🤖 Switch LLM → 📡 Local Fallback
-- Toggle writes/removes `~/.picoclaw/llm_fallback_enabled` (flag file)
+- Toggle writes/removes `~/.taris/llm_fallback_enabled` (flag file)
 - `ask_llm()` checks `os.path.exists(LLM_FALLBACK_FLAG_FILE)` at each call
 - No env-var changes, no service restart needed
 
 To check or change from SSH:
 ```bash
 # Check: file present = ON, absent = OFF
-ls ~/.picoclaw/llm_fallback_enabled
+ls ~/.taris/llm_fallback_enabled
 
 # Toggle ON (create flag file):
-touch ~/.picoclaw/llm_fallback_enabled
+touch ~/.taris/llm_fallback_enabled
 
 # Toggle OFF (remove flag file):
-rm -f ~/.picoclaw/llm_fallback_enabled
+rm -f ~/.taris/llm_fallback_enabled
 ```
 
 > Both `LLM_LOCAL_FALLBACK=true` (static, env-var, requires restart) and the flag file (runtime, toggleable via Admin Panel) activate the offline fallback. The flag file takes precedence at runtime and persists across service restarts.
@@ -140,12 +140,12 @@ rm -f ~/.picoclaw/llm_fallback_enabled
 **Via `bot.env`** (permanent, requires service restart):
 ```bash
 # On Pi:
-nano ~/.picoclaw/bot.env
+nano ~/.taris/bot.env
 # Change LLM_PROVIDER=openai  (or desired provider)
-sudo systemctl restart picoclaw-telegram
+sudo systemctl restart taris-telegram
 ```
 
-**Active model within `picoclaw` provider** (no restart): Admin panel → 🤖 Switch LLM. This only affects the model selection within the picoclaw/OpenRouter backend and writes to `active_model.txt`.
+**Active model within `taris` provider** (no restart): Admin panel → 🤖 Switch LLM. This only affects the model selection within the taris/OpenRouter backend and writes to `active_model.txt`.
 
 ### 19.8 Adding a New Provider
 

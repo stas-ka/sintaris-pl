@@ -1,5 +1,5 @@
 """
-bot_web.py — FastAPI web interface for Pico Bot.
+bot_web.py — FastAPI web interface for Taris Bot.
 
 Phases 0–2: auth + chat + notes + calendar + mail + admin + voice pages.
 Run: python bot_web.py  OR  uvicorn bot_web:app --host 0.0.0.0 --port 8080
@@ -52,7 +52,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core.bot_config import (
-    BOT_VERSION, PICOCLAW_BIN, PICOCLAW_CONFIG, NOTES_DIR,
+    BOT_VERSION, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, log,
 )
 from security.bot_auth import (
@@ -68,8 +68,8 @@ from core.bot_prompts import PROMPTS, fmt_prompt
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PICOCLAW_DIR = os.path.expanduser("~/.picoclaw")
-_CALENDAR_DIR = os.path.join(_PICOCLAW_DIR, "calendar")
+_TARIS_DIR = os.path.expanduser("~/.taris")
+_CALENDAR_DIR = os.path.join(_TARIS_DIR, "calendar")
 
 BASE = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE / "web" / "templates"
@@ -118,7 +118,7 @@ def _get_google_creds_obj(creds_data: dict) -> Optional[object]:
 # App setup
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Pico Bot Web UI")
+app = FastAPI(title="Taris Bot Web UI")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -283,7 +283,7 @@ def _system_status() -> list[dict]:
 # Data helpers — Voice opts
 # ─────────────────────────────────────────────────────────────────────────────
 
-_VOICE_OPTS_FILE = os.path.join(_PICOCLAW_DIR, "voice_opts.json")
+_VOICE_OPTS_FILE = os.path.join(_TARIS_DIR, "voice_opts.json")
 
 def _load_voice_opts() -> dict:
     try:
@@ -1096,7 +1096,7 @@ async def google_oauth_callback(request: Request, code: str = "", state: str = "
     except Exception:
         pass
     # Store tokens
-    mail_dir = Path(_PICOCLAW_DIR) / "mail_creds"
+    mail_dir = Path(_TARIS_DIR) / "mail_creds"
     mail_dir.mkdir(parents=True, exist_ok=True)
     creds_file = mail_dir / f"{uid}.json"
     creds_data = {
@@ -1267,7 +1267,7 @@ _MAIL_PROVIDERS = {
 
 def _mail_creds_path(uid: str) -> Path:
     """Creds file for a web user ID."""
-    return Path(_PICOCLAW_DIR) / "mail_creds" / f"{uid}.json"
+    return Path(_TARIS_DIR) / "mail_creds" / f"{uid}.json"
 
 
 def _load_mail_creds_for_user(uid: str) -> Optional[dict]:
@@ -1281,7 +1281,7 @@ def _load_mail_creds_for_user(uid: str) -> Optional[dict]:
     # Legacy fallback: Telegram-linked account may have creds under numeric chat_id
     acc = find_account_by_id(uid)
     if acc and acc.get("telegram_chat_id"):
-        tp = Path(_PICOCLAW_DIR) / "mail_creds" / f"{acc['telegram_chat_id']}.json"
+        tp = Path(_TARIS_DIR) / "mail_creds" / f"{acc['telegram_chat_id']}.json"
         if tp.exists():
             try:
                 return json.loads(tp.read_text(encoding="utf-8"))
@@ -1297,7 +1297,7 @@ async def mail_page(request: Request, show_settings: bool = False, error: str = 
         return RedirectResponse("/login", status_code=302)
 
     uid = user["sub"]
-    mail_dir = Path(_PICOCLAW_DIR) / "mail_creds"
+    mail_dir = Path(_TARIS_DIR) / "mail_creds"
 
     # Load cached digest (web user_id first, then Telegram chat_id for legacy)
     digest_file = mail_dir / f"{uid}_last_digest.txt"
@@ -1405,7 +1405,7 @@ async def mail_settings_save(request: Request):
         err = _imap_err_str(e).replace(" ", "+").replace("&", "and")
         return RedirectResponse(f"/mail?show_settings=1&error=Connection+failed:+{err}", status_code=302)
 
-    mail_dir = Path(_PICOCLAW_DIR) / "mail_creds"
+    mail_dir = Path(_TARIS_DIR) / "mail_creds"
     mail_dir.mkdir(parents=True, exist_ok=True)
     creds_data = {
         "provider": provider, "email": email_addr, "app_password": app_password,
@@ -1434,7 +1434,7 @@ async def mail_settings_delete(request: Request):
     if not user:
         raise HTTPException(401)
     uid = user["sub"]
-    mail_dir = Path(_PICOCLAW_DIR) / "mail_creds"
+    mail_dir = Path(_TARIS_DIR) / "mail_creds"
     for fname in (f"{uid}.json", f"{uid}_last_digest.txt"):
         f = mail_dir / fname
         if f.exists():
@@ -1589,7 +1589,7 @@ def _get_vosk_model_web():
     global _vosk_model_web
     if _vosk_model_web is None:
         import vosk as _vosk_lib
-        vosk_dir = str(Path(_PICOCLAW_DIR) / "vosk-model-small-ru")
+        vosk_dir = str(Path(_TARIS_DIR) / "vosk-model-small-ru")
         if not Path(vosk_dir).is_dir():
             raise HTTPException(503, "Vosk model not installed")
         _vosk_model_web = _vosk_lib.Model(vosk_dir)
@@ -1598,10 +1598,10 @@ def _get_vosk_model_web():
 
 def _voice_pipeline_status() -> list[dict]:
     """Check real filesystem to report component readiness."""
-    d = Path(_PICOCLAW_DIR)
+    d = Path(_TARIS_DIR)
     ffmpeg_ok = Path("/usr/bin/ffmpeg").exists()
     vosk_ok = (d / "vosk-model-small-ru").is_dir()
-    picoclaw_ok = Path(PICOCLAW_BIN).exists()
+    taris_ok = Path(TARIS_BIN).exists()
     piper_bin_ok = Path("/usr/local/bin/piper").exists()
     piper_med = (d / "ru_RU-irina-medium.onnx").exists()
     piper_low = (d / "ru_RU-irina-low.onnx").exists()
@@ -1619,8 +1619,8 @@ def _voice_pipeline_status() -> list[dict]:
         },
         {
             "icon": "🤖", "name": f"LLM ({active_model})",
-            "status": "ready" if picoclaw_ok else "missing",
-            "detail": PICOCLAW_BIN,
+            "status": "ready" if taris_ok else "missing",
+            "detail": TARIS_BIN,
         },
         {
             "icon": "🔊", "name": "TTS (Piper)",
@@ -1637,7 +1637,7 @@ async def voice_page(request: Request):
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    d = Path(_PICOCLAW_DIR)
+    d = Path(_TARIS_DIR)
 
     # Read last transcript saved by telegram bot or web STT
     last_t_file = d / "last_transcript.txt"
@@ -1676,7 +1676,7 @@ async def voice_last_transcript(request: Request):
     user = _get_current_user(request)
     if not user:
         raise HTTPException(401)
-    last_t_file = Path(_PICOCLAW_DIR) / "last_transcript.txt"
+    last_t_file = Path(_TARIS_DIR) / "last_transcript.txt"
     transcript = ""
     if last_t_file.exists():
         try:
@@ -1710,7 +1710,7 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
     if not Path(piper_bin).exists():
         raise HTTPException(503, "Piper TTS not installed")
 
-    d = Path(_PICOCLAW_DIR)
+    d = Path(_TARIS_DIR)
     tmpfs_model = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
     low_model   = d / "ru_RU-irina-low.onnx"
     med_model   = d / "ru_RU-irina-medium.onnx"
@@ -1784,7 +1784,7 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
         duration_s = round(len(raw_pcm) / (16000 * 2), 1)
 
         # Vosk STT
-        vosk_dir = str(Path(_PICOCLAW_DIR) / "vosk-model-small-ru")
+        vosk_dir = str(Path(_TARIS_DIR) / "vosk-model-small-ru")
         if not Path(vosk_dir).is_dir():
             raise HTTPException(503, "Vosk model not installed")
 
@@ -1804,7 +1804,7 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
         transcript = re.sub(r"\[\?([^\]]+)\]", r"\1", transcript)
 
         # Save as last transcript
-        last_t_file = Path(_PICOCLAW_DIR) / "last_transcript.txt"
+        last_t_file = Path(_TARIS_DIR) / "last_transcript.txt"
         ts_now = datetime.now().strftime("%Y-%m-%d %H:%M")
         last_t_file.write_text(f"[web] {ts_now}  {transcript}", encoding="utf-8")
 
@@ -1872,7 +1872,7 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
 
         # Save for the last-transcript panel
         ts_now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        (Path(_PICOCLAW_DIR) / "last_transcript.txt").write_text(
+        (Path(_TARIS_DIR) / "last_transcript.txt").write_text(
             f"[web] {ts_now}  {user_text}", encoding="utf-8"
         )
 
@@ -1888,7 +1888,7 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
         tts_text = tts_text.strip()[:600]
 
         if tts_text:
-            d = Path(_PICOCLAW_DIR)
+            d = Path(_TARIS_DIR)
             tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
             low_m     = d / "ru_RU-irina-low.onnx"
             med_m     = d / "ru_RU-irina-medium.onnx"
@@ -1957,7 +1957,7 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
     tts_text = tts_text.strip()[:600]
 
     if tts_text:
-        d = Path(_PICOCLAW_DIR)
+        d = Path(_TARIS_DIR)
         tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
         low_m     = d / "ru_RU-irina-low.onnx"
         med_m     = d / "ru_RU-irina-medium.onnx"
@@ -2140,7 +2140,7 @@ async def admin_reset_password(
 @app.on_event("startup")
 async def on_startup():
     ensure_admin_account()
-    log.info(f"[Web] Pico Bot Web UI v{BOT_VERSION} starting")
+    log.info(f"[Web] Taris Bot Web UI v{BOT_VERSION} starting")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

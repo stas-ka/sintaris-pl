@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Voice Chat — Pico Bot{% endblock %}
+{% block title %}Voice Chat — Taris{% endblock %}
 {% block page_title %}🎤 Voice Chat{% endblock %}
 
 {% block content %}
@@ -340,7 +340,7 @@ function vcAddRawBubble(id, role, inner, time) {
 
 const _STAGE_LABELS = {
   stt: '🎤 Transcribing speech (Vosk STT)…',
-  llm: '🤖 LLM thinking (picoclaw → OpenRouter)…',
+  llm: '🤖 Taris thinking (LLM)…',
   tts: '🔊 Generating audio reply (Piper TTS)…'
 };
 function vcSetStage(active) {

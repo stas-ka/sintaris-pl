@@ -1,5 +1,5 @@
 """
-test_ui.py — Playwright end-to-end tests for the Pico Bot Web UI.
+test_ui.py — Playwright end-to-end tests for the Taris Bot Web UI.
 
 Run (from workspace root):
     pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080

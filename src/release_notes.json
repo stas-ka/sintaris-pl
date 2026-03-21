@@ -1,5 +1,17 @@
 [
   {
+    "version": "2026.4.9",
+    "date":    "2026-4-9",
+    "title":   "No-history emergency fallback + model switch to gemma-3-4b-it:free",
+    "notes":   "- ask_llm_with_history now falls back to ask_llm (no history) if all retries exhausted\n- Prevents silent empty response when rate-limited model fails after 3 attempts\n- active_model switched to google/gemma-3-4b-it:free"
+  },
+  {
+    "version": "2026.4.8",
+    "date":    "2026-4-8",
+    "title":   "LLM HTTP 429 retry backoff + model switch",
+    "notes":   "- _http_post_json now retries up to 2 times on HTTP 429 with 5s/10s backoff\n- Respects Retry-After header from OpenRouter\n- Default OpenRouter model switched to meta-llama/llama-3.2-3b-instruct:free for better free-tier availability"
+  },
+  {
     "version": "2026.4.7",
     "date":    "2026-4-7",
     "title":   "System Chat LLM error handling improvements",
@@ -14,8 +26,8 @@
   {
     "version": "2026.4.5",
     "date":    "2026-4-5",
-    "title":   "Fix raw HTTP 402 error leaked through picoclaw rc=0 stdout path",
-    "notes":   "- Added _raise_if_http_error() helper in bot_llm.py\n- _ask_picoclaw now detects HTTP error patterns in stdout even when picoclaw exits rc=0\n- Also improves rc!=0 path: error text parsed for 402/429/401/503 patterns; full text included in RuntimeError message\n- System Chat and exception handler in bot_handlers.py correctly intercepts all these errors with user-friendly messages"
+    "title":   "Fix raw HTTP 402 error leaked through taris rc=0 stdout path",
+    "notes":   "- Added _raise_if_http_error() helper in bot_llm.py\n- _ask_taris now detects HTTP error patterns in stdout even when taris exits rc=0\n- Also improves rc!=0 path: error text parsed for 402/429/401/503 patterns; full text included in RuntimeError message\n- System Chat and exception handler in bot_handlers.py correctly intercepts all these errors with user-friendly messages"
   },
   {
     "version": "2026.4.4",
@@ -39,7 +51,7 @@
     "version": "2026.3.43",
     "date":    "2026-4-2",
     "title":   "Local LLM Fallback — Admin Panel toggle (§3.2 complete)",
-    "notes":   "- Admin Panel: 🤖 Switch LLM → 📡 Local Fallback shows ON/OFF status and toggle button\n- Toggle writes/removes ~/.picoclaw/llm_fallback_enabled flag file — no restart needed\n- Fallback state survives bot restarts (LLM_LOCAL_FALLBACK env var OR flag file)\n- Displays configured llama.cpp URL and model in the menu"
+    "notes":   "- Admin Panel: 🤖 Switch LLM → 📡 Local Fallback shows ON/OFF status and toggle button\n- Toggle writes/removes ~/.taris/llm_fallback_enabled flag file — no restart needed\n- Fallback state survives bot restarts (LLM_LOCAL_FALLBACK env var OR flag file)\n- Displays configured llama.cpp URL and model in the menu"
   },
   {
     "version": "2026.3.42",
@@ -51,7 +63,7 @@
     "version": "2026.3.41",
     "date":    "2026-3-25",
     "title":   "Fix System Chat LLM routing",
-    "notes":   "- Fixed: System Chat returned 'Could not generate a command' for any input — it was calling the picoclaw CLI binary directly instead of routing through the configured LLM_PROVIDER (openai/OpenRouter)\n- System Chat now uses ask_llm() like all other LLM-powered features, so the active provider and model are respected"
+    "notes":   "- Fixed: System Chat returned 'Could not generate a command' for any input — it was calling the taris CLI binary directly instead of routing through the configured LLM_PROVIDER (openai/OpenRouter)\n- System Chat now uses ask_llm() like all other LLM-powered features, so the active provider and model are respected"
   },
   {
     "version": "2026.3.40",
@@ -63,13 +75,13 @@
     "version": "2026.3.39",
     "date":    "2026-3-20",
     "title":   "Fix LLM provider (OpenRouter direct), voice mode routing, import error",
-    "notes":   "- Fixed: LLM calls failed with picoclaw rc=1 because picoclaw-gateway service crash-loops (Error: no channels enabled) — switched to LLM_PROVIDER=openai pointing at OpenRouter's OpenAI-compatible endpoint\n- Fixed: voice messages during contact_add / contact_edit / contact_search modes were silently handed to LLM instead of the contact handler — STT transcript was discarded, contact was never saved\n- Fixed: voice messages during cal_edit_title / cal_edit_dt / cal_edit_remind modes were also ignored — calendar field edits via voice now work\n- Fixed: NameError ACTIVE_MODEL_FILE not defined in bot_admin.py — constant was used in _set_active_model() but missing from the import block"
+    "notes":   "- Fixed: LLM calls failed with taris rc=1 because taris-gateway service crash-loops (Error: no channels enabled) — switched to LLM_PROVIDER=openai pointing at OpenRouter's OpenAI-compatible endpoint\n- Fixed: voice messages during contact_add / contact_edit / contact_search modes were silently handed to LLM instead of the contact handler — STT transcript was discarded, contact was never saved\n- Fixed: voice messages during cal_edit_title / cal_edit_dt / cal_edit_remind modes were also ignored — calendar field edits via voice now work\n- Fixed: NameError ACTIVE_MODEL_FILE not defined in bot_admin.py — constant was used in _set_active_model() but missing from the import block"
   },
   {
     "version": "2026.3.38",
     "date":    "2026-3-19",
     "title":   "Fix empty-note crashes; /status shows LLM provider",
-    "notes":   "- Fixed: opening, editing, appending, or replacing an empty note crashed with ApiTelegramException: Bad Request: message text is empty\n- Root cause: _handle_note_raw and _start_note_edit/append/replace used text/lines[0] without guarding for empty string\n- Fix: note display falls back to localized note_empty_body string; lines[0] access guarded with if lines else ''\n- /status command now shows LLM_PROVIDER prefix before active model name (e.g. picoclaw > gpt-4o-mini)"
+    "notes":   "- Fixed: opening, editing, appending, or replacing an empty note crashed with ApiTelegramException: Bad Request: message text is empty\n- Root cause: _handle_note_raw and _start_note_edit/append/replace used text/lines[0] without guarding for empty string\n- Fix: note display falls back to localized note_empty_body string; lines[0] access guarded with if lines else ''\n- /status command now shows LLM_PROVIDER prefix before active model name (e.g. taris > gpt-4o-mini)"
   },
   {
     "version": "2026.3.37",
@@ -80,14 +92,14 @@
   {
     "version": "2026.3.36",
     "date":    "2026-3-19",
-    "title":   "Fix free chat: picoclaw 402 error leaked as reply",
-    "notes":   "- Fixed: free chat showed raw picoclaw error log (HTTP 402 / OpenRouter out of credits) as bot reply\n- Root cause 1: _ask_picoclaw() in bot_llm.py logged warning on rc!=0 but still returned cleaned output instead of raising\n- Root cause 2: _LOG_PREFIX regex didn't match compact date format YYYYMMDD HH:MM:SS used by picoclaw — log lines passed through cleanup unchanged\n- Fix: raise RuntimeError on non-zero picoclaw exit code — ask_llm() catches it, returns empty — user sees user-friendly error message\n- Fix: extended _LOG_PREFIX regex to also match YYYYMMDD (no separator) date format"
+    "title":   "Fix free chat: taris 402 error leaked as reply",
+    "notes":   "- Fixed: free chat showed raw taris error log (HTTP 402 / OpenRouter out of credits) as bot reply\n- Root cause 1: _ask_taris() in bot_llm.py logged warning on rc!=0 but still returned cleaned output instead of raising\n- Root cause 2: _LOG_PREFIX regex didn't match compact date format YYYYMMDD HH:MM:SS used by taris — log lines passed through cleanup unchanged\n- Fix: raise RuntimeError on non-zero taris exit code — ask_llm() catches it, returns empty — user sees user-friendly error message\n- Fix: extended _LOG_PREFIX regex to also match YYYYMMDD (no separator) date format"
   },
   {
     "version": "2026.3.35",
     "date":    "2026-3-19",
     "title":   "Fix calendar LLM call — use ask_llm",
-    "notes":   "- Fixed: calendar NL input returned 'no LLM response' error\n- Root cause: bot_calendar.py used old _ask_picoclaw (bot_access) with short timeouts (20-30s) and outdated output cleaner missing agent|json pipe format\n- Fix: migrated all 4 calendar LLM calls to ask_llm (bot_llm) with 60s timeout, proper error logging, and correct output cleaning"
+    "notes":   "- Fixed: calendar NL input returned 'no LLM response' error\n- Root cause: bot_calendar.py used old _ask_taris (bot_access) with short timeouts (20-30s) and outdated output cleaner missing agent|json pipe format\n- Fix: migrated all 4 calendar LLM calls to ask_llm (bot_llm) with 60s timeout, proper error logging, and correct output cleaning"
   },
   {
     "version": "2026.3.34",
@@ -99,13 +111,13 @@
     "version": "2026.3.33",
     "date":    "2026-03-18",
     "title":   "Fix Telegram-Web account link codes",
-    "notes":   "- Fixed HTTP 500 on /register when entering a Telegram link code\n- Root cause: link codes were stored per-process in memory; web service never saw codes generated by Telegram service\n- Fix: codes now persisted to ~/.picoclaw/web_link_codes.json, shared between both services"
+    "notes":   "- Fixed HTTP 500 on /register when entering a Telegram link code\n- Root cause: link codes were stored per-process in memory; web service never saw codes generated by Telegram service\n- Fix: codes now persisted to ~/.taris/web_link_codes.json, shared between both services"
   },
   {
     "version": "2026.3.32",
     "date":    "2026-03-17",
     "title":   "Multi-LLM Provider Support & Local Fallback",
-    "notes":   "- Feature 3.1: LLM_PROVIDER env-var switch (picoclaw/openai/yandexgpt/gemini/anthropic/local) — set in ~/.picoclaw/bot.env\n- Feature 3.2: Local llama.cpp offline fallback with LLM_LOCAL_FALLBACK=1 and picoclaw-llm.service systemd unit\n- Fallback responses labelled with warning prefix"
+    "notes":   "- Feature 3.1: LLM_PROVIDER env-var switch (taris/openai/yandexgpt/gemini/anthropic/local) — set in ~/.taris/bot.env\n- Feature 3.2: Local llama.cpp offline fallback with LLM_LOCAL_FALLBACK=1 and taris-llm.service systemd unit\n- Fallback responses labelled with warning prefix"
   },
   {
     "version": "2026.3.31",
@@ -195,7 +207,7 @@
     "version": "2026.3.18",
     "date": "2026-03-08",
     "title": "Notes System — create, list, edit, delete + voice dictation & read",
-    "notes": "- New 📝 Notes menu (Full + Admin roles) with Create / List / Open / Edit / Delete\n- Notes stored as Markdown files in ~/.picoclaw/notes/<chat_id>/\n- Voice dictation: say \"запиши заметку …\" / \"create note …\" to save a voice note\n- Voice read: say \"прочитай заметку …\" / \"read note …\" to hear a note via TTS\n- All notes UI localised in Russian and English via strings.json"
+    "notes": "- New 📝 Notes menu (Full + Admin roles) with Create / List / Open / Edit / Delete\n- Notes stored as Markdown files in ~/.taris/notes/<chat_id>/\n- Voice dictation: say \"запиши заметку …\" / \"create note …\" to save a voice note\n- Voice read: say \"прочитай заметку …\" / \"read note …\" to hear a note via TTS\n- All notes UI localised in Russian and English via strings.json"
   },
   {
     "version": "2026.3.17",
@@ -213,7 +225,7 @@
     "version": "2026.3.15-rc1",
     "date": "2026-03-07",
     "title": "RC1 — User Registration Workflow + Full Feature Overview",
-    "notes": "🎉 Release Candidate 1 — first officially tagged release.\n\nNEW in this version (TODO §1.1 — User Registration Workflow):\n- Unknown users who send /start now enter a registration flow\n- Registration stored in registrations.json: pending / approved / blocked\n- Admins receive inline-button notification for every new request\n- Approve → user added as guest and notified immediately\n- Block → user marked blocked with polite decline message\n- Admin panel: new Pending Requests button with live count badge\n- Blocked users see declined message on /start; pending users see waiting message\n\nAll available features:\n- Gmail digest (inbox + spam, last 24h, LLM-summarised)\n- Free Chat via picoclaw agent\n- System Chat: describe task, LLM generates bash command, confirm and run\n- Voice Session: Telegram voice note → Vosk STT → picoclaw LLM → Piper TTS\n- LLM switcher: OpenRouter (default), OpenAI GPT-4o/mini/o3-mini/o1/gpt-4.5\n- Voice pipeline opts: silence strip, 8kHz STT, warm Piper, parallel TTS, Piper ONNX in RAM\n- Auto-detect question language (Cyrillic=Russian, Latin=English)\n- Role system: Admin / Full / Guest with role-specific menus\n- /status: per-service status, active LLM, user role\n- Admin deploy notifications on every version bump\n- Orphaned TTS message cleanup on restart\n- User Registration Workflow (this version)\n\nGit commits in this RC:\n663a133 feat: User Registration Workflow (v2026.3.15-rc1)\n61fd8c4 Restructure TODO.md\n4e5c71b v2026.3.14 — Piper ONNX in RAM (tmpfs_model)\na448a4c v2026.3.12 — Fix stuck Generating audio\n3a545de v2026.3.11 — TTS_MAX_CHARS 200-600\n21832a2 v2026.3.10 — Auto-detect question language\n4064a85 v2026.3.9  — Fix picoclaw output\n5fc4336 v2026.3.8  — Language enforcement + TTS emoji fix\na74a27b v2026.3.7  — Release notes system\n4d20006             Voice pipeline optimizations\ne53bf78 v2026.3.6  — OpenAI ChatGPT sub-menu\n7c836a7             /status service diagnostics\n3c505fd             Role-based help variants\n\nTag: v2026.3.15-rc1"
+    "notes": "🎉 Release Candidate 1 — first officially tagged release.\n\nNEW in this version (TODO §1.1 — User Registration Workflow):\n- Unknown users who send /start now enter a registration flow\n- Registration stored in registrations.json: pending / approved / blocked\n- Admins receive inline-button notification for every new request\n- Approve → user added as guest and notified immediately\n- Block → user marked blocked with polite decline message\n- Admin panel: new Pending Requests button with live count badge\n- Blocked users see declined message on /start; pending users see waiting message\n\nAll available features:\n- Gmail digest (inbox + spam, last 24h, LLM-summarised)\n- Free Chat via taris agent\n- System Chat: describe task, LLM generates bash command, confirm and run\n- Voice Session: Telegram voice note → Vosk STT → taris LLM → Piper TTS\n- LLM switcher: OpenRouter (default), OpenAI GPT-4o/mini/o3-mini/o1/gpt-4.5\n- Voice pipeline opts: silence strip, 8kHz STT, warm Piper, parallel TTS, Piper ONNX in RAM\n- Auto-detect question language (Cyrillic=Russian, Latin=English)\n- Role system: Admin / Full / Guest with role-specific menus\n- /status: per-service status, active LLM, user role\n- Admin deploy notifications on every version bump\n- Orphaned TTS message cleanup on restart\n- User Registration Workflow (this version)\n\nGit commits in this RC:\n663a133 feat: User Registration Workflow (v2026.3.15-rc1)\n61fd8c4 Restructure TODO.md\n4e5c71b v2026.3.14 — Piper ONNX in RAM (tmpfs_model)\na448a4c v2026.3.12 — Fix stuck Generating audio\n3a545de v2026.3.11 — TTS_MAX_CHARS 200-600\n21832a2 v2026.3.10 — Auto-detect question language\n4064a85 v2026.3.9  — Fix taris output\n5fc4336 v2026.3.8  — Language enforcement + TTS emoji fix\na74a27b v2026.3.7  — Release notes system\n4d20006             Voice pipeline optimizations\ne53bf78 v2026.3.6  — OpenAI ChatGPT sub-menu\n7c836a7             /status service diagnostics\n3c505fd             Role-based help variants\n\nTag: v2026.3.15-rc1"
   },
   {
     "version": "2026.3.14",
@@ -248,8 +260,8 @@
   {
     "version": "2026.3.9",
     "date": "2026-03-07",
-    "title": "Fix picoclaw bash-lc command leaking to user",
-    "notes": "- Strip \"Picoclaw:\" header line from picoclaw output\n- Extract text from bash -lc 'printf \"...\"' wrapper (picoclaw agent format)\n- Users no longer see raw shell commands in voice/chat responses"
+    "title": "Fix taris bash-lc command leaking to user",
+    "notes": "- Strip \"Taris:\" header line from taris output\n- Extract text from bash -lc 'printf \"...\"' wrapper (taris agent format)\n- Users no longer see raw shell commands in voice/chat responses"
   },
   {
     "version": "2026.3.8",
@@ -261,7 +273,7 @@
     "version": "2026.3.7",
     "date": "2026-03-07",
     "title": "Voice Pipeline Optimizations",
-    "notes": "5 optional voice latency optimizations added (all OFF by default).\n\nEnable via Admin → ⚡ Voice Opts:\n• *Silence strip* — crops silence before STT (−6s)\n• *8 kHz sample rate* — lighter Vosk processing (−7s)\n• *Warm Piper cache* — pre-loads TTS model at startup (−15s first call)\n• *Parallel TTS thread* — TTS starts while text reply is sent (text-first UX)\n• *Per-user audio toggle* — 🔇/🔊 button on every voice reply\n\nSettings persist in `~/.picoclaw/voice_opts.json`."
+    "notes": "5 optional voice latency optimizations added (all OFF by default).\n\nEnable via Admin → ⚡ Voice Opts:\n• *Silence strip* — crops silence before STT (−6s)\n• *8 kHz sample rate* — lighter Vosk processing (−7s)\n• *Warm Piper cache* — pre-loads TTS model at startup (−15s first call)\n• *Parallel TTS thread* — TTS starts while text reply is sent (text-first UX)\n• *Per-user audio toggle* — 🔇/🔊 button on every voice reply\n\nSettings persist in `~/.taris/voice_opts.json`."
   },
   {
     "version": "2026.3.6",

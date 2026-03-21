@@ -2,7 +2,7 @@
 bot_error_protocol.py — Error Protocol: collect voice, text, photos → save → email.
 
 Admin/developer feature for sending structured error reports.
-Data is saved to ~/.picoclaw/error_protocols/YYYYMMDD-HHMMSS_errorname/
+Data is saved to ~/.taris/error_protocols/YYYYMMDD-HHMMSS_errorname/
 and optionally emailed with all attachments.
 
 Imports: bot_config, bot_state, bot_instance, bot_access.

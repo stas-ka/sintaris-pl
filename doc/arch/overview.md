@@ -1,4 +1,4 @@
-# Picoclaw — System Overview
+# Taris — System Overview
 
 **Version:** `2026.3.28` · **Last updated:** March 2026  
 → Architecture index: [architecture.md](../architecture.md)
@@ -31,7 +31,7 @@ Microphone (USB / I2S HAT)
  [Vosk STT]    ← same model, fresh recognizer for the command phrase
       │              stops on 2 s silence or 15 s max
       ▼
- [picoclaw]    ← CLI subprocess: picoclaw agent -m "<text>"
+ [taris]    ← CLI subprocess: taris agent -m "<text>"
       │              binary: /usr/bin/picoclaw (sipeed/picoclaw v0.2.0)
       ▼
  [OpenRouter]  ← HTTPS call to openrouter.ai (cloud, configurable model)
@@ -49,10 +49,10 @@ Microphone (USB / I2S HAT)
 
 ```
 systemd
-  ├── picoclaw-gateway.service
+  ├── taris-gateway.service
   │     └── /usr/bin/picoclaw gateway  (disabled — config "enabled": false)
   │
-  ├── picoclaw-telegram.service
+  ├── taris-telegram.service
   │     └── /usr/bin/python3 telegram_menu_bot.py
   │           │
   │           ├── [calendar daemon threads, started at startup]
@@ -64,7 +64,7 @@ systemd
   │           │     └── voice_handler    → _handle_voice_message()
   │           │           ├── ffmpeg [subprocess]           ← OGG → 16kHz PCM
   │           │           ├── vosk-cpp / whisper-cpp        ← STT
-  │           │           ├── picoclaw agent [subprocess]   ← LLM
+  │           │           ├── taris agent [subprocess]   ← LLM
   │           │           ├── piper [subprocess]            ← TTS synthesis
   │           │           └── ffmpeg [subprocess]           ← PCM → OGG Opus
   │           │
@@ -74,7 +74,7 @@ systemd
   │           └── [email send threads]
   │                 └── _send_in_thread() per send op  ← SMTP
   │
-  ├── picoclaw-web.service
+  ├── taris-web.service
   │     └── uvicorn bot_web:app --host 0.0.0.0 --port 8080 --ssl-keyfile …
   │           │   FastAPI application (bot_web.py)
   │           │
@@ -87,7 +87,7 @@ systemd
   │           ├── GET /admin                     ← admin dashboard (admin-only)
   │           └── POST /api/voice/…              ← voice: upload/STT/TTS
   │
-  └── picoclaw-voice.service
+  └── taris-voice.service
         └── /usr/bin/python3 voice_assistant.py
               ├── pw-record [subprocess]  ← continuous hotword listen
               ├── pw-record [subprocess]  ← command recording (transient)

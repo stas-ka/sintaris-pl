@@ -38,7 +38,7 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_llm.py` | `core/` | ~250 | Pluggable LLM backend — 6 providers via `LLM_PROVIDER`; `ask_llm()` unified entry point; shared by Telegram + Web |
 | `bot_security.py` | `security/` | ~200 | 3-layer prompt injection guard; `SECURITY_PREAMBLE`; `_wrap_user_input()` |
 | `bot_auth.py` | `security/` | ~200 | JWT/bcrypt authentication, `accounts.json` — Web UI only |
-| `bot_access.py` | `telegram/` | ~380 | Access control, i18n, keyboards, text utils, `_ask_picoclaw()` |
+| `bot_access.py` | `telegram/` | ~380 | Access control, i18n, keyboards, text utils, `_ask_taris()` |
 | `bot_users.py` | `telegram/` | ~160 | Registration + notes file I/O (pure, no Telegram API) |
 | `bot_admin.py` | `telegram/` | ~310 | Admin panel: guests, reg, voice opts, release notes, LLM |
 | `bot_handlers.py` | `telegram/` | ~160 | User handlers: chat, system, digest, notes, profile |
@@ -64,21 +64,21 @@ No imports from other `bot_*` modules. Root of the dependency tree.
 | `BOT_TOKEN` | Telegram bot token from `bot.env` |
 | `ALLOWED_USERS` | `set[int]` — full-access chat IDs |
 | `ADMIN_USERS` | `set[int]` — admin chat IDs |
-| `PICOCLAW_BIN` | `/usr/bin/picoclaw` |
-| `PICOCLAW_CONFIG` | `~/.picoclaw/config.json` |
-| `ACTIVE_MODEL_FILE` | `~/.picoclaw/active_model.txt` |
+| `TARIS_BIN` | `/usr/bin/picoclaw` |
+| `TARIS_CONFIG` | `~/.taris/config.json` |
+| `ACTIVE_MODEL_FILE` | `~/.taris/active_model.txt` |
 | `PIPER_BIN` | `/usr/local/bin/piper` |
-| `PIPER_MODEL` | `~/.picoclaw/ru_RU-irina-medium.onnx` |
+| `PIPER_MODEL` | `~/.taris/ru_RU-irina-medium.onnx` |
 | `PIPER_MODEL_TMPFS` | `/dev/shm/piper/...` (RAM-disk copy) |
-| `PIPER_MODEL_LOW` | `~/.picoclaw/ru_RU-irina-low.onnx` |
+| `PIPER_MODEL_LOW` | `~/.taris/ru_RU-irina-low.onnx` |
 | `WHISPER_BIN` | `/usr/local/bin/whisper-cpp` |
-| `WHISPER_MODEL` | `~/.picoclaw/ggml-base.bin` |
-| `VOSK_MODEL_PATH` | `~/.picoclaw/vosk-model-small-ru/` |
-| `NOTES_DIR` | `~/.picoclaw/notes/` |
-| `_PENDING_TTS_FILE` | `~/.picoclaw/pending_tts.json` |
+| `WHISPER_MODEL` | `~/.taris/ggml-base.bin` |
+| `VOSK_MODEL_PATH` | `~/.taris/vosk-model-small-ru/` |
+| `NOTES_DIR` | `~/.taris/notes/` |
+| `_PENDING_TTS_FILE` | `~/.taris/pending_tts.json` |
 | `_VOICE_OPTS_DEFAULTS` | All 10 voice-opt flags (all `False`) |
 | `_load_env_file(path)` | Parse `KEY=VALUE` file → `os.environ` |
-| `log` | `logging.getLogger("pico-tgbot")` |
+| `log` | `logging.getLogger("taris-tgbot")` |
 
 ---
 
@@ -164,8 +164,8 @@ Imports: `bot_config`, `bot_state`, `bot_instance`.
 | Function | Purpose |
 |---|---|
 | `_get_active_model()` | Read active model name from `active_model.txt` |
-| `_clean_picoclaw_output(text)` | Strip log lines, printf wrappers, timestamps |
-| `_ask_picoclaw(prompt, timeout)` | Call `picoclaw agent -m "..."`, return clean text |
+| `_clean_taris_output(text)` | Strip log lines, printf wrappers, timestamps |
+| `_ask_taris(prompt, timeout)` | Call `taris agent -m "..."`, return clean text |
 
 ### Keyboards / UI
 
@@ -201,7 +201,7 @@ Pure functions — no Telegram API calls. Imports: `bot_config` only.
 | Function | Purpose |
 |---|---|
 | `_slug(title)` | `"My Title"` → `"my_title"` (safe filename) |
-| `_notes_user_dir(chat_id)` | `~/.picoclaw/notes/<chat_id>/` — created if missing |
+| `_notes_user_dir(chat_id)` | `~/.taris/notes/<chat_id>/` — created if missing |
 | `_list_notes_for(chat_id)` | `[{slug, title, mtime}]` sorted newest-first |
 | `_load_note_text(chat_id, slug)` | Return note content or `None` |
 | `_save_note_file(chat_id, slug, content)` | Write note `.md` file |
@@ -308,7 +308,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`, `
 | Function | Purpose |
 |---|---|
 | `_set_active_model(model_name)` | Write chosen model to `active_model.txt` |
-| `_get_picoclaw_models()` | Read `model_list` from `config.json` |
+| `_get_taris_models()` | Read `model_list` from `config.json` |
 | `_handle_admin_llm_menu(chat_id)` | LLM selection keyboard |
 | `_handle_set_llm(chat_id, model_name)` | Apply selection + confirm |
 | `_get_shared_openai_key()` | First OpenAI `api_key` in `config.json` |
@@ -362,7 +362,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 | Function | Purpose |
 |---|---|
-| `_handle_chat_message(chat_id, user_text)` | Forward to picoclaw LLM, return reply |
+| `_handle_chat_message(chat_id, user_text)` | Forward to taris LLM, return reply |
 
 ---
 
@@ -374,7 +374,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_voice` l
 
 | Function | Purpose |
 |---|---|
-| `_cal_user_file(chat_id)` | Path: `~/.picoclaw/calendar/<chat_id>.json` |
+| `_cal_user_file(chat_id)` | Path: `~/.taris/calendar/<chat_id>.json` |
 | `_cal_load(chat_id)` | Load events list (returns `[]` on error) |
 | `_cal_save(chat_id, events)` | Persist events list |
 | `_cal_add_event(chat_id, title, dt, remind_before_min)` | Append new event, return dict |
@@ -508,7 +508,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_mail_cre
 ### Directory structure
 
 ```
-~/.picoclaw/error_protocols/
+~/.taris/error_protocols/
   └── 20260312-143022_crash_report/
         ├── manifest.json
         ├── text_01.txt
@@ -550,7 +550,7 @@ Imports: `bot_config` only. Shared by Telegram and Web channels.
 | `list_models() -> list[dict]` | Read `model_list` from `config.json` |
 | `_clean_output(raw) -> str` | Strip log lines, printf wrappers, ANSI from CLI output |
 | `_http_post_json(url, payload, timeout)` | Shared HTTP helper for REST-based providers (OpenAI, YandexGPT, Gemini, Anthropic, local) |
-| `_ask_picoclaw(prompt, timeout)` | OpenRouter via `picoclaw agent` CLI subprocess (default; `LLM_PROVIDER=picoclaw`) |
+| `_ask_taris(prompt, timeout)` | OpenRouter via `taris agent` CLI subprocess (default; `LLM_PROVIDER=taris`) |
 | `_ask_openai(prompt, timeout)` | OpenAI / OpenAI-compatible REST API (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`) |
 | `_ask_yandexgpt(prompt, timeout)` | YandexGPT REST API (`YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI`) |
 | `_ask_gemini(prompt, timeout)` | Google Gemini REST API (`GEMINI_API_KEY`, `GEMINI_MODEL`) |
@@ -587,7 +587,7 @@ Imports: `bot_config` only. Used by Web UI channel exclusively.
 | `create_token(user_id, username, role)` | Sign HS256 JWT with 7-day expiry |
 | `verify_token(token)` | Decode and validate JWT; return payload dict or `None` |
 
-Storage: `~/.picoclaw/accounts.json`
+Storage: `~/.taris/accounts.json`
 
 ---
 
@@ -664,7 +664,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`. (`bot_mail_creds` lazy-impor
 
 | Function | Purpose |
 |---|---|
-| `_target_file(chat_id)` | Path: `.picoclaw/mail_creds/<chat_id>_target.txt` |
+| `_target_file(chat_id)` | Path: `.taris/mail_creds/<chat_id>_target.txt` |
 | `_get_target_email(chat_id)` | Read stored send-to address or `None` |
 | `_set_target_email(chat_id, addr)` | Persist send-to address |
 | `_mask_addr(addr)` | Mask email for display: `us**@domain.tld` |
@@ -686,7 +686,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_email` l
 
 | Function | Purpose |
 |---|---|
-| `_creds_dir()` | `~/.picoclaw/mail_creds/` — created if missing |
+| `_creds_dir()` | `~/.taris/mail_creds/` — created if missing |
 | `_creds_file(chat_id)` | `…/mail_creds/<chat_id>.json` |
 | `_last_digest_file(chat_id)` | `…/mail_creds/<chat_id>_last_digest.txt` |
 | `_load_creds(chat_id)` | Return credentials dict or `None` |
@@ -735,14 +735,14 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`. (`bot_email` l
 ## bot_web.py — FastAPI Web Application
 
 Imports: all `bot_*` modules. Entry point for web channel. ~2000 lines, 41 routes.
-**Service:** `picoclaw-web.service` · **Port:** HTTPS 8080 · **Auth:** JWT cookie `pico_token`
+**Service:** `taris-web.service` · **Port:** HTTPS 8080 · **Auth:** JWT cookie `taris_token`
 
 ### Route inventory
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/login` | Login form |
-| `POST` | `/login` | Verify credentials, set JWT `pico_token` cookie |
+| `POST` | `/login` | Verify credentials, set JWT `taris_token` cookie |
 | `GET` | `/register` | Registration form (optional `link_code` for Telegram-linked setup) |
 | `POST` | `/register` | Create account; if `link_code` provided → role inherited, status=active |
 | `GET` | `/logout` | Clear JWT cookie |
@@ -882,19 +882,19 @@ All `data=` keys handled in `callback_handler()`:
 
 | File | Purpose |
 |---|---|
-| `~/.picoclaw/bot.env` | Secrets: `BOT_TOKEN`, `ALLOWED_USERS`, `ADMIN_USERS` |
-| `~/.picoclaw/accounts.json` | Web UI user accounts (username + bcrypt hash + role) |
-| `~/.picoclaw/voice_opts.json` | Persisted voice-opt flags |
-| `~/.picoclaw/pending_tts.json` | TTS orphan-cleanup tracker |
-| `~/.picoclaw/users.json` | Dynamically approved guest users |
-| `~/.picoclaw/registrations.json` | User registration records (pending/approved/blocked) |
-| `~/.picoclaw/active_model.txt` | Admin-selected LLM model name |
-| `~/.picoclaw/last_notified_version.txt` | Last `BOT_VERSION` admin was notified about |
-| `~/.picoclaw/notes/<chat_id>/<slug>.md` | Per-user note files |
-| `~/.picoclaw/calendar/<chat_id>.json` | Per-user calendar events |
-| `~/.picoclaw/mail_creds/<chat_id>.json` | Per-user IMAP credentials (chmod 600) |
-| `~/.picoclaw/mail_creds/<chat_id>_last_digest.txt` | Last digest cache |
-| `~/.picoclaw/mail_creds/<chat_id>_target.txt` | SMTP send-to address |
-| `~/.picoclaw/config.json` | picoclaw LLM config (model_list, agents, active_model) |
-| `~/.picoclaw/error_protocols/` | Error protocol reports (YYYYMMDD-HHMMSS_name/) |
-| `~/.picoclaw/telegram_bot.log` | Bot log file |
+| `~/.taris/bot.env` | Secrets: `BOT_TOKEN`, `ALLOWED_USERS`, `ADMIN_USERS` |
+| `~/.taris/accounts.json` | Web UI user accounts (username + bcrypt hash + role) |
+| `~/.taris/voice_opts.json` | Persisted voice-opt flags |
+| `~/.taris/pending_tts.json` | TTS orphan-cleanup tracker |
+| `~/.taris/users.json` | Dynamically approved guest users |
+| `~/.taris/registrations.json` | User registration records (pending/approved/blocked) |
+| `~/.taris/active_model.txt` | Admin-selected LLM model name |
+| `~/.taris/last_notified_version.txt` | Last `BOT_VERSION` admin was notified about |
+| `~/.taris/notes/<chat_id>/<slug>.md` | Per-user note files |
+| `~/.taris/calendar/<chat_id>.json` | Per-user calendar events |
+| `~/.taris/mail_creds/<chat_id>.json` | Per-user IMAP credentials (chmod 600) |
+| `~/.taris/mail_creds/<chat_id>_last_digest.txt` | Last digest cache |
+| `~/.taris/mail_creds/<chat_id>_target.txt` | SMTP send-to address |
+| `~/.taris/config.json` | taris LLM config (model_list, agents, active_model) |
+| `~/.taris/error_protocols/` | Error protocol reports (YYYYMMDD-HHMMSS_name/) |
+| `~/.taris/telegram_bot.log` | Bot log file |

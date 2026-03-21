@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Pico Assistant{% endblock %}
-{% block page_title %}🤖 Pico Assistant{% endblock %}
+{% block title %}Taris{% endblock %}
+{% block page_title %}🤖 Taris{% endblock %}
 
 {% block topbar_extra %}
 <div class="flex items-center gap-sm">
@@ -69,7 +69,7 @@
     {% else %}
       <div id="chat-empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:12px">
         <div style="font-size:52px">🤖</div>
-        <div style="font-size:18px;font-weight:700;color:#fff">Pico Assistant</div>
+        <div style="font-size:18px;font-weight:700;color:#fff">Taris</div>
         <div class="text-dim" style="max-width:380px;line-height:1.7;font-size:13px">
           Type a message <strong>or press 🎤</strong> to speak.<br>
           Use the quick actions below to add notes, events, or ask for a digest.
@@ -167,7 +167,7 @@
 {% block extra_scripts %}
 <script>
 /* ══════════════════════════════════════════════════════
-   Pico Assistant — unified text + voice input/output
+   Taris — unified text + voice input/output
 ══════════════════════════════════════════════════════ */
 
 let _audioEnabled = true;
@@ -390,7 +390,7 @@ function _showProcBar(show) {
 }
 const _STAGE_LABELS = {
   stt: '🎤 Transcribing speech (Vosk STT)…',
-  llm: '🤖 LLM thinking (picoclaw → OpenRouter)…',
+  llm: '🤖 Taris thinking (LLM)…',
   tts: '🔊 Generating audio reply (Piper TTS)…'
 };
 function _setStage(active) {

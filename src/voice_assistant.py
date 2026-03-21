@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Picoclaw Russian Voice Assistant
+Taris Russian Voice Assistant
 =================================
-Local Russian voice interface for picoclaw gateway on Raspberry Pi.
+Local Russian voice interface for taris gateway on Raspberry Pi.
 
 Pipeline:
   Microphone (webcam or USB mic via PipeWire)
@@ -10,7 +10,7 @@ Pipeline:
     → [Vosk STT - vosk-model-small-ru]      (offline, Russian)
     → hotword detection ("пико")
     → record voice command → recognize text
-    → picoclaw agent -m "..."               (OpenRouter LLM via gateway)
+    → taris agent -m "..."               (OpenRouter LLM via gateway)
     → [Piper TTS - ru_RU-irina-medium]      (offline, Russian, fast)
     → speaker (Pi 3.5mm jack or USB speaker)
 
@@ -30,7 +30,7 @@ Supported microphones (set AUDIO_TARGET):
   - <name>   = custom PipeWire source node name (from: pactl list sources short)
 
 Config via environment variables:
-  VOSK_MODEL_PATH, PIPER_BIN, PIPER_MODEL, PICOCLAW_BIN, AUDIO_TARGET
+  VOSK_MODEL_PATH, PIPER_BIN, PIPER_MODEL, TARIS_BIN, AUDIO_TARGET
 """
 
 import json
@@ -52,10 +52,10 @@ import vosk
 
 CONFIG = {
     # Paths
-    "vosk_model_path": os.getenv("VOSK_MODEL_PATH", "/home/stas/.picoclaw/vosk-model-small-ru"),
+    "vosk_model_path": os.getenv("VOSK_MODEL_PATH", "/home/stas/.taris/vosk-model-small-ru"),
     "piper_bin":       os.getenv("PIPER_BIN",       "/usr/local/bin/piper"),
-    "piper_model":     os.getenv("PIPER_MODEL",     "/home/stas/.picoclaw/ru_RU-irina-medium.onnx"),
-    "picoclaw_bin":    os.getenv("PICOCLAW_BIN",    "/usr/bin/picoclaw"),
+    "piper_model":     os.getenv("PIPER_MODEL",     "/home/stas/.taris/ru_RU-irina-medium.onnx"),
+    "taris_bin":    os.getenv("TARIS_BIN",    "/usr/bin/picoclaw"),
 
     # PipeWire runtime
     "pipewire_runtime_dir": "/run/user/1000",
@@ -97,10 +97,10 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("/home/stas/.picoclaw/voice.log", encoding="utf-8"),
+        logging.FileHandler("/home/stas/.taris/voice.log", encoding="utf-8"),
     ],
 )
-log = logging.getLogger("picoclaw-voice")
+log = logging.getLogger("taris-voice")
 
 # ---------------------------------------------------------------------------
 # PipeWire audio capture (replaces sounddevice — PipeWire owns audio on Pi)
@@ -348,34 +348,34 @@ def play_beep() -> None:
         pass
 
 # ---------------------------------------------------------------------------
-# Ask picoclaw (subprocess CLI)
+# Ask taris (subprocess CLI)
 # ---------------------------------------------------------------------------
 
-def ask_picoclaw(text: str, timeout: int = 60) -> Optional[str]:
-    """Send recognized text to picoclaw agent and return its response."""
-    picoclaw_bin = CONFIG["picoclaw_bin"]
-    log.info(f"[ASK] → picoclaw: {text}")
+def ask_taris(text: str, timeout: int = 60) -> Optional[str]:
+    """Send recognized text to taris agent and return its response."""
+    taris_bin = CONFIG["taris_bin"]
+    log.info(f"[ASK] → taris: {text}")
     try:
         result = subprocess.run(
-            [picoclaw_bin, "agent", "-m", text],
+            [taris_bin, "agent", "-m", text],
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=timeout,
         )
         response = result.stdout.strip()
         if result.returncode != 0 and not response:
-            log.error(f"picoclaw error: {result.stderr.strip()}")
+            log.error(f"taris error: {result.stderr.strip()}")
             return None
         log.info(f"[RESPONSE] ← {response[:120]}")
         return response or None
     except subprocess.TimeoutExpired:
-        log.warning(f"picoclaw timed out after {timeout}s")
+        log.warning(f"taris timed out after {timeout}s")
         return None
     except FileNotFoundError:
-        log.error(f"picoclaw binary not found at {picoclaw_bin}")
+        log.error(f"taris binary not found at {taris_bin}")
         return None
     except Exception as e:
-        log.error(f"picoclaw call error: {e}")
+        log.error(f"taris call error: {e}")
         return None
 
 # ---------------------------------------------------------------------------
@@ -459,10 +459,10 @@ def record_phrase(
 def main() -> None:
     """
     Main voice assistant loop.
-    States: LISTENING → (hotword) → RECORDING → picoclaw → SPEAKING → LISTENING
+    States: LISTENING → (hotword) → RECORDING → taris → SPEAKING → LISTENING
     """
     log.info("=" * 60)
-    log.info("Picoclaw Russian Voice Assistant starting...")
+    log.info("Taris Russian Voice Assistant starting...")
     log.info(f"  Vosk model : {CONFIG['vosk_model_path']}")
     log.info(f"  Piper TTS  : {CONFIG['piper_model']}")
     log.info(f"  Hotwords   : {CONFIG['hotwords']}")
@@ -476,7 +476,7 @@ def main() -> None:
     ]:
         if not Path(path_val).exists():
             log.error(f"Required file not found: {path_val} (config key: {key})")
-            log.error("Run: bash /home/stas/.picoclaw/setup_voice.sh")
+            log.error("Run: bash /home/stas/.taris/setup_voice.sh")
             sys.exit(1)
 
     # List available sources for diagnostics
@@ -566,7 +566,7 @@ def main() -> None:
                         log.warning("[RECORDING] Nothing recognized")
                         speak(CONFIG["timeout_reply"])
                     else:
-                        response = ask_picoclaw(command)
+                        response = ask_taris(command)
                         if response:
                             speak(response)
                         else:

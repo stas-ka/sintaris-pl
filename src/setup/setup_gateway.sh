@@ -1,9 +1,9 @@
 #!/bin/bash
-# Install picoclaw-gateway as a systemd service
+# Install taris-gateway as a systemd service
 
-cat > /etc/systemd/system/picoclaw-gateway.service << 'EOF'
+cat > /etc/systemd/system/taris-gateway.service << 'EOF'
 [Unit]
-Description=picoclaw Telegram Gateway
+Description=taris Telegram Gateway
 After=network-online.target
 Wants=network-online.target
 
@@ -20,7 +20,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable picoclaw-gateway
-systemctl start picoclaw-gateway
+systemctl enable taris-gateway
+systemctl start taris-gateway
 sleep 4
-systemctl status picoclaw-gateway --no-pager
+systemctl status taris-gateway --no-pager

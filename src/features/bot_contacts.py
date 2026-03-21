@@ -15,7 +15,7 @@ from core.bot_config import log
 from core.bot_instance import bot
 from telegram.bot_access import (
     _is_allowed, _is_guest, _deny, _t, _lang,
-    _ask_picoclaw, _safe_edit, _send_menu,
+    _ask_taris, _safe_edit, _send_menu,
 )
 from core.bot_db import get_db
 

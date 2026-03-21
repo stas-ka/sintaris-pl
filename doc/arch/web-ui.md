@@ -1,4 +1,4 @@
-# Picoclaw — Web UI & Screen DSL Architecture
+# Taris — Web UI & Screen DSL Architecture
 
 **Version:** `2026.3.28`  
 → Architecture index: [architecture.md](../architecture.md)
@@ -7,7 +7,7 @@
 
 ## 17. Web UI Channel (FastAPI)
 
-**Service:** `picoclaw-web.service` · **Port:** HTTPS 8080 · **Auth:** JWT cookie `pico_token`
+**Service:** `taris-web.service` · **Port:** HTTPS 8080 · **Auth:** JWT cookie `taris_token`
 
 The Web UI channel provides a browser-based interface with the same features as the Telegram bot, served from the Pi over HTTPS using a self-signed TLS certificate. The interface is PWA-installable.
 
@@ -27,18 +27,18 @@ The Web UI channel provides a browser-based interface with the same features as 
 
 | Item | Detail |
 |---|---|
-| User accounts | `~/.picoclaw/accounts.json` (username + bcrypt hash) |
-| Token | JWT HS256, returned as `HttpOnly` cookie `pico_token` |
+| User accounts | `~/.taris/accounts.json` (username + bcrypt hash) |
+| Token | JWT HS256, returned as `HttpOnly` cookie `taris_token` |
 | Session | Cookie-based; re-login on expiry |
 | Registration | Self-registration with admin approval flow |
 | Admin check | `is_admin` flag in JWT claims |
 | Dependency | FastAPI `Depends(get_current_user)` on every protected route |
 
 **Auth flows:**
-- **Flow A (login):** `POST /login` → verify bcrypt → issue JWT → set `pico_token` cookie → redirect `/`
+- **Flow A (login):** `POST /login` → verify bcrypt → issue JWT → set `taris_token` cookie → redirect `/`
 - **Flow B (register):** `POST /register` → create pending account → admin notified → admin approves
 - **Flow B2 (Telegram-linked register):** `POST /register` with `link_code` → `validate_web_link_code()` in `bot_state.py` → inherit role from Telegram account → status=active immediately (no admin approval needed)
-- **Flow C (protected route):** incoming request → decode `pico_token` → raise 401 if missing/invalid → pass `UserContext` to handler
+- **Flow C (protected route):** incoming request → decode `taris_token` → raise 401 if missing/invalid → pass `UserContext` to handler
 - **Flow D (logout):** `POST /logout` → delete cookie
 
 ### 17.3 Route Inventory

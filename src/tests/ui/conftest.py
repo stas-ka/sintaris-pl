@@ -1,5 +1,5 @@
 """
-conftest.py — Playwright fixtures for Pico Bot Web UI tests.
+conftest.py — Playwright fixtures for Taris Bot Web UI tests.
 
 Usage:
     pytest src/tests/ui/ --base-url https://openclawpi2:8080

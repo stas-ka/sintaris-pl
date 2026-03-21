@@ -5,7 +5,7 @@ Design:
   • Uses the per-user IMAP app-password (from features.bot_mail_creds) to also send via SMTP.
     No additional credentials needed — the same Gmail/Yandex/Mail.ru App Password
     that already works for IMAP reading also works for SMTP sending.
-  • Per-user recipient address stored at ~/.picoclaw/mail_creds/<chat_id>_email_target.txt
+  • Per-user recipient address stored at ~/.taris/mail_creds/<chat_id>_email_target.txt
     (a plain text file with a single email address).
   • First use: bot asks "Enter recipient email". Reply is stored & email sent immediately.
   • Subsequent uses: email sent directly using stored recipient.
