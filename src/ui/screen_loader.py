@@ -30,6 +30,48 @@ try:
 except ImportError:
     _HAS_YAML = False
 
+# Optional schema validation
+try:
+    import jsonschema
+    _HAS_JSONSCHEMA = True
+except ImportError:
+    _HAS_JSONSCHEMA = False
+
+_SCHEMA: dict | None = None
+
+
+def _get_schema() -> dict | None:
+    """Lazy-load the JSON Schema from src/screens/screen.schema.json."""
+    global _SCHEMA
+    if _SCHEMA is not None:
+        return _SCHEMA
+    schema_path = Path(__file__).resolve().parent.parent / "screens" / "screen.schema.json"
+    if not schema_path.exists():
+        return None
+    try:
+        with open(schema_path, "r", encoding="utf-8") as f:
+            _SCHEMA = json.load(f)
+        return _SCHEMA
+    except Exception as exc:
+        log.warning("[ScreenLoader] Could not load schema: %s", exc)
+        return None
+
+
+def _validate_screen(data: dict, path: str) -> None:
+    """Validate screen data against the JSON Schema. Logs warnings on failure."""
+    if not _HAS_JSONSCHEMA:
+        return
+    schema = _get_schema()
+    if schema is None:
+        return
+    try:
+        jsonschema.validate(instance=data, schema=schema)
+    except jsonschema.ValidationError as exc:
+        log.warning(
+            "[ScreenLoader] Schema validation failed for %s: %s (path: %s)",
+            path, exc.message, list(exc.absolute_path),
+        )
+
 # ---------------------------------------------------------------------------
 # Widget builder registry
 # ---------------------------------------------------------------------------
@@ -85,14 +127,17 @@ def _resolve_action(w: dict, variables: dict[str, str]) -> str:
     return _substitute(str(action), variables)
 
 
-def _is_visible(w: dict, user: UserContext) -> bool:
+def _is_visible(w: dict, user: UserContext, variables: dict | None = None) -> bool:
     """Check role-based and conditional visibility."""
     roles = w.get("visible_roles")
     if roles and user.role not in roles:
         return False
     cond = w.get("visible_if")
-    if cond and cond != "true":
-        return False
+    if cond:
+        if cond == "true":
+            pass  # always visible
+        elif not bool((variables or {}).get(cond)):
+            return False
     return True
 
 
@@ -111,7 +156,7 @@ def _build_button(w: dict, **ctx) -> Button:
 def _build_button_row(w: dict, **ctx) -> ButtonRow:
     buttons = []
     for bw in w.get("buttons", []):
-        if _is_visible(bw, ctx["user"]):
+        if _is_visible(bw, ctx["user"], ctx.get("vars")):
             buttons.append(_build_button(bw, **ctx))
     return ButtonRow(buttons=buttons)
 
@@ -196,6 +241,7 @@ def _load_file(path: str) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"Screen file must be a JSON/YAML object: {path}")
 
+    _validate_screen(data, path)
     _screen_cache[abs_path] = data
     return data
 
@@ -264,7 +310,7 @@ def load_screen(
     ctx = {"t_func": t_func, "lang": lang, "vars": vars_, "user": user}
 
     for w in data.get("widgets", []):
-        if not _is_visible(w, user):
+        if not _is_visible(w, user, vars_):
             continue
 
         wtype = w.get("type", "").lower()

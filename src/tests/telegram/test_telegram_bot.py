@@ -264,18 +264,22 @@ class TestCallbackAdmin:
         admin_chat_id,
         make_callback,
     ):
-        """admin_menu callback should call _handle_admin_menu for an admin."""
+        """admin_menu callback should render the admin_menu.yaml screen for an admin."""
         cb = make_callback(admin_chat_id, "admin_menu")
         _reset_state(admin_chat_id)
 
         with patch.object(tmb, "bot", mock_bot), \
              patch("telegram_menu_bot._is_allowed", return_value=True), \
              patch("telegram_menu_bot._is_admin", return_value=True), \
-             patch("telegram_menu_bot._handle_admin_menu") as mock_admin, \
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._get_pending_registrations", return_value=[]), \
+             patch("telegram_menu_bot.load_screen", return_value=MagicMock()) as mock_load, \
+             patch("telegram_menu_bot.render_screen") as mock_render, \
              patch("telegram_menu_bot._set_lang"):
             tmb.callback_handler(cb)
 
-        mock_admin.assert_called_once_with(admin_chat_id)
+        mock_load.assert_called_once()
+        mock_render.assert_called_once()
 
     def test_reg_approve_rejected_for_non_admin(
         self,
@@ -321,43 +325,82 @@ class TestCallbackAdmin:
 # ===========================================================================
 
 class TestCallbackMenu:
-    """Tests for the menu and help callbacks."""
+    """Phase 3 DSL: data='menu' / 'help' use load_screen + render_screen."""
 
-    def test_menu_callback_calls_send_menu(
+    def test_menu_callback_invokes_dsl_load_and_render(
         self,
         mock_bot,
         user_chat_id,
         make_callback,
     ):
-        """The 'menu' callback should call _send_menu."""
+        """The 'menu' callback should call load_screen with main_menu.yaml."""
         cb = make_callback(user_chat_id, "menu")
         _reset_state(user_chat_id)
 
         with patch.object(tmb, "bot", mock_bot), \
              patch("telegram_menu_bot._is_allowed", return_value=True), \
-             patch("telegram_menu_bot._send_menu") as mock_send_menu, \
-             patch("telegram_menu_bot._set_lang"):
+             patch("telegram_menu_bot._is_admin", return_value=False), \
+             patch("telegram_menu_bot._is_guest", return_value=False), \
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot.load_screen") as mock_load, \
+             patch("telegram_menu_bot.render_screen") as mock_render:
+            mock_load.return_value = MagicMock(name="Screen")
             tmb.callback_handler(cb)
 
-        mock_send_menu.assert_called_once_with(user_chat_id)
+        mock_load.assert_called_once()
+        assert mock_load.call_args[0][0] == "screens/main_menu.yaml"
+        mock_render.assert_called_once()
 
-    def test_menu_callback_clears_user_mode(
+    def test_menu_callback_clears_user_mode_and_pending(
         self,
         mock_bot,
         user_chat_id,
         make_callback,
     ):
-        """The 'menu' callback should clear any active user mode."""
+        """The 'menu' callback should clear user mode and pending command."""
         _st._user_mode[user_chat_id] = "chat"
+        _st._pending_cmd[user_chat_id] = "something"
         cb = make_callback(user_chat_id, "menu")
 
         with patch.object(tmb, "bot", mock_bot), \
              patch("telegram_menu_bot._is_allowed", return_value=True), \
-             patch("telegram_menu_bot._send_menu"), \
-             patch("telegram_menu_bot._set_lang"):
+             patch("telegram_menu_bot._is_admin", return_value=False), \
+             patch("telegram_menu_bot._is_guest", return_value=False), \
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot.load_screen", return_value=MagicMock()), \
+             patch("telegram_menu_bot.render_screen"):
             tmb.callback_handler(cb)
 
-        assert _st._user_mode.get(user_chat_id) not in ("chat", "system", "calendar")
+        assert user_chat_id not in _st._user_mode
+        assert user_chat_id not in _st._pending_cmd
+
+    def test_menu_callback_admin_gets_admin_role(
+        self,
+        mock_bot,
+        admin_chat_id,
+        make_callback,
+    ):
+        """Admin user's 'menu' callback should pass role='admin' to load_screen."""
+        cb = make_callback(admin_chat_id, "menu")
+        _reset_state(admin_chat_id)
+        captured_ctx = {}
+
+        def fake_load(path, ctx, **kwargs):
+            captured_ctx["role"] = ctx.role
+            return MagicMock()
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin", return_value=True), \
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot.load_screen", side_effect=fake_load), \
+             patch("telegram_menu_bot.render_screen"):
+            tmb.callback_handler(cb)
+
+        assert captured_ctx.get("role") == "admin"
 
     def test_help_callback_sends_message(
         self,
@@ -365,7 +408,7 @@ class TestCallbackMenu:
         user_chat_id,
         make_callback,
     ):
-        """The 'help' callback should send a help message."""
+        """The 'help' callback should render via DSL (load_screen + render_screen)."""
         cb = make_callback(user_chat_id, "help")
         _reset_state(user_chat_id)
 
@@ -373,9 +416,97 @@ class TestCallbackMenu:
              patch("telegram_menu_bot._is_allowed", return_value=True), \
              patch("telegram_menu_bot._is_admin", return_value=False), \
              patch("telegram_menu_bot._is_guest", return_value=False), \
-             patch("telegram_menu_bot._set_lang"):
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot.load_screen", return_value=MagicMock()) as mock_load, \
+             patch("telegram_menu_bot.render_screen") as mock_render:
             tmb.callback_handler(cb)
 
+        mock_load.assert_called_once()
+        args = mock_load.call_args
+        assert args[0][0] == "screens/help.yaml"
+        mock_render.assert_called_once()
+
+
+# ===========================================================================
+# 4b.  Admin-menu DSL callbacks (Phase 3)
+# ===========================================================================
+
+class TestCallbackAdminMenuDSL:
+    """Phase 3 DSL: data='admin_menu' uses load_screen + render_screen."""
+
+    def test_admin_menu_callback_loads_admin_menu_yaml(
+        self,
+        mock_bot,
+        admin_chat_id,
+        make_callback,
+    ):
+        """Admin-menu callback should call load_screen with admin_menu.yaml."""
+        cb = make_callback(admin_chat_id, "admin_menu")
+        _reset_state(admin_chat_id)
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin", return_value=True), \
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._get_pending_registrations", return_value=[]), \
+             patch("telegram_menu_bot.load_screen") as mock_load, \
+             patch("telegram_menu_bot.render_screen") as mock_render:
+            mock_load.return_value = MagicMock(name="AdminScreen")
+            tmb.callback_handler(cb)
+
+        mock_load.assert_called_once()
+        assert mock_load.call_args[0][0] == "screens/admin_menu.yaml"
+        mock_render.assert_called_once()
+
+    def test_admin_menu_pending_badge_injected(
+        self,
+        mock_bot,
+        admin_chat_id,
+        make_callback,
+    ):
+        """pending_badge variable should contain the count when there are pending regs."""
+        cb = make_callback(admin_chat_id, "admin_menu")
+        _reset_state(admin_chat_id)
+        fake_pending = [{"user": "alice"}, {"user": "bob"}]
+        captured = {}
+
+        def fake_load(path, ctx, variables=None, **kwargs):
+            captured["variables"] = variables
+            return MagicMock()
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin", return_value=True), \
+             patch("telegram_menu_bot._lang", return_value="en"), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._get_pending_registrations", return_value=fake_pending), \
+             patch("telegram_menu_bot.load_screen", side_effect=fake_load), \
+             patch("telegram_menu_bot.render_screen"):
+            tmb.callback_handler(cb)
+
+        assert "pending_badge" in captured.get("variables", {})
+        assert "2" in captured["variables"]["pending_badge"]
+
+    def test_admin_menu_callback_denied_for_non_admin(
+        self,
+        mock_bot,
+        user_chat_id,
+        make_callback,
+    ):
+        """Non-admin 'admin_menu' callback should NOT call load_screen."""
+        cb = make_callback(user_chat_id, "admin_menu")
+        _reset_state(user_chat_id)
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin", return_value=False), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot.load_screen") as mock_load:
+            tmb.callback_handler(cb)
+
+        mock_load.assert_not_called()
         mock_bot.send_message.assert_called()
 
 

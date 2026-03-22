@@ -589,3 +589,91 @@ class TestHelpYaml:
         assert user_screen is not None
         # Admin should see more or equal widgets
         assert len(admin_screen.widgets) >= len(user_screen.widgets)
+
+
+# ===========================================================================
+# main_menu.yaml — real file integration tests
+# ===========================================================================
+
+class TestMainMenuYaml:
+    """Validate the actual main_menu.yaml screen definition file."""
+
+    SCREEN_PATH = os.path.join(
+        os.path.dirname(__file__), "..", "..", "screens", "main_menu.yaml"
+    )
+
+    def _skip_if_missing(self):
+        if not os.path.exists(self.SCREEN_PATH):
+            pytest.skip("main_menu.yaml not found")
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            pytest.skip("pyyaml not installed")
+
+    def test_main_menu_yaml_loads_for_user(self):
+        """File should load without error for a regular user."""
+        self._skip_if_missing()
+        screen = load_screen(self.SCREEN_PATH, _user("user"), variables={}, t_func=_t)
+        assert screen is not None
+        assert isinstance(screen, Screen)
+        assert len(screen.widgets) >= 1
+
+    def test_main_menu_admin_sees_more_widgets_than_user(self):
+        """Admin receives 3 extra widgets gated by visible_roles: [admin]."""
+        self._skip_if_missing()
+        user_screen = load_screen(self.SCREEN_PATH, _user("user"), variables={}, t_func=_t)
+        admin_screen = load_screen(self.SCREEN_PATH, _user("admin"), variables={}, t_func=_t)
+        assert len(admin_screen.widgets) > len(user_screen.widgets)
+
+    def test_main_menu_user_sees_8_widgets(self):
+        """User should see 8 widgets (11 total minus 3 admin-only rows)."""
+        self._skip_if_missing()
+        screen = load_screen(self.SCREEN_PATH, _user("user"), variables={}, t_func=_t)
+        assert len(screen.widgets) == 8
+
+    def test_main_menu_admin_sees_11_widgets(self):
+        """Admin should see all 11 widgets."""
+        self._skip_if_missing()
+        screen = load_screen(self.SCREEN_PATH, _user("admin"), variables={}, t_func=_t)
+        assert len(screen.widgets) == 11
+
+
+# ===========================================================================
+# admin_menu.yaml — real file integration tests
+# ===========================================================================
+
+class TestAdminMenuYaml:
+    """Validate the actual admin_menu.yaml screen definition file."""
+
+    SCREEN_PATH = os.path.join(
+        os.path.dirname(__file__), "..", "..", "screens", "admin_menu.yaml"
+    )
+
+    def _skip_if_missing(self):
+        if not os.path.exists(self.SCREEN_PATH):
+            pytest.skip("admin_menu.yaml not found")
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            pytest.skip("pyyaml not installed")
+
+    def test_admin_menu_yaml_loads_with_empty_badge(self):
+        """File loads without error; expects exactly 10 widgets."""
+        self._skip_if_missing()
+        screen = load_screen(
+            self.SCREEN_PATH, _user("admin"),
+            variables={"pending_badge": ""}, t_func=_t,
+        )
+        assert screen is not None
+        assert isinstance(screen, Screen)
+        assert len(screen.widgets) == 10
+
+    def test_admin_menu_with_pending_badge_variable(self):
+        """pending_badge variable should be accepted and substituted without error."""
+        self._skip_if_missing()
+        screen = load_screen(
+            self.SCREEN_PATH, _user("admin"),
+            variables={"pending_badge": "  (2 new)"}, t_func=_t,
+        )
+        assert screen is not None
+        assert len(screen.widgets) == 10

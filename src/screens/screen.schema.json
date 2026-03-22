@@ -1,0 +1,250 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "screen.schema.json",
+  "title": "Taris Screen DSL",
+  "description": "Schema for YAML/JSON screen definition files used by screen_loader.py",
+  "type": "object",
+  "required": ["widgets"],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Literal title (supports {variable} placeholders)"
+    },
+    "title_key": {
+      "type": "string",
+      "description": "i18n key resolved via t_func(lang, key) from strings.json"
+    },
+    "parse_mode": {
+      "description": "Telegram parse mode. Use null/~ for plain text",
+      "oneOf": [
+        { "type": "string", "enum": ["Markdown", "HTML"] },
+        { "type": "null" }
+      ],
+      "default": "Markdown"
+    },
+    "ephemeral": {
+      "type": "boolean",
+      "description": "If true, message is auto-deleted after interaction",
+      "default": false
+    },
+    "widgets": {
+      "type": "array",
+      "description": "Ordered list of widgets to render",
+      "items": { "$ref": "#/definitions/widget" }
+    }
+  },
+  "definitions": {
+    "visibility": {
+      "type": "object",
+      "properties": {
+        "visible_roles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Widget shown only if user.role is in this list"
+        },
+        "visible_if": {
+          "type": "string",
+          "description": "Conditional visibility expression"
+        }
+      }
+    },
+    "text_or_key": {
+      "description": "Pattern: either a literal string or an i18n key. Used by label/label_key, title/title_key, text/text_key, etc."
+    },
+    "widget": {
+      "type": "object",
+      "required": ["type"],
+      "discriminator": { "propertyName": "type" },
+      "oneOf": [
+        { "$ref": "#/definitions/button_widget" },
+        { "$ref": "#/definitions/button_row_widget" },
+        { "$ref": "#/definitions/card_widget" },
+        { "$ref": "#/definitions/text_input_widget" },
+        { "$ref": "#/definitions/toggle_widget" },
+        { "$ref": "#/definitions/audio_player_widget" },
+        { "$ref": "#/definitions/markdown_widget" },
+        { "$ref": "#/definitions/spinner_widget" },
+        { "$ref": "#/definitions/confirm_widget" },
+        { "$ref": "#/definitions/redirect_widget" }
+      ]
+    },
+    "button_object": {
+      "type": "object",
+      "description": "Button inside a button_row.buttons array",
+      "required": ["action"],
+      "properties": {
+        "label": { "type": "string", "description": "Literal button text" },
+        "label_key": { "type": "string", "description": "i18n key for button text" },
+        "action": { "type": "string", "description": "Callback action (supports {var} placeholders)" },
+        "style": {
+          "type": "string",
+          "enum": ["primary", "secondary", "danger", "ghost"],
+          "default": "primary"
+        },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "anyOf": [
+        { "required": ["label"] },
+        { "required": ["label_key"] }
+      ],
+      "additionalProperties": false
+    },
+    "button_widget": {
+      "type": "object",
+      "description": "Standalone button (rendered as a single-button row)",
+      "required": ["type", "action"],
+      "properties": {
+        "type": { "const": "button" },
+        "label": { "type": "string" },
+        "label_key": { "type": "string" },
+        "action": { "type": "string" },
+        "style": {
+          "type": "string",
+          "enum": ["primary", "secondary", "danger", "ghost"],
+          "default": "primary"
+        },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "anyOf": [
+        { "required": ["label"] },
+        { "required": ["label_key"] }
+      ],
+      "additionalProperties": false
+    },
+    "button_row_widget": {
+      "type": "object",
+      "description": "Horizontal row of buttons",
+      "required": ["type", "buttons"],
+      "properties": {
+        "type": { "const": "button_row" },
+        "buttons": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/button_object" },
+          "minItems": 1
+        },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "card_widget": {
+      "type": "object",
+      "description": "Information card with optional title and body",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "card" },
+        "title": { "type": "string" },
+        "title_key": { "type": "string" },
+        "body": { "type": "string" },
+        "body_key": { "type": "string" },
+        "action": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "text_input_widget": {
+      "type": "object",
+      "description": "Text input prompt (ForceReply in Telegram, <input> in Web)",
+      "required": ["type", "action"],
+      "properties": {
+        "type": { "const": "text_input" },
+        "placeholder": { "type": "string" },
+        "placeholder_key": { "type": "string" },
+        "action": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "toggle_widget": {
+      "type": "object",
+      "description": "Boolean toggle switch",
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "toggle" },
+        "label": { "type": "string" },
+        "label_key": { "type": "string" },
+        "key": { "type": "string", "description": "Toggle state key" },
+        "value": { "type": "boolean", "default": false },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "audio_player_widget": {
+      "type": "object",
+      "description": "Audio playback widget",
+      "required": ["type", "src"],
+      "properties": {
+        "type": { "const": "audio_player" },
+        "src": { "type": "string", "description": "Audio source URL or variable" },
+        "caption": { "type": "string" },
+        "caption_key": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "markdown_widget": {
+      "type": "object",
+      "description": "Pre-formatted Markdown content block",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "markdown" },
+        "text": { "type": "string" },
+        "text_key": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "anyOf": [
+        { "required": ["text"] },
+        { "required": ["text_key"] }
+      ],
+      "additionalProperties": false
+    },
+    "spinner_widget": {
+      "type": "object",
+      "description": "Loading indicator",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "spinner" },
+        "label": { "type": "string" },
+        "label_key": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "confirm_widget": {
+      "type": "object",
+      "description": "Yes/No confirmation gate",
+      "required": ["type", "action_yes", "action_no"],
+      "properties": {
+        "type": { "const": "confirm" },
+        "text": { "type": "string" },
+        "text_key": { "type": "string" },
+        "action_yes": { "type": "string" },
+        "action_no": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    },
+    "redirect_widget": {
+      "type": "object",
+      "description": "Immediately redirect to another action",
+      "required": ["type", "target"],
+      "properties": {
+        "type": { "const": "redirect" },
+        "target": { "type": "string" },
+        "visible_roles": { "$ref": "#/definitions/visibility/properties/visible_roles" },
+        "visible_if": { "$ref": "#/definitions/visibility/properties/visible_if" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

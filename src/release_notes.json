@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.12",
+    "date":    "2026-03-22",
+    "title":   "Screen DSL Phase 4+5: Feature Screens + Schema Validation (TODO 21.4-21.5)",
+    "notes":   "- 7 new YAML screens: notes_menu, note_view, note_raw, note_edit, profile, profile_lang, profile_my_data\n- bot_handlers.py migrated to DSL render via _render() + _screen_ctx() helpers\n- screen.schema.json: JSON Schema draft-07 for all 10 widget types\n- screen_loader.py: visible_if bug fix (now evaluates against variables dict)\n- New section 19.12 in dev-patterns.md: Hybrid Pattern for Multi-Step Flows\n- Multi-step YAML proposal: doc/todo/21.6-multistep-yaml-proposal.md"
+  },
+  {
     "version": "2026.4.11",
     "date":    "2026-4-11",
     "title":   "Screen DSL Loader - Phase 3: Main & Admin Menus (TODO 21.3)",

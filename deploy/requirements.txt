@@ -33,6 +33,10 @@ psycopg[binary]
 psycopg-pool
 pgvector
 
+# Screen DSL
+pyyaml                 # YAML screen definitions (src/screens/)
+jsonschema             # optional — YAML/JSON screen file validation
+
 # Documents / RAG
 sentence-transformers  # all-MiniLM-L6-v2 embeddings
 pdfminer.six           # PDF text extraction

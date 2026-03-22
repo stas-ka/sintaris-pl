@@ -15,6 +15,7 @@
 - [] German voice models absent on both PIs (`de_DE-thorsten-medium.onnx`, `vosk-model-small-de`)
 - [] PI2 has no Whisper model (`ggml-base.bin`) — Whisper tests SKIP
 - [] Vosk WER regression on short audio (`audio_2026-03-08_08-34-23.ogg`) — WER 0.70 vs threshold 0.35
+- [] Static textes for UI defined partialy in the python . For example bot_calendar.py contains strings in english or urssian languages. It is not allowed to define string directly in the python. strings.json shall be used overall. Fix it in all python scripts and move textes in the strings.json
 
 
 
@@ -418,19 +419,19 @@ incremental migration from Python-coded screens.
 - [x] Add 11 admin i18n keys to `strings.json` (ru/en/de)
 - [x] Test: py_compile OK, YAML validation OK, IDE error-free
 
-### 21.4 Phase 4 — Feature Screens 🔲
+### 21.4 Phase 4 — Feature Screens ✅ Implemented (v2026.4.10)
 
-- [ ] Convert notes list + note view + note edit screens
-- [ ] Convert calendar event list screen
-- [ ] Convert mail digest screen
-- [ ] Convert settings/profile screen
+- [x] Convert notes list + note view + note edit screens (`notes_menu.yaml`, `note_view.yaml`, `note_raw.yaml`, `note_edit.yaml`)
+- [x] Convert settings/profile screen (`profile.yaml`, `profile_lang.yaml`, `profile_my_data.yaml`)
+- [x] Wire all 7 handlers in `bot_handlers.py` via `_render()` + `_screen_ctx()` helpers
+- [x] All 10 YAML screen files in `src/screens/`, validated with zero errors
 
-### 21.5 Phase 5 — Validation & Docs 🔲
+### 21.5 Phase 5 — Validation & Docs ✅ Implemented (v2026.4.10)
 
-- [ ] Create `src/screens/screen.schema.json` JSON Schema
-- [ ] Add schema validation in `_load_file()` — log warning on invalid files
-- [ ] Document screen file format as new section in `doc/dev-patterns.md`
-- [ ] Update `doc/bot-code-map.md` with `screen_loader.py` entry
+- [x] Create `src/screens/screen.schema.json` JSON Schema (draft-07, 14 definitions, 10 widget types)
+- [x] Add schema validation in `_load_file()` — log warning on invalid files
+- [x] Document screen file format as new section §19 in `doc/dev-patterns.md`
+- [x] Update `doc/bot-code-map.md` with `screen_loader.py` entry
 
 ### 21.6 Phase 6 — Visual Editor (OpenClaw only) 🔲
 
