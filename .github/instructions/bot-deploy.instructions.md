@@ -17,13 +17,17 @@ Use this skill whenever deploying bot changes to the Pi.
 
 ## Deployment Pipeline — MANDATORY ORDER
 
-> **RULE: Engineering before Production — always.**
+> **RULE: Engineering before Production — always. PI1 receives only the master branch.**
 >
-> 1. Deploy and test on **PI2** (`OpenClawPI2`) — engineering target.
-> 2. **Only after** all tests pass and the change is committed and pushed to git:
+> 1. Deploy and test on **PI2** (`OpenClawPI2`) — engineering target. Accepts any branch.
+> 2. **Only after** all tests pass: commit, push to git, and **merge to `master`**.
 > 3. Deploy to **PI1** (`OpenClawPI`) — production target.
+>    - **PI1 ONLY receives code from the `master` branch. NEVER deploy a feature branch to PI1.**
+>    - Before deploying to PI1, run `git branch` and confirm the working branch is `master`.
+>    - If on a feature branch: merge to `master` first, then deploy.
 >
 > **NEVER** deploy directly to PI1 without prior validation on PI2.
+> **NEVER** deploy a non-master branch to PI1.
 
 ## 1 — Version Bump
 

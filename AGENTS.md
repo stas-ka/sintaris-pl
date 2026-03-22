@@ -11,9 +11,11 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ## Remote Host
 
+> ⚠️ **PI1 Branch Rule**: PI1 (`OpenClawPI`) only receives deployments from the **`master` branch**. PI2 (`OpenClawPI2`) may receive any branch for development/testing.
+
 | Key | Value |
 |---|---|
-| `DEV_TARGETHOST` | `OpenClawPI` |
+| `DEV_TARGETHOST` | `OpenClawPI2` |
 | `DEV_HOSTUSER` | `stas` |
 | `DEV_TAILSCALE_IP` | `100.81.143.126` |
 | SSH | `plink -pw "%DEV_HOSTPWD%" -batch stas@OpenClawPI2 "<cmd>"` (LAN) |

@@ -49,7 +49,9 @@
 
 /* Input wrapper */
 .input-wrapper    { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin-top:4px; padding:10px 12px 8px; }
-.text-row         { display:flex; gap:6px; align-items:flex-end; }
+.text-row         { display:flex; gap:6px; align-items:flex-end; margin:0; }
+.text-row button  { flex:0 0 auto; width:36px; height:36px; min-width:36px; padding:0; /* override Pico form-button block sizing */ }
+#chat-input       { flex:1 1 auto; min-width:0; }
 .voice-row        { display:none; flex-direction:column; gap:6px; }
 .waveform         { height:32px; display:flex; align-items:flex-end; gap:2px; flex:1; overflow:hidden; }
 .vc-status-row    { display:flex; align-items:center; gap:8px; }
@@ -137,7 +139,7 @@
         <span class="material-icons-round" id="mic-icon" style="font-size:20px">mic</span>
       </button>
       <button id="send-btn" type="submit" class="btn btn-accent btn-icon" title="Send message">
-        <span class="material-icons-round" id="send-icon">send</span>
+        <span class="material-icons-round" id="send-icon" style="font-size:20px">send</span>
       </button>
     </form>
 

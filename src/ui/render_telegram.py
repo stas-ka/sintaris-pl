@@ -193,9 +193,12 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
             log.error("[render_telegram] widget render error: %s", exc)
 
     # --- If nothing was sent yet, emit the screen title + any remaining keyboard ---
+    # Use screen.title as-is: it may already contain Markdown (e.g. "🔐 *Admin Panel*")
+    # from strings.json. Applying _escape_md() + wrapping in *..* would double-escape.
     if not sent_at_least_one:
+        msg_text = screen.title if screen.title else "\u200b"  # zero-width space if empty
         bot.send_message(
-            chat_id, f"*{_escape_md(screen.title)}*",
+            chat_id, msg_text,
             parse_mode="Markdown",
             reply_markup=ikm,
             **_common()
@@ -204,8 +207,9 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
 
     # --- Orphan keyboard (button rows with no associated text) ---
     if ikm is not None:
+        msg_text = screen.title if screen.title else "\u200b"
         bot.send_message(
-            chat_id, f"*{_escape_md(screen.title)}*",
+            chat_id, msg_text,
             parse_mode="Markdown",
             reply_markup=ikm,
             **_common()

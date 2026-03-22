@@ -46,6 +46,11 @@ widgets:
 
   - type: button_row
     buttons:
+      - label_key: admin_btn_system
+        action: mode_system
+
+  - type: button_row
+    buttons:
       - label_key: admin_btn_reload_screens
         action: reload_screens
 
