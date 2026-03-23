@@ -20,6 +20,7 @@ from typing import Optional
 import core.bot_state as _st
 from core.bot_config import (
     LAST_DIGEST_FILE, DIGEST_SCRIPT, MAIL_CREDS_DIR,
+    RAG_ENABLED, RAG_TOP_K, RAG_FLAG_FILE,
     log,
 )
 from core.bot_instance import bot
@@ -717,22 +718,26 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
         # Build message list: past history + current user turn (with lang hint)
         current_content = _with_lang(chat_id, user_text)
         # ── RAG context injection ──────────────────────────────────────────
-        try:
-            from core.store import store as _store
-            if _store.has_document_search():
-                _MAX_CHUNK_CHARS = 400   # truncate each FTS5 chunk
-                _MAX_RAG_CHARS   = 1600  # total context cap
-                _chunks = _store.search_fts(user_text, chat_id, top_k=3)
-                if _chunks:
-                    _rag_ctx = "\n---\n".join(
-                        c["chunk_text"][:_MAX_CHUNK_CHARS] for c in _chunks
-                    )
-                    current_content = (
-                        f"[Relevant context:\n{_rag_ctx[:_MAX_RAG_CHARS]}]\n\n{current_content}"
-                    )
-                    log.debug("[RAG] injected %d chars from %d chunks", len(_rag_ctx[:_MAX_RAG_CHARS]), len(_chunks))
-        except Exception as _rag_e:
-            log.debug("[RAG] vector search failed: %s", _rag_e)
+        import os as _os
+        if RAG_ENABLED and not _os.path.exists(RAG_FLAG_FILE):
+            try:
+                from core.store import store as _store
+                if _store.has_document_search():
+                    _MAX_CHUNK_CHARS = 400
+                    _MAX_RAG_CHARS   = 1600
+                    _chunks = _store.search_fts(user_text, chat_id, top_k=RAG_TOP_K)
+                    if _chunks:
+                        _rag_ctx = "\n---\n".join(
+                            c["chunk_text"][:_MAX_CHUNK_CHARS] for c in _chunks
+                        )
+                        _injected = len(_rag_ctx[:_MAX_RAG_CHARS])
+                        current_content = (
+                            f"[Relevant context:\n{_rag_ctx[:_MAX_RAG_CHARS]}]\n\n{current_content}"
+                        )
+                        log.debug("[RAG] injected %d chars from %d chunks", _injected, len(_chunks))
+                        _store.log_rag_activity(chat_id, user_text, len(_chunks), _injected)
+            except Exception as _rag_e:
+                log.debug("[RAG] search failed: %s", _rag_e)
         messages = history_msgs + [{"role": "user", "content": current_content}]
 
         # Record the raw user text (without lang prefix) before calling the LLM

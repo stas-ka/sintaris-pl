@@ -86,11 +86,7 @@ Role validation on every command/callback, security event logging, configurable 
 ---
 
 ## 3. LLM Provider Support
-- [] Uploaded from user Documents shall be used only in your context and can be shared with other users, in first step with all
-- [] Admin can administrate(view, delete) all uploaded documents from all users and which user which document uploaded and status of sharing documents 
-- [] Admin can remove sharing documents for uploaded documents from user to all 
-- [] Uploaded documents can be downloaded in original format 
-- [] ( nice to have) if is possible to show txt, pdf, rtf, docx, md documents
+→ Document management and knowledge base features: see **§10** (Upload and Knowledge Documents).
 
 ### 3.1 Multi-LLM Provider Support ✅ Implemented (v2026.3.32)
 OpenRouter ✅ · OpenAI direct ✅ · YandexGPT ✅ · Gemini ✅ · Anthropic ✅ · local llama.cpp ✅
@@ -127,21 +123,23 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 ---
 
 ### 4.1 Local RAG Knowledge Base 🔲
+→ Implementation steps: **§24.6** (PicoClaw — FTS5-only) · **§25.6 Phases A–B** (OpenClaw — Hybrid Tiered RAG)
+→ Architecture: [concept/rag-memory-architecture.md](concept/rag-memory-architecture.md) (Variant C — Hybrid Tiered RAG, score 4.45)
 
-- [ ] using local llm for RAG optional , configurable in Admin PAnel 
-- [ ] Embed documents with `all-MiniLM-L6-v2` fro local RAG
-- [ ] Vector similarity search → inject top-k context into LLM prompt
-- [ ] Commands: `/rag_on`, `/rag_off`
-- [ ] Storage: `~/.taris/knowledge_base/` (documents + `embeddings.db`)
-- [ ] configuration to use local knowledges for integrated RAG with local LLM and remote llm and remote RAG knowledge  service.
-- [ ] settings for configuration of local RAG service via Admin panel
+- [ ] RAG on/off toggle + settings in Admin Panel (`RAG_ENABLED`, `RAG_TOP_K`, chunk size, temperature — see Appendix B)
+- [ ] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp (OpenClaw/Laptop only)
+- [ ] `all-MiniLM-L6-v2` embeddings via ONNX Runtime (Pi 5/Server); graceful FTS5-only fallback on Pi 3
+- [ ] Storage: sqlite-vec for vectors (Pi 5+) or FTS5-only (Pi 3); pgvector HNSW (OpenClaw/VPS)
+- [ ] Timeout monitoring for RAG / LLM calls; configurable `MCP_TIMEOUT` per provider
+- [ ] RAG activity log in DB; Admin Panel: view last N queries + retrieved chunks
 
+### 4.2 Remote RAG Service (MCP) 🔲
+→ Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
 
-### 4.2 [ ] optimize local RAG
-
-### 4.2 [ ] Implement remote  RAG service as MCP service
-- [ ] Using local knowledges is possible and connect to use remote RAG services as additional
-- [ ] Connect , using to remote service via MCP server connection as tool
+- [ ] Expose `search_knowledge()` as local MCP tool server
+- [ ] Connect to external MCP RAG services via `MCP_REMOTE_URL` config in `bot.env`
+- [ ] Circuit breaker + timeout (default 10 s) with fallback to local knowledge base
+- [ ] Credentials and endpoint URL configurable in Admin Panel
 ---
 
 ## 5. Voice Pipeline
@@ -204,10 +202,10 @@ Full regression test run on both PIs. **Vosk wins decisively** on Raspberry Pi h
 - [ ] Feature flags pattern in `bot.env` for gradual rollout
 
 ### 6.4 Hardware Upgrades 💡
-
-- [ ] Pi 4 B upgrade — drops total latency ~115 s → ~15 s
-- [ ] Pi 5 + NVMe upgrade — ~8 s total; full local LLM viable
-- [ ] USB SSD — eliminates Piper model cold-start (15 s → 2 s), zero code changes
+→ PicoClaw (Pi 3 B+) performance tuning: **§24.4** (USB SSD, tmpfs ONNX, zram, CPU governor, low-quality voice model)
+→ OpenClaw upgrade path (Pi 5 / RK3588 / Laptop/AI X1): **§25** — pgvector, local LLM, ≤2 s voice with NPU
+→ VPS cloud deployment: **§26** — Docker Compose, webhook mode, pgvector, multi-user
+→ Full hardware analysis: [doc/hw-requirements-report.md](doc/hw-requirements-report.md) · [doc/hardware-performance-analysis.md](doc/hardware-performance-analysis.md)
 
 ### 6.5 Recovery Testing 🔲
 
@@ -341,8 +339,9 @@ Before implementaion of memories shall be analyse how can be implemented . here 
 ## [] 18. Using ZeroClaw instead PicoClaw
 → [Hardware Requirements Report §4.2](doc/hw-requirements-report.md) — ZeroClaw feasibility analysis (text-only; voice not viable on 512 MB)
 
-## [] 19. Using OpenClaw instead PicoClaw
-→ [Hardware Requirements Report §4.3 + §6](doc/hw-requirements-report.md) — OpenClaw configurations (Pi 5, RK3588, Jetson); full local AI stack
+## 19. OpenClaw Platform 💡
+→ Full deployment plan: **§25 Deployment Plan: OpenClaw (Laptop / AI X1 / Pi 5 8 GB / RK3588)**
+→ Hardware specs and options: [doc/hw-requirements-report.md §1.3](doc/hw-requirements-report.md)
 
 ---
 
@@ -467,3 +466,173 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - [ ] 23.10 Cross-architecture Pareto analysis — aggregate AutoResearch results across Pi/X1/VPS; identify Pareto-optimal configurations per hardware tier; document recommended defaults
 - [ ] 23.11 AutoResearch for nanochat training — adapt autoresearch paradigm to optimize nanochat hyperparameters (depth, vocab_size, seq_len) for edge LLM on Pi 5 / AI X1
 - [ ] 23.12 Compare Hybrid RAG vs Google Grounding — run identical queries through both pipelines using AutoResearch evaluation harness; measure quality/latency/cost; document results
+
+---
+
+## 24. Deployment Plan: PicoClaw (Raspberry Pi 3 B+) 🔲
+
+> **Hardware:** BCM2837B0 · 4× Cortex-A53 @ 1.4 GHz · 1 GB LPDDR2. RAM budget at full load: ~715 MB (critical).
+> **Voice latency baseline:** ~30–60 s; achievable after tuning: ~20–25 s. ≤2 s target is **not achievable** (no NPU/GPU).
+> **Backend:** `STORE_BACKEND=sqlite` + sqlite-vec. **LLM:** Cloud only (no local inference on Pi 3).
+> → Hardware deep-dive: [doc/hardware-performance-analysis.md](doc/hardware-performance-analysis.md) · [doc/hw-requirements-report.md §1.1](doc/hw-requirements-report.md)
+
+### 24.1 Base System
+- [ ] Flash Raspberry Pi OS Lite 64-bit (Bookworm); enable SSH; set hostname; disable GUI
+- [ ] `sudo apt install python3.11 python3-pip git ffmpeg sqlite3 -y`
+- [ ] Clone repo to `/home/stas/taris/`; `pip install -r deploy/requirements.txt`
+- [ ] Create `~/.taris/bot.env`: `STORE_BACKEND=sqlite`, `LLM_PROVIDER=taris`, `EMBED_KEEP_RESIDENT=0`
+
+### 24.2 Voice Pipeline
+- [ ] Install Piper binary `/usr/local/bin/piper`; download `ru_RU-irina-medium.onnx` (66 MB) + `.json` config to `~/.taris/`
+- [ ] Install Vosk models: `vosk-model-small-ru-0.22` (48 MB) + `vosk-model-small-en-us-0.15` to `~/.taris/`
+- [ ] Optional: `ru_RU-irina-low.onnx` (faster TTS inference); `ggml-base.bin` (Whisper fallback, 142 MB)
+- [ ] Run `bash src/setup/setup_voice.sh` — verifies all binaries and model paths
+
+### 24.3 Storage & Migration
+- [ ] `bash src/setup/install_sqlite_vec.sh` (ARMv8 sqlite-vec wheel)
+- [ ] `python3 src/setup/migrate_to_db.py` (idempotent — JSON → SQLite)
+- [ ] Set `STORE_VECTORS=off` in `bot.env` by default (FTS5-only until free RAM confirmed ≥150 MB)
+
+### 24.4 Performance Tuning (apply in order)
+- [ ] CPU governor: `echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`; persist in `/etc/rc.local`
+- [ ] GPU memory: add `gpu_mem=16` to `/boot/firmware/config.txt` → frees ~50 MB extra page cache
+- [ ] zram: `sudo apt install zram-tools; echo ALGO=lz4 >> /etc/default/zramswap; echo PERCENT=50 >> /etc/default/zramswap`
+- [ ] Enable `tmpfs_model` voice opt in admin panel — copies 66 MB ONNX to `/dev/shm`, eliminates 10–15 s Piper cold-start
+- [ ] USB SSD (optional): mount via USB 2.0; copy ONNX models; update `PIPER_MODEL` path; move swap there (→ 0.4 ms latency vs 15 ms on SD). See [doc/hardware-performance-analysis.md §8](doc/hardware-performance-analysis.md)
+- [ ] Enable `piper_low_model` voice opt — TTS inference ~10 s faster at slightly lower quality
+- [ ] Enable `persistent_piper` voice opt — keeps warm Piper subprocess between calls
+
+### 24.5 Services & Smoke Test
+- [ ] `sudo cp src/services/taris-telegram.service src/services/taris-web.service /etc/systemd/system/`
+- [ ] `sudo systemctl daemon-reload && sudo systemctl enable --now taris-telegram taris-web`
+- [ ] Smoke check: `journalctl -u taris-telegram -n 20 --no-pager` → `[INFO] Version: X.Y.Z` + `Polling Telegram…`
+- [ ] Voice regression: `python3 ~/.taris/tests/test_voice_regression.py` — all T01–T26 pass
+
+### 24.6 RAG on Pi 3 (FTS5-only mode)
+- [ ] Phase A — Memory System: add `memory_summaries`/`memory_long` tables to `store_sqlite.py`; implement `compact_short_to_middle()` / `compact_middle_to_long()` (see `concept/rag-memory-architecture.md §6.3`)
+- [ ] Phase B — FTS5 RAG: `classify_query()` adaptive routing; FTS5 BM25 search only (no vectors — RAM constraint); `rag_log` table
+- [ ] **Do NOT** enable `STORE_VECTORS=on` on Pi 3 unless `free -m` under full load confirms ≥150 MB available
+- [ ] Embedding model (`all-MiniLM-L6-v2`): load on demand and free after use (`EMBED_KEEP_RESIDENT=0`)
+
+### 24.7 Known Constraints
+- Voice ≤2 s target: ❌ impossible on Pi 3 B+ (no NPU/GPU; minimum requires ≥13 TOPS — see §25 for upgrade)
+- Local LLM: ❌ not viable; Qwen2-0.5B only as emergency offline fallback at ≤0.4 tok/s
+- Vector search: ⚠️ only if free RAM ≥150 MB confirmed; otherwise FTS5-only RAG
+
+---
+
+## 25. Deployment Plan: OpenClaw (Laptop / AI X1 / Pi 5 8 GB / RK3588) 🔲
+
+> **Hardware options:** x86_64 Laptop/AI X1 · Pi 5 8 GB (A76 @ 2.4 GHz, NVMe 900 MB/s) · RK3588 (6 TOPS NPU, ≤16 GB, NVMe 3000 MB/s).
+> **Voice target:** ≤2 s requires NPU/GPU (≥13 TOPS). Pi 5 + Hailo-8L HAT achieves 1.5–2.0 s with cloud LLM.
+> **Backend:** `STORE_BACKEND=postgres` + pgvector HNSW. **LLM:** Local llama.cpp + cloud fallback.
+> → Hardware specs: [doc/hw-requirements-report.md §1.3 + §0](doc/hw-requirements-report.md)
+> → RAG architecture: [concept/rag-memory-architecture.md](concept/rag-memory-architecture.md) (Variant C — Hybrid Tiered RAG, score 4.45)
+
+### 25.1 Base System
+- [ ] Ubuntu 22.04 LTS (or Raspberry Pi OS Bookworm 64-bit for Pi 5); `sudo apt install python3.11 python3-pip git ffmpeg -y`
+- [ ] NVMe SSD: mount at `/data/taris/`; symlink `~/.taris → /data/taris/` (Pi 5: PCIe 2.0 900 MB/s; RK3588: PCIe 3.0 3000 MB/s)
+- [ ] Clone repo; `pip install -r deploy/requirements.txt`
+
+### 25.2 PostgreSQL + pgvector
+- [ ] `sudo apt install postgresql-16 -y; pip install psycopg2-binary`
+- [ ] `sudo -u postgres psql -c "CREATE USER taris WITH PASSWORD '…'; CREATE DATABASE taris_db OWNER taris;"`
+- [ ] `sudo apt install postgresql-16-pgvector -y` (or build from source); `CREATE EXTENSION IF NOT EXISTS vector;`
+- [ ] HNSW index: `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64);`
+- [ ] Set `STORE_BACKEND=postgres`, `DB_URL=postgresql://taris:…@localhost/taris_db`, `STORE_VECTORS=on` in `bot.env`
+
+### 25.3 Local LLM (llama.cpp)
+- [ ] Build: `git clone https://github.com/ggerganov/llama.cpp /data/llama.cpp && cmake -B build -DLLAMA_BLAS=ON && cmake --build build -j$(nproc)`
+- [ ] GPU (Laptop/AI X1): add `-DLLAMA_CUDA=on` (NVIDIA) or `-DLLAMA_METAL=on` (Apple) to cmake flags
+- [ ] Download model: Pi 5 → `Phi-3-mini-4k-instruct-Q4_K_M.gguf` (2.4 GB); Laptop/AI X1 → 7B–13B GGUF
+- [ ] Deploy `src/services/taris-llm.service`; configure `--model` path and `--port 8081`; `sudo systemctl enable --now taris-llm`
+- [ ] Set `LLM_PROVIDER=local`, `LLAMA_CPP_URL=http://localhost:8081`, `LLM_LOCAL_FALLBACK=true` in `bot.env`
+
+### 25.4 Embedding Service
+- [ ] `pip install onnxruntime sentence-transformers`
+- [ ] `python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"` (downloads ~90 MB)
+- [ ] Set `EMBED_MODEL=all-MiniLM-L6-v2`, `EMBED_KEEP_RESIDENT=1` in `bot.env`
+
+### 25.5 Voice Pipeline + NPU Acceleration
+- [ ] Install same Vosk/Piper models as §24.2 (NVMe load: 66 MB in ~0.07 s on Pi 5)
+- [ ] ≤2 s voice (optional — requires Hailo-8L HAT on Pi 5 or GPU on Laptop/AI X1):
+  - Flash Hailo PCIe driver; set up Whisper-tiny on NPU (STT ~0.05 s); run Piper ONNX on NPU (TTS ~0.3 s)
+  - Or: CUDA/OpenVINO Whisper-tiny for Laptop; update `WHISPER_BIN`; enable `whisper_stt` voice opt
+  - See [doc/hw-requirements-report.md §0.2–§0.3](doc/hw-requirements-report.md) for supported backends
+
+### 25.6 RAG Implementation — Variant C (Hybrid Tiered RAG)
+- [ ] **Phase A — Memory System (3–5 d):** `bot_memory.py`; DB tables `memory_summaries` + `memory_long`; `compact_short_to_middle()` / `compact_middle_to_long()` — see `concept/rag-memory-architecture.md §6.3`
+- [ ] **Phase B — Enhanced RAG (5–7 d):** FTS5 + pgvector HNSW + RRF fusion (k=60); `EmbeddingService` (ONNX Runtime); `classify_query()` routing; `rag_log` table; `RAG_TOP_K=5`, `RAG_MAX_CHARS=2000`
+- [ ] **Phase C — Document Management (3–4 d):** upload/chunk pipeline (`RAG_CHUNK_SIZE=512`, overlap=50); `doc_sharing` table; admin sharing controls; `PyMuPDF` for PDF+image; `rag_settings` per-user config
+- [ ] **Phase D — Remote RAG + MCP (4–6 d):** expose `search_knowledge()` as MCP tool; `MCP_REMOTE_URL` client; circuit breaker + fallback; see `concept/rag-memory-architecture.md §4.3`
+- [ ] **Phase E — Multimodal (future, GPU/Pi 5+ only):** CLIP embeddings for image search; `docling` for complex PDFs; vision API fallback
+
+### 25.7 Migration from PicoClaw
+- [ ] `python3 src/setup/migrate_sqlite_to_pg.py` (copies taris.db → PostgreSQL, idempotent)
+- [ ] Validate row counts; run full test suite T01–T26 + Web UI Playwright + offline Telegram tests
+
+### 25.8 Services & Test
+- [ ] `sudo cp src/services/taris-*.service /etc/systemd/system/ && sudo systemctl daemon-reload`
+- [ ] `sudo systemctl enable --now taris-telegram taris-web taris-llm`
+- [ ] AutoResearch (§23.7–23.9): `pip install ragas deepeval`; configure `evaluate.py` per `concept/rag-memory-architecture.md §6b`
+- [ ] Playwright UI tests: `py -m pytest src/tests/ui/ -v --base-url https://openclawpi2:8080`
+
+### 25.9 Hardware Notes
+- **Pi 5 8 GB** — minimum for full stack (PostgreSQL + llama.cpp + RAG). NVMe HAT strongly recommended.
+- **Pi 5 4 GB** — marginal: pgvector feasible but local LLM too slow; use cloud LLM provider.
+- **RK3588 (Orange Pi 5 / Rock 5B)** — best Pi-class option: 6 TOPS NPU + PCIe 3.0 + up to 16 GB.
+- **Laptop / AI X1 (x86_64)** — full stack; 7B–13B models with GPU; fastest development iteration.
+- **Pi 4 B 4 GB** — not recommended for OpenClaw tier; stick to §24 patterns with cloud LLM.
+
+---
+
+## 26. Deployment Plan: VPS (Cloud) 🔲
+
+> **Minimum spec:** 2 vCPU · 4 GB RAM · 40 GB SSD · Ubuntu 22.04 LTS.
+> **Stack:** Docker Compose · PostgreSQL 16 + pgvector · nginx + Let's Encrypt TLS.
+> **Bot mode:** Telegram webhook (not polling). Multi-user (`MULTI_USER=1`).
+
+### 26.1 Provision & Base Setup
+- [ ] Provision Ubuntu 22.04 VPS; create user `taris`; enable SSH key-only login; disable password auth
+- [ ] `sudo apt install docker.io docker-compose-v2 git nginx certbot python3-certbot-nginx ufw -y`
+- [ ] Clone repo to `/opt/taris/`; `chown -R taris:taris /opt/taris`
+
+### 26.2 PostgreSQL + pgvector
+- [ ] Deploy `postgres:16-alpine` in Docker Compose (internal only, not exposed); or install system PostgreSQL
+- [ ] `CREATE EXTENSION IF NOT EXISTS vector;`; create `taris` user + `taris_db`; run `migrate_to_db.py`
+- [ ] Set `STORE_BACKEND=postgres`, `DB_URL=postgresql://taris:…@localhost/taris_db`, `STORE_VECTORS=on`, `EMBED_KEEP_RESIDENT=1` in `bot.env`
+- [ ] HNSW index: `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops);`
+
+### 26.3 TLS & nginx
+- [ ] nginx server block: proxy `/` → `http://localhost:8080`; `/webhook` → `http://localhost:8080/webhook`
+- [ ] `sudo certbot --nginx -d yourdomain.com` (Let's Encrypt; auto-renew)
+- [ ] nginx rate limiting on `/webhook`: `limit_req_zone $binary_remote_addr zone=webhook:10m rate=30r/m;`
+- [ ] Firewall: `ufw allow 80,443/tcp; ufw deny 5432/tcp; ufw enable`
+
+### 26.4 Telegram Webhook
+- [ ] Register: `curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://yourdomain.com/webhook&secret_token=<RANDOM_SECRET>"`
+- [ ] Verify: `curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"` → `"pending_update_count":0`
+- [ ] Set `TELEGRAM_WEBHOOK_URL=https://yourdomain.com/webhook`, `WEBHOOK_SECRET=<secret>`, `MULTI_USER=1` in `bot.env`
+
+### 26.5 RAG & Embeddings
+- [ ] `pip install onnxruntime sentence-transformers psycopg2-binary` in bot virtualenv
+- [ ] `EMBED_MODEL=all-MiniLM-L6-v2`, `EMBED_KEEP_RESIDENT=1` in `bot.env`
+- [ ] LLM: connect via `LLM_PROVIDER` to cloud provider (OpenAI / Anthropic / Gemini); local llama.cpp only if VPS RAM ≥8 GB
+- [ ] Implement Phases A–D from §25.6 (same RAG code; only backend differs — pgvector already configured)
+
+### 26.6 Backups & Monitoring
+- [ ] Daily: `pg_dump taris_db | gzip > /backup/taris_$(date +%F).sql.gz`; rsync to `cloud.dev2null.de` (see §6.2); retain 30 days
+- [ ] Deploy `src/services/taris-logrotate` → `/etc/logrotate.d/taris`
+- [ ] `bot_logger.py` structured logs; CRITICAL events forwarded to admin Telegram ID
+- [ ] `Restart=on-failure; RestartSec=10` in all systemd service units
+
+### 26.7 Security Hardening
+- [ ] `ADMIN_USERS` + `ALLOWED_USERS` must be set in `bot.env` before first start; review on every deploy
+- [ ] Rotate `WEBHOOK_SECRET` and `JWT_SECRET` on first deploy; store outside git
+- [ ] `sudo apt install fail2ban` — monitor SSH + nginx auth log
+- [ ] `sudo unattended-upgrades` enabled; monthly review of `deploy/requirements.txt` for CVEs
+
+### 26.8 Scaling Path
+- [ ] ≤50 concurrent users: single instance as above is sufficient
+- [ ] 50–200 users: Redis session cache (`REDIS_URL=redis://localhost:6379`); `uvicorn --workers 4`
+- [ ] 200+ users: horizontal scale via load balancer + multiple bot-web instances; RabbitMQ/Redis update queue

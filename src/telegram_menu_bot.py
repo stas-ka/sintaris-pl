@@ -70,6 +70,7 @@ from telegram.bot_admin import (
     _handle_admin_llm_menu, _handle_set_llm,
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
+    _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
     _admin_keyboard,
 )
 
@@ -416,6 +417,25 @@ def callback_handler(call):
     elif data == "admin_llm_fallback_toggle":
         if _is_admin(cid):
             _handle_admin_llm_fallback_toggle(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── RAG administration ────────────────────────────────────────────
+    elif data == "admin_rag_menu":
+        if _is_admin(cid):
+            _handle_admin_rag_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_toggle":
+        if _is_admin(cid):
+            _handle_admin_rag_toggle(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_log":
+        if _is_admin(cid):
+            _handle_admin_rag_log(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

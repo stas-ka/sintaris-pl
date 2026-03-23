@@ -161,6 +161,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS doc_chunks USING fts5(
     chunk_text,
     tokenize  = 'unicode61'
 );
+
+-- RAG query log (admin audit + last-N-queries viewer)
+CREATE TABLE IF NOT EXISTS rag_log (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id        INTEGER NOT NULL,
+    query          TEXT    NOT NULL,
+    n_chunks       INTEGER NOT NULL DEFAULT 0,
+    chars_injected INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rag_log_chat ON rag_log(chat_id, created_at DESC);
 """
 
 

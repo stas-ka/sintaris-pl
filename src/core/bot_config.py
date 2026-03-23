@@ -136,10 +136,18 @@ DOCS_DIR            = os.environ.get("DOCS_DIR",
                           os.path.expanduser("~/.taris/docs"))
 
 # ─────────────────────────────────────────────────────────────────────────────
+# RAG (Retrieval-Augmented Generation) — FTS5 local knowledge base
+# ─────────────────────────────────────────────────────────────────────────────
+RAG_ENABLED    = os.environ.get("RAG_ENABLED",    "1") == "1"
+RAG_TOP_K      = int(os.environ.get("RAG_TOP_K",      "3"))
+RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
+RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.12"
+BOT_VERSION        = "2026.4.13"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

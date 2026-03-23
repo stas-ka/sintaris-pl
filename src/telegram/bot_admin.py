@@ -99,6 +99,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_release_notes"), callback_data="admin_changelog"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_logs"),       callback_data="admin_logs_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
@@ -787,3 +788,69 @@ def _handle_admin_llm_fallback_toggle(chat_id: int) -> None:
         log.warning(f"[LLM] fallback toggle send failed: {e}")
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
     _handle_admin_llm_fallback_menu(chat_id)
+
+
+# ── RAG Administration ─────────────────────────────────────────────────────
+
+def _handle_admin_rag_menu(chat_id: int) -> None:
+    """Show RAG status, top-K, and action buttons."""
+    import os
+    from core.bot_config import RAG_FLAG_FILE, RAG_TOP_K
+    enabled = not os.path.exists(RAG_FLAG_FILE)
+    status  = _t(chat_id, "admin_rag_status_on" if enabled else "admin_rag_status_off")
+    text = (
+        _t(chat_id, "admin_rag_menu_title") + "\n" +
+        status + "\n" +
+        _t(chat_id, "admin_rag_topk").format(topk=RAG_TOP_K)
+    )
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),   callback_data="admin_rag_log"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"), callback_data="admin_rag_toggle"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin"))
+    try:
+        bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_toggle(chat_id: int) -> None:
+    """Toggle RAG on/off via flag file."""
+    import os
+    from core.bot_config import RAG_FLAG_FILE
+    if os.path.exists(RAG_FLAG_FILE):
+        os.remove(RAG_FLAG_FILE)
+        msg = _t(chat_id, "admin_rag_toggled_on")
+    else:
+        os.makedirs(os.path.dirname(RAG_FLAG_FILE), exist_ok=True)
+        open(RAG_FLAG_FILE, "w").close()  # noqa: WPS515
+        msg = _t(chat_id, "admin_rag_toggled_off")
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
+    _handle_admin_rag_menu(chat_id)
+
+
+def _handle_admin_rag_log(chat_id: int) -> None:
+    """Show the 20 most recent RAG activity log entries."""
+    from core.store import store as _store
+    rows = _store.list_rag_log(limit=20)
+    if not rows:
+        text = _t(chat_id, "admin_rag_log_title") + "\n" + _t(chat_id, "admin_rag_log_empty")
+    else:
+        lines = [_t(chat_id, "admin_rag_log_title")]
+        for i, r in enumerate(rows, 1):
+            lines.append(
+                _t(chat_id, "admin_rag_log_row").format(
+                    i=i,
+                    query=r["query"][:40],
+                    n_chunks=r["n_chunks"],
+                    chars=r["chars_injected"],
+                    ts=r["created_at"][:16],
+                )
+            )
+        text = "\n".join(lines)
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text))

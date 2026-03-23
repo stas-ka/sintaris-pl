@@ -15,6 +15,12 @@ widgets:
         action: mode_chat
 
   - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_system
+        action: mode_system
+
+  - type: button_row
     visible_roles: [admin, developer, user]
     buttons:
       - label_key: btn_notes

@@ -15,9 +15,10 @@ from core.bot_config import log, DOCS_DIR
 from core.bot_instance import bot
 from core.store import store
 from telegram.bot_access import _is_guest, _t
+from core.bot_config import RAG_CHUNK_SIZE
 
 _SUPPORTED_EXTS = {".txt", ".md", ".pdf", ".docx"}
-_CHUNK_SIZE = 512
+_CHUNK_SIZE = RAG_CHUNK_SIZE
 _CHUNK_OVERLAP = 50
 
 

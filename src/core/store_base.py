@@ -230,6 +230,16 @@ class DataStore(Protocol):
         """Remove all FTS5 text chunks for a document. Silent if not found."""
         ...
 
+    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int) -> None:
+        """Record a RAG retrieval event for auditing / admin log viewer."""
+        ...
+
+    def list_rag_log(self, limit: int = 20) -> list[dict]:
+        """Return the most recent RAG log entries, newest first.
+        Each entry: {id, chat_id, query, n_chunks, chars_injected, created_at}.
+        """
+        ...
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def close(self) -> None:
