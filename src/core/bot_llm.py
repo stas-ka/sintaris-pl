@@ -270,7 +270,7 @@ def _ask_openclaw(prompt: str, timeout: int) -> str:
     if not os.path.isfile(bin_path) and not shutil.which(bin_path):
         raise FileNotFoundError(f"openclaw binary not found: {bin_path}")
 
-    cmd = [bin_path, "agent", "--message", prompt, "--json", "--session", OPENCLAW_SESSION]
+    cmd = [bin_path, "agent", "--message", prompt, "--json", "--session-id", OPENCLAW_SESSION]
     env = {**os.environ, "NO_COLOR": "1"}
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
     raw = (proc.stdout or "").strip()
