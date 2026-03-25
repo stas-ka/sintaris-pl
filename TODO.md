@@ -122,16 +122,19 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 
 ---
 
-### 4.1 Local RAG Knowledge Base 🔲
+### 4.1 Local RAG Knowledge Base ✅ FTS5 pipeline implemented (v2026.4.13); vector + settings UI pending
 → Implementation steps: **§24.6** (PicoClaw — FTS5-only) · **§25.6 Phases A–B** (OpenClaw — Hybrid Tiered RAG)
 → Architecture: [concept/rag-memory-architecture.md](concept/rag-memory-architecture.md) (Variant C — Hybrid Tiered RAG, score 4.45)
 
-- [ ] RAG on/off toggle + settings in Admin Panel (`RAG_ENABLED`, `RAG_TOP_K`, chunk size, temperature — see Appendix B)
-- [ ] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp (OpenClaw/Laptop only)
-- [ ] `all-MiniLM-L6-v2` embeddings via ONNX Runtime (Pi 5/Server); graceful FTS5-only fallback on Pi 3
-- [ ] Storage: sqlite-vec for vectors (Pi 5+) or FTS5-only (Pi 3); pgvector HNSW (OpenClaw/VPS)
+- [x] RAG on/off toggle in Admin Panel via `RAG_FLAG_FILE` (`~/.taris/rag_disabled`); `RAG_ENABLED`, `RAG_TOP_K`, `RAG_CHUNK_SIZE` env-var constants in `bot_config.py`; admin callbacks `admin_rag_menu` / `admin_rag_toggle` / `admin_rag_log` wired (v2026.4.13)
+- [ ] Configurable RAG settings from Admin Panel UI (top-K, chunk size, temperature editable at runtime — currently env-var only)
+- [x] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp — implemented in §3.1 (v2026.3.32)
+- [x] FTS5-only RAG pipeline: document upload → `_chunk_text()` (512-char) → `doc_chunks` FTS5 virtual table → `search_fts()` → LLM prompt injection in `bot_handlers.py` (v2026.4.13)
+- [x] `install_sqlite_vec.sh` setup script + `vec_embeddings` table (sqlite-vec `vec0`, 384-dim) + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` adapter methods ready in `store_sqlite.py` — schema and plumbing in place (v2026.4.13)
+- [ ] `all-MiniLM-L6-v2` embeddings via ONNX Runtime: no `EMBED_MODEL` constant, no embedding generation code wired yet; Pi 5/Server only; graceful FTS5-only fallback on Pi 3
+- [ ] pgvector HNSW (OpenClaw/VPS) — §25.6 scope
 - [ ] Timeout monitoring for RAG / LLM calls; configurable `MCP_TIMEOUT` per provider
-- [ ] RAG activity log in DB; Admin Panel: view last N queries + retrieved chunks
+- [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected (v2026.4.13)
 
 ### 4.2 Remote RAG Service (MCP) 🔲
 → Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
