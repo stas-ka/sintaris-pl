@@ -27,7 +27,7 @@ from core.bot_config import (
     VOSK_MODEL_PATH, VOSK_MODEL_DE_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
     WHISPER_BIN, WHISPER_MODEL,
-    _PENDING_TTS_FILE, log,
+    TARIS_DIR, _PENDING_TTS_FILE, log,
 )
 from core.bot_instance import bot
 from telegram.bot_access import (
@@ -949,7 +949,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
 
         # ── Save last transcript for web UI display ────────────────────────────
         try:
-            _last_t_path = Path(os.path.expanduser("~/.taris")) / "last_transcript.txt"
+            _last_t_path = Path(TARIS_DIR) / "last_transcript.txt"
             _last_t_path.write_text(
                 f"[telegram] {time.strftime('%Y-%m-%d %H:%M')}  {_clean_text}",
                 encoding="utf-8",

@@ -27,9 +27,24 @@ def _load_env_file(path: str) -> None:
         pass
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TARIS_HOME — runtime data directory
+# Set TARIS_HOME in the OS environment (e.g. in a startup script) to redirect
+# the bot's data directory away from the default ~/.taris/.
+# This allows running multiple independent instances or a local dev deploy.
+# ─────────────────────────────────────────────────────────────────────────────
+TARIS_DIR = os.environ.get("TARIS_HOME") or os.path.expanduser("~/.taris")
+
+
+def _th(rel: str) -> str:
+    """Return absolute path inside TARIS_DIR."""
+    return os.path.join(TARIS_DIR, rel)
+
+
 # Load credentials: bot.env first, then .taris_env (bot.env takes priority via setdefault)
-_load_env_file(os.path.expanduser("~/.taris/bot.env"))
-_load_env_file(os.path.expanduser("~/.taris/.taris_env"))
+_load_env_file(_th("bot.env"))
+_load_env_file(_th(".taris_env"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,12 +79,12 @@ DEVELOPER_USERS: set[int] = _parse_developer_users()
 BOT_NAME = os.environ.get("BOT_NAME", "Taris")
 
 USERS_FILE          = os.environ.get("USERS_FILE",
-                          os.path.expanduser("~/.taris/users.json"))
+                          _th("users.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
-                          os.path.expanduser("~/.taris/registrations.json"))
+                          _th("registrations.json"))
 TARIS_BIN        = os.environ.get("TARIS_BIN", "/usr/bin/taris")
 TARIS_CONFIG     = os.environ.get("TARIS_CONFIG",
-                          os.path.expanduser("~/.taris/config.json"))
+                          _th("config.json"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Deployment variant — controls optional features per platform
@@ -90,11 +105,11 @@ OPENCLAW_TIMEOUT = int(os.environ.get("OPENCLAW_TIMEOUT", "60"))
 TARIS_API_TOKEN  = os.environ.get("TARIS_API_TOKEN", "")
 
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
-                          os.path.expanduser("~/.taris/active_model.txt"))
+                          _th("active_model.txt"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LLM provider switching  (Feature 3.1 + 3.2)
-# Set LLM_PROVIDER in ~/.taris/bot.env to switch backends.
+# Set LLM_PROVIDER in TARIS_DIR/bot.env to switch backends.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Primary provider: taris | openai | yandexgpt | gemini | anthropic | local
@@ -102,7 +117,7 @@ LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "taris")
 
 # Local llama.cpp fallback — enable with LLM_LOCAL_FALLBACK=1 (Feature 3.2)
 LLM_LOCAL_FALLBACK      = os.environ.get("LLM_LOCAL_FALLBACK", "0") == "1"
-LLM_FALLBACK_FLAG_FILE  = os.path.expanduser("~/.taris/llm_fallback_enabled")  # runtime toggle
+LLM_FALLBACK_FLAG_FILE  = _th("llm_fallback_enabled")  # runtime toggle
 LLAMA_CPP_URL           = os.environ.get("LLAMA_CPP_URL",   "http://127.0.0.1:8081")
 LLAMA_CPP_MODEL     = os.environ.get("LLAMA_CPP_MODEL", "")
 
@@ -136,23 +151,23 @@ CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"
 CONVERSATION_PERSIST      = os.environ.get("CONVERSATION_PERSIST", "0") == "1"
 CONVERSATION_HISTORY_FILE = os.environ.get(
     "CONVERSATION_HISTORY_FILE",
-    os.path.expanduser("~/.taris/conversation_history.json"),
+    _th("conversation_history.json"),
 )
 
 DIGEST_SCRIPT       = os.environ.get("DIGEST_SCRIPT",
-                          os.path.expanduser("~/.taris/gmail_digest.py"))
+                          _th("gmail_digest.py"))
 LAST_DIGEST_FILE    = os.environ.get("LAST_DIGEST_FILE",
-                          os.path.expanduser("~/.taris/last_digest.txt"))
+                          _th("last_digest.txt"))
 NOTES_DIR           = os.environ.get("NOTES_DIR",
-                          os.path.expanduser("~/.taris/notes"))
+                          _th("notes"))
 CALENDAR_DIR        = os.environ.get("CALENDAR_DIR",
-                          os.path.expanduser("~/.taris/calendar"))
+                          _th("calendar"))
 MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
-                          os.path.expanduser("~/.taris/mail_creds"))
+                          _th("mail_creds"))
 ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
-                          os.path.expanduser("~/.taris/error_protocols"))
+                          _th("error_protocols"))
 DOCS_DIR            = os.environ.get("DOCS_DIR",
-                          os.path.expanduser("~/.taris/docs"))
+                          _th("docs"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RAG (Retrieval-Augmented Generation) — FTS5 local knowledge base
@@ -160,7 +175,7 @@ DOCS_DIR            = os.environ.get("DOCS_DIR",
 RAG_ENABLED    = os.environ.get("RAG_ENABLED",    "1") == "1"
 RAG_TOP_K      = int(os.environ.get("RAG_TOP_K",      "3"))
 RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
-RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
+RAG_FLAG_FILE  = _th("rag_disabled")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment
@@ -171,32 +186,32 @@ RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
 )
-LAST_NOTIFIED_FILE = os.path.expanduser("~/.taris/last_notified_version.txt")
+LAST_NOTIFIED_FILE = _th("last_notified_version.txt")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice pipeline constants
 # ─────────────────────────────────────────────────────────────────────────────
 
 VOSK_MODEL_PATH    = os.environ.get("VOSK_MODEL_PATH",
-                         os.path.expanduser("~/.taris/vosk-model-small-ru"))
+                         _th("vosk-model-small-ru"))
 VOSK_MODEL_DE_PATH = os.environ.get("VOSK_MODEL_DE_PATH",
-                         os.path.expanduser("~/.taris/vosk-model-small-de"))
+                         _th("vosk-model-small-de"))
 PIPER_BIN          = os.environ.get("PIPER_BIN",  "/usr/local/bin/piper")
 PIPER_MODEL        = os.environ.get("PIPER_MODEL",
-                         os.path.expanduser("~/.taris/ru_RU-irina-medium.onnx"))
+                         _th("ru_RU-irina-medium.onnx"))
 PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser(
                              "~/.taris/ru_RU-irina-medium.onnx")))
 PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
-                         os.path.expanduser("~/.taris/ru_RU-irina-low.onnx"))
+                         _th("ru_RU-irina-low.onnx"))
 PIPER_MODEL_DE     = os.environ.get("PIPER_MODEL_DE",
-                         os.path.expanduser("~/.taris/de_DE-thorsten-medium.onnx"))
+                         _th("de_DE-thorsten-medium.onnx"))
 PIPER_MODEL_DE_TMPFS = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser(
                              "~/.taris/de_DE-thorsten-medium.onnx")))
 WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
 WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
-                         os.path.expanduser("~/.taris/ggml-base.bin"))
+                         _th("ggml-base.bin"))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
 
 VOICE_SAMPLE_RATE     = 16000
@@ -216,12 +231,12 @@ _STRINGS_FILE = os.environ.get(
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice optimization feature flags
 # All OFF by default — enable via Admin → ⚡ Voice Opts menu.
-# Settings persist in ~/.taris/voice_opts.json.
+# Settings persist in TARIS_DIR/voice_opts.json.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_VOICE_OPTS_FILE      = os.path.expanduser("~/.taris/voice_opts.json")
-_WEB_LINK_CODES_FILE  = os.path.expanduser("~/.taris/web_link_codes.json")
-_PENDING_TTS_FILE    = os.path.expanduser("~/.taris/pending_tts.json")
+_VOICE_OPTS_FILE      = _th("voice_opts.json")
+_WEB_LINK_CODES_FILE  = _th("web_link_codes.json")
+_PENDING_TTS_FILE    = _th("pending_tts.json")
 _VOICE_OPTS_DEFAULTS: dict = {
     "silence_strip":     False,   # #1: strip leading/trailing silence (ffmpeg)
     "low_sample_rate":   False,   # #3: 8 kHz instead of 16 kHz for Vosk STT
@@ -247,7 +262,7 @@ _WEB_ONLY = os.environ.get("WEB_ONLY", "0").lower() in ("1", "true", "yes")
 
 if not _WEB_ONLY:
     if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN not set. Add it to ~/.taris/bot.env")
+        raise RuntimeError(f"BOT_TOKEN not set. Add it to {TARIS_DIR}/bot.env")
     if not ALLOWED_USERS and not ADMIN_USERS:
         raise RuntimeError(
             "ALLOWED_USERS (or ALLOWED_USER / TELEGRAM_CHAT_ID) not set. "
@@ -258,11 +273,11 @@ if not _WEB_ONLY:
 # Logging — set up once here; all modules use getLogger("taris-tgbot")
 # ─────────────────────────────────────────────────────────────────────────────
 
-_LOG_FILE           = os.path.expanduser("~/.taris/telegram_bot.log")
-_ASSISTANT_LOG_FILE = os.path.expanduser("~/.taris/assistant.log")
-_SECURITY_LOG_FILE  = os.path.expanduser("~/.taris/security.log")
-_VOICE_LOG_FILE     = os.path.expanduser("~/.taris/voice.log")
-_DATASTORE_LOG_FILE = os.path.expanduser("~/.taris/datastore.log")
+_LOG_FILE           = _th("telegram_bot.log")
+_ASSISTANT_LOG_FILE = _th("assistant.log")
+_SECURITY_LOG_FILE  = _th("security.log")
+_VOICE_LOG_FILE     = _th("voice.log")
+_DATASTORE_LOG_FILE = _th("datastore.log")
 _log_handlers: list = [logging.StreamHandler()]
 try:
     os.makedirs(os.path.dirname(_LOG_FILE), exist_ok=True)

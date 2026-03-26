@@ -11,11 +11,10 @@ import sqlite3
 import threading
 import os
 
-from core.bot_config import log
+from core.bot_config import log, TARIS_DIR
 
 # ── Database file path ────────────────────────────────────────────────────────
-_TARIS_DIR = os.path.expanduser("~/.taris")
-DB_PATH = os.path.join(_TARIS_DIR, "taris.db")
+DB_PATH = os.path.join(TARIS_DIR, "taris.db")
 
 # Thread-local storage for per-thread connections
 _local = threading.local()

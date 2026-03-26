@@ -18,15 +18,15 @@ from typing import Optional
 import bcrypt
 import jwt
 
-from core.bot_config import log
+from core.bot_config import log, TARIS_DIR
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-_TARIS_DIR = os.path.expanduser("~/.taris")
-ACCOUNTS_FILE = os.path.join(_TARIS_DIR, "accounts.json")
-_SECRET_FILE  = os.path.join(_TARIS_DIR, "web_secret.key")
+_TARIS_DIR = TARIS_DIR
+ACCOUNTS_FILE = os.path.join(TARIS_DIR, "accounts.json")
+_SECRET_FILE  = os.path.join(TARIS_DIR, "web_secret.key")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24

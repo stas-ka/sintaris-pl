@@ -47,6 +47,7 @@ from core.bot_config import (
     MAIL_CREDS_DIR,
     NOTES_DIR,
     REGISTRATIONS_FILE,
+    TARIS_DIR,
     USERS_FILE,
     _PENDING_TTS_FILE,
     _VOICE_OPTS_DEFAULTS,
@@ -63,7 +64,7 @@ log = logging.getLogger("migrate")
 # ---------------------------------------------------------------------------
 # DB path — matches store.py / bot_db.py defaults
 # ---------------------------------------------------------------------------
-_TARIS_DIR = Path(os.path.expanduser("~/.taris"))
+_TARIS_DIR = Path(TARIS_DIR)
 DB_PATH = Path(os.environ.get("STORE_DB_PATH", str(_TARIS_DIR / "taris.db")))
 ACCOUNTS_FILE = _TARIS_DIR / "accounts.json"
 

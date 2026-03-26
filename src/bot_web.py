@@ -54,7 +54,7 @@ from fastapi.templating import Jinja2Templates
 from core.bot_config import (
     BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, TARIS_API_TOKEN, LLM_PROVIDER,
-    DEVICE_VARIANT, log,
+    DEVICE_VARIANT, TARIS_DIR, log,
 )
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
@@ -71,8 +71,8 @@ from ui.screen_loader import load_screen
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-_TARIS_DIR = os.path.expanduser("~/.taris")
-_CALENDAR_DIR = os.path.join(_TARIS_DIR, "calendar")
+_TARIS_DIR = TARIS_DIR
+_CALENDAR_DIR = os.path.join(TARIS_DIR, "calendar")
 
 BASE = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE / "web" / "templates"

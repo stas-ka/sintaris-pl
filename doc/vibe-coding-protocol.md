@@ -971,3 +971,15 @@ Every ~3 months, measure baseline health:
 **Session 65 total: 1 item, ~20 turns — AutoResearch integration into RAG roadmap ✅**
 
 | 21:08 UTC | 20:36 UTC | 21:37 UTC | 61 min | Analyze two-project architecture (sintaris-pl + sintaris-openclaw), identify OpenClaw variant support regression, implement flexible DEVICE_VARIANT system (picoclaw|openclaw) with Screen DSL visible_variants support, restore OpenClaw integration, commit+push | Explore both projects, analyze branches, fix bot_config/bot_llm/bot_web regression, add DEVICE_VARIANT+visible_variants to UserContext+screen_loader, update YAML screens, strings.json, schema, deployment.md, bot.env.example, fix+extend tests (64 pass) | 4 | 7 | claude-sonnet-4.6 | src/core/bot_config.py, src/core/bot_llm.py, src/bot_web.py, src/ui/bot_ui.py, src/ui/screen_loader.py, src/telegram/bot_handlers.py, src/screens/main_menu.yaml, src/screens/admin_menu.yaml, src/screens/screen.schema.json, src/strings.json, src/setup/bot.env.example, doc/arch/deployment.md, src/tests/screen_loader/test_screen_loader.py | done |
+
+---
+
+### Session 66 — 2026-03-26 (UTC)
+
+**Focus:** TARIS_HOME env var support + local OpenClaw deploy directory
+
+| Time (UTC) | Start | End | Duration | Description | Steps/Todos | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 23:05 UTC | 21:53 UTC | 23:10 UTC | 77 min | Add TARIS_HOME env var support to all bot modules; create ~/projects/sintaris-openclaw-local-deploy/ with symlinks, .taris/ data dir, bot.env template, run_telegram.sh/run_web.sh/run_all.sh startup scripts | Add TARIS_DIR+_th() to bot_config.py (31 paths), update bot_db.py/bot_web.py/store.py/bot_auth.py/migrate_to_db.py/bot_voice.py to import TARIS_DIR; create deploy dir with 3 scripts; verify all 99 tests pass | 2 | 4 | claude-sonnet-4.6 | src/core/bot_config.py, src/core/bot_db.py, src/core/store.py, src/bot_web.py, src/security/bot_auth.py, src/setup/migrate_to_db.py, src/features/bot_voice.py | done |
+
+**Session 66 total: 1 item, ~4 turns — TARIS_HOME support + local deploy setup ✅**
