@@ -3,6 +3,7 @@ bot_documents.py — Document upload, management, and FTS5 text search.
 
 Supports: .txt, .md, .pdf, .docx
 Pipeline: download → extract text → chunk → store via SQLite FTS5 (zero extra RAM, built-in)
+         + optional vector embeddings when EmbeddingService + sqlite-vec are available.
 """
 import os
 import threading
@@ -59,9 +60,24 @@ def _chunk_text(text: str, size: int = _CHUNK_SIZE, overlap: int = _CHUNK_OVERLA
 
 
 def _store_text_chunks(doc_id: str, chat_id: int, chunks: list) -> int:
-    """Store text chunks via FTS5 — no embeddings, no external model, zero extra RAM."""
+    """Store text chunks via FTS5; also generates vector embeddings when available."""
     for idx, chunk in enumerate(chunks):
         store.upsert_chunk_text(doc_id, idx, chat_id, chunk)
+
+    # Vector embeddings — only when sqlite-vec is present and a model is configured.
+    if store.has_vector_search():
+        try:
+            from core.bot_embeddings import EmbeddingService  # lazy import — heavy deps
+            svc = EmbeddingService.get()
+            if svc is not None:
+                vecs = svc.embed_batch(chunks)
+                if vecs:
+                    for idx, vec in enumerate(vecs):
+                        store.upsert_embedding(doc_id, idx, chat_id, vec)
+                    log.debug("[Docs] stored %d embeddings for doc %s", len(vecs), doc_id)
+        except Exception as exc:
+            log.warning("[Docs] embedding failed for doc %s: %s", doc_id, exc)
+
     return len(chunks)
 
 

@@ -178,10 +178,24 @@ RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
 RAG_FLAG_FILE  = _th("rag_disabled")
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Embedding Service — vector embeddings for semantic document search
+# EMBED_MODEL: HuggingFace model name for fastembed / sentence-transformers.
+#   Leave empty ("") to disable embedding generation (FTS5-only mode).
+#   Default: "sentence-transformers/all-MiniLM-L6-v2" (384-dim, ~90 MB).
+# EMBED_KEEP_RESIDENT: keep the model loaded in RAM between requests.
+#   Set to "0" on memory-constrained devices (Pi 3 — 1 GB RAM).
+# EMBED_DIMENSION: must match the model output size.
+# ─────────────────────────────────────────────────────────────────────────────
+EMBED_MODEL          = os.environ.get("EMBED_MODEL",
+                           "sentence-transformers/all-MiniLM-L6-v2")
+EMBED_KEEP_RESIDENT  = os.environ.get("EMBED_KEEP_RESIDENT", "1") == "1"
+EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.13"
+BOT_VERSION        = "2026.4.14"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
@@ -213,6 +227,11 @@ WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp"
 WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
                          _th("ggml-base.bin"))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
+# Inference backend for hardware-accelerated STT (whisper-cpp).
+# cpu      — pure CPU (default, always works)
+# cuda     — NVIDIA GPU via CUDA-compiled whisper-cpp binary
+# openvino — Intel NPU/GPU via OpenVINO backend (future)
+VOICE_BACKEND      = os.environ.get("VOICE_BACKEND", "cpu").lower()
 
 VOICE_SAMPLE_RATE     = 16000
 VOICE_CHUNK_SIZE      = 4000       # 250 ms at 16 kHz

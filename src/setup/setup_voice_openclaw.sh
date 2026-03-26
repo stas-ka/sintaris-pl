@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# setup_voice_openclaw.sh — Voice pipeline setup for OpenClaw (x86_64 / amd64)
+#
+# Installs Vosk STT + Piper TTS for Russian voice on Ubuntu/Debian x86_64.
+# Mirrors the aarch64 install.sh voice steps but uses x86_64 binaries/models.
+#
+# Usage (run as normal user, NOT root):
+#   bash src/setup/setup_voice_openclaw.sh
+#
+# Environment:
+#   TARIS_HOME — bot data dir (default: ~/.taris)
+#   PIPER_VERSION — Piper release tag (default: 1.2.0)
+#
+# After this script, set in bot.env / environment:
+#   VOSK_MODEL_PATH=$TARIS_HOME/vosk-model-small-ru-0.22
+#   PIPER_BIN=$TARIS_HOME/piper/piper
+#   PIPER_MODEL=$TARIS_HOME/ru_RU-irina-medium.onnx
+#   VOICE_BACKEND=cpu      # or cuda if you have NVIDIA GPU + CUDA whisper-cpp
+
+set -euo pipefail
+
+TARIS_HOME="${TARIS_HOME:-$HOME/.taris}"
+PIPER_VERSION="${PIPER_VERSION:-1.2.0}"
+PIPER_ARCH="x86_64"
+
+# ─── URLs ────────────────────────────────────────────────────────────────────
+PIPER_URL="https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_linux_${PIPER_ARCH}.tar.gz"
+VOSK_MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
+PIPER_VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx"
+PIPER_VOICE_CFG_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json"
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+info()  { echo "==> $*"; }
+warn()  { echo "[WARN] $*"; }
+check() { command -v "$1" &>/dev/null; }
+
+mkdir -p "$TARIS_HOME"
+
+echo "======================================================="
+echo " Taris Voice Setup — OpenClaw / x86_64"
+echo "======================================================="
+echo "  TARIS_HOME  : $TARIS_HOME"
+echo "  Piper       : $PIPER_VERSION ($PIPER_ARCH)"
+echo ""
+
+# ─── Step 1: System packages ─────────────────────────────────────────────────
+info "[1/5] Checking system packages..."
+MISSING_PKGS=()
+check ffmpeg      || MISSING_PKGS+=(ffmpeg)
+check sox         || MISSING_PKGS+=(sox)
+python3 -c "import sounddevice" 2>/dev/null || MISSING_PKGS+=(python3-sounddevice)
+
+if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
+    info "Installing: ${MISSING_PKGS[*]}"
+    if [[ "$(id -u)" -eq 0 ]]; then
+        apt-get install -y "${MISSING_PKGS[@]}"
+    else
+        sudo apt-get install -y "${MISSING_PKGS[@]}"
+    fi
+fi
+info "System packages OK."
+
+# ─── Step 2: Python voice packages ───────────────────────────────────────────
+info "[2/5] Installing Python voice packages..."
+pip3 install --quiet vosk sounddevice webrtcvad
+info "vosk, sounddevice, webrtcvad installed."
+
+# ─── Step 3: Vosk Russian model ──────────────────────────────────────────────
+VOSK_DIR="$TARIS_HOME/vosk-model-small-ru-0.22"
+if [ -d "$VOSK_DIR" ]; then
+    info "[3/5] Vosk model already present at $VOSK_DIR — skipping."
+else
+    info "[3/5] Downloading Vosk Russian model..."
+    TMP_ZIP=$(mktemp /tmp/vosk-model-XXXXXX.zip)
+    curl -L --progress-bar "$VOSK_MODEL_URL" -o "$TMP_ZIP"
+    info "Extracting to $TARIS_HOME/..."
+    unzip -q "$TMP_ZIP" -d "$TARIS_HOME/"
+    rm -f "$TMP_ZIP"
+    info "Vosk model: $VOSK_DIR"
+fi
+
+# ─── Step 4: Piper binary (x86_64) ───────────────────────────────────────────
+PIPER_DIR="$TARIS_HOME/piper"
+PIPER_BIN="$PIPER_DIR/piper"
+
+if [ -x "$PIPER_BIN" ]; then
+    info "[4/5] Piper binary already at $PIPER_BIN — skipping."
+else
+    info "[4/5] Downloading Piper $PIPER_VERSION for $PIPER_ARCH..."
+    TMP_TGZ=$(mktemp /tmp/piper-XXXXXX.tar.gz)
+    curl -L --progress-bar "$PIPER_URL" -o "$TMP_TGZ"
+    mkdir -p "$PIPER_DIR"
+    tar -xzf "$TMP_TGZ" -C "$PIPER_DIR" --strip-components=1
+    rm -f "$TMP_TGZ"
+    chmod +x "$PIPER_BIN"
+    info "Piper binary: $PIPER_BIN"
+fi
+
+# Create symlink in /usr/local/bin if writable (optional convenience)
+if [ ! -e "/usr/local/bin/piper" ] && [ -w "/usr/local/bin" ]; then
+    ln -sf "$PIPER_BIN" /usr/local/bin/piper
+    info "Symlinked: /usr/local/bin/piper -> $PIPER_BIN"
+fi
+
+# ─── Step 5: Piper Russian voice model ───────────────────────────────────────
+ONNX="$TARIS_HOME/ru_RU-irina-medium.onnx"
+ONNX_JSON="$TARIS_HOME/ru_RU-irina-medium.onnx.json"
+
+if [ -f "$ONNX" ] && [ -f "$ONNX_JSON" ]; then
+    info "[5/5] Piper voice model already present — skipping."
+else
+    info "[5/5] Downloading Piper Russian voice model..."
+    [ -f "$ONNX" ] || curl -L --progress-bar "$PIPER_VOICE_URL"     -o "$ONNX"
+    [ -f "$ONNX_JSON" ] || curl -L --progress-bar "$PIPER_VOICE_CFG_URL" -o "$ONNX_JSON"
+    info "Piper model: $ONNX"
+fi
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+echo ""
+echo "======================================================="
+echo " Voice pipeline setup complete!"
+echo "======================================================="
+echo ""
+echo "Add to $TARIS_HOME/bot.env:"
+echo "  VOSK_MODEL_PATH=$VOSK_DIR"
+echo "  PIPER_BIN=$PIPER_BIN"
+echo "  PIPER_MODEL=$ONNX"
+echo "  VOICE_BACKEND=cpu"
+echo ""
+echo "For NVIDIA GPU acceleration (requires CUDA-compiled whisper-cpp):"
+echo "  VOICE_BACKEND=cuda"
+echo ""

@@ -552,16 +552,10 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - [ ] Set `LLM_PROVIDER=local`, `LLAMA_CPP_URL=http://localhost:8081`, `LLM_LOCAL_FALLBACK=true` in `bot.env`
 
 ### 25.4 Embedding Service
-- [ ] `pip install onnxruntime sentence-transformers`
-- [ ] `python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"` (downloads ~90 MB)
-- [ ] Set `EMBED_MODEL=all-MiniLM-L6-v2`, `EMBED_KEEP_RESIDENT=1` in `bot.env`
+✅ Implemented (v2026.4.13) — `src/core/bot_embeddings.py` (`EmbeddingService`); fastembed-first with sentence-transformers fallback; `EMBED_MODEL` / `EMBED_KEEP_RESIDENT` / `EMBED_DIMENSION` constants in `bot_config.py`; wired into `bot_documents.py`; `src/setup/install_embedding_model.sh`; `bot.env.example` updated.
 
 ### 25.5 Voice Pipeline + NPU Acceleration
-- [ ] Install same Vosk/Piper models as §24.2 (NVMe load: 66 MB in ~0.07 s on Pi 5)
-- [ ] ≤2 s voice (optional — requires Hailo-8L HAT on Pi 5 or GPU on Laptop/AI X1):
-  - Flash Hailo PCIe driver; set up Whisper-tiny on NPU (STT ~0.05 s); run Piper ONNX on NPU (TTS ~0.3 s)
-  - Or: CUDA/OpenVINO Whisper-tiny for Laptop; update `WHISPER_BIN`; enable `whisper_stt` voice opt
-  - See [doc/hw-requirements-report.md §0.2–§0.3](doc/hw-requirements-report.md) for supported backends
+✅ Implemented (v2026.4.13) — `src/setup/setup_voice_openclaw.sh` (x86_64 Vosk + Piper install); `VOICE_BACKEND=cpu|cuda|openvino` constant; `--device cuda` flag passed to whisper-cpp when `VOICE_BACKEND=cuda`.
 
 ### 25.6 RAG Implementation — Variant C (Hybrid Tiered RAG)
 - [ ] **Phase A — Memory System (3–5 d):** `bot_memory.py`; DB tables `memory_summaries` + `memory_long`; `compact_short_to_middle()` / `compact_middle_to_long()` — see `concept/rag-memory-architecture.md §6.3`

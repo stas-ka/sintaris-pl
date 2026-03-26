@@ -26,7 +26,7 @@ from core.bot_config import (
     PIPER_MODEL_DE, PIPER_MODEL_DE_TMPFS,
     VOSK_MODEL_PATH, VOSK_MODEL_DE_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
-    WHISPER_BIN, WHISPER_MODEL,
+    WHISPER_BIN, WHISPER_MODEL, VOICE_BACKEND,
     TARIS_DIR, _PENDING_TTS_FILE, log,
 )
 from core.bot_instance import bot
@@ -297,13 +297,17 @@ def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
             wf.setframerate(sample_rate)
             wf.writeframes(raw_pcm)
 
+        _whisper_cmd = [WHISPER_BIN, "-m", WHISPER_MODEL, "-f", tmp_path,
+                        "-l", "ru", "--no-timestamps", "-otxt",
+                        "--threads", "4",            # use all Pi 3 cores
+                        "--suppress-blank",          # don't output blank/silence segments
+                        "--entropy-thold", "1.8",    # reject hallucinated output
+                        "--no-speech-thold", "0.6"]  # reject silence/noise segments
+        if VOICE_BACKEND == "cuda":
+            _whisper_cmd += ["--device", "cuda"]
+
         result = subprocess.run(
-            [WHISPER_BIN, "-m", WHISPER_MODEL, "-f", tmp_path,
-             "-l", "ru", "--no-timestamps", "-otxt",
-             "--threads", "4",            # use all Pi 3 cores
-             "--suppress-blank",          # don't output blank/silence segments
-             "--entropy-thold", "1.8",    # reject hallucinated output
-             "--no-speech-thold", "0.6"], # reject silence/noise segments
+            _whisper_cmd,
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=60,

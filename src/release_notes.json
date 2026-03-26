@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.14",
+    "date":    "2026-03-26",
+    "title":   "§25.4 Embedding Service + §25.5 Voice Pipeline (OpenClaw variant)",
+    "notes":   "- bot_embeddings.py: EmbeddingService with fastembed-first / sentence-transformers fallback, lazy load + keep-resident mode\n- bot_config.py: EMBED_MODEL, EMBED_KEEP_RESIDENT, EMBED_DIMENSION, VOICE_BACKEND constants\n- bot_documents.py: vector embeddings wired into _store_text_chunks() when store.has_vector_search()\n- bot_voice.py: VOICE_BACKEND imported; --device cuda passed to whisper-cpp when VOICE_BACKEND=cuda\n- src/setup/install_embedding_model.sh: pre-download embedding model (fastembed or sentence-transformers)\n- src/setup/setup_voice_openclaw.sh: x86_64 voice setup (Vosk + Piper) for OpenClaw variant\n- src/setup/bot.env.example: EMBED_MODEL, EMBED_KEEP_RESIDENT, EMBED_DIMENSION, VOICE_BACKEND documented\n- TODO.md: §25.4 and §25.5 marked as implemented"
+  },
+  {
     "version": "2026.4.13",
     "date":    "2026-03-22",
     "title":   "§4.1 Local RAG Knowledge Base — FTS5-only (TODO 4.1)",
