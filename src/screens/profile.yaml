@@ -1,0 +1,32 @@
+# Profile — user profile with action buttons.
+# Variables: name (escaped), username_line, tg_id, role, reg_date, email_line
+
+title_key: profile_msg
+parse_mode: Markdown
+
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: profile_btn_edit_name
+        action: profile_edit_name
+      - label_key: profile_btn_change_pw
+        action: profile_change_pw
+
+  - type: button_row
+    buttons:
+      - label_key: profile_btn_mailbox
+        action: mail_settings
+      - label_key: web_link_btn
+        action: web_link
+
+  - type: button_row
+    buttons:
+      - label_key: profile_btn_lang
+        action: profile_set_lang
+      - label_key: profile_btn_my_data
+        action: profile_my_data
+
+  - type: button_row
+    buttons:
+      - label_key: btn_back
+        action: menu

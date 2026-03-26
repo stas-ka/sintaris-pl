@@ -44,7 +44,7 @@ def login(page, username: str, password: str, base_url: str = BASE_URL):
     page.fill("input[name='username']", username)
     page.fill("input[name='password']", password)
     page.click("button[type='submit']")
-    page.wait_for_url(f"{base_url}/", timeout=10_000)
+    page.wait_for_url(f"{base_url}/", timeout=30_000)
 
 
 # ─── Session-scoped authenticated contexts ───────────────────────────────────

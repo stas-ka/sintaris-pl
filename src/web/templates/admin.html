@@ -114,27 +114,6 @@
     </table>
   </div>
 
-  <!-- ── LLM Provider ──────────────── -->
-  <p class="section-label">LLM Provider</p>
-  <div class="card mb-md">
-    <div class="flex items-center justify-between py-sm border-b">
-      <div>
-        <span class="text-dim text-xs">Active provider (LLM_PROVIDER)</span><br>
-        <span class="text-white fw-bold">{{ llm_provider }}</span>
-      </div>
-      {% if llm_provider == "openclaw" %}
-      <span class="badge badge-ok">OpenClaw</span>
-      {% elif llm_provider == "taris" %}
-      <span class="badge" style="background:#555">picoclaw</span>
-      {% else %}
-      <span class="badge" style="background:#555">{{ llm_provider }}</span>
-      {% endif %}
-    </div>
-    <p class="text-dim text-xs" style="padding-top:6px">
-      Change via <code>LLM_PROVIDER</code> in <code>~/.taris/bot.env</code>, then restart.
-    </p>
-  </div>
-
   <!-- ── LLM Models ──────────────── -->
   <p class="section-label">LLM Models</p>
   <div class="card mb-md">

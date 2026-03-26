@@ -602,6 +602,24 @@ class SQLiteStore:
         db.execute("DELETE FROM doc_chunks WHERE doc_id = ?", (str(doc_id),))
         db.commit()
 
+    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int) -> None:
+        """Insert one RAG retrieval record into rag_log."""
+        db = self._db()
+        db.execute(
+            "INSERT INTO rag_log(chat_id, query, n_chunks, chars_injected) VALUES (?,?,?,?)",
+            (chat_id, query, n_chunks, chars),
+        )
+        db.commit()
+
+    def list_rag_log(self, limit: int = 20) -> list[dict]:
+        """Return up to *limit* most recent RAG log rows, newest first."""
+        rows = self._db().execute(
+            "SELECT id, chat_id, query, n_chunks, chars_injected, created_at "
+            "FROM rag_log ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def close(self) -> None:

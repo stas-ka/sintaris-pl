@@ -1,5 +1,29 @@
 [
   {
+    "version": "2026.4.13",
+    "date":    "2026-03-22",
+    "title":   "§4.1 Local RAG Knowledge Base — FTS5-only (TODO 4.1)",
+    "notes":   "- FTS5 local knowledge base: zero new dependencies, Pi 3 B+ compatible\n- rag_log table + index in bot_db.py schema\n- store_base.py: log_rag_activity + list_rag_log Protocol stubs\n- store_sqlite.py: full FTS5 search + rag_log persistence\n- bot_handlers.py: RAG context injection guarded by RAG_ENABLED + flag file\n- bot_admin.py: Admin RAG sub-menu — status, toggle on/off, view query log\n- telegram_menu_bot.py: admin_rag_menu / admin_rag_toggle / admin_rag_log callbacks\n- strings.json: 12 RAG admin keys across ru/en/de"
+  },
+  {
+    "version": "2026.4.12",
+    "date":    "2026-03-22",
+    "title":   "Screen DSL Phase 4+5: Feature Screens + Schema Validation (TODO 21.4-21.5)",
+    "notes":   "- 7 new YAML screens: notes_menu, note_view, note_raw, note_edit, profile, profile_lang, profile_my_data\n- bot_handlers.py migrated to DSL render via _render() + _screen_ctx() helpers\n- screen.schema.json: JSON Schema draft-07 for all 10 widget types\n- screen_loader.py: visible_if bug fix (now evaluates against variables dict)\n- New section 19.12 in dev-patterns.md: Hybrid Pattern for Multi-Step Flows\n- Multi-step YAML proposal: doc/todo/21.6-multistep-yaml-proposal.md"
+  },
+  {
+    "version": "2026.4.11",
+    "date":    "2026-4-11",
+    "title":   "Screen DSL Loader - Phase 3: Main & Admin Menus (TODO 21.3)",
+    "notes":   "- Main menu converted to screens/main_menu.yaml with RBAC visible_roles\n- Admin menu converted to screens/admin_menu.yaml with {pending_badge} variable substitution\n- 11 new i18n keys added to strings.json (ru/en/de)\n- Telegram callbacks menu and admin_menu wired to DSL load_screen() + render_screen()"
+  },
+  {
+    "version": "2026.4.10",
+    "date":    "2026-4-10",
+    "title":   "Screen DSL Loader - Phase 1 + Phase 2 (TODO 21)",
+    "notes":   "- New screen_loader.py: declarative Screen DSL loader (YAML/JSON)\n- 10 widget builders: button, button_row, card, text_input, toggle, audio_player, markdown, spinner, confirm, redirect\n- i18n key resolution via t_func(lang, key)\n- Role-based widget visibility (visible_roles filter)\n- Variable substitution in text and actions\n- Screen caching, reload_screens(), load_all_screens()\n- help.yaml: first declarative screen (role-aware help text)\n- Telegram: help callback renders via screen_loader + render_screen\n- Telegram: Admin panel 'Reload Screens' button\n- Web UI: GET /screen/{screen_id} dynamic route + dynamic.html template\n- 53 unit tests (51 pass, 2 skip without PyYAML)\n- P-5 (bot_web.py split) superseded by this approach"
+  },
+  {
     "version": "2026.4.9",
     "date":    "2026-4-9",
     "title":   "No-history emergency fallback + model switch to gemma-3-4b-it:free",

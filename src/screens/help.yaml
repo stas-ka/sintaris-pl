@@ -1,0 +1,24 @@
+# Help screen — role-filtered content
+# Renders the same output as the previous hardcoded help callback.
+# Only ONE MarkdownBlock is visible per user role; the ButtonRow is always shown.
+
+title_key: help_text  # fallback title if no widgets render
+parse_mode: Markdown
+
+widgets:
+  - type: markdown
+    text_key: help_text_admin
+    visible_roles: [admin]
+
+  - type: markdown
+    text_key: help_text_guest
+    visible_roles: [guest]
+
+  - type: markdown
+    text_key: help_text
+    visible_roles: [user]
+
+  - type: button_row
+    buttons:
+      - label_key: btn_back
+        action: menu

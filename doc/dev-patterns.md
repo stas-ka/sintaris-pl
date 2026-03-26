@@ -787,3 +787,416 @@ Add a `🔑 Change password` button to the Profile screen. The flow follows the 
 - Minimum password length: 8 characters (enforce in `change_password()` or caller)
 - Admin cannot change their own password via the admin reset route — only via the settings route (forces current-password check)
 - Log every password reset to `telegram_bot.log` with admin's chat_id + target account username (never log the password itself)
+
+---
+
+## 19. YAML Screen File Format (Declarative Screen DSL)
+
+Screen definitions can be written as YAML (or JSON) files in `src/screens/`. The loader module `src/ui/screen_loader.py` parses these files into the same `Screen` dataclass objects used by the programmatic approach (§15), so both Telegram and Web renderers work unchanged.
+
+**When to use YAML screens:** Static or semi-static UI — menus, help pages, profile views, note detail cards. Any screen whose layout is fixed and whose content varies only through i18n keys or variable substitution.
+
+**When to keep programmatic screens:** Complex multi-step flows (calendar add/edit, mail setup wizard) where control flow depends on runtime state. These remain in `bot_actions.py` or their feature module.
+
+### 19.1 File Location & Format
+
+```
+src/screens/
+  main_menu.yaml       ← main user menu
+  admin_menu.yaml      ← admin panel menu
+  help.yaml            ← role-filtered help text
+  notes_menu.yaml      ← notes submenu
+  note_view.yaml       ← single note detail
+  note_raw.yaml        ← raw text view
+  note_edit.yaml       ← note edit options
+  profile.yaml         ← user profile card
+  profile_lang.yaml    ← language selection
+  profile_my_data.yaml ← stored data summary
+```
+
+Both YAML (requires `pyyaml`) and JSON (stdlib) are supported. YAML is preferred for readability. If `pyyaml` is not installed, only `.json` files can be loaded.
+
+### 19.2 Screen-Level Properties
+
+```yaml
+# Required
+widgets:              # list of widget objects (see §19.4)
+  - type: button_row
+    ...
+
+# Title — one of:
+title: "📄 My Screen"             # literal text (may contain {variables})
+title_key: my_screen_title         # i18n key resolved via t_func
+
+# Optional
+parse_mode: Markdown               # "Markdown" (default) | "HTML" | null (plain text)
+ephemeral: false                   # default false; if true, message is auto-deleted
+```
+
+### 19.3 i18n Key Resolution
+
+Every text-bearing property has two variants: a literal and a `_key` form.
+
+| Literal | i18n key variant | Resolution |
+|---|---|---|
+| `title` | `title_key` | Screen title |
+| `label` | `label_key` | Button label, toggle label, spinner text |
+| `text` | `text_key` | Markdown body, card body, confirm message |
+
+The `_key` variant is resolved via the `t_func(lang, key)` callback passed to `load_screen()`. If `t_func` is `None` or the key is absent, the raw key string is returned as fallback.
+
+```yaml
+# i18n — key looked up in strings.json
+- type: button_row
+  buttons:
+    - label_key: btn_chat        # → _t(lang, "btn_chat") → "💬 Chat"
+      action: mode_chat
+
+# Literal — used as-is
+- type: markdown
+  text: "Welcome to taris!"
+```
+
+### 19.4 Widget Reference
+
+#### `button_row` — Horizontal row of buttons
+
+```yaml
+- type: button_row
+  visible_roles: [admin]          # optional — RBAC filter
+  buttons:
+    - label_key: btn_admin        # i18n key
+      action: admin_menu          # callback data string
+      style: primary              # optional: "primary" | "danger"
+    - label: "🔗 Website"        # literal label
+      url: "https://example.com"  # external URL (instead of action)
+```
+
+Each button in the `buttons` array can have its own `visible_roles` / `visible_if`.
+
+#### `card` — Information card
+
+```yaml
+- type: card
+  title: "{user_name}"           # variable substitution
+  title_key: profile_title       # OR i18n key (title_key takes priority)
+  body: "Role: {role}"
+  body_key: profile_body         # OR i18n key
+  action: profile                # optional tap action
+```
+
+#### `markdown` — Pre-formatted Markdown block
+
+```yaml
+- type: markdown
+  text_key: help_text_admin      # i18n key
+  visible_roles: [admin]         # only shown to admins
+```
+
+Or with literal text:
+
+```yaml
+- type: markdown
+  text: "\n{note_content}"       # variable substitution
+```
+
+#### `text_input` — Prompt for user text
+
+```yaml
+- type: text_input
+  placeholder: "Enter title..."
+  placeholder_key: note_title_prompt  # OR i18n key
+  action: note_create_title           # callback on submit
+```
+
+#### `toggle` — Boolean switch
+
+```yaml
+- type: toggle
+  label_key: opt_silence_strip
+  key: silence_strip             # voice opt key
+  value: true                    # current state
+```
+
+#### `audio_player` — Audio playback widget
+
+```yaml
+- type: audio_player
+  src: "/voice/tts/latest.ogg"
+  caption: "Voice reply"
+  caption_key: voice_reply_caption   # OR i18n key
+```
+
+#### `spinner` — Loading indicator
+
+```yaml
+- type: spinner
+  label_key: loading              # i18n key
+```
+
+#### `confirm` — Yes/No confirmation gate
+
+```yaml
+- type: confirm
+  text: "Delete this note?"
+  text_key: confirm_delete        # OR i18n key
+  action_yes: "note_delete_confirmed:{slug}"
+  action_no: menu_notes
+```
+
+#### `redirect` — Immediate redirect to another action
+
+```yaml
+- type: redirect
+  target: menu                    # callback key to dispatch
+```
+
+### 19.5 Variable Substitution
+
+Any `{var_name}` pattern in text, title, label, or action strings is replaced with the value from the `variables` dict passed to `load_screen()`.
+
+```yaml
+title: "📄 *{note_title}*"
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: btn_edit
+        action: "note_edit:{slug}"      # slug is substituted at render time
+```
+
+```python
+screen = load_screen(
+    "screens/note_view.yaml",
+    user=ctx,
+    variables={"slug": "my_note", "note_title": "My Note", "note_content": "..."},
+    t_func=_t_by_lang,
+)
+```
+
+### 19.6 Visibility Rules
+
+Two mechanisms control whether a widget is rendered:
+
+**Role-based (`visible_roles`)** — widget shown only if `user.role` matches:
+
+```yaml
+- type: button_row
+  visible_roles: [admin]          # only admin sees this row
+  buttons:
+    - label_key: btn_admin
+      action: admin_menu
+```
+
+**Condition-based (`visible_if`)** — widget shown only if a variable with that name is truthy:
+
+```yaml
+- type: markdown
+  text_key: notes_empty_hint
+  visible_if: "no_notes"          # shown only when variables["no_notes"] is truthy
+```
+
+Both can be applied to individual buttons within a `button_row`, not just the row itself.
+
+### 19.7 Schema Validation
+
+Screen files are validated against `src/screens/screen.schema.json` (JSON Schema draft-07) at load time. Validation requires the `jsonschema` package; if absent, validation is silently skipped.
+
+- Validation errors produce `log.warning()` messages but **never crash** the loader.
+- The schema enforces `additionalProperties: false` on all widgets — typos in property names are caught.
+- The schema is lazy-loaded and cached in memory.
+
+### 19.8 API Reference (`screen_loader.py`)
+
+#### `load_screen(path, user, variables=None, t_func=None) → Screen`
+
+Main entry point. Loads a YAML/JSON file, resolves i18n keys and variables, filters widgets by visibility, and returns a `Screen` dataclass.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `path` | `str` | Relative path to screen file (e.g. `"screens/help.yaml"`) |
+| `user` | `UserContext` | Caller identity — `chat_id`, `lang`, `role`, `is_admin` |
+| `variables` | `dict[str, Any]` | Optional variable substitution map |
+| `t_func` | `Callable[[str, str], str]` | Optional i18n function: `t_func(lang, key) → text` |
+
+#### `load_all_screens(directory) → dict[str, dict]`
+
+Pre-load all YAML/JSON files in a directory. Returns raw parsed data (not `Screen` objects). Useful for startup cache warming.
+
+#### `reload_screens() → None`
+
+Clears the internal `_screen_cache`. Call after editing screen files for hot-reload without restarting.
+
+### 19.9 Wiring a YAML Screen — Telegram + Web
+
+**Telegram callback dispatcher** (`telegram_menu_bot.py`):
+
+```python
+elif data == "help":
+    from ui.screen_loader import load_screen
+    from ui.render_telegram import render_screen
+    ctx = UserContext(chat_id=cid, lang=_lang(cid), is_admin=_is_admin(cid))
+    screen = load_screen("screens/help.yaml", ctx, t_func=_t_by_lang)
+    render_screen(screen, cid, bot)
+```
+
+**Web route** (`bot_web.py`):
+
+```python
+@app.get("/screen/{screen_id}")
+async def dynamic_screen(screen_id: str, request: Request, user=Depends(get_current_user)):
+    from ui.screen_loader import load_screen
+    ctx = _make_ctx(user)
+    screen = load_screen(f"screens/{screen_id}.yaml", ctx, t_func=_t_by_lang)
+    return templates.TemplateResponse("dynamic.html",
+                                      {"request": request, "screen": screen, "user": user})
+```
+
+**Admin hot-reload** (Telegram):
+
+```python
+elif data == "reload_screens":
+    if _is_admin(cid):
+        from ui.screen_loader import reload_screens
+        reload_screens()
+        bot.send_message(cid, "✅ Screens reloaded")
+```
+
+### 19.10 Complete Example — `main_menu.yaml`
+
+```yaml
+title_key: choose
+parse_mode: Markdown
+
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: btn_digest
+        action: digest
+
+  - type: button_row
+    buttons:
+      - label_key: btn_chat
+        action: mode_chat
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_system
+        action: mode_system
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_notes
+        action: menu_notes
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_calendar
+        action: menu_calendar
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_contacts
+        action: menu_contacts
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_docs
+        action: menu_docs
+
+  - type: button_row
+    buttons:
+      - label_key: btn_profile
+        action: profile
+
+  - type: button_row
+    buttons:
+      - label_key: btn_help
+        action: help
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_error_protocol
+        action: errp_start
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_admin
+        action: admin_menu
+```
+
+### 19.11 Checklist — Adding a New YAML Screen
+
+1. Create `src/screens/my_feature.yaml` following the format above
+2. Add all `_key` strings to `src/strings.json` under `ru`, `en`, `de`
+3. Wire the Telegram callback in `telegram_menu_bot.py` (see §19.9)
+4. Wire the Web route in `bot_web.py` or use the generic `/screen/{screen_id}` route
+5. Validate: `python3 -c "from ui.screen_loader import load_screen; print(load_screen('screens/my_feature.yaml', None))"`
+6. Update `doc/bot-code-map.md` callback key table if a new callback was added
+
+### 19.12 Hybrid Pattern for Multi-Step Flows
+
+Complex multi-step flows (calendar add/edit, contact wizard, mail setup, error protocol) **cannot be fully expressed in YAML** because they involve LLM calls, IMAP tests, or state machine transitions. Use the **Hybrid Screen Pattern**: YAML defines the layout and text of each step; Python handles the logic and transitions.
+
+→ Full proposal: [`doc/todo/21.6-multistep-yaml-proposal.md`](todo/21.6-multistep-yaml-proposal.md)
+
+**Pattern A — YAML Layout Screen per step:**
+
+```yaml
+# screens/cal_confirm.yaml — calendar single-event confirmation card
+title: "📅 {event_title}"
+parse_mode: Markdown
+
+widgets:
+  - type: card
+    title: "{event_title}"
+    body: "🕒 {event_dt}\n⏰ {remind_text}"
+
+  - type: button_row
+    buttons:
+      - label_key: cal_btn_save
+        action: cal_confirm_save
+      - label_key: btn_cancel
+        action: menu_calendar
+        style: danger
+```
+
+```python
+def _show_cal_confirm(chat_id: int) -> None:
+    state = _pending_cal[chat_id]
+    screen = load_screen("screens/cal_confirm.yaml",
+        user=_screen_ctx(chat_id),
+        variables={
+            "event_title": _escape_md(state["title"]),
+            "event_dt":    _format_dt(state["dt_iso"]),
+            "remind_text": _format_remind(state.get("remind_before_min", 15)),
+        },
+        t_func=_t_by_lang,
+    )
+    render_screen(screen, chat_id, bot)
+```
+
+**Pattern B — Dynamic List via pre-built Markdown variable:**
+
+For data-driven lists (events, contacts), build the list as a Markdown string in Python and inject it:
+
+```yaml
+# screens/cal_menu.yaml
+widgets:
+  - type: markdown
+    text: "{events_list}"
+    visible_if: has_events
+  - type: markdown
+    text_key: cal_no_events
+    visible_if: no_events
+```
+
+Per-item buttons can be injected by appending `ButtonRow` objects to `screen.widgets` from Python before rendering.
+
+**Rule of thumb:** If it involves I/O, LLM, or flow control → **Python**. If it involves text, layout, or buttons → **YAML**.

@@ -923,3 +923,49 @@ Every ~3 months, measure baseline health:
 | — | `/taris-update-doc TODO 8.2 8.3`: collapsed both completed entries in TODO.md to single `✅ Implemented (v2026.4.7)` lines; added Category F (offline Telegram regression) to doc/test-suite.md: quick-ref table row, categories overview row, new §6b section (31 tests, 8 classes, run commands, arch notes), §7 Targets table updated | 2 | ~3 | claude-sonnet-4.6 | TODO.md, doc/test-suite.md | done |
 
 **Session 61 total: 1 item, ~3 turns — doc sync for TODO 8.2+8.3 ✅**
+
+---
+
+### Session 62 — 2026-04-09 (UTC)
+
+**Focus:** Fix "Command not permitted: copy" regression — LLM generated Windows `copy` for Russian disk-space query
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| — | Root-cause: `system_prompt` in `src/prompts.json` had no multilingual guidance and no Linux command examples → LLM (Qwen2-0.5B local fallback) generated Windows `copy` for Russian "сколько места на диске". Fix: replaced weak `system_prompt` with multilingual version (ru/de/en) containing explicit task→command mapping table (disk space→`df -h`, memory→`free -h`, CPU→`uptime`, etc.) and explicit ban on Windows commands (`copy`, `dir`, `cls`, `del`, etc.). Deployed to PI1 + PI2, both services restarted, v2026.4.9 confirmed running. | 2 | ~5 | claude-sonnet-4-6 | src/prompts.json | done |
+
+**Session 62 total: 1 bug fix, ~5 turns — `system_prompt` multilingual fix deployed to PI1+PI2 ✅**
+
+---
+
+### Session 63 — 2026-03-21 (UTC)
+
+**Focus:** PI2 Vosk STT broken (symlink to missing .picoclaw path) + PI1 Vosk symlink collateral damage repair
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 08:00 | PI2 Vosk STT fix: diagnosed broken symlink `~/.taris/vosk-model-small-ru → ~/.picoclaw/vosk-model-small-ru` (target missing on PI2). Confirmed PI1→PI2 key-based SSH works. Removed broken symlink on PI2, copied 88MB model from PI1 via `scp`, verified 88M + correct structure, restarted PI2 `taris-telegram` — clean start v2026.4.9, no Vosk errors, polling ✅ | 2 | ~8 | claude-sonnet-4-6 | — (infra/data only) | done |
+| 08:29 | PI1 symlink collateral fix: accidental `rm -f ~/.taris/vosk-model-small-ru` ran on PI1 (wrong host) during the fix. Real model data (`~/.picoclaw/vosk-model-small-ru` 88MB) untouched. Recreated symlink with `ln -s`, verified PI1 service journal clean v2026.4.9, polling ✅ | 1 | ~3 | claude-sonnet-4-6 | — (infra/data only) | done |
+
+**Session 63 total: 2 infra fixes, ~11 turns — PI2 Vosk STT restored + PI1 symlink collateral repaired ✅**
+
+### Session 64 — Phase 3: Main & Admin Menus (Screen DSL)
+
+| Time | Description | C | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 14:00 UTC | Phase 3 TODO 21.3: Convert main menu + admin menu to YAML Screen DSL. Created `screens/main_menu.yaml` (11 button_rows, RBAC visible_roles), `screens/admin_menu.yaml` (10 button_rows, {pending_badge} variable substitution). Added 11 admin i18n keys (ru/en/de) to strings.json. Wired `menu` and `admin_menu` callbacks in telegram_menu_bot.py to use `load_screen()` + `render_screen()`. Web UI auto-served via Phase 2 generic `/screen/{screen_id}` route. All static checks pass. | 4 | ~30 | claude-sonnet-4-6 | screens/main_menu.yaml, screens/admin_menu.yaml, strings.json, telegram_menu_bot.py, TODO.md | done |
+| 23:35 UTC | Deploy Phase 3 (TODO 21.3) to PI2. Version bump 2026.4.10→2026.4.11. Backup 228MB. Deployed 6 files (bot_config.py, telegram_menu_bot.py, strings.json, release_notes.json, main_menu.yaml, admin_menu.yaml). Both services verified: taris-telegram v2026.4.11 polling ✅, taris-web v2026.4.11 on :8080 ✅ | 2 | ~12 | claude-sonnet-4-6 | bot_config.py, release_notes.json | done |
+
+**Session 64 total: 2 items, ~42 turns — YAML Screen DSL Phase 3 + PI2 deploy ✅**
+
+---
+
+### Session 65 — 2026-04-11 (UTC)
+
+**Focus:** Integrate Karpathy AutoResearch into RAG research roadmap (TODO §23)
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| — | Integrated Karpathy AutoResearch (`karpathy/autoresearch`, 51.1K ⭐) into RAG research roadmap. Added ~180-line §6b to extended research (3-file paradigm, Taris RAG adaptation with rag_score composite metric, per-architecture configs for Pi/X1/VPS, community forks, integration pipeline). Updated §1 scope, §8.1/8.2 tables (score 4.40→4.45), §9.4/9.5 recommendations, Appendix sources. Rewrote TODO.md §23 from 9→12 items with AutoResearch evaluation methodology. Updated main concept paper executive summary + implementation timeline. | 4 | ~20 | claude-opus-4.6 | concept/rag-memory-extended-research.md, concept/rag-memory-architecture.md, TODO.md, doc/vibe-coding-protocol.md | done |
+
+**Session 65 total: 1 item, ~20 turns — AutoResearch integration into RAG roadmap ✅**

@@ -6,15 +6,28 @@ applyTo: "src/telegram_menu_bot.py,src/bot_*.py,src/strings.json,src/release_not
 
 Use this skill whenever deploying bot changes to the Pi.
 
+## ⚠️ Data Safety — Mandatory Rule
+
+> **DATA SHALL ALWAYS BE BACKED UP AND MIGRATED ON EVERY SOFTWARE CHANGE ON TARGETS.**
+>
+> - **Before any deploy**: verify `~/.taris/calendar/`, `~/.taris/notes/`, `~/.taris/mail_creds/`, `~/.taris/taris.db`, `~/.taris/bot.env` are present and non-empty on the target.
+> - **If changing data paths or service names**: migrate ALL user data from the old path to the new path BEFORE deploying new code.
+> - **If in doubt**: run Step 0.5 (backup) + Step 0.6 (data directory migration check) from the `/taris-deploy-to-target` skill first.
+> - **Data loss is never acceptable. Silent data loss is a critical bug.**
+
 ## Deployment Pipeline — MANDATORY ORDER
 
-> **RULE: Engineering before Production — always.**
+> **RULE: Engineering before Production — always. PI1 receives only the master branch.**
 >
-> 1. Deploy and test on **PI2** (`OpenClawPI2`) — engineering target.
-> 2. **Only after** all tests pass and the change is committed and pushed to git:
+> 1. Deploy and test on **PI2** (`OpenClawPI2`) — engineering target. Accepts any branch.
+> 2. **Only after** all tests pass: commit, push to git, and **merge to `master`**.
 > 3. Deploy to **PI1** (`OpenClawPI`) — production target.
+>    - **PI1 ONLY receives code from the `master` branch. NEVER deploy a feature branch to PI1.**
+>    - Before deploying to PI1, run `git branch` and confirm the working branch is `master`.
+>    - If on a feature branch: merge to `master` first, then deploy.
 >
 > **NEVER** deploy directly to PI1 without prior validation on PI2.
+> **NEVER** deploy a non-master branch to PI1.
 
 ## 1 — Version Bump
 

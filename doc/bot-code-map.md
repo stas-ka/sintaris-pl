@@ -51,6 +51,9 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_ui.py` | `ui/` | ~150 | Screen DSL dataclasses: `Screen`, `Button`, `Card`, `Toggle`, `Spinner`, etc. |
 | `bot_actions.py` | `ui/` | ~300 | Action handlers returning `Screen` objects — shared logic layer |
 | `render_telegram.py` | `ui/` | ~220 | Renders `Screen` → Telegram `send_message` / `InlineKeyboardMarkup` |
+| `screen_loader.py` | `ui/` | ~330 | Declarative YAML/JSON → `Screen` loader with schema validation, caching, i18n, visibility rules |
+| `screen.schema.json` | `screens/` | ~200 | JSON Schema (draft-07) for YAML screen file validation — all 10 widget types |
+| `*.yaml` (10 files) | `screens/` | ~15 ea | Declarative screen definitions: main_menu, admin_menu, help, notes_menu, note_view, note_raw, note_edit, profile, profile_lang, profile_my_data |
 | `telegram_menu_bot.py` | `src/` | ~280 | Entry point: handlers + `main()` |
 | `bot_web.py` | `src/` | ~2000 | FastAPI app: all HTTP routes, Jinja2 templates, HTMX endpoints, HTTPS :8080 |
 
@@ -655,6 +658,81 @@ Imports: `bot_config`, `bot_instance`, `bot_ui`.
 | `Spinner` | `bot.send_message("⏳ …")` — edited on completion |
 | `Confirm` | Two-button keyboard ✅/❌ |
 | `Redirect` | Immediately calls the target action handler |
+
+---
+
+## screen_loader.py — Declarative Screen DSL Loader
+
+Imports: `bot_ui` (all 11 dataclasses). Optional: `yaml` (pyyaml), `jsonschema`.
+
+Loads YAML/JSON screen definitions from `src/screens/` and returns `Screen` objects identical to those built programmatically in `bot_actions.py`. Both Telegram and Web renderers work unchanged.
+
+### Feature flags
+
+| Flag | Effect when absent |
+|---|---|
+| `_HAS_YAML` | Only `.json` files can be loaded (`.yaml` raises warning) |
+| `_HAS_JSONSCHEMA` | Schema validation silently skipped |
+
+### Globals
+
+| Symbol | Purpose |
+|---|---|
+| `_screen_cache` | `dict[str, dict]` — parsed file cache (cleared by `reload_screens()`) |
+| `_SCHEMA` | Lazy-loaded JSON Schema object (from `screen.schema.json`) |
+| `_VAR_RE` | `re.compile(r"\{(\w+)\}")` — variable substitution pattern |
+| `_WIDGET_BUILDERS` | `dict[str, Callable]` — type name → builder function registry |
+
+### Public API
+
+| Function | Purpose |
+|---|---|
+| `load_screen(path, user, variables, t_func)` | Main entry point: load YAML/JSON → resolve i18n + variables + visibility → return `Screen` |
+| `load_all_screens(directory)` | Pre-load all files in a directory → `dict[str, dict]` (raw parsed data) |
+| `reload_screens()` | Clear `_screen_cache` — call for hot-reload without restart |
+
+### Internal helpers
+
+| Function | Purpose |
+|---|---|
+| `_get_schema()` | Lazy-load `screen.schema.json` from `../screens/` relative to module |
+| `_validate_screen(data, path)` | Validate parsed dict against JSON Schema; `log.warning()` on error, never crashes |
+| `_load_file(path)` | Read + parse YAML/JSON + cache + validate; returns raw dict |
+| `_resolve_text(widget, key, t_func, lang, variables)` | Resolve `title_key` / `label_key` / `text_key` → literal text via i18n + variable substitution |
+| `_resolve_action(action, variables)` | Substitute `{var}` in callback action strings |
+| `_is_visible(widget, user, variables)` | Check `visible_roles` and `visible_if` conditions |
+| `_substitute(text, variables)` | Replace `{var_name}` patterns with values from `variables` dict |
+| `_register(type_name)` | Decorator: register a builder function in `_WIDGET_BUILDERS` |
+
+### Widget builders (registered via `@_register`)
+
+| Builder | Widget type | Returns |
+|---|---|---|
+| `_build_button(w, ...)` | `button` | `Button` |
+| `_build_button_row(w, ...)` | `button_row` | `ButtonRow` |
+| `_build_card(w, ...)` | `card` | `Card` |
+| `_build_text_input(w, ...)` | `text_input` | `TextInput` |
+| `_build_toggle(w, ...)` | `toggle` | `Toggle` |
+| `_build_audio_player(w, ...)` | `audio_player` | `AudioPlayer` |
+| `_build_markdown(w, ...)` | `markdown` | `MarkdownBlock` |
+| `_build_spinner(w, ...)` | `spinner` | `Spinner` |
+| `_build_confirm(w, ...)` | `confirm` | `Confirm` |
+| `_build_redirect(w, ...)` | `redirect` | `Redirect` |
+
+### Screen files (`src/screens/`)
+
+| File | Screen | Key variables |
+|---|---|---|
+| `main_menu.yaml` | Main user menu | — |
+| `admin_menu.yaml` | Admin panel menu | `{pending_badge}` |
+| `help.yaml` | Role-filtered help text | — |
+| `notes_menu.yaml` | Notes submenu | — |
+| `note_view.yaml` | Single note detail | `{slug}`, `{note_title}`, `{note_content}` |
+| `note_raw.yaml` | Raw text view | `{slug}`, `{note_title}`, `{note_content}` |
+| `note_edit.yaml` | Note edit options | `{slug}`, `{note_title}` |
+| `profile.yaml` | User profile card | `{user_name}`, `{role}`, `{chat_id}`, etc. |
+| `profile_lang.yaml` | Language selection | — |
+| `profile_my_data.yaml` | Stored data summary | `{notes_count}`, `{calendar_count}`, etc. |
 
 ---
 

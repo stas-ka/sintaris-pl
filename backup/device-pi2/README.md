@@ -67,11 +67,11 @@ These files are created automatically by `telegram_menu_bot.py` at runtime and a
 
 | File | Description |
 |---|---|
-| `~/.picoclaw/voice_opts.json` | Voice optimization flags |
-| `~/.picoclaw/last_notified_version.txt` | Admin notification tracking |
-| `~/.picoclaw/pending_tts.json` | TTS orphan-cleanup tracker |
-| `~/.picoclaw/users.json` | Dynamically approved guest users |
-| `~/.picoclaw/registrations.json` | User registration records |
+| `~/.sintaris-pl/voice_opts.json` | Voice optimization flags |
+| `~/.sintaris-pl/last_notified_version.txt` | Admin notification tracking |
+| `~/.sintaris-pl/pending_tts.json` | TTS orphan-cleanup tracker |
+| `~/.sintaris-pl/users.json` | Dynamically approved guest users |
+| `~/.sintaris-pl/registrations.json` | User registration records |
 
 ---
 

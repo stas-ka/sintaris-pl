@@ -1,7 +1,55 @@
 # Taris — Deployment, File Layout & Configuration
 
-**Version:** `2026.3.28`  
+**Version:** `2026.4.13`  
 → Architecture index: [architecture.md](../architecture.md)
+
+---
+
+## Deployment Variants
+
+Taris supports two deployment targets, controlled by `DEVICE_VARIANT` in `bot.env`:
+
+| Variant | `DEVICE_VARIANT` | Hardware | LLM Provider | REST API |
+|---|---|---|---|---|
+| **PicoClaw** | `picoclaw` (default) | Raspberry Pi 4/5 | `taris` / `openai` / `local` | No (not needed) |
+| **OpenClaw** | `openclaw` | Laptop / Mini-PC | `openclaw` → GPT-5+ / `openai` | Yes (`/api/status`, `/api/chat`) |
+
+### Variant: PicoClaw (Raspberry Pi)
+
+- `DEVICE_VARIANT=picoclaw` (or unset)
+- Offline voice pipeline: Vosk STT + Piper TTS
+- LLM: taris binary, OpenAI, or local llama.cpp
+- Web UI on `:8080` (local network only)
+- REST API endpoints NOT needed (no external skill calls)
+- Screen DSL menus: standard buttons only (no OpenClaw controls)
+
+### Variant: OpenClaw (Laptop / Mini-PC)
+
+- `DEVICE_VARIANT=openclaw`
+- Runs alongside `sintaris-openclaw` (Node.js AI gateway on `:18789`)
+- LLM: `openclaw` routes to GPT-5+/Codex via the local OpenClaw gateway
+- REST API active: `/api/status` and `/api/chat` (Bearer token via `TARIS_API_TOKEN`)
+- `skill-taris` in sintaris-openclaw calls these endpoints
+- Screen DSL menus: shows additional OpenClaw buttons (`visible_variants: [openclaw]`)
+- ⚠️ **Loop prevention**: if `LLM_PROVIDER=openclaw`, skill-taris must NOT relay
+  chat requests back to Taris (creates an infinite loop)
+
+### Integration Diagram (OpenClaw variant)
+
+```
+User (Telegram)
+     │
+     ├──► @taris_bot (sintaris-pl)
+     │         │ LLM_PROVIDER=openclaw
+     │         └──► openclaw agent --message ...
+     │                    │
+     │                    └──► GPT-5+/Codex (OpenAI)
+     │
+     └──► @suppenclaw_bot (sintaris-openclaw)
+               │ skill-taris
+               └──► POST /api/chat → sintaris-pl :8080
+                         (notes, calendar, status queries)
+```
 
 ---
 

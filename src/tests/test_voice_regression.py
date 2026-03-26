@@ -58,7 +58,7 @@ PIPER_MODEL       = os.environ.get("PIPER_MODEL", str(TARIS_DIR / "ru_RU-irina-m
 PIPER_MODEL_TMPFS = "/dev/shm/piper/" + Path(PIPER_MODEL).name
 PIPER_MODEL_LOW   = os.environ.get("PIPER_MODEL_LOW", str(TARIS_DIR / "ru_RU-irina-low.onnx"))
 WHISPER_BIN       = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
-WHISPER_MODEL     = os.environ.get("WHISPER_MODEL", str(TARIS_DIR / "ggml-tiny.bin"))
+WHISPER_MODEL     = os.environ.get("WHISPER_MODEL", str(TARIS_DIR / "ggml-base.bin"))
 VOSK_MODEL_PATH   = os.environ.get("VOSK_MODEL_PATH", str(TARIS_DIR / "vosk-model-small-ru"))
 
 VOSK_MODEL_DE_PATH   = os.environ.get("VOSK_MODEL_DE_PATH",  str(TARIS_DIR / "vosk-model-small-de"))

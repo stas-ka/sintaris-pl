@@ -30,12 +30,12 @@ from core.bot_config import (
     LLM_LOCAL_FALLBACK,
     LLM_FALLBACK_FLAG_FILE,
     LLM_PROVIDER,
-    OPENCLAW_BIN,
-    OPENCLAW_SESSION,
-    OPENCLAW_TIMEOUT,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     OPENAI_MODEL,
+    OPENCLAW_BIN,
+    OPENCLAW_SESSION,
+    OPENCLAW_TIMEOUT,
     TARIS_BIN,
     TARIS_CONFIG,
     YANDEXGPT_API_KEY,
@@ -258,12 +258,27 @@ def _ask_anthropic(prompt: str, timeout: int) -> str:
     return result["content"][0]["text"].strip()
 
 
-def _ask_openclaw(prompt: str, timeout: int) -> str:
-    """Call OpenClaw AI gateway as an LLM provider.
+def _ask_local(prompt: str, timeout: int) -> str:
+    """Call local llama.cpp server (OpenAI-compatible /v1/chat/completions)."""
+    url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    body: dict = {
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": LOCAL_MAX_TOKENS,
+        "temperature": LOCAL_TEMPERATURE,
+    }
+    if LLAMA_CPP_MODEL:
+        body["model"] = LLAMA_CPP_MODEL
+    result = _http_post_json(url, headers, body, timeout)
+    return result["choices"][0]["message"]["content"].strip()
 
-    Uses ``openclaw agent --message <prompt> --json --session <session>``
-    and parses the JSON reply.  Returns empty string if the binary is not
-    found so that ``ask_llm()`` can fall back to the next provider.
+
+def _ask_openclaw(prompt: str, timeout: int) -> str:
+    """Call OpenClaw AI gateway as an LLM provider (DEVICE_VARIANT=openclaw).
+
+    Uses ``openclaw agent --message <prompt> --json --session-id <session>``
+    and parses the JSON reply.  Raises FileNotFoundError when the binary is
+    not found so ``ask_llm()`` can fall back gracefully.
     """
     import shutil
     bin_path = OPENCLAW_BIN
@@ -291,21 +306,6 @@ def _ask_openclaw(prompt: str, timeout: int) -> str:
         return text
     except (json.JSONDecodeError, ValueError):
         return _clean_output(raw)
-
-
-def _ask_local(prompt: str, timeout: int) -> str:
-    """Call local llama.cpp server (OpenAI-compatible /v1/chat/completions)."""
-    url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    body: dict = {
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": LOCAL_MAX_TOKENS,
-        "temperature": LOCAL_TEMPERATURE,
-    }
-    if LLAMA_CPP_MODEL:
-        body["model"] = LLAMA_CPP_MODEL
-    result = _http_post_json(url, headers, body, timeout)
-    return result["choices"][0]["message"]["content"].strip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

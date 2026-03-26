@@ -32,14 +32,20 @@ from core.bot_logger import configure_alert_handler, attach_alerts_to_main_log
 # ─── Shared utilities ─────────────────────────────────────────────────────────
 from telegram.bot_access import (
     _is_allowed, _is_admin, _is_guest,
-    _deny, _set_lang, _send_menu,
+    _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
 )
 
+# ─── Screen DSL ───────────────────────────────────────────────────────────────
+from ui.bot_ui import UserContext
+from ui.screen_loader import load_screen, reload_screens
+from ui.render_telegram import render_screen
+
 # ─── Data layer ───────────────────────────────────────────────────────────────
 from telegram.bot_users import (
     _upsert_registration, _is_blocked_reg, _is_pending_reg,
+    _get_pending_registrations,
     _slug, _load_note_text, _save_note_file,
 )
 
@@ -64,6 +70,7 @@ from telegram.bot_admin import (
     _handle_admin_llm_menu, _handle_set_llm,
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
+    _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
     _admin_keyboard,
 )
 
@@ -269,7 +276,11 @@ def callback_handler(call):
     if data == "menu":
         _st._user_mode.pop(cid, None)
         _st._pending_cmd.pop(cid, None)
-        _send_menu(cid)
+        role = "admin" if _is_admin(cid) else "guest" if _is_guest(cid) else "user"
+        ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role=role)
+        screen = load_screen("screens/main_menu.yaml", ctx,
+                             t_func=lambda _lang_arg, key: _t(cid, key))
+        render_screen(screen, cid, bot)
 
     # ── Mail digest ────────────────────────────────────────────────────────
     elif data == "digest":
@@ -296,15 +307,11 @@ def callback_handler(call):
 
     # ── Help ───────────────────────────────────────────────────────────────
     elif data == "help":
-        if _is_admin(cid):
-            key = "help_text_admin"
-        elif _is_guest(cid):
-            key = "help_text_guest"
-        else:
-            key = "help_text"
-        bot.send_message(cid, _t(cid, key),
-                         parse_mode="Markdown",
-                         reply_markup=_back_keyboard())
+        role = "admin" if _is_admin(cid) else "guest" if _is_guest(cid) else "user"
+        ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role=role)
+        screen = load_screen("screens/help.yaml", ctx,
+                             t_func=lambda _lang_arg, key: _t(cid, key))
+        render_screen(screen, cid, bot)
     # ── User profile ───────────────────────────────────────────────────────────
     elif data == "profile":
         if not _is_allowed(cid): return _deny(cid)
@@ -330,7 +337,13 @@ def callback_handler(call):
     # ── Admin panel ────────────────────────────────────────────────────────
     elif data == "admin_menu":
         if _is_admin(cid):
-            _handle_admin_menu(cid)
+            pending_count = len(_get_pending_registrations())
+            pending_badge = f"  ({pending_count} new)" if pending_count else ""
+            ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role="admin")
+            screen = load_screen("screens/admin_menu.yaml", ctx,
+                                 variables={"pending_badge": pending_badge},
+                                 t_func=lambda _lang_arg, key: _t(cid, key))
+            render_screen(screen, cid, bot)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -407,6 +420,25 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── RAG administration ────────────────────────────────────────────
+    elif data == "admin_rag_menu":
+        if _is_admin(cid):
+            _handle_admin_rag_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_toggle":
+        if _is_admin(cid):
+            _handle_admin_rag_toggle(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_log":
+        if _is_admin(cid):
+            _handle_admin_rag_log(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -424,6 +456,14 @@ def callback_handler(call):
     elif data == "admin_changelog":
         if _is_admin(cid):
             _handle_admin_changelog(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Screen DSL reload ──────────────────────────────────────────────────
+    elif data == "reload_screens":
+        if _is_admin(cid):
+            reload_screens()
+            bot.send_message(cid, "✅ Screens reloaded")
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

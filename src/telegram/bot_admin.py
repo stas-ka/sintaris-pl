@@ -84,21 +84,24 @@ def _user_info_block(uid: int, reg) -> str:
 # Admin keyboard
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _admin_keyboard() -> InlineKeyboardMarkup:
+def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     pending_count = len(_get_pending_registrations())
     pending_badge = f"  ({pending_count} new)" if pending_count else ""
     kb.add(
-        InlineKeyboardButton(f"👥  Pending Requests{pending_badge}",
+        InlineKeyboardButton(_t(chat_id, "admin_btn_pending", pending_badge=pending_badge),
                              callback_data="admin_pending_users"),
-        InlineKeyboardButton("➕  Add user",       callback_data="admin_add_user"),
-        InlineKeyboardButton("📋  List users",     callback_data="admin_list_users"),
-        InlineKeyboardButton("🗑   Remove user",    callback_data="admin_remove_user"),
-        InlineKeyboardButton("🤖  Switch LLM",     callback_data="admin_llm_menu"),
-        InlineKeyboardButton("⚡  Voice Opts",      callback_data="voice_opts_menu"),
-        InlineKeyboardButton("📝  Release Notes",   callback_data="admin_changelog"),
-        InlineKeyboardButton("�  Logs",            callback_data="admin_logs_menu"),
-        InlineKeyboardButton("�🔙  Menu",            callback_data="menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_system"),    callback_data="mode_system"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_add_user"),   callback_data="admin_add_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_list_users"), callback_data="admin_list_users"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_remove_user"), callback_data="admin_remove_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_switch_llm"), callback_data="admin_llm_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_release_notes"), callback_data="admin_changelog"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_logs"),       callback_data="admin_logs_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
     return kb
 
@@ -106,9 +109,9 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
 def _handle_admin_menu(chat_id: int) -> None:
     bot.send_message(
         chat_id,
-        "🔐 *Admin Panel*",
+        _t(chat_id, "admin_panel_title"),
         parse_mode="Markdown",
-        reply_markup=_admin_keyboard(),
+        reply_markup=_admin_keyboard(chat_id),
     )
 
 
@@ -149,14 +152,14 @@ def _handle_admin_list_users(chat_id: int) -> None:
 
     if not sections:
         bot.send_message(chat_id, _t(chat_id, "no_guests"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
         return
 
     bot.send_message(
         chat_id,
         "\n\n" + "\n\n───────\n\n".join(sections),
         parse_mode="Markdown",
-        reply_markup=_admin_keyboard(),
+        reply_markup=_admin_keyboard(chat_id),
     )
 
 
@@ -174,16 +177,16 @@ def _finish_admin_add_user(admin_id: int, text: str) -> None:
     dyn = _dynamic_users()
     if uid in dyn:
         bot.send_message(admin_id, _t(admin_id, "already_guest", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     elif uid in ALLOWED_USERS or uid in ADMIN_USERS:
         bot.send_message(admin_id, _t(admin_id, "already_full", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     else:
         dyn.add(uid)
         _save_dynamic_users()
         log.info(f"Admin {admin_id} added user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_added", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     _st._user_mode.pop(admin_id, None)
 
 
@@ -191,7 +194,7 @@ def _start_admin_remove_user(chat_id: int) -> None:
     dyn = _dynamic_users()
     if not dyn:
         bot.send_message(chat_id, _t(chat_id, "no_guests_del"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
         return
     _st._user_mode[chat_id] = "admin_remove_user"
     lst = "\n\n".join(_user_info_block(uid, _find_registration(uid)) for uid in sorted(dyn))
@@ -210,10 +213,10 @@ def _finish_admin_remove_user(admin_id: int, text: str) -> None:
         _save_dynamic_users()
         log.info(f"Admin {admin_id} removed guest user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_removed", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     else:
         bot.send_message(admin_id, _t(admin_id, "user_not_found", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     _st._user_mode.pop(admin_id, None)
 
 
@@ -226,7 +229,7 @@ def _handle_admin_pending_users(chat_id: int) -> None:
     pending = _get_pending_registrations()
     if not pending:
         bot.send_message(chat_id, _t(chat_id, "no_pending_regs"),
-                         reply_markup=_admin_keyboard())
+                         reply_markup=_admin_keyboard(chat_id))
         return
     for reg in pending:
         uid      = reg.get("chat_id")
@@ -264,11 +267,11 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     reg = _find_registration(target_id)
     if not reg:
         bot.send_message(admin_id, f"ℹ️ Registration for `{target_id}` not found.",
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
         return
     if reg.get("status") == "approved":
         bot.send_message(admin_id, f"ℹ️ User `{target_id}` is already approved.",
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
         return
     _set_reg_status(target_id, "approved")
     _dynamic_users().add(target_id)
@@ -276,7 +279,7 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     name_disp = f" \u2014 {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id}")
     bot.send_message(admin_id, f"✅ User `{target_id}`{name_disp} approved and added.",
-                     parse_mode="Markdown", reply_markup=_admin_keyboard())
+                     parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     try:
         bot.send_message(target_id, _t(target_id, "reg_approved"),
                          parse_mode="Markdown",
@@ -294,7 +297,7 @@ def _do_block_registration(admin_id: int, target_id: int) -> None:
     _save_dynamic_users()
     log.info(f"[Reg] Admin {admin_id} blocked user {target_id}")
     bot.send_message(admin_id, f"\U0001f6ab User `{target_id}`{name_disp} blocked.",
-                     parse_mode="Markdown", reply_markup=_admin_keyboard())
+                     parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     try:
         bot.send_message(target_id, _t(target_id, "reg_declined"))
     except Exception as e:
@@ -461,13 +464,13 @@ def _notify_admins_new_version() -> None:
     for admin_id in ADMIN_USERS:
         try:
             bot.send_message(admin_id, msg, parse_mode="Markdown",
-                             reply_markup=_admin_keyboard())
+                             reply_markup=_admin_keyboard(admin_id))
             log.info(f"[ReleaseNotes] notified admin {admin_id} (v{BOT_VERSION})")
         except Exception as e:
             log.warning(f"[ReleaseNotes] Markdown failed for admin {admin_id}: {e} — retrying plain")
             try:
                 bot.send_message(admin_id, _re.sub(r"[*_`]", "", msg),
-                                 reply_markup=_admin_keyboard())
+                                 reply_markup=_admin_keyboard(admin_id))
                 log.info(f"[ReleaseNotes] notified admin {admin_id} (v{BOT_VERSION}, plain)")
             except Exception as e2:
                 log.warning(f"[ReleaseNotes] notify admin {admin_id} failed: {e2}")
@@ -483,12 +486,12 @@ def _handle_admin_changelog(chat_id: int) -> None:
     text = f"📝 *Release Notes*  (current: v{BOT_VERSION})\n" + _get_changelog_text()
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown",
-                         reply_markup=_admin_keyboard())
+                         reply_markup=_admin_keyboard(chat_id))
     except Exception as e:
         log.warning(f"[Changelog] Markdown failed for {chat_id}: {e} — retrying plain")
         try:
             bot.send_message(chat_id, _re.sub(r"[*_`]", "", text),
-                             reply_markup=_admin_keyboard())
+                             reply_markup=_admin_keyboard(chat_id))
         except Exception as e2:
             log.error(f"[Changelog] send failed for {chat_id}: {e2}")
 
@@ -518,16 +521,16 @@ def _handle_admin_logs_menu(chat_id: int) -> None:
 def _handle_admin_logs_show(chat_id: int, category: str) -> None:
     path = next((p for k, _, p in _LOG_CATEGORIES if k == category), None)
     if path is None:
-        bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard())
+        bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard(chat_id))
         return
     lines = tail_log(path, n=50)
     header = _t(chat_id, "admin_logs_header", n=50, cat=category)
     text = f"{header}\n\n```\n{lines or _t(chat_id, 'admin_logs_empty')}\n```"
     try:
-        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=_admin_keyboard())
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
     except Exception:
         bot.send_message(chat_id, f"{header}\n\n{lines or _t(chat_id, 'admin_logs_empty')}",
-                         reply_markup=_admin_keyboard())
+                         reply_markup=_admin_keyboard(chat_id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -560,7 +563,7 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
 
     if not models:
         bot.send_message(chat_id, "⚠️ Cannot read taris config.json.",
-                         reply_markup=_admin_keyboard())
+                         reply_markup=_admin_keyboard(chat_id))
         return
 
     kb = InlineKeyboardMarkup(row_width=1)
@@ -610,7 +613,7 @@ def _handle_set_llm(chat_id: int, model_name: str) -> None:
     else:
         msg = "↩️ LLM reset to config default (openrouter-auto)."
     try:
-        bot.send_message(chat_id, msg, reply_markup=_admin_keyboard())
+        bot.send_message(chat_id, msg, reply_markup=_admin_keyboard(chat_id))
     except Exception as e:
         log.warning(f"[LLM] set_llm send failed: {e}")
 
@@ -785,3 +788,69 @@ def _handle_admin_llm_fallback_toggle(chat_id: int) -> None:
         log.warning(f"[LLM] fallback toggle send failed: {e}")
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
     _handle_admin_llm_fallback_menu(chat_id)
+
+
+# ── RAG Administration ─────────────────────────────────────────────────────
+
+def _handle_admin_rag_menu(chat_id: int) -> None:
+    """Show RAG status, top-K, and action buttons."""
+    import os
+    from core.bot_config import RAG_FLAG_FILE, RAG_TOP_K
+    enabled = not os.path.exists(RAG_FLAG_FILE)
+    status  = _t(chat_id, "admin_rag_status_on" if enabled else "admin_rag_status_off")
+    text = (
+        _t(chat_id, "admin_rag_menu_title") + "\n" +
+        status + "\n" +
+        _t(chat_id, "admin_rag_topk").format(topk=RAG_TOP_K)
+    )
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),   callback_data="admin_rag_log"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"), callback_data="admin_rag_toggle"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin"))
+    try:
+        bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_toggle(chat_id: int) -> None:
+    """Toggle RAG on/off via flag file."""
+    import os
+    from core.bot_config import RAG_FLAG_FILE
+    if os.path.exists(RAG_FLAG_FILE):
+        os.remove(RAG_FLAG_FILE)
+        msg = _t(chat_id, "admin_rag_toggled_on")
+    else:
+        os.makedirs(os.path.dirname(RAG_FLAG_FILE), exist_ok=True)
+        open(RAG_FLAG_FILE, "w").close()  # noqa: WPS515
+        msg = _t(chat_id, "admin_rag_toggled_off")
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
+    _handle_admin_rag_menu(chat_id)
+
+
+def _handle_admin_rag_log(chat_id: int) -> None:
+    """Show the 20 most recent RAG activity log entries."""
+    from core.store import store as _store
+    rows = _store.list_rag_log(limit=20)
+    if not rows:
+        text = _t(chat_id, "admin_rag_log_title") + "\n" + _t(chat_id, "admin_rag_log_empty")
+    else:
+        lines = [_t(chat_id, "admin_rag_log_title")]
+        for i, r in enumerate(rows, 1):
+            lines.append(
+                _t(chat_id, "admin_rag_log_row").format(
+                    i=i,
+                    query=r["query"][:40],
+                    n_chunks=r["n_chunks"],
+                    chars=r["chars_injected"],
+                    ts=r["created_at"][:16],
+                )
+            )
+        text = "\n".join(lines)
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text))

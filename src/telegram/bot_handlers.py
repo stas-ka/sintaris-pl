@@ -20,14 +20,20 @@ from typing import Optional
 import core.bot_state as _st
 from core.bot_config import (
     LAST_DIGEST_FILE, DIGEST_SCRIPT, MAIL_CREDS_DIR,
+    RAG_ENABLED, RAG_TOP_K, RAG_FLAG_FILE,
+    DEVICE_VARIANT,
     log,
 )
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS
 from telegram.bot_access import (
-    _t, _is_admin, _is_allowed, _is_developer, _with_lang, _escape_md, _truncate,
+    _t, _is_admin, _is_allowed, _is_developer, _is_guest, _lang,
+    _with_lang, _escape_md, _truncate,
     _safe_edit, _back_keyboard, _run_subprocess,
 )
+from ui.screen_loader import load_screen
+from ui.render_telegram import render_screen
+from ui.bot_ui import UserContext
 from core.bot_llm import ask_llm as _ask_builtin_llm, ask_llm_or_raise as _ask_llm_strict
 from telegram.bot_users import (
     _list_notes_for, _load_note_text, _save_note_file, _delete_note_file,
@@ -41,6 +47,18 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # ─────────────────────────────────────────────────────────────────────────────
 
 _pending_profile: dict[int, dict] = {}
+
+
+def _screen_ctx(chat_id: int) -> UserContext:
+    role = "admin" if _is_admin(chat_id) else "guest" if _is_guest(chat_id) else "user"
+    return UserContext(user_id=chat_id, chat_id=chat_id, lang=_lang(chat_id), role=role, variant=DEVICE_VARIANT)
+
+
+def _render(chat_id: int, path: str, variables: dict | None = None):
+    ctx = _screen_ctx(chat_id)
+    screen = load_screen(path, ctx, variables=variables,
+                         t_func=lambda _l, key: _t(chat_id, key))
+    render_screen(screen, chat_id, bot)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,12 +97,7 @@ def _notes_list_keyboard(chat_id: int, notes: list[dict]) -> InlineKeyboardMarku
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_notes_menu(chat_id: int) -> None:
-    bot.send_message(
-        chat_id,
-        _t(chat_id, "note_menu_header"),
-        parse_mode="Markdown",
-        reply_markup=_notes_menu_keyboard(chat_id),
-    )
+    _render(chat_id, "screens/notes_menu.yaml")
 
 
 def _handle_note_list(chat_id: int) -> None:
@@ -113,28 +126,11 @@ def _handle_note_open(chat_id: int, slug: str) -> None:
         bot.send_message(chat_id, _t(chat_id, "note_not_found"),
                          reply_markup=_notes_menu_keyboard(chat_id))
         return
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.row(
-        InlineKeyboardButton(_t(chat_id, "btn_edit"),    callback_data=f"note_edit:{slug}"),
-        InlineKeyboardButton(_t(chat_id, "btn_delete"),  callback_data=f"note_delete:{slug}"),
-    )
-    kb.row(
-        InlineKeyboardButton(_t(chat_id, "btn_raw_text"),   callback_data=f"note_raw:{slug}"),
-        InlineKeyboardButton(_t(chat_id, "btn_read_aloud"), callback_data=f"note_tts:{slug}"),
-    )
-    kb.row(
-        InlineKeyboardButton(_t(chat_id, "btn_send_email"), callback_data=f"note_email:{slug}"),
-    )
-    kb.row(
-        InlineKeyboardButton(_t(chat_id, "btn_all_notes"), callback_data="note_list"),
-        InlineKeyboardButton(_t(chat_id, "btn_back"),      callback_data="menu"),
-    )
-    bot.send_message(
-        chat_id,
-        f"📄 *{_escape_md(slug.replace('_', ' '))}*\n\n{_escape_md(text)}",
-        parse_mode="Markdown",
-        reply_markup=kb,
-    )
+    _render(chat_id, "screens/note_view.yaml", {
+        "note_title": _escape_md(slug.replace('_', ' ')),
+        "note_content": _escape_md(text),
+        "slug": slug,
+    })
 
 
 def _handle_note_raw(chat_id: int, slug: str) -> None:
@@ -144,17 +140,11 @@ def _handle_note_raw(chat_id: int, slug: str) -> None:
         bot.send_message(chat_id, _t(chat_id, "note_not_found"),
                          reply_markup=_notes_menu_keyboard(chat_id))
         return
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.row(
-        InlineKeyboardButton(_t(chat_id, "btn_edit"),      callback_data=f"note_edit:{slug}"),
-        InlineKeyboardButton(_t(chat_id, "btn_delete"),    callback_data=f"note_delete:{slug}"),
-    )
-    kb.row(
-        InlineKeyboardButton(_t(chat_id, "btn_read_aloud"), callback_data=f"note_tts:{slug}"),
-        InlineKeyboardButton(_t(chat_id, "btn_back_short"),    callback_data=f"note_open:{slug}"),
-    )
     # Send without parse_mode — every character appears exactly as stored
-    bot.send_message(chat_id, text or _t(chat_id, "note_empty_body"), reply_markup=kb)
+    _render(chat_id, "screens/note_raw.yaml", {
+        "note_content": text or _t(chat_id, "note_empty_body"),
+        "slug": slug,
+    })
 
 
 def _start_note_edit(chat_id: int, slug: str) -> None:
@@ -165,18 +155,10 @@ def _start_note_edit(chat_id: int, slug: str) -> None:
         return
     lines = text.splitlines()
     note_title = lines[0].lstrip("# ").strip() if lines else ""
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton(_t(chat_id, "btn_note_append"),
-                             callback_data=f"note_append:{slug}"),
-        InlineKeyboardButton(_t(chat_id, "btn_note_replace"),
-                             callback_data=f"note_replace:{slug}"),
-    )
-    kb.row(InlineKeyboardButton(_t(chat_id, "btn_back_short"),
-                                callback_data=f"note_open:{slug}"))
-    bot.send_message(chat_id,
-                     _t(chat_id, "note_edit_choice", title=_escape_md(note_title)),
-                     parse_mode="Markdown", reply_markup=kb)
+    _render(chat_id, "screens/note_edit.yaml", {
+        "title": _escape_md(note_title),
+        "slug": slug,
+    })
 
 
 def _start_note_append(chat_id: int, slug: str) -> None:
@@ -290,29 +272,14 @@ def _handle_profile(chat_id: int) -> None:
     else:
         email_line = _t(chat_id, "profile_no_email")
 
-    text = _t(chat_id, "profile_msg",
-              name=_escape_md(name),
-              username_line=username_line,
-              tg_id=chat_id,
-              role=role,
-              reg_date=reg_date,
-              email_line=email_line)
-
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton(_t(chat_id, "profile_btn_edit_name"),  callback_data="profile_edit_name"),
-        InlineKeyboardButton(_t(chat_id, "profile_btn_change_pw"),  callback_data="profile_change_pw"),
-    )
-    kb.add(
-        InlineKeyboardButton(_t(chat_id, "profile_btn_mailbox"),    callback_data="mail_settings"),
-        InlineKeyboardButton(_t(chat_id, "web_link_btn"),           callback_data="web_link"),
-    )
-    kb.add(
-        InlineKeyboardButton(_t(chat_id, "profile_btn_lang"),     callback_data="profile_set_lang"),
-        InlineKeyboardButton(_t(chat_id, "profile_btn_my_data"), callback_data="profile_my_data"),
-    )
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),            callback_data="menu"))
-    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    _render(chat_id, "screens/profile.yaml", {
+        "name": _escape_md(name),
+        "username_line": username_line,
+        "tg_id": str(chat_id),
+        "role": role,
+        "reg_date": reg_date,
+        "email_line": email_line,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -408,12 +375,7 @@ def _handle_web_link(chat_id: int) -> None:
 
 def _handle_profile_lang(chat_id: int) -> None:
     """Show language selection keyboard."""
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton(_t(chat_id, "profile_lang_ru"), callback_data="profile_lang_ru"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "profile_lang_en"), callback_data="profile_lang_en"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "profile_lang_de"), callback_data="profile_lang_de"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),        callback_data="profile"))
-    bot.send_message(chat_id, _t(chat_id, "profile_lang_title"), reply_markup=kb)
+    _render(chat_id, "screens/profile_lang.yaml")
 
 
 def _set_profile_lang(chat_id: int, lang: str) -> None:
@@ -439,13 +401,16 @@ def _handle_profile_my_data(chat_id: int) -> None:
     contacts_count = _contact_count(chat_id)
     mail_file = Path(MAIL_CREDS_DIR) / f"{chat_id}.json"
     mail_status = "\u2705" if mail_file.exists() else "\u274c"
-    text = _t(chat_id, "profile_my_data_msg",
-              name=_escape_md(name), tg_id=chat_id, lang=lang,
-              reg_date=reg_date, notes_count=notes_count,
-              cal_count=cal_count, contacts_count=contacts_count,
-              mail_status=mail_status)
-    bot.send_message(chat_id, text, parse_mode="Markdown",
-                     reply_markup=_back_keyboard())
+    _render(chat_id, "screens/profile_my_data.yaml", {
+        "name": _escape_md(name),
+        "tg_id": str(chat_id),
+        "lang": lang,
+        "reg_date": reg_date,
+        "notes_count": str(notes_count),
+        "cal_count": str(cal_count),
+        "contacts_count": str(contacts_count),
+        "mail_status": mail_status,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -754,22 +719,26 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
         # Build message list: past history + current user turn (with lang hint)
         current_content = _with_lang(chat_id, user_text)
         # ── RAG context injection ──────────────────────────────────────────
-        try:
-            from core.store import store as _store
-            if _store.has_document_search():
-                _MAX_CHUNK_CHARS = 400   # truncate each FTS5 chunk
-                _MAX_RAG_CHARS   = 1600  # total context cap
-                _chunks = _store.search_fts(user_text, chat_id, top_k=3)
-                if _chunks:
-                    _rag_ctx = "\n---\n".join(
-                        c["chunk_text"][:_MAX_CHUNK_CHARS] for c in _chunks
-                    )
-                    current_content = (
-                        f"[Relevant context:\n{_rag_ctx[:_MAX_RAG_CHARS]}]\n\n{current_content}"
-                    )
-                    log.debug("[RAG] injected %d chars from %d chunks", len(_rag_ctx[:_MAX_RAG_CHARS]), len(_chunks))
-        except Exception as _rag_e:
-            log.debug("[RAG] vector search failed: %s", _rag_e)
+        import os as _os
+        if RAG_ENABLED and not _os.path.exists(RAG_FLAG_FILE):
+            try:
+                from core.store import store as _store
+                if _store.has_document_search():
+                    _MAX_CHUNK_CHARS = 400
+                    _MAX_RAG_CHARS   = 1600
+                    _chunks = _store.search_fts(user_text, chat_id, top_k=RAG_TOP_K)
+                    if _chunks:
+                        _rag_ctx = "\n---\n".join(
+                            c["chunk_text"][:_MAX_CHUNK_CHARS] for c in _chunks
+                        )
+                        _injected = len(_rag_ctx[:_MAX_RAG_CHARS])
+                        current_content = (
+                            f"[Relevant context:\n{_rag_ctx[:_MAX_RAG_CHARS]}]\n\n{current_content}"
+                        )
+                        log.debug("[RAG] injected %d chars from %d chunks", _injected, len(_chunks))
+                        _store.log_rag_activity(chat_id, user_text, len(_chunks), _injected)
+            except Exception as _rag_e:
+                log.debug("[RAG] search failed: %s", _rag_e)
         messages = history_msgs + [{"role": "user", "content": current_content}]
 
         # Record the raw user text (without lang prefix) before calling the LLM

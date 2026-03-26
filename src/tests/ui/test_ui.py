@@ -396,7 +396,7 @@ class TestNavigation:
 
     @pytest.mark.parametrize("path,expected_heading", [
         ("/",         "Dashboard"),
-        ("/chat",     "Assistant"),
+        ("/chat",     "Taris"),
         ("/notes",    "Notes"),
         ("/calendar", "Calendar"),
         ("/voice",    "Voice"),
@@ -413,7 +413,7 @@ class TestNavigation:
         admin_page.goto(f"{base_url_or_default}/")
         admin_page.click("a[href='/chat']")
         admin_page.wait_for_url(f"{base_url_or_default}/chat", timeout=8_000)
-        expect(admin_page.locator("h1")).to_contain_text("Assistant")
+        expect(admin_page.locator("h1")).to_contain_text("Taris")
 
     def test_logout_link_in_sidebar(self, admin_page, base_url_or_default):
         """Logout link is present in the sidebar."""

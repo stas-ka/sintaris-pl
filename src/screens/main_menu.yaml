@@ -1,0 +1,73 @@
+# Main menu — role-filtered buttons (matches _menu_keyboard in bot_access.py)
+# Title uses "choose" key: "👋 Выберите режим:" / "👋 Choose a mode:" / "👋 Wähle einen Modus:"
+title_key: choose
+parse_mode: Markdown
+
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: btn_digest
+        action: digest
+
+  - type: button_row
+    buttons:
+      - label_key: btn_chat
+        action: mode_chat
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_system
+        action: mode_system
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_notes
+        action: menu_notes
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_calendar
+        action: menu_calendar
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_contacts
+        action: menu_contacts
+
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_docs
+        action: menu_docs
+
+  - type: button_row
+    buttons:
+      - label_key: btn_profile
+        action: profile
+
+  - type: button_row
+    buttons:
+      - label_key: btn_help
+        action: help
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_error_protocol
+        action: errp_start
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
+      - label_key: btn_admin
+        action: admin_menu
+
+  - type: button_row
+    visible_variants: [openclaw]
+    buttons:
+      - label_key: btn_openclaw_agent
+        action: openclaw_status

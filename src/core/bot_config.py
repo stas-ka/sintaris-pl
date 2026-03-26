@@ -71,14 +71,24 @@ TARIS_BIN        = os.environ.get("TARIS_BIN", "/usr/bin/taris")
 TARIS_CONFIG     = os.environ.get("TARIS_CONFIG",
                           os.path.expanduser("~/.taris/config.json"))
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Deployment variant — controls optional features per platform
+# DEVICE_VARIANT=picoclaw  → Raspberry Pi + PicoClaw robot (default)
+# DEVICE_VARIANT=openclaw  → Laptop/PC + OpenClaw AI gateway
+# ─────────────────────────────────────────────────────────────────────────────
+DEVICE_VARIANT   = os.environ.get("DEVICE_VARIANT", "picoclaw").lower()
+
 # OpenClaw AI gateway — optional provider (Feature §4.2 remote integration)
-# Falls back to taris/picoclaw automatically when OPENCLAW_BIN is not found.
+# Only active when DEVICE_VARIANT=openclaw or OPENCLAW_BIN is explicitly set.
+# Falls back to taris/picoclaw automatically when the binary is not found.
 OPENCLAW_BIN     = os.environ.get("OPENCLAW_BIN",     os.path.expanduser("~/.local/bin/openclaw"))
 OPENCLAW_SESSION = os.environ.get("OPENCLAW_SESSION", "taris")
 OPENCLAW_TIMEOUT = int(os.environ.get("OPENCLAW_TIMEOUT", "60"))
 
 # Internal API token — authenticates skill-taris (sintaris-openclaw) on /api/* routes
+# Required when DEVICE_VARIANT=openclaw so skill-taris can call /api/status and /api/chat.
 TARIS_API_TOKEN  = os.environ.get("TARIS_API_TOKEN", "")
+
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           os.path.expanduser("~/.taris/active_model.txt"))
 
@@ -145,10 +155,18 @@ DOCS_DIR            = os.environ.get("DOCS_DIR",
                           os.path.expanduser("~/.taris/docs"))
 
 # ─────────────────────────────────────────────────────────────────────────────
+# RAG (Retrieval-Augmented Generation) — FTS5 local knowledge base
+# ─────────────────────────────────────────────────────────────────────────────
+RAG_ENABLED    = os.environ.get("RAG_ENABLED",    "1") == "1"
+RAG_TOP_K      = int(os.environ.get("RAG_TOP_K",      "3"))
+RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
+RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.9"
+BOT_VERSION        = "2026.4.13"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
