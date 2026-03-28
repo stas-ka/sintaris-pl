@@ -2414,7 +2414,7 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
     t0 = time.time()
     results: list[TestResult] = []
 
-    # 1. Source: bot_voice.py has primary → vosk fallback logic
+    # 1. Source: bot_voice.py has primary → vosk fallback logic + STT_LANG override
     try:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
@@ -2425,9 +2425,13 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
         has_primary_stt_used   = "primary_stt_used" in src
         has_vosk_fallback_code = "vosk_fallback_enabled" in src
         has_fallback_model     = "_get_vosk_model" in src
+        # Regression guard (v2026.3.38): STT_LANG used instead of _lang(chat_id)
+        has_stt_lang_var       = "_stt_lang" in src and "STT_LANG" in src
+        uses_stt_lang_in_vosk  = "_get_vosk_model(_stt_lang)" in src
 
         all_ok = all([has_vosk_fallback_opt, has_primary_stt_used,
-                      has_vosk_fallback_code, has_fallback_model])
+                      has_vosk_fallback_code, has_fallback_model,
+                      has_stt_lang_var, uses_stt_lang_in_vosk])
         results.append(TestResult(
             "stt_fallback_code_present",
             "PASS" if all_ok else "FAIL",
@@ -2435,7 +2439,9 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
             f"vosk_fallback_opt={'yes' if has_vosk_fallback_opt else 'NO'} "
             f"primary_stt_used={'yes' if has_primary_stt_used else 'NO'} "
             f"fallback_enabled={'yes' if has_vosk_fallback_code else 'NO'} "
-            f"get_vosk_model={'yes' if has_fallback_model else 'NO'}",
+            f"get_vosk_model={'yes' if has_fallback_model else 'NO'} "
+            f"stt_lang_var={'yes' if has_stt_lang_var else 'NO'} "
+            f"vosk_uses_stt_lang={'yes' if uses_stt_lang_in_vosk else 'NO'}",
         ))
     except Exception as e:
         results.append(TestResult("stt_fallback_code_present", "FAIL", time.time() - t0, str(e)))
