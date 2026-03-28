@@ -366,9 +366,21 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 
 - [x] `src/core/store_postgres.py` — 696-line PostgreSQL + pgvector adapter (DataStore Protocol)
 - [x] `src/core/bot_embeddings.py` — `EmbeddingService`: fastembed + sentence-transformers fallback; `EMBED_MODEL` / `EMBED_DIMENSION` constants
-- [x] `src/setup/setup_voice_openclaw.sh` — x86_64 Vosk + Piper install; `VOICE_BACKEND=cpu|cuda|openvino`
+- [x] `src/setup/setup_voice_openclaw.sh` — x86_64 Vosk + Piper install; step 6/6 adds faster-whisper; `VOICE_BACKEND=cpu|cuda|openvino`
 - [x] `src/setup/install_embedding_model.sh` — download + verify embedding model
+- [x] `src/setup/setup_llm_openclaw.sh` — Ollama installer (qwen2:0.5b default); offline local LLM for OpenClaw (v2026.3.28-openclaw)
 - [x] `bot.env.example` updated with `DEVICE_VARIANT`, `OPENCLAW_BIN`, `TARIS_API_TOKEN`
+
+### 19.2b STT/LLM Extensions ✅ Implemented (v2026.3.28-openclaw)
+
+- [x] `STT_PROVIDER` env var (`vosk` | `faster_whisper`); auto-default `faster_whisper` for openclaw
+- [x] `FASTER_WHISPER_MODEL/DEVICE/COMPUTE` constants; `_stt_faster_whisper()` in `bot_voice.py`
+- [x] `faster_whisper_stt` voice opt (True by default when DEVICE_VARIANT=openclaw)
+- [x] `voice_assistant.py` standalone — `record_and_recognize_faster_whisper()` routing
+- [x] `OLLAMA_URL` / `OLLAMA_MODEL` constants; `_ask_ollama()` in `bot_llm.py`; `LLM_PROVIDER=ollama` dispatch
+- [x] `LLM_PROVIDER=ollama` as default in `~/.taris/bot.env` (fixes OPENAI_API_KEY not set error)
+- [x] `src/tests/benchmark_stt.py` — Vosk vs faster-whisper benchmark script
+- [x] T27–T30 OpenClaw regression tests in `test_voice_regression.py`
 
 ### 19.3 Local Development Deploy ✅ Implemented (v2026.4.13)
 
@@ -592,7 +604,14 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 ✅ Implemented (v2026.4.13) — `src/core/bot_embeddings.py` (`EmbeddingService`); fastembed-first with sentence-transformers fallback; `EMBED_MODEL` / `EMBED_KEEP_RESIDENT` / `EMBED_DIMENSION` constants in `bot_config.py`; wired into `bot_documents.py`; `src/setup/install_embedding_model.sh`; `bot.env.example` updated.
 
 ### 25.5 Voice Pipeline + NPU Acceleration
-✅ Implemented (v2026.4.13) — `src/setup/setup_voice_openclaw.sh` (x86_64 Vosk + Piper install); `VOICE_BACKEND=cpu|cuda|openvino` constant; `--device cuda` flag passed to whisper-cpp when `VOICE_BACKEND=cuda`.
+✅ Extended (v2026.3.28-openclaw) — `faster-whisper` STT added as default for OpenClaw:
+- `STT_PROVIDER` env var (`vosk` | `faster_whisper` | `whisper_cpp`) in `bot_config.py`; auto-defaults to `faster_whisper` when `DEVICE_VARIANT=openclaw`
+- `FASTER_WHISPER_MODEL/DEVICE/COMPUTE` constants; `faster_whisper_stt` voice opt (default True for openclaw)
+- `_stt_faster_whisper()` in `bot_voice.py` — CTranslate2 backend, built-in VAD, language detection
+- `voice_assistant.py` — `record_and_recognize_faster_whisper()` for standalone mode; STT routing by `STT_PROVIDER`
+- `setup_voice_openclaw.sh` — step 6/6 now installs faster-whisper + pre-downloads base model
+- `src/tests/benchmark_stt.py` — Vosk vs faster-whisper benchmark (WER, RTF, latency)
+- Previously (v2026.4.13): `VOICE_BACKEND=cpu|cuda|openvino` + whisper-cpp `--device cuda` support
 
 ### 25.6 RAG Implementation — Variant C (Hybrid Tiered RAG)
 - [ ] **Phase A — Memory System (3–5 d):** `bot_memory.py`; DB tables `memory_summaries` + `memory_long`; `compact_short_to_middle()` / `compact_middle_to_long()` — see `concept/rag-memory-architecture.md §6.3`

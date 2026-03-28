@@ -107,13 +107,37 @@ ONNX="$TARIS_HOME/ru_RU-irina-medium.onnx"
 ONNX_JSON="$TARIS_HOME/ru_RU-irina-medium.onnx.json"
 
 if [ -f "$ONNX" ] && [ -f "$ONNX_JSON" ]; then
-    info "[5/5] Piper voice model already present — skipping."
+    info "[5/6] Piper voice model already present — skipping."
 else
-    info "[5/5] Downloading Piper Russian voice model..."
+    info "[5/6] Downloading Piper Russian voice model..."
     [ -f "$ONNX" ] || curl -L --progress-bar "$PIPER_VOICE_URL"     -o "$ONNX"
     [ -f "$ONNX_JSON" ] || curl -L --progress-bar "$PIPER_VOICE_CFG_URL" -o "$ONNX_JSON"
     info "Piper model: $ONNX"
 fi
+
+# ─── Step 6: faster-whisper (recommended STT for OpenClaw/laptop) ─────────────
+# faster-whisper uses CTranslate2 for much better WER than Vosk small model.
+# Works without GPU — base model is recommended for i7/i5 (no NVIDIA GPU).
+FASTER_WHISPER_MODEL_NAME="${FASTER_WHISPER_MODEL:-base}"
+info "[6/6] Installing faster-whisper (STT for OpenClaw)..."
+if python3 -c "import faster_whisper" 2>/dev/null; then
+    info "faster-whisper already installed."
+else
+    pip3 install faster-whisper --quiet
+    info "faster-whisper installed."
+fi
+# Warm up / pre-download model
+info "Pre-downloading faster-whisper model: ${FASTER_WHISPER_MODEL_NAME}..."
+python3 -c "
+from faster_whisper import WhisperModel
+import sys
+try:
+    m = WhisperModel('${FASTER_WHISPER_MODEL_NAME}', device='cpu', compute_type='int8')
+    print('[OK] faster-whisper model loaded successfully')
+except Exception as e:
+    print(f'[WARN] Model pre-download failed: {e}', file=sys.stderr)
+    print('      It will download automatically on first use.')
+" || true
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 echo ""
@@ -122,11 +146,19 @@ echo " Voice pipeline setup complete!"
 echo "======================================================="
 echo ""
 echo "Add to $TARIS_HOME/bot.env:"
+echo "  STT_PROVIDER=faster_whisper"
+echo "  FASTER_WHISPER_MODEL=${FASTER_WHISPER_MODEL_NAME}"
 echo "  VOSK_MODEL_PATH=$VOSK_DIR"
 echo "  PIPER_BIN=$PIPER_BIN"
 echo "  PIPER_MODEL=$ONNX"
 echo "  VOICE_BACKEND=cpu"
 echo ""
-echo "For NVIDIA GPU acceleration (requires CUDA-compiled whisper-cpp):"
-echo "  VOICE_BACKEND=cuda"
+echo "STT comparison for i7-2640M (no GPU):"
+echo "  faster_whisper base  — WER ~8-12%, RTF ~0.3-0.5 (recommended)"
+echo "  faster_whisper small — WER ~5-8%,  RTF ~0.8-1.2 (slower but better)"
+echo "  vosk small-ru        — WER ~15-20%, RTF ~0.1    (Pi-tuned, still works)"
+echo ""
+echo "For NVIDIA GPU (faster-whisper):"
+echo "  FASTER_WHISPER_DEVICE=cuda"
+echo "  FASTER_WHISPER_COMPUTE=float16"
 echo ""

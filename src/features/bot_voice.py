@@ -27,6 +27,7 @@ from core.bot_config import (
     VOSK_MODEL_PATH, VOSK_MODEL_DE_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
     WHISPER_BIN, WHISPER_MODEL, VOICE_BACKEND,
+    STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
     TARIS_DIR, _PENDING_TTS_FILE, log,
 )
 from core.bot_instance import bot
@@ -358,8 +359,92 @@ def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TTS — Piper → raw PCM → ffmpeg → OGG Opus
+# §OpenClaw — faster-whisper STT (Python, CTranslate2)
+# Recommended STT for OpenClaw (laptop/PC) variant.
+# Much better WER than Vosk small model; runs on CPU without GPU.
+# Install: pip install faster-whisper
+# Model auto-downloaded on first run to ~/.cache/huggingface/hub/
 # ─────────────────────────────────────────────────────────────────────────────
+
+_fw_model_cache: dict = {}   # {(model_size, device, compute): WhisperModel}
+
+
+def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> Optional[str]:
+    """Run faster-whisper on raw S16LE PCM.  Returns transcript or None.
+
+    Uses CTranslate2 backend — much faster than original Whisper on CPU.
+    Model is loaded once and cached for the process lifetime.
+
+    Args:
+        raw_pcm:     Raw 16-bit LE PCM audio bytes.
+        sample_rate: Audio sample rate in Hz.
+        lang:        Language code: 'ru', 'en', 'de'.
+
+    Config (bot.env):
+        FASTER_WHISPER_MODEL   — model size: tiny/base/small/medium (default: base)
+        FASTER_WHISPER_DEVICE  — cpu / cuda (default: cpu)
+        FASTER_WHISPER_COMPUTE — int8 / float16 / float32 (default: int8)
+    """
+    try:
+        from faster_whisper import WhisperModel  # type: ignore[import]
+    except ImportError:
+        log.debug("[FasterWhisper] faster-whisper not installed — install with: pip install faster-whisper")
+        return None
+
+    try:
+        import tempfile
+        import wave as _wave_mod
+        import numpy as _np
+
+        cache_key = (FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE)
+        if cache_key not in _fw_model_cache:
+            log.info(
+                f"[FasterWhisper] Loading model={FASTER_WHISPER_MODEL} "
+                f"device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE}"
+            )
+            _fw_model_cache[cache_key] = WhisperModel(
+                FASTER_WHISPER_MODEL,
+                device=FASTER_WHISPER_DEVICE,
+                compute_type=FASTER_WHISPER_COMPUTE,
+            )
+        model = _fw_model_cache[cache_key]
+
+        # Convert S16LE PCM bytes → float32 numpy array in [-1, 1]
+        audio_np = _np.frombuffer(raw_pcm, dtype=_np.int16).astype(_np.float32) / 32768.0
+
+        # Resample to 16kHz if needed (faster-whisper expects 16kHz)
+        if sample_rate != 16000:
+            from scipy.signal import resample as _resample  # type: ignore[import]
+            target_len = int(len(audio_np) * 16000 / sample_rate)
+            audio_np = _resample(audio_np, target_len).astype(_np.float32)
+
+        # Map language codes — faster-whisper uses ISO 639-1
+        lang_map = {"ru": "ru", "en": "en", "de": "de"}
+        fw_lang = lang_map.get(lang, "ru")
+
+        segments, info = model.transcribe(
+            audio_np,
+            language=fw_lang,
+            beam_size=5,
+            vad_filter=True,          # built-in VAD — suppresses silence/noise
+            vad_parameters=dict(min_silence_duration_ms=500),
+            condition_on_previous_text=False,
+        )
+
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        if not text:
+            log.debug("[FasterWhisper] no speech detected")
+            return None
+
+        log.debug(f"[FasterWhisper] transcript ({info.language}, {info.language_probability:.2f}): {text[:80]}")
+        return text
+
+    except Exception as exc:
+        log.warning(f"[FasterWhisper] error: {exc}")
+        return None
+
+
+
 
 def _split_for_tts(text: str, max_chars: int) -> list[str]:
     """
@@ -700,21 +785,28 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             raw_pcm = _vad_filter_pcm(raw_pcm, _srate)
             _timing["VAD"] = time.time() - _ts
 
-        # ── STT: whisper.cpp (§5.3) or Vosk (default / fallback) ─────────────
+        # ── STT: faster-whisper (OpenClaw default) or whisper.cpp or Vosk ───────
         _ts = time.time()
         text = ""
+        fw_used = opts.get("faster_whisper_stt")
         whisper_used = opts.get("whisper_stt")
-        if whisper_used:
+
+        if fw_used:
+            text = _stt_faster_whisper(raw_pcm, _srate, _lang(chat_id)) or ""
+            if text:
+                log.debug(f"[FasterWhisper] transcript: {text[:80]}")
+            else:
+                log.warning("[FasterWhisper] no result — falling back to Vosk")
+        elif whisper_used:
             text = _stt_whisper(raw_pcm, _srate) or ""
             if text:
                 log.debug(f"[WhisperSTT] transcript: {text[:80]}")
             else:
                 log.warning("[WhisperSTT] no result — falling back to Vosk")
 
-        # Only load Vosk if: (a) Whisper not active, or (b) Whisper returned nothing.
-        # When whisper_stt=true, Vosk is skipped entirely if vosk_fallback opt is OFF
-        # — this saves ~180 MB RAM at the cost of no-reply on inaudible audio.
-        vosk_fallback_enabled = not whisper_used or opts.get("vosk_fallback", True)
+        # Vosk fallback — skip only when primary STT succeeded or vosk_fallback=False
+        primary_stt_used = fw_used or whisper_used
+        vosk_fallback_enabled = not primary_stt_used or opts.get("vosk_fallback", True)
         if not text and vosk_fallback_enabled:
             STT_CONF_THRESHOLD = 0.65
             try:

@@ -1714,6 +1714,258 @@ def t_system_chat_clean_output(**_) -> list[TestResult]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T27 — OpenClaw: faster-whisper STT availability (SKIP if not installed)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_faster_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResult]:
+    """T27 — faster-whisper STT: import, model load, inference on silence."""
+    t0 = time.time()
+    try:
+        from faster_whisper import WhisperModel  # type: ignore[import]
+    except ImportError:
+        return [TestResult("faster_whisper_stt", "SKIP", time.time() - t0,
+                           "faster-whisper not installed — run: pip install faster-whisper")]
+
+    results: list[TestResult] = []
+    fw_model_size = os.environ.get("FASTER_WHISPER_MODEL", "base")
+    device = os.environ.get("FASTER_WHISPER_DEVICE", "cpu")
+    compute = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
+
+    # Test 1: model load
+    t1 = time.time()
+    try:
+        model = WhisperModel(fw_model_size, device=device, compute_type=compute)
+        load_t = time.time() - t1
+        results.append(TestResult(
+            f"faster_whisper:model_load:{fw_model_size}",
+            "PASS", load_t,
+            f"Loaded {fw_model_size} ({device}/{compute}) in {load_t:.2f}s",
+            metric=load_t, metric_key=f"faster_whisper_load_{fw_model_size}",
+        ))
+    except Exception as e:
+        dur = time.time() - t1
+        return results + [TestResult(f"faster_whisper:model_load:{fw_model_size}", "FAIL", dur, str(e))]
+
+    # Test 2: inference on silence (should return empty or short result)
+    import numpy as np
+    silent_pcm = np.zeros(16000, dtype=np.int16).tobytes()  # 1s silence
+    audio_np = np.frombuffer(silent_pcm, dtype=np.int16).astype(np.float32) / 32768.0
+    t2 = time.time()
+    try:
+        segments, info = model.transcribe(audio_np, language="ru", vad_filter=True, beam_size=1)
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        infer_t = time.time() - t2
+        rtf = infer_t / 1.0  # 1s audio
+        status = "PASS" if rtf < 5.0 else "WARN"  # should be fast even on old CPU
+        results.append(TestResult(
+            "faster_whisper:inference_silence",
+            status, infer_t,
+            f"RTF={rtf:.2f} (text='{text[:30]}')",
+            metric=infer_t, metric_key="faster_whisper_inference_silence",
+        ))
+    except Exception as e:
+        results.append(TestResult("faster_whisper:inference_silence", "FAIL", time.time() - t2, str(e)))
+
+    # Test 3: real audio fixture (if available)
+    ogg_files = list(VOICE_DIR.glob("*.ogg")) if VOICE_DIR.exists() else []
+    if ogg_files and gt:
+        ogg = ogg_files[0]
+        gt_text = gt.get(ogg.name, "")
+        t3 = time.time()
+        try:
+            import subprocess as _sp
+            cmd = ["ffmpeg", "-i", str(ogg), "-ar", "16000", "-ac", "1", "-f", "s16le", "-loglevel", "error", "-"]
+            raw = _sp.run(cmd, capture_output=True, check=True).stdout
+            audio_arr = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+            segs, _ = model.transcribe(audio_arr, language="ru", beam_size=5, vad_filter=True)
+            hyp = " ".join(s.text.strip() for s in segs).strip()
+            infer_t = time.time() - t3
+            dur_s = len(raw) / (16000 * 2)
+            rtf = infer_t / dur_s if dur_s > 0 else 0
+
+            if gt_text:
+                ref_words = gt_text.lower().split()
+                hyp_words = hyp.lower().split()
+                n, m = len(ref_words), len(hyp_words)
+                dp = [[0]*(m+1) for _ in range(n+1)]
+                for i in range(n+1): dp[i][0] = i
+                for j in range(m+1): dp[0][j] = j
+                for i in range(1,n+1):
+                    for j in range(1,m+1):
+                        dp[i][j] = dp[i-1][j-1] if ref_words[i-1]==hyp_words[j-1] else 1+min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1])
+                wer = dp[n][m] / n if n > 0 else 0
+                status = "PASS" if wer <= 0.3 else "WARN"
+                detail = f"WER={wer:.1%} RTF={rtf:.2f} transcript='{hyp[:50]}'"
+            else:
+                status, detail = "PASS", f"RTF={rtf:.2f} transcript='{hyp[:50]}'"
+
+            results.append(TestResult(
+                f"faster_whisper:stt_fixture:{ogg.name}",
+                status, infer_t, detail,
+                metric=rtf, metric_key="faster_whisper_rtf_fixture",
+            ))
+        except Exception as e:
+            results.append(TestResult(f"faster_whisper:stt_fixture:{ogg.name}", "WARN", time.time()-t3, str(e)))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T28 — OpenClaw: LLM connectivity (SKIP if no API key/local LLM configured)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_openclaw_llm_connectivity(**_) -> list[TestResult]:
+    """T28 — OpenClaw LLM: verify configured provider responds to a test prompt."""
+    t0 = time.time()
+    results: list[TestResult] = []
+    try:
+        sys.path.insert(0, str(TARIS_DIR))
+        os.environ["WEB_ONLY"] = "1"
+        import importlib
+        if "core.bot_config" in sys.modules:
+            import core.bot_config as _cfg
+            importlib.reload(_cfg)
+        else:
+            import core.bot_config as _cfg  # type: ignore[import]
+
+        provider = _cfg.LLM_PROVIDER
+        device_variant = _cfg.DEVICE_VARIANT
+
+        if device_variant != "openclaw":
+            return [TestResult("openclaw_llm_connectivity", "SKIP", time.time() - t0,
+                               f"DEVICE_VARIANT={device_variant} (not openclaw) — skipping")]
+
+        # Check if provider is configured
+        has_key = False
+        if provider == "openai" and _cfg.OPENAI_API_KEY:
+            has_key = True
+        elif provider in ("ollama", "local"):
+            has_key = True  # no key needed
+
+        if not has_key:
+            return [TestResult("openclaw_llm_connectivity", "SKIP", time.time() - t0,
+                               f"LLM_PROVIDER={provider}: no API key configured — set OPENAI_API_KEY or use ollama")]
+
+        if "core.bot_llm" in sys.modules:
+            import core.bot_llm as _llm
+            importlib.reload(_llm)
+        else:
+            import core.bot_llm as _llm  # type: ignore[import]
+
+        t1 = time.time()
+        try:
+            resp = _llm.ask_llm("Reply with exactly: TARIS_OK", timeout=15)
+            dur = time.time() - t1
+            if resp and len(resp.strip()) > 0:
+                status = "PASS"
+                detail = f"provider={provider} response_len={len(resp)} latency={dur:.2f}s"
+            else:
+                status = "FAIL"
+                detail = f"provider={provider} empty response after {dur:.2f}s"
+        except Exception as e:
+            dur = time.time() - t1
+            status, detail = "FAIL", f"provider={provider} error: {str(e)[:120]}"
+        results.append(TestResult("openclaw_llm_connectivity", status, dur, detail))
+    except Exception as e:
+        results.append(TestResult("openclaw_llm_connectivity", "FAIL", time.time() - t0, str(e)))
+    finally:
+        os.environ.pop("WEB_ONLY", None)
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T29 — OpenClaw: STT provider routing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_openclaw_stt_routing(**_) -> list[TestResult]:
+    """T29 — OpenClaw STT routing: verify STT_PROVIDER selects correct engine."""
+    t0 = time.time()
+    results: list[TestResult] = []
+    try:
+        sys.path.insert(0, str(TARIS_DIR))
+        os.environ["WEB_ONLY"] = "1"
+        os.environ["DEVICE_VARIANT"] = "openclaw"
+        import importlib
+        if "core.bot_config" in sys.modules:
+            import core.bot_config as _cfg
+            importlib.reload(_cfg)
+        else:
+            import core.bot_config as _cfg  # type: ignore[import]
+
+        # When DEVICE_VARIANT=openclaw, STT_PROVIDER should default to faster_whisper
+        stt_provider = _cfg.STT_PROVIDER
+        expected_default = "faster_whisper"
+        if stt_provider == expected_default:
+            results.append(TestResult("openclaw_stt_routing:default",
+                                      "PASS", time.time() - t0,
+                                      f"STT_PROVIDER={stt_provider} (openclaw default correct)"))
+        else:
+            results.append(TestResult("openclaw_stt_routing:default",
+                                      "WARN", time.time() - t0,
+                                      f"STT_PROVIDER={stt_provider} (expected {expected_default})"))
+
+        # Verify faster_whisper_stt voice opt defaults to True for openclaw
+        opts = _cfg._VOICE_OPTS_DEFAULTS
+        fw_default = opts.get("faster_whisper_stt", False)
+        results.append(TestResult(
+            "openclaw_stt_routing:voice_opt_default",
+            "PASS" if fw_default else "WARN",
+            time.time() - t0,
+            f"faster_whisper_stt default={'True' if fw_default else 'False'} (expected True for openclaw)",
+        ))
+    except Exception as e:
+        results.append(TestResult("openclaw_stt_routing", "FAIL", time.time() - t0, str(e)))
+    finally:
+        os.environ.pop("DEVICE_VARIANT", None)
+        os.environ.pop("WEB_ONLY", None)
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T30 — OpenClaw: ollama provider in LLM dispatch
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_openclaw_ollama_provider(**_) -> list[TestResult]:
+    """T30 — OpenClaw LLM dispatch: ollama provider registered, constants present."""
+    t0 = time.time()
+    results: list[TestResult] = []
+    try:
+        sys.path.insert(0, str(TARIS_DIR))
+        os.environ["WEB_ONLY"] = "1"
+        import importlib
+        for mod_name in ["core.bot_config", "core.bot_llm"]:
+            if mod_name in sys.modules:
+                importlib.reload(sys.modules[mod_name])
+        import core.bot_config as _cfg  # type: ignore[import]
+        import core.bot_llm as _llm     # type: ignore[import]
+
+        # Check OLLAMA_URL + OLLAMA_MODEL constants
+        has_url = hasattr(_cfg, "OLLAMA_URL") and _cfg.OLLAMA_URL
+        has_model = hasattr(_cfg, "OLLAMA_MODEL") and _cfg.OLLAMA_MODEL
+        results.append(TestResult(
+            "openclaw_ollama_constants",
+            "PASS" if (has_url and has_model) else "FAIL",
+            time.time() - t0,
+            f"OLLAMA_URL={getattr(_cfg,'OLLAMA_URL','MISSING')} OLLAMA_MODEL={getattr(_cfg,'OLLAMA_MODEL','MISSING')}",
+        ))
+
+        # Check ollama in dispatch table
+        dispatch = getattr(_llm, "_DISPATCH", {})
+        has_ollama = "ollama" in dispatch
+        results.append(TestResult(
+            "openclaw_ollama_dispatch",
+            "PASS" if has_ollama else "FAIL",
+            time.time() - t0,
+            f"_DISPATCH keys: {list(dispatch.keys())}",
+        ))
+    except Exception as e:
+        results.append(TestResult("openclaw_ollama_provider", "FAIL", time.time() - t0, str(e)))
+    finally:
+        os.environ.pop("WEB_ONLY", None)
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Runner
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1749,6 +2001,11 @@ TEST_FUNCTIONS = [
     t_web_link_code_roundtrip,
     # System-chat clean-output / ask_llm_or_raise regression (T26)
     t_system_chat_clean_output,
+    # OpenClaw variant tests (T27–T30)
+    t_faster_whisper_stt,
+    t_openclaw_llm_connectivity,
+    t_openclaw_stt_routing,
+    t_openclaw_ollama_provider,
 ]
 
 

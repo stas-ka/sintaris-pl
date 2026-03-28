@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.28",
+    "date":    "2026-04-14",
+    "title":   "OpenClaw STT/LLM improvements (taris-openclaw branch)",
+    "notes":   "- bot_config.py: STT_PROVIDER (vosk|faster_whisper), FASTER_WHISPER_MODEL/DEVICE/COMPUTE constants; OLLAMA_URL/OLLAMA_MODEL; faster_whisper_stt voice opt (default True for openclaw)\n- bot_llm.py: _ask_ollama() provider; LLM_PROVIDER=ollama dispatch; fixes OPENAI_API_KEY-not-set error\n- bot_voice.py: _stt_faster_whisper() CTranslate2 backend with VAD + language detection; STT routing updated\n- voice_assistant.py: record_and_recognize_faster_whisper(); main() routes by STT_PROVIDER\n- setup_llm_openclaw.sh: installs Ollama + pulls qwen2:0.5b model\n- setup_voice_openclaw.sh: step 6/6 installs faster-whisper + pre-downloads base model\n- src/tests/benchmark_stt.py: Vosk vs faster-whisper benchmark (WER, RTF, latency)\n- test_voice_regression.py: T27-T30 OpenClaw tests (faster-whisper, LLM, STT routing, ollama)\n- .github/prompts/taris-openclaw-setup.prompt.md: new skill for OpenClaw setup/troubleshoot\n- .github/instructions/openclaw.instructions.md: new instructions for OpenClaw source files\n- doc/arch/openclaw-integration.md: STT section, LLM troubleshooting, updated status table\n- TODO.md: §19.2b added, §25.5 extended"
+  },
+  {
     "version": "2026.4.14",
     "date":    "2026-03-26",
     "title":   "§25.4 Embedding Service + §25.5 Voice Pipeline (OpenClaw variant)",

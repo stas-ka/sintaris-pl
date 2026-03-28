@@ -46,8 +46,20 @@ from typing import Optional, IO
 
 import vosk
 
-# ---------------------------------------------------------------------------
-# Configuration
+# STT provider — set via STT_PROVIDER env var
+# vosk          → Vosk offline (default for Pi/picoclaw)
+# faster_whisper → faster-whisper CTranslate2 (default for openclaw/laptop)
+STT_PROVIDER = os.getenv("STT_PROVIDER",
+    "faster_whisper" if os.getenv("DEVICE_VARIANT", "picoclaw").lower() == "openclaw" else "vosk"
+).lower()
+FASTER_WHISPER_MODEL   = os.getenv("FASTER_WHISPER_MODEL",   "base")
+FASTER_WHISPER_DEVICE  = os.getenv("FASTER_WHISPER_DEVICE",  "cpu")
+FASTER_WHISPER_COMPUTE = os.getenv("FASTER_WHISPER_COMPUTE", "int8")
+
+# faster-whisper model cache (loaded on first use)
+_fw_model_cache: dict = {}
+
+
 # ---------------------------------------------------------------------------
 
 CONFIG = {
@@ -456,27 +468,142 @@ def record_phrase(
 # Main loop
 # ---------------------------------------------------------------------------
 
+
+def record_and_recognize_faster_whisper(audio_target: Optional[str]) -> Optional[str]:
+    """Record a voice phrase and transcribe it with faster-whisper.
+
+    Unlike record_phrase() which runs STT incrementally, this function:
+      1. Records audio into a buffer until silence is detected
+      2. Transcribes the full buffer with faster-whisper in one shot
+
+    Returns recognized text or None.
+    """
+    try:
+        from faster_whisper import WhisperModel  # type: ignore[import]
+        import numpy as _np
+    except ImportError:
+        log.error("[FasterWhisper] faster-whisper not installed. Run: pip install faster-whisper")
+        return None
+
+    sample_rate = CONFIG["sample_rate"]
+    chunk_size = CONFIG["chunk_size"]
+    silence_timeout = CONFIG["silence_timeout"]
+    max_duration = CONFIG["max_phrase_duration"]
+    min_chars = CONFIG["min_phrase_chars"]
+
+    chunks_per_second = sample_rate // chunk_size
+    max_chunks = int(max_duration * chunks_per_second)
+    silence_chunks = int(silence_timeout * chunks_per_second)
+
+    # Load model (cached)
+    cache_key = (FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE)
+    if cache_key not in _fw_model_cache:
+        log.info(f"[FasterWhisper] Loading model={FASTER_WHISPER_MODEL} device={FASTER_WHISPER_DEVICE}")
+        _fw_model_cache[cache_key] = WhisperModel(
+            FASTER_WHISPER_MODEL,
+            device=FASTER_WHISPER_DEVICE,
+            compute_type=FASTER_WHISPER_COMPUTE,
+        )
+    fw_model = _fw_model_cache[cache_key]
+
+    # Simple energy-based silence detection using Vosk for VAD
+    vosk_model = vosk.Model(CONFIG["vosk_model_path"])
+    vosk_vad = vosk.KaldiRecognizer(vosk_model, sample_rate)
+    vosk.SetLogLevel(-1)
+
+    log.debug("[FasterWhisper] Recording phrase...")
+    all_chunks: list[bytes] = []
+    silent_count = 0
+
+    try:
+        proc = start_audio_capture(target=audio_target)
+    except RuntimeError as e:
+        log.error(f"[FasterWhisper] Failed to start audio: {e}")
+        return None
+
+    try:
+        for _ in range(max_chunks):
+            data = read_audio_chunk(proc, chunk_size)
+            if data is None:
+                break
+            all_chunks.append(data)
+
+            # Use Vosk PartialResult just for silence detection
+            if vosk_vad.AcceptWaveform(data):
+                silent_count = 0
+            else:
+                partial = json.loads(vosk_vad.PartialResult())
+                if not partial.get("partial", "").strip():
+                    silent_count += 1
+                else:
+                    silent_count = 0
+
+            if silent_count >= silence_chunks and len(all_chunks) > chunks_per_second:
+                break
+    finally:
+        proc.kill()
+        proc.wait()
+
+    if not all_chunks:
+        return None
+
+    raw_pcm = b"".join(all_chunks)
+    audio_np = _np.frombuffer(raw_pcm, dtype=_np.int16).astype(_np.float32) / 32768.0
+
+    lang = CONFIG.get("language", "ru")
+    lang_map = {"ru": "ru", "en": "en", "de": "de"}
+    fw_lang = lang_map.get(lang, "ru")
+
+    segments, info = fw_model.transcribe(
+        audio_np,
+        language=fw_lang,
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500),
+        condition_on_previous_text=False,
+    )
+    text = " ".join(seg.text.strip() for seg in segments).strip()
+    log.info(f"[FasterWhisper] Recognized: '{text}' (lang={info.language}, p={info.language_probability:.2f})")
+
+    if len(text) < min_chars:
+        return None
+    return text
+
+
+
+
 def main() -> None:
     """
     Main voice assistant loop.
     States: LISTENING → (hotword) → RECORDING → taris → SPEAKING → LISTENING
+
+    STT routing (controlled by STT_PROVIDER env var):
+      - 'vosk'           → Vosk offline (default for picoclaw / Raspberry Pi)
+      - 'faster_whisper' → faster-whisper CTranslate2 (default for openclaw / laptop)
     """
     log.info("=" * 60)
     log.info("Taris Russian Voice Assistant starting...")
-    log.info(f"  Vosk model : {CONFIG['vosk_model_path']}")
+    log.info(f"  STT provider: {STT_PROVIDER}")
+    if STT_PROVIDER == "faster_whisper":
+        log.info(f"  faster-whisper model : {FASTER_WHISPER_MODEL} ({FASTER_WHISPER_DEVICE}/{FASTER_WHISPER_COMPUTE})")
+    else:
+        log.info(f"  Vosk model : {CONFIG['vosk_model_path']}")
     log.info(f"  Piper TTS  : {CONFIG['piper_model']}")
     log.info(f"  Hotwords   : {CONFIG['hotwords']}")
     log.info(f"  Audio      : {CONFIG['audio_target'] or 'system default (PipeWire)'}")
     log.info("=" * 60)
 
-    # Validate paths
-    for key, path_val in [
-        ("vosk_model_path", CONFIG["vosk_model_path"]),
-        ("piper_model", CONFIG["piper_model"]),
-    ]:
-        if not Path(path_val).exists():
-            log.error(f"Required file not found: {path_val} (config key: {key})")
-            log.error("Run: bash /home/stas/.taris/setup_voice.sh")
+    # Validate piper model always
+    if not Path(CONFIG["piper_model"]).exists():
+        log.error(f"Piper model not found: {CONFIG['piper_model']}")
+        log.error("Run: bash src/setup/setup_voice_openclaw.sh")
+        sys.exit(1)
+
+    # Validate Vosk model only when Vosk is the STT provider
+    if STT_PROVIDER != "faster_whisper":
+        if not Path(CONFIG["vosk_model_path"]).exists():
+            log.error(f"Vosk model not found: {CONFIG['vosk_model_path']}")
+            log.error("Run: bash src/setup/setup_voice_openclaw.sh")
             sys.exit(1)
 
     # List available sources for diagnostics
@@ -486,13 +613,14 @@ def main() -> None:
     else:
         log.warning("[AUDIO] No PipeWire sources found. Check: pactl list sources short")
 
-    # Load Vosk model
-    log.info("[STT] Loading Vosk Russian model...")
+    # Load Vosk model — always needed for hotword detection (even with faster-whisper)
+    # Hotword loop uses Vosk because it is streaming/real-time; faster-whisper is batch.
+    log.info("[STT] Loading Vosk model for hotword detection...")
     vosk.SetLogLevel(-1)
     model = vosk.Model(CONFIG["vosk_model_path"])
     recognizer = vosk.KaldiRecognizer(model, CONFIG["sample_rate"])
     recognizer.SetWords(True)
-    log.info("[STT] Vosk model loaded.")
+    log.info(f"[STT] Vosk loaded. Command STT: {STT_PROVIDER.replace('_', '-')}")
 
     # Resolve audio target
     audio_target = _get_audio_target()
@@ -501,10 +629,10 @@ def main() -> None:
     else:
         log.info("[AUDIO] Using system default microphone")
 
-    # Startup announcement — spoken through the speaker
-    model_name = Path(CONFIG["vosk_model_path"]).name   # e.g. vosk-model-small-ru
-    tts_model  = Path(CONFIG["piper_model"]).stem        # e.g. ru_RU-irina-medium
-    log.info(f"[READY] STT model: {model_name}  |  TTS model: {tts_model}")
+    # Startup announcement
+    tts_model  = Path(CONFIG["piper_model"]).stem
+    stt_label  = f"faster-whisper {FASTER_WHISPER_MODEL}" if STT_PROVIDER == "faster_whisper" else f"vosk {Path(CONFIG['vosk_model_path']).name}"
+    log.info(f"[READY] STT: {stt_label}  |  TTS: {tts_model}")
     speak(
         f"Голосовой ассистент Пико запущен. "
         f"Поддерживаемые языки: русский. "
@@ -555,12 +683,15 @@ def main() -> None:
                     if CONFIG["confirm_sound"]:
                         play_beep()
 
-                    # Record command with fresh recognizer
-                    cmd_recognizer = vosk.KaldiRecognizer(model, CONFIG["sample_rate"])
-                    cmd_recognizer.SetWords(True)
-
                     log.info("[RECORDING] Listening for command...")
-                    command = record_phrase(cmd_recognizer, audio_target)
+
+                    # Route to STT provider for command recognition
+                    if STT_PROVIDER == "faster_whisper":
+                        command = record_and_recognize_faster_whisper(audio_target)
+                    else:
+                        cmd_recognizer = vosk.KaldiRecognizer(model, CONFIG["sample_rate"])
+                        cmd_recognizer.SetWords(True)
+                        command = record_phrase(cmd_recognizer, audio_target)
 
                     if not command:
                         log.warning("[RECORDING] Nothing recognized")

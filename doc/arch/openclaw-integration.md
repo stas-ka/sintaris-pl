@@ -147,15 +147,119 @@ Getestete Szenarien:
 
 ---
 
-## Implementation Status (v2026.4.13)
+## STT Configuration for OpenClaw (Laptop/PC)
+
+The OpenClaw variant uses **faster-whisper** as the default STT engine (instead of Vosk small model).
+
+### STT Provider Comparison
+
+| Engine | Model | WER (Russian) | RTF (i7-2640M, no GPU) | RAM | Recommendation |
+|--------|-------|--------------|------------------------|-----|----------------|
+| `vosk` | small-ru (48MB) | ~15–20% | ~0.1 | 200MB | Pi 3/4 only |
+| `faster_whisper` | tiny | ~12–16% | ~0.15–0.3 | 150MB | Minimal HW |
+| `faster_whisper` | base | ~8–12% | ~0.3–0.5 | 300MB | **Recommended OpenClaw** |
+| `faster_whisper` | small | ~5–8% | ~0.8–1.2 | 500MB | Good laptop |
+| `faster_whisper` | medium | ~3–5% | ~2.5–4.0 | 1.5GB | Fast CPU/GPU |
+
+**Default for `DEVICE_VARIANT=openclaw`:** `STT_PROVIDER=faster_whisper`, `FASTER_WHISPER_MODEL=base`
+
+### Config (`~/.taris/bot.env`)
+
+```bash
+# STT
+STT_PROVIDER=faster_whisper       # vosk | faster_whisper | whisper_cpp
+FASTER_WHISPER_MODEL=base          # tiny | base | small | medium | large-v3
+FASTER_WHISPER_DEVICE=cpu          # cpu | cuda
+FASTER_WHISPER_COMPUTE=int8        # int8 | float16 | float32
+
+# For NVIDIA GPU (much faster):
+FASTER_WHISPER_DEVICE=cuda
+FASTER_WHISPER_COMPUTE=float16
+```
+
+### Install faster-whisper
+
+```bash
+bash src/setup/setup_voice_openclaw.sh   # includes faster-whisper step
+# or manually:
+pip install faster-whisper
+```
+
+### Run STT Benchmark
+
+```bash
+python3 src/tests/benchmark_stt.py --all
+python3 src/tests/benchmark_stt.py --model tiny base small --audio test.ogg --text "привет пико"
+```
+
+---
+
+## LLM Configuration for OpenClaw
+
+### Recommended: Ollama (offline, no API key needed)
+
+```bash
+# Install and start
+bash src/setup/setup_llm_openclaw.sh        # installs ollama + qwen2:0.5b
+
+# In bot.env
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen2:0.5b        # or: llama3.2:1b, phi3:mini, mistral:7b
+OLLAMA_URL=http://127.0.0.1:11434
+LLM_LOCAL_FALLBACK=1
+```
+
+### Alternative: OpenRouter / OpenAI
+
+```bash
+# In bot.env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-or-...        # OpenRouter key
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_MODEL=openai/gpt-4o-mini
+LLM_LOCAL_FALLBACK=1           # Ollama as fallback when cloud fails
+```
+
+### Ollama Model Recommendations for i7-2640M (4 cores, 7.6GB RAM, no GPU)
+
+| Model | Size | Speed | Quality | Command |
+|-------|------|-------|---------|---------|
+| `qwen2:0.5b` | 512MB | ~1-2s | Good for simple commands | `ollama pull qwen2:0.5b` |
+| `llama3.2:1b` | 1.3GB | ~3-5s | Better reasoning | `ollama pull llama3.2:1b` |
+| `phi3:mini` | 2.3GB | ~5-10s | Strong small model | `ollama pull phi3:mini` |
+| `mistral:7b` | 4.1GB | ~15-30s | Best quality | `ollama pull mistral:7b` |
+
+### LLM Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `[LLM] openai failed: OPENAI_API_KEY not set` | Empty key in bot.env | Set `LLM_PROVIDER=ollama` or add `OPENAI_API_KEY` |
+| `[LLM] ollama failed: connection refused` | Ollama not running | `systemctl --user start ollama` or `ollama serve &` |
+| Empty LLM response | Provider not configured | Check `LLM_PROVIDER` in bot.env; run `bash src/setup/setup_llm_openclaw.sh` |
+| Slow responses (~30s) | Using heavy model | Switch to `qwen2:0.5b` or use cloud API |
+
+---
+
+## Implementation Status (v2026.3.28-openclaw)
 
 | Component | Status | Location |
 |---|---|---|
 | `DEVICE_VARIANT` constant | ✅ Implemented | `src/core/bot_config.py` |
 | `OPENCLAW_BIN` constant | ✅ Implemented | `src/core/bot_config.py` |
 | `TARIS_API_TOKEN` constant | ✅ Implemented | `src/core/bot_config.py` |
+| `STT_PROVIDER` + `FASTER_WHISPER_*` constants | ✅ Implemented | `src/core/bot_config.py` |
+| `OLLAMA_URL` + `OLLAMA_MODEL` constants | ✅ Implemented | `src/core/bot_config.py` |
+| `faster_whisper_stt` voice opt (OpenClaw default) | ✅ Implemented | `src/core/bot_config.py` |
 | `_ask_openclaw()` LLM provider | ✅ Implemented | `src/core/bot_llm.py` |
-| `LLM_PROVIDER=openclaw` dispatch | ✅ Implemented | `src/core/bot_llm.py` |
+| `_ask_ollama()` LLM provider | ✅ Implemented | `src/core/bot_llm.py` |
+| `LLM_PROVIDER=ollama` dispatch | ✅ Implemented | `src/core/bot_llm.py` |
+| `_stt_faster_whisper()` function | ✅ Implemented | `src/features/bot_voice.py` |
+| STT routing: faster_whisper → whisper → vosk | ✅ Implemented | `src/features/bot_voice.py` |
+| `voice_assistant.py` faster-whisper support | ✅ Implemented | `src/voice_assistant.py` |
+| `setup_voice_openclaw.sh` + faster-whisper step | ✅ Implemented | `src/setup/setup_voice_openclaw.sh` |
+| `setup_llm_openclaw.sh` (Ollama installer) | ✅ Implemented | `src/setup/setup_llm_openclaw.sh` |
+| STT benchmark script | ✅ Implemented | `src/tests/benchmark_stt.py` |
+| T27–T30 OpenClaw regression tests | ✅ Implemented | `src/tests/test_voice_regression.py` |
 | `GET /api/status` REST endpoint | ✅ Implemented | `src/bot_web.py` |
 | `POST /api/chat` REST endpoint | ✅ Implemented | `src/bot_web.py` |
 | Bearer-token authentication | ✅ Implemented | `src/bot_web.py` |
@@ -163,8 +267,6 @@ Getestete Szenarien:
 | 18 unit tests for `_ask_openclaw()` | ✅ Implemented | `src/tests/llm/` |
 | `store_postgres.py` PostgreSQL adapter | ✅ Implemented | `src/core/store_postgres.py` |
 | `bot_embeddings.py` EmbeddingService | ✅ Implemented | `src/core/bot_embeddings.py` |
-| `setup_voice_openclaw.sh` | ✅ Implemented | `src/setup/setup_voice_openclaw.sh` |
-| `install_embedding_model.sh` | ✅ Implemented | `src/setup/install_embedding_model.sh` |
 | `TARIS_HOME` configurable data dir | ✅ Implemented | `src/core/bot_config.py` |
 | `sintaris-openclaw-local-deploy` | ✅ Implemented | `~/projects/sintaris-openclaw-local-deploy/` |
 | `skill-taris` in sintaris-openclaw | ✅ Implemented | `sintaris-openclaw/skills/skill-taris/` |

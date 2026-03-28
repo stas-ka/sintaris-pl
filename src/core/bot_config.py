@@ -121,6 +121,12 @@ LLM_FALLBACK_FLAG_FILE  = _th("llm_fallback_enabled")  # runtime toggle
 LLAMA_CPP_URL           = os.environ.get("LLAMA_CPP_URL",   "http://127.0.0.1:8081")
 LLAMA_CPP_MODEL     = os.environ.get("LLAMA_CPP_MODEL", "")
 
+# Ollama local LLM — OpenAI-compatible on port 11434 (OpenClaw variant default)
+# Use LLM_PROVIDER=ollama or set LLM_LOCAL_FALLBACK=1 with LLAMA_CPP_URL pointing to Ollama.
+# Install: curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b
+OLLAMA_URL          = os.environ.get("OLLAMA_URL",  "http://127.0.0.1:11434")
+OLLAMA_MODEL        = os.environ.get("OLLAMA_MODEL", "qwen2:0.5b")
+
 # YandexGPT (Feature 3.1)
 YANDEXGPT_API_KEY   = os.environ.get("YANDEXGPT_API_KEY",   "")
 YANDEXGPT_FOLDER_ID = os.environ.get("YANDEXGPT_FOLDER_ID", "")
@@ -195,7 +201,7 @@ EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.14"
+BOT_VERSION        = "2026.3.28"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
@@ -233,6 +239,21 @@ PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
 # openvino — Intel NPU/GPU via OpenVINO backend (future)
 VOICE_BACKEND      = os.environ.get("VOICE_BACKEND", "cpu").lower()
 
+# STT provider — selects the speech recognition engine.
+# vosk          — Vosk offline (lightweight, good for Pi 3/4)
+# faster_whisper — faster-whisper (CTranslate2, better WER for laptop/PC)
+# whisper_cpp   — whisper.cpp binary (hardware-accelerated, VOICE_BACKEND=cuda)
+# Auto-default: faster_whisper for openclaw, vosk for picoclaw
+_DEFAULT_STT = "faster_whisper" if os.environ.get("DEVICE_VARIANT", "picoclaw").lower() == "openclaw" else "vosk"
+STT_PROVIDER            = os.environ.get("STT_PROVIDER", _DEFAULT_STT).lower()
+
+# faster-whisper model size: tiny, base, small, medium, large-v2, large-v3
+# Recommended for i7/i5 no-GPU: base (good WER, ~0.3s RTF)
+# Recommended for Pi 5 / modern laptop: small
+FASTER_WHISPER_MODEL    = os.environ.get("FASTER_WHISPER_MODEL", "base")
+FASTER_WHISPER_DEVICE   = os.environ.get("FASTER_WHISPER_DEVICE", "cpu")
+FASTER_WHISPER_COMPUTE  = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
+
 VOICE_SAMPLE_RATE     = 16000
 VOICE_CHUNK_SIZE      = 4000       # 250 ms at 16 kHz
 VOICE_SILENCE_TIMEOUT = 4.0        # seconds of silence → auto-stop
@@ -257,18 +278,19 @@ _VOICE_OPTS_FILE      = _th("voice_opts.json")
 _WEB_LINK_CODES_FILE  = _th("web_link_codes.json")
 _PENDING_TTS_FILE    = _th("pending_tts.json")
 _VOICE_OPTS_DEFAULTS: dict = {
-    "silence_strip":     False,   # #1: strip leading/trailing silence (ffmpeg)
-    "low_sample_rate":   False,   # #3: 8 kHz instead of 16 kHz for Vosk STT
-    "warm_piper":        False,   # #4: pre-warm Piper ONNX model at startup
-    "parallel_tts":      False,   # #5: start TTS thread immediately after LLM
-    "user_audio_toggle": False,   # #9: show 🔊/🔇 per-voice-reply audio toggle
-    "tmpfs_model":       False,   # #10: copy Piper ONNX to /dev/shm (RAM disk)
-    "vad_prefilter":     False,   # §5.3: webrtcvad noise gate before Vosk STT
-    "whisper_stt":       False,   # §5.3: use whisper.cpp tiny instead of Vosk
-    "vosk_fallback":     True,    # §5.3: fall back to Vosk when Whisper returns nothing (set False to save ~180 MB RAM)
-    "piper_low_model":   False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
-    "persistent_piper":  False,   # §5.3: keep warm Piper process alive (ONNX hot)
-    "voice_timing_debug": False,  # show per-stage ⏱ timings in voice replies
+    "silence_strip":      False,   # #1: strip leading/trailing silence (ffmpeg)
+    "low_sample_rate":    False,   # #3: 8 kHz instead of 16 kHz for Vosk STT
+    "warm_piper":         False,   # #4: pre-warm Piper ONNX model at startup
+    "parallel_tts":       False,   # #5: start TTS thread immediately after LLM
+    "user_audio_toggle":  False,   # #9: show 🔊/🔇 per-voice-reply audio toggle
+    "tmpfs_model":        False,   # #10: copy Piper ONNX to /dev/shm (RAM disk)
+    "vad_prefilter":      False,   # §5.3: webrtcvad noise gate before STT
+    "faster_whisper_stt": STT_PROVIDER == "faster_whisper",  # faster-whisper (Python, CTranslate2) — OpenClaw default
+    "whisper_stt":        False,   # §5.3: use whisper.cpp binary instead of Vosk (Pi/whisper-cpp)
+    "vosk_fallback":      True,    # §5.3: fall back to Vosk when primary STT returns nothing
+    "piper_low_model":    False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
+    "persistent_piper":   False,   # §5.3: keep warm Piper process alive (ONNX hot)
+    "voice_timing_debug": False,   # show per-stage ⏱ timings in voice replies
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

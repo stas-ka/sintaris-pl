@@ -30,6 +30,8 @@ from core.bot_config import (
     LLM_LOCAL_FALLBACK,
     LLM_FALLBACK_FLAG_FILE,
     LLM_PROVIDER,
+    OLLAMA_URL,
+    OLLAMA_MODEL,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     OPENAI_MODEL,
@@ -273,6 +275,25 @@ def _ask_local(prompt: str, timeout: int) -> str:
     return result["choices"][0]["message"]["content"].strip()
 
 
+def _ask_ollama(prompt: str, timeout: int) -> str:
+    """Call local Ollama server (OpenAI-compatible API on port 11434).
+
+    Ollama is the recommended local LLM for the OpenClaw (laptop/PC) variant.
+    Install: curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b
+    Config:  OLLAMA_URL=http://127.0.0.1:11434  OLLAMA_MODEL=qwen2:0.5b
+    """
+    url = f"{OLLAMA_URL.rstrip('/')}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    body: dict = {
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": LOCAL_MAX_TOKENS,
+        "temperature": LOCAL_TEMPERATURE,
+    }
+    result = _http_post_json(url, headers, body, timeout)
+    return result["choices"][0]["message"]["content"].strip()
+
+
 def _ask_openclaw(prompt: str, timeout: int) -> str:
     """Call OpenClaw AI gateway as an LLM provider (DEVICE_VARIANT=openclaw).
 
@@ -320,6 +341,7 @@ _DISPATCH = {
     "gemini":    _ask_gemini,
     "anthropic": _ask_anthropic,
     "local":     _ask_local,
+    "ollama":    _ask_ollama,
 }
 
 

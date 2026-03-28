@@ -14,6 +14,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/taris-test-software` | Auto-select tests based on changed files (also triggered by plain "test software") |
 | `/taris-update-doc` | Sync project documentation (`doc/arch/`, code-map, TODO, README) with current implementation |
 | `/taris-test-ui` | Run Web UI Playwright + Telegram smoke tests; detect and fill coverage gaps via playwright-mcp |
+| `/taris-openclaw-setup` | Setup, configure, troubleshoot, and extend the OpenClaw variant (STT, LLM, sync, tests) |
 
 📖 Full usage guide: [`doc/copilot-skills-guide.md`](../doc/copilot-skills-guide.md)
 
