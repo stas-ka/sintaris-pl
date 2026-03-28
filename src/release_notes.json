@@ -1,5 +1,22 @@
 [
   {
+    "version": "2026.3.34",
+    "date":    "2026-03-28",
+    "title":   "Fix: web UI hang during voice/LLM — async event loop unblocked",
+    "changes": [
+      "Root cause: ask_llm() + subprocess.run() in async FastAPI endpoints blocked entire event loop",
+      "Fix: all blocking calls wrapped with asyncio.to_thread() in 7 endpoints:",
+      "  voice_chat_endpoint: ffmpeg decode, STT, LLM (90s), TTS piper+ffmpeg",
+      "  voice_transcribe_endpoint: ffmpeg decode, STT",
+      "  voice_tts_endpoint: piper + ffmpeg",
+      "  voice_chat_text_endpoint: ask_llm, piper + ffmpeg",
+      "  chat_send: ask_llm_with_history",
+      "  calendar_parse_text: _cal_parse_events_from_text (via to_thread)",
+      "  calendar_console_route: ask_llm intent classifier",
+      "Server now handles concurrent requests during voice/LLM processing"
+    ]
+  },
+  {
     "version": "2026.3.33",
     "date":    "2026-03-28",
     "title":   "Ollama installed + LLM fallback chain active",

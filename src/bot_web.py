@@ -20,6 +20,7 @@ import re
 import requests as _requests_lib
 import socket
 import stat as _stat_mod
+import asyncio
 import subprocess
 import tempfile
 import threading
@@ -703,7 +704,7 @@ async def chat_send(request: Request, message: str = Form(...)):
         {"role": "user" if e["role"] == "user" else "assistant", "content": e["text"]}
         for e in history
     ]
-    reply = ask_llm_with_history(llm_messages, timeout=60)
+    reply = await asyncio.to_thread(lambda: ask_llm_with_history(llm_messages, timeout=60))
     if not reply:
         reply = "No response from LLM."
     history.append({"role": "bot", "text": reply, "time": now_str})
@@ -1029,7 +1030,7 @@ async def calendar_parse_text(request: Request):
     text = (body.get("text") or "").strip()
     if not text:
         return JSONResponse({"events": []})
-    events = _cal_parse_events_from_text(text)
+    events = await asyncio.to_thread(lambda: _cal_parse_events_from_text(text))
     return JSONResponse({"events": events})
 
 
@@ -1051,7 +1052,7 @@ async def calendar_console_route(request: Request):
     events_hint = "; ".join(event_hints) if event_hints else "none"
 
     intent_prompt = fmt_prompt(PROMPTS["web"]["cal_intent"], now_iso=now_iso, events_hint=events_hint, text=text)
-    raw_intent = ask_llm(intent_prompt, timeout=20)
+    raw_intent = await asyncio.to_thread(lambda: ask_llm(intent_prompt, timeout=20))
     intent = "add"
     ev_id: str | None = None
     if raw_intent:
@@ -1999,22 +2000,22 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
         raise HTTPException(503, "No Piper TTS voice model found")
 
     try:
-        piper_result = subprocess.run(
+        piper_result = await asyncio.to_thread(lambda: subprocess.run(
             [piper_bin, "--model", model_path, "--output-raw"],
             input=text.encode("utf-8"),
             capture_output=True,
             timeout=120,
-        )
+        ))
         raw_pcm = piper_result.stdout
         if not raw_pcm:
             raise ValueError(f"Piper returned no output (rc={piper_result.returncode})")
 
-        ff_result = subprocess.run(
+        ff_result = await asyncio.to_thread(lambda: subprocess.run(
             ["ffmpeg", "-y",
              "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
              "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
             input=raw_pcm, capture_output=True, timeout=30,
-        )
+        ))
         ogg_bytes = ff_result.stdout
         if not ogg_bytes:
             raise ValueError(f"ffmpeg returned no output (rc={ff_result.returncode})")
@@ -2055,11 +2056,11 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
 
         # ffmpeg: WebM/OGG → 16 kHz mono S16LE PCM
         t0_decode = time.monotonic()
-        ff = subprocess.run(
+        ff = await asyncio.to_thread(lambda: subprocess.run(
             ["ffmpeg", "-y", "-i", tmp_in_path,
              "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1"],
             capture_output=True, timeout=30,
-        )
+        ))
         raw_pcm = ff.stdout
         if not raw_pcm:
             raise ValueError(f"ffmpeg decode failed (rc={ff.returncode}): {ff.stderr[:200]}")
@@ -2070,7 +2071,9 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
         audio_ms = int(duration_s * 1000)
 
         # STT — routes by STT_PROVIDER (faster_whisper for openclaw, vosk otherwise)
-        transcript = pl.timed_stt(lambda: _stt_web(raw_pcm, 16000), audio_ms=audio_ms)
+        transcript = await asyncio.to_thread(
+            lambda: pl.timed_stt(lambda: _stt_web(raw_pcm, 16000), audio_ms=audio_ms)
+        )
         dbg.save_stt(transcript)
         dbg.finalise({"endpoint": "transcribe", "stt_provider": STT_PROVIDER})
 
@@ -2128,11 +2131,11 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
             tmp_in_path = tmp_in.name
 
         t0_decode = time.monotonic()
-        ff = subprocess.run(
+        ff = await asyncio.to_thread(lambda: subprocess.run(
             ["ffmpeg", "-y", "-i", tmp_in_path,
              "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1"],
             capture_output=True, timeout=30,
-        )
+        ))
         raw_pcm = ff.stdout
         if not raw_pcm:
             raise ValueError(f"ffmpeg decode failed (rc={ff.returncode}): {ff.stderr[:200]}")
@@ -2142,7 +2145,9 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
         audio_ms = int(len(raw_pcm) / (16000 * 2) * 1000)
 
         # ── Stage 2: STT ───────────────────────────────────────────────────────
-        user_text = pl.timed_stt(lambda: _stt_web(raw_pcm, 16000), audio_ms=audio_ms)
+        user_text = await asyncio.to_thread(
+            lambda: pl.timed_stt(lambda: _stt_web(raw_pcm, 16000), audio_ms=audio_ms)
+        )
         dbg.save_stt(user_text)
 
         if not user_text:
@@ -2156,7 +2161,9 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
         )
 
         # ── Stage 3: LLM ───────────────────────────────────────────────────────
-        reply_text = pl.timed_llm(lambda: ask_llm(user_text, timeout=90), input_text=user_text)
+        reply_text = await asyncio.to_thread(
+            lambda: pl.timed_llm(lambda: ask_llm(user_text, timeout=90), input_text=user_text)
+        )
         if not reply_text:
             reply_text = "No response from LLM."
         dbg.save_llm_answer(reply_text)
@@ -2197,7 +2204,9 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
                             return ff2.stdout if ff2.stdout else None
                         return None
 
-                    ogg_bytes = pl.timed_tts(_run_tts, input_text=tts_text)
+                    ogg_bytes = await asyncio.to_thread(
+                        lambda: pl.timed_tts(_run_tts, input_text=tts_text)
+                    )
                     if ogg_bytes:
                         audio_b64 = base64.b64encode(ogg_bytes).decode()
                         dbg.save_tts_output(ogg_bytes)
@@ -2243,7 +2252,7 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
     if not user_text:
         raise HTTPException(400, "Empty message")
 
-    reply_text = ask_llm(user_text, timeout=90)
+    reply_text = await asyncio.to_thread(lambda: ask_llm(user_text, timeout=90))
     if not reply_text:
         reply_text = "No response from LLM."
 
@@ -2266,18 +2275,20 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
         )
         if model_path and Path(piper_bin).exists():
             try:
-                pr = subprocess.run(
+                _tts_text = tts_text  # capture for lambda
+                pr = await asyncio.to_thread(lambda: subprocess.run(
                     [piper_bin, "--model", model_path, "--output-raw"],
-                    input=tts_text.encode("utf-8"),
+                    input=_tts_text.encode("utf-8"),
                     capture_output=True, timeout=180,
-                )
+                ))
                 if pr.stdout:
-                    ff2 = subprocess.run(
+                    _pr_out = pr.stdout
+                    ff2 = await asyncio.to_thread(lambda: subprocess.run(
                         ["ffmpeg", "-y",
                          "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
                          "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
-                        input=pr.stdout, capture_output=True, timeout=30,
-                    )
+                        input=_pr_out, capture_output=True, timeout=30,
+                    ))
                     if ff2.stdout:
                         audio_b64 = base64.b64encode(ff2.stdout).decode()
             except Exception as tts_err:

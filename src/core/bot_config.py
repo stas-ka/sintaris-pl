@@ -210,7 +210,7 @@ EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.33"
+BOT_VERSION        = "2026.3.34"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
