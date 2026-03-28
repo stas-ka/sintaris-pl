@@ -118,6 +118,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_release_notes"), callback_data="admin_changelog"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_logs"),       callback_data="admin_logs_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_system"),      callback_data="mode_system"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
