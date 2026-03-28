@@ -55,6 +55,7 @@ from core.bot_config import (
     BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, TARIS_API_TOKEN, LLM_PROVIDER,
     DEVICE_VARIANT, TARIS_DIR, log,
+    STT_PROVIDER,
 )
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
@@ -1612,6 +1613,38 @@ def _get_vosk_model_web():
     return _vosk_model_web
 
 
+def _stt_web(raw_pcm: bytes, sample_rate: int = 16000) -> str:
+    """STT dispatch for web voice endpoints — routes by STT_PROVIDER.
+
+    Uses faster-whisper when STT_PROVIDER='faster_whisper' (OpenClaw default),
+    falls back to Vosk otherwise.
+    Returns transcript string (may be empty if no speech detected).
+    """
+    if STT_PROVIDER == "faster_whisper":
+        try:
+            from features.bot_voice import _stt_faster_whisper
+            result = _stt_faster_whisper(raw_pcm, sample_rate)
+            if result is not None:
+                return result
+        except ImportError:
+            log.warning("[Web/STT] faster_whisper not installed, falling back to Vosk")
+        except Exception as e:
+            log.warning(f"[Web/STT] faster_whisper failed: {e}, falling back to Vosk")
+
+    # Vosk STT (default / fallback)
+    import vosk as _vosk_lib
+    import json as _vj_local
+    model = _get_vosk_model_web()
+    rec = _vosk_lib.KaldiRecognizer(model, sample_rate)
+    rec.SetWords(True)
+    CHUNK = 4000 * 2
+    for i in range(0, len(raw_pcm), CHUNK):
+        rec.AcceptWaveform(raw_pcm[i:i + CHUNK])
+    result = _vj_local.loads(rec.FinalResult())
+    text = result.get("text", "").strip()
+    return re.sub(r"\[\?([^\]]+)\]", r"\1", text)
+
+
 def _voice_pipeline_status() -> list[dict]:
     """Check real filesystem to report component readiness."""
     d = Path(_TARIS_DIR)
@@ -1771,7 +1804,7 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
 
 @app.post("/voice/transcribe")
 async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(...)):
-    """Accept browser audio upload → Vosk STT → return transcript JSON."""
+    """Accept browser audio upload → STT (faster-whisper or Vosk) → return transcript JSON."""
     user = _get_current_user(request)
     if not user:
         raise HTTPException(401)
@@ -1799,32 +1832,15 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
 
         duration_s = round(len(raw_pcm) / (16000 * 2), 1)
 
-        # Vosk STT
-        vosk_dir = str(Path(_TARIS_DIR) / "vosk-model-small-ru")
-        if not Path(vosk_dir).is_dir():
-            raise HTTPException(503, "Vosk model not installed")
-
-        import vosk as _vosk_lib
-        import json as _vj
-        model = _vosk_lib.Model(vosk_dir)
-        rec = _vosk_lib.KaldiRecognizer(model, 16000)
-        rec.SetWords(True)
-
-        CHUNK = 4000 * 2  # 4000 frames × 2 bytes
-        for i in range(0, len(raw_pcm), CHUNK):
-            rec.AcceptWaveform(raw_pcm[i:i + CHUNK])
-        result = _vj.loads(rec.FinalResult())
-
-        transcript = result.get("text", "").strip()
-        # Strip low-confidence markers  [?word] → word
-        transcript = re.sub(r"\[\?([^\]]+)\]", r"\1", transcript)
+        # STT — routes by STT_PROVIDER (faster_whisper for openclaw, vosk otherwise)
+        transcript = _stt_web(raw_pcm, 16000)
 
         # Save as last transcript
         last_t_file = Path(_TARIS_DIR) / "last_transcript.txt"
         ts_now = datetime.now().strftime("%Y-%m-%d %H:%M")
         last_t_file.write_text(f"[web] {ts_now}  {transcript}", encoding="utf-8")
 
-        return {"transcript": transcript, "duration": duration_s}
+        return {"transcript": transcript, "duration": duration_s, "stt_provider": STT_PROVIDER}
 
     except HTTPException:
         raise
@@ -1841,8 +1857,9 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
 
 @app.post("/voice/chat")
 async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
-    """Full voice conversation pipeline: browser audio → Vosk STT → LLM → Piper TTS.
+    """Full voice conversation pipeline: browser audio → STT → LLM → Piper TTS.
 
+    STT engine is selected by STT_PROVIDER (faster-whisper for openclaw, Vosk otherwise).
     Returns JSON: {user_text, reply_text, audio_b64}
     Mirrors the Telegram bot's _handle_voice_message() flow.
     """
@@ -1870,18 +1887,8 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
         if not raw_pcm:
             raise ValueError(f"ffmpeg decode failed (rc={ff.returncode}): {ff.stderr[:200]}")
 
-        # ── Stage 2: Vosk STT ──────────────────────────────────────────────────
-        import vosk as _vosk_lib
-        import json as _vj
-        vosk_model = _get_vosk_model_web()
-        rec = _vosk_lib.KaldiRecognizer(vosk_model, 16000)
-        rec.SetWords(True)
-        CHUNK = 4000 * 2
-        for i in range(0, len(raw_pcm), CHUNK):
-            rec.AcceptWaveform(raw_pcm[i:i + CHUNK])
-        stt_result = _vj.loads(rec.FinalResult())
-        user_text = stt_result.get("text", "").strip()
-        user_text = re.sub(r"\[\?([^\]]+)\]", r"\1", user_text)  # strip low-conf markers
+        # ── Stage 2: STT (faster-whisper for openclaw, Vosk otherwise) ────────
+        user_text = _stt_web(raw_pcm, 16000)
 
         if not user_text:
             return {"user_text": "", "reply_text": "", "audio_b64": "", "error": "no_speech"}
