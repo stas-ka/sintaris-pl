@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Taris{% endblock %}</title>
+  <!-- No-cache meta — always fetch fresh HTML -->
+  <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <!-- Auto-redirect HTTP → HTTPS so mic / Speech API features work -->
   <script>
     if (location.protocol === 'http:' &&
@@ -41,9 +45,13 @@
     <div class="sidebar-header">
       <div class="sidebar-avatar">🤖</div>
       <div>
-        <div class="sidebar-brand">Taris</div>
+        <div class="sidebar-brand">{{ device_label }}</div>
         <div class="sidebar-version">v{{ bot_version }}</div>
       </div>
+    </div>
+    <div class="sidebar-stack">
+      <div class="stack-row" title="Speech-to-Text engine">🎤 {{ stt_label }}</div>
+      <div class="stack-row" title="Language model">🧠 {{ llm_label }}</div>
     </div>
 
     <hr>

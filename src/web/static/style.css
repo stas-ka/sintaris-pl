@@ -79,6 +79,19 @@ a:hover { text-decoration: underline; }
 .sidebar-brand { font-size: 16px; font-weight: 700; color: #fff; }
 .sidebar-version { font-size: 11px; color: var(--text-dim); }
 
+.sidebar-stack {
+  padding: 6px 14px 4px;
+  border-top: 1px solid #2a2a4a;
+  margin-top: 2px;
+}
+.stack-row {
+  font-size: 10px; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.7;
+  cursor: default;
+}
+.stack-row:hover { color: #c4b5fd; }
+
 .sidebar hr { border: none; border-top: 1px solid #2a2a4a; margin: 0 12px 8px; }
 
 .sidebar-section-label {

@@ -1,5 +1,18 @@
 [
   {
+    "version": "2026.3.30",
+    "date":    "2026-03-28",
+    "title":   "Web UI software stack info in sidebar",
+    "changes": [
+      "base.html: sidebar now shows active STT engine (e.g. Faster-Whisper) and LLM (e.g. Ollama · qwen2:0.5b) below version badge",
+      "base.html: no-cache meta tags to prevent browser caching stale pages",
+      "_ctx() always injects stt_label / llm_label / device_label — available on every page without per-route boilerplate",
+      "New GET /api/version endpoint (no auth) returning version, stt, llm, device labels + raw provider IDs",
+      "_LLM_UI_LABEL + _DEVICE_UI_LABEL module constants alongside _STT_UI_LABEL",
+      "OLLAMA_MODEL added to bot_config import in bot_web.py"
+    ]
+  },
+  {
     "version": "2026.3.29",
     "date":    "2026-03-28",
     "title":   "Pipeline analytics logger (OpenClaw)",

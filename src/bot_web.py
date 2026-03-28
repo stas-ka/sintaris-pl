@@ -57,16 +57,32 @@ from core.bot_config import (
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, TARIS_API_TOKEN, LLM_PROVIDER,
     DEVICE_VARIANT, TARIS_DIR, log,
     STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
+    OLLAMA_MODEL,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
 
-# Human-readable STT label for UI templates — derived from STT_PROVIDER at import time
+# ── UI labels for software stack (computed once at startup) ───────────────────
 _STT_UI_LABELS = {
     "faster_whisper": "Faster-Whisper",
     "vosk":           "Vosk",
     "whisper":        "Whisper",
 }
 _STT_UI_LABEL = _STT_UI_LABELS.get(STT_PROVIDER, STT_PROVIDER.replace("_", "-").title())
+
+_LLM_UI_LABELS = {
+    "ollama":    f"Ollama · {OLLAMA_MODEL}",
+    "openai":    "OpenAI",
+    "openclaw":  "OpenClaw",
+    "taris":     "Taris LLM",
+}
+_LLM_UI_LABEL = _LLM_UI_LABELS.get(LLM_PROVIDER, LLM_PROVIDER.replace("_", "-").title())
+
+_DEVICE_UI_LABELS = {
+    "openclaw": "OpenClaw",
+    "picoclaw": "PicoClaw",
+    "taris":    "Taris",
+}
+_DEVICE_UI_LABEL = _DEVICE_UI_LABELS.get(DEVICE_VARIANT, DEVICE_VARIANT.title())
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
     create_token, verify_token, list_accounts, ensure_admin_account,
@@ -185,14 +201,18 @@ def _require_auth(request: Request) -> dict:
 
 
 def _ctx(request: Request, user: dict, page: str, **extra) -> dict:
-    """Build common template context."""
-    return {
+    """Build common template context — always includes software stack labels."""
+    ctx = {
         "request": request,
         "active_page": page,
         "user": user,
         "bot_version": BOT_VERSION,
-        **extra,
+        "stt_label":   _STT_UI_LABEL,
+        "llm_label":   _LLM_UI_LABEL,
+        "device_label": _DEVICE_UI_LABEL,
     }
+    ctx.update(extra)   # caller kwargs override defaults
+    return ctx
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -649,7 +669,6 @@ async def chat_page(request: Request):
         request, user, "chat",
         models=models_list,
         messages=messages,
-        stt_label=_STT_UI_LABEL,
     ))
 
 
@@ -1796,7 +1815,6 @@ async def voice_page(request: Request):
         request, user, "voice",
         pipeline=_voice_pipeline_status(),
         transcript=transcript,
-        stt_label=_STT_UI_LABEL,
         languages=[
             {
                 "code": "ru", "flag": "🇷🇺", "name": "Russian",
@@ -2288,6 +2306,19 @@ async def api_status(request: Request):
     """Health check for skill-taris and external monitors."""
     _verify_api_token(request)
     return JSONResponse({"status": "ok", "version": BOT_VERSION, "provider": LLM_PROVIDER})
+
+
+@app.get("/api/version")
+async def api_version():
+    """Public — returns current software stack info (no auth required)."""
+    return JSONResponse({
+        "version":  BOT_VERSION,
+        "stt":      _STT_UI_LABEL,
+        "llm":      _LLM_UI_LABEL,
+        "device":   _DEVICE_UI_LABEL,
+        "stt_raw":  STT_PROVIDER,
+        "llm_raw":  LLM_PROVIDER,
+    })
 
 
 @app.get("/api/logs")
