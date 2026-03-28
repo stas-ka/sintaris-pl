@@ -402,8 +402,19 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
                 f"[FasterWhisper] Loading model={FASTER_WHISPER_MODEL} "
                 f"device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE}"
             )
+            # Prefer local HuggingFace cache path to avoid any network/auth requests.
+            # faster-whisper caches as models--Systran--faster-whisper-<size>
+            model_arg = FASTER_WHISPER_MODEL
+            _hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+            _model_dir = _hf_cache / f"models--Systran--faster-whisper-{FASTER_WHISPER_MODEL}"
+            _snapshots = _model_dir / "snapshots"
+            if _snapshots.is_dir():
+                _snaps = sorted(_snapshots.iterdir())
+                if _snaps:
+                    model_arg = str(_snaps[-1])   # latest snapshot
+                    log.info(f"[FasterWhisper] using local cache: {model_arg}")
             _fw_model_cache[cache_key] = WhisperModel(
-                FASTER_WHISPER_MODEL,
+                model_arg,
                 device=FASTER_WHISPER_DEVICE,
                 compute_type=FASTER_WHISPER_COMPUTE,
             )

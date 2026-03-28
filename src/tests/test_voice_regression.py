@@ -1965,6 +1965,69 @@ def t_openclaw_ollama_provider(**_) -> list[TestResult]:
     return results
 
 
+def t_web_stt_provider_routing(**_) -> list[TestResult]:
+    """T31 — Regression: web UI _stt_web() uses faster-whisper (no deferred bot import).
+
+    Bug: _stt_web() imported bot_voice which imported core.bot_instance → telebot
+    validated BOT_TOKEN format → ValueError 'Token must contain a colon' → Vosk fallback.
+    Fix: _stt_faster_whisper_web() defined directly in bot_web.py with no telegram imports.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # 1. _stt_faster_whisper_web must exist directly in bot_web (not via bot_voice import)
+    try:
+        import importlib, types
+        bw_path = TARIS_DIR / "bot_web.py"
+        if not bw_path.exists():
+            return [TestResult("web_stt_routing", "SKIP", time.time() - t0, "bot_web.py not found")]
+
+        src = bw_path.read_text()
+        has_local_fn = "def _stt_faster_whisper_web(" in src
+        results.append(TestResult(
+            "web_stt_local_fn_defined",
+            "PASS" if has_local_fn else "FAIL",
+            time.time() - t0,
+            "_stt_faster_whisper_web() defined in bot_web.py" if has_local_fn
+            else "MISSING — still using deferred import from bot_voice",
+        ))
+
+        # 2. No deferred import of bot_voice inside _stt_web
+        import re as _re
+        bad_import = bool(_re.search(r"from features\.bot_voice import _stt_faster_whisper", src))
+        results.append(TestResult(
+            "web_stt_no_deferred_bot_import",
+            "FAIL" if bad_import else "PASS",
+            time.time() - t0,
+            "deferred bot_voice import found — will break with telegram token error" if bad_import
+            else "no deferred bot_voice import (correct)",
+        ))
+
+        # 3. _stt_web() calls _stt_faster_whisper_web (not the old function name)
+        calls_local = "_stt_faster_whisper_web(" in src
+        results.append(TestResult(
+            "web_stt_calls_local_fn",
+            "PASS" if calls_local else "FAIL",
+            time.time() - t0,
+            "_stt_web calls _stt_faster_whisper_web" if calls_local else "MISSING call",
+        ))
+
+        # 4. Local HuggingFace cache path resolution present (avoids network auth)
+        has_cache_resolve = "models--Systran--faster-whisper-" in src
+        results.append(TestResult(
+            "web_stt_local_cache_path",
+            "PASS" if has_cache_resolve else "FAIL",
+            time.time() - t0,
+            "local HF cache path resolution present" if has_cache_resolve
+            else "MISSING — will attempt network download → auth error",
+        ))
+
+    except Exception as e:
+        results.append(TestResult("web_stt_provider_routing", "FAIL", time.time() - t0, str(e)))
+
+    return results
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Runner
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2001,11 +2064,12 @@ TEST_FUNCTIONS = [
     t_web_link_code_roundtrip,
     # System-chat clean-output / ask_llm_or_raise regression (T26)
     t_system_chat_clean_output,
-    # OpenClaw variant tests (T27–T30)
+    # OpenClaw variant tests (T27–T31)
     t_faster_whisper_stt,
     t_openclaw_llm_connectivity,
     t_openclaw_stt_routing,
     t_openclaw_ollama_provider,
+    t_web_stt_provider_routing,
 ]
 
 

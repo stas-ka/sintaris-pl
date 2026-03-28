@@ -55,7 +55,7 @@ from core.bot_config import (
     BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, TARIS_API_TOKEN, LLM_PROVIDER,
     DEVICE_VARIANT, TARIS_DIR, log,
-    STT_PROVIDER,
+    STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
 )
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
@@ -1613,6 +1613,61 @@ def _get_vosk_model_web():
     return _vosk_model_web
 
 
+_fw_web_model_cache: dict = {}   # {(model_size, device, compute): WhisperModel}
+
+
+def _stt_faster_whisper_web(raw_pcm: bytes, sample_rate: int = 16000, lang: str = "ru") -> Optional[str]:
+    """Self-contained faster-whisper STT for web endpoints.
+
+    Avoids importing bot_voice (which pulls in telegram bot machinery).
+    Uses local HuggingFace cache path — no network/auth requests.
+    """
+    from faster_whisper import WhisperModel  # type: ignore[import]
+    import numpy as _np
+
+    cache_key = (FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE)
+    if cache_key not in _fw_web_model_cache:
+        # Resolve local HuggingFace cache path to avoid network/auth requests.
+        model_arg = FASTER_WHISPER_MODEL
+        _snapshots = (
+            Path.home() / ".cache" / "huggingface" / "hub"
+            / f"models--Systran--faster-whisper-{FASTER_WHISPER_MODEL}"
+            / "snapshots"
+        )
+        if _snapshots.is_dir():
+            snaps = sorted(_snapshots.iterdir())
+            if snaps:
+                model_arg = str(snaps[-1])
+                log.info(f"[FasterWhisper/Web] using local cache: {model_arg}")
+        log.info(
+            f"[FasterWhisper/Web] loading model={FASTER_WHISPER_MODEL} "
+            f"device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE}"
+        )
+        _fw_web_model_cache[cache_key] = WhisperModel(
+            model_arg, device=FASTER_WHISPER_DEVICE, compute_type=FASTER_WHISPER_COMPUTE
+        )
+
+    model = _fw_web_model_cache[cache_key]
+    audio_np = _np.frombuffer(raw_pcm, dtype=_np.int16).astype(_np.float32) / 32768.0
+    if sample_rate != 16000:
+        from scipy.signal import resample as _resample  # type: ignore[import]
+        audio_np = _resample(audio_np, int(len(audio_np) * 16000 / sample_rate)).astype(_np.float32)
+
+    lang_map = {"ru": "ru", "en": "en", "de": "de"}
+    segments, info = model.transcribe(
+        audio_np,
+        language=lang_map.get(lang, "ru"),
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500),
+        condition_on_previous_text=False,
+    )
+    text = " ".join(seg.text.strip() for seg in segments).strip()
+    if text:
+        log.debug(f"[FasterWhisper/Web] ({info.language} {info.language_probability:.2f}): {text[:80]}")
+    return text or None
+
+
 def _stt_web(raw_pcm: bytes, sample_rate: int = 16000) -> str:
     """STT dispatch for web voice endpoints — routes by STT_PROVIDER.
 
@@ -1622,8 +1677,7 @@ def _stt_web(raw_pcm: bytes, sample_rate: int = 16000) -> str:
     """
     if STT_PROVIDER == "faster_whisper":
         try:
-            from features.bot_voice import _stt_faster_whisper
-            result = _stt_faster_whisper(raw_pcm, sample_rate)
+            result = _stt_faster_whisper_web(raw_pcm, sample_rate)
             if result is not None:
                 return result
         except ImportError:
