@@ -2022,6 +2022,16 @@ def t_web_stt_provider_routing(**_) -> list[TestResult]:
             else "MISSING — will attempt network download → auth error",
         ))
 
+        # 5. _voice_pipeline_status() shows correct STT name (not hardcoded Vosk)
+        has_dynamic_stt = "STT_PROVIDER == \"faster_whisper\"" in src and "faster-whisper" in src
+        results.append(TestResult(
+            "web_stt_pipeline_status_label",
+            "PASS" if has_dynamic_stt else "FAIL",
+            time.time() - t0,
+            "_voice_pipeline_status shows dynamic STT label" if has_dynamic_stt
+            else "MISSING — status page still hardcodes 'STT (Vosk)'",
+        ))
+
     except Exception as e:
         results.append(TestResult("web_stt_provider_routing", "FAIL", time.time() - t0, str(e)))
 

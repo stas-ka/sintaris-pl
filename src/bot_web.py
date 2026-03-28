@@ -1709,17 +1709,36 @@ def _voice_pipeline_status() -> list[dict]:
     piper_med = (d / "ru_RU-irina-medium.onnx").exists()
     piper_low = (d / "ru_RU-irina-low.onnx").exists()
     active_model = get_active_model() or "default"
+
+    # STT entry — reflects actual STT_PROVIDER
+    if STT_PROVIDER == "faster_whisper":
+        from pathlib import Path as _P
+        fw_snap = (
+            _P.home() / ".cache" / "huggingface" / "hub"
+            / f"models--Systran--faster-whisper-{FASTER_WHISPER_MODEL}"
+            / "snapshots"
+        )
+        fw_ok = fw_snap.is_dir() and any(fw_snap.iterdir())
+        stt_entry = {
+            "icon": "🎤", "name": f"STT (faster-whisper {FASTER_WHISPER_MODEL})",
+            "status": "ready" if fw_ok else "missing",
+            "detail": f"model={FASTER_WHISPER_MODEL} device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE}"
+                      if fw_ok else f"faster-whisper-{FASTER_WHISPER_MODEL} not in HF cache",
+        }
+    else:
+        stt_entry = {
+            "icon": "🎤", "name": "STT (Vosk)",
+            "status": "ready" if vosk_ok else "missing",
+            "detail": "vosk-model-small-ru" if vosk_ok else "Model not found",
+        }
+
     return [
         {
             "icon": "🎵", "name": "Audio (ffmpeg)",
             "status": "ready" if ffmpeg_ok else "missing",
             "detail": "OGG ↔ PCM conversion",
         },
-        {
-            "icon": "🎤", "name": "STT (Vosk)",
-            "status": "ready" if vosk_ok else "missing",
-            "detail": "vosk-model-small-ru" if vosk_ok else "Model not found",
-        },
+        stt_entry,
         {
             "icon": "🤖", "name": f"LLM ({active_model})",
             "status": "ready" if taris_ok else "missing",
