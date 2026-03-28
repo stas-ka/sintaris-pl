@@ -148,6 +148,30 @@ def change_password(user_id: str, new_password: str) -> bool:
     return update_account(user_id, pw_hash=new_hash)
 
 
+def change_username(user_id: str, new_username: str) -> str:
+    """Rename a web account.  Returns 'ok', 'taken', or 'not_found'."""
+    new_lc = new_username.strip().lower()
+    if not new_lc:
+        return "not_found"
+    accounts = _load_accounts()
+    existing_user = None
+    for a in accounts:
+        if a.get("user_id") == user_id:
+            existing_user = a
+        elif a.get("username", "").lower() == new_lc:
+            return "taken"
+    if not existing_user:
+        return "not_found"
+    existing_user["username"] = new_lc
+    _save_accounts(accounts)
+    log.info(f"[Auth] Username changed to '{new_lc}' for user_id={user_id}")
+    return "ok"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Telegram ↔ Web linking codes  (6-char, 10 min TTL)
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ─────────────────────────────────────────────────────────────────────────────
 # JWT tokens
 # ─────────────────────────────────────────────────────────────────────────────

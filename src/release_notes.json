@@ -1,5 +1,22 @@
 [
   {
+    "version": "2026.3.36",
+    "date":    "2026-03-28",
+    "title":   "Username change + Telegram-Web unified account linking",
+    "changes": [
+      "Profile page: Change Username form (validates uniqueness, re-issues JWT)",
+      "Profile page: Link Telegram section with 6-char code entry",
+      "POST /profile/change-username: validates format, checks uniqueness, re-signs JWT",
+      "POST /profile/link-telegram: consumes bot_state link code, merges accounts",
+      "/link command in Telegram bot (calls _handle_web_link, same as menu button)",
+      "Linking merges: if Telegram ID was on another web account, it is unlinked first",
+      "Profile info card: shows Telegram link status (linked/not linked)",
+      "Unified admin user list: Telegram users + Web UI accounts in one view",
+      "Fixed taris-telegram.service: removed User=stas (invalid in user-mode systemd)",
+      "bot_auth.py: change_username() function"
+    ]
+  },
+  {
     "version": "2026.3.35",
     "date":    "2026-03-29",
     "title":   "LLM indicator in chat + self-service password reset",

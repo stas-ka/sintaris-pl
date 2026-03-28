@@ -9,6 +9,14 @@
 <div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
   <span style="color:#4caf50">✅</span> Display name saved.
 </div>
+{% elif msg == 'username_saved' %}
+<div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
+  <span style="color:#4caf50">✅</span> Username changed successfully. You have been re-logged in.
+</div>
+{% elif msg == 'telegram_linked' %}
+<div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
+  <span style="color:#4caf50">✅</span> Telegram account linked — you now have one unified account.
+</div>
 {% endif %}
 
 {% if error %}
@@ -33,17 +41,19 @@
       <td style="padding:7px 0; color:var(--text-muted)">Role</td>
       <td style="padding:7px 0; color:var(--text-primary)">{{ account.get('role', user.role) }}</td>
     </tr>
-    {% if account.get('telegram_chat_id') %}
     <tr>
-      <td style="padding:7px 0; color:var(--text-muted)">Telegram ID</td>
-      <td style="padding:7px 0; color:var(--text-primary); font-family:monospace">{{ account.get('telegram_chat_id') }}</td>
+      <td style="padding:7px 0; color:var(--text-muted)">Telegram</td>
+      <td style="padding:7px 0;">
+        {% if account.get('telegram_chat_id') %}
+          <span style="color:#4caf50">🔗 Linked</span>
+          <span style="color:var(--text-muted); font-size:12px; font-family:monospace"> (ID: {{ account.get('telegram_chat_id') }})</span>
+          {% if tg_reg %}· <span style="color:var(--text-primary)">{{ tg_reg.get('name') or '' }}</span>{% endif %}
+        {% else %}
+          <span style="color:var(--text-muted)">Not linked</span>
+        {% endif %}
+      </td>
     </tr>
-    {% endif %}
     {% if tg_reg %}
-    <tr>
-      <td style="padding:7px 0; color:var(--text-muted)">Telegram name</td>
-      <td style="padding:7px 0; color:var(--text-primary)">{{ tg_reg.get('name') or '—' }}</td>
-    </tr>
     <tr>
       <td style="padding:7px 0; color:var(--text-muted)">Registered</td>
       <td style="padding:7px 0; color:var(--text-primary)">{{ (tg_reg.get('timestamp') or '')[:10] or '—' }}</td>
@@ -52,8 +62,36 @@
   </table>
 </div>
 
+<!-- ── Change username ───────────────────────────────────── -->
+<p class="section-label mt-md">Change Username</p>
+<div class="card mb-md">
+  <form method="post" action="/profile/change-username">
+    <div style="display:grid; gap:12px; max-width:420px">
+      <div>
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
+          New Username <span style="font-weight:normal; color:var(--text-muted)">(min 3 chars, letters/digits/-/_)</span>
+        </label>
+        <input type="text" name="new_username" required minlength="3"
+               value="{{ account.get('username', '') }}"
+               pattern="[a-zA-Z0-9_\-]+"
+               placeholder="new_username"
+               style="width:100%; padding:9px 12px; background:var(--surface-2);
+                      border:1px solid var(--border-color); border-radius:8px;
+                      color:var(--text-primary); font-size:14px">
+        <small style="color:var(--text-muted); font-size:11px">Note: you will be re-logged in with the new username.</small>
+      </div>
+      <button type="submit"
+              style="padding:9px 24px; border-radius:8px; border:none;
+                     background:var(--accent); color:#fff; font-size:14px;
+                     font-weight:600; cursor:pointer; width:fit-content">
+        ✏️ Change Username
+      </button>
+    </div>
+  </form>
+</div>
+
 <!-- ── Edit display name card ────────────────────────────── -->
-<p class="section-label mt-md">Edit Display Name</p>
+<p class="section-label mt-md">Display Name</p>
 <div class="card mb-md">
   <form method="post" action="/profile/name">
     <div style="display:grid; gap:12px; max-width:420px">
@@ -68,14 +106,55 @@
                       border:1px solid var(--border-color); border-radius:8px;
                       color:var(--text-primary); font-size:14px">
       </div>
-      <div>
-        <button type="submit"
-                style="padding:9px 24px; border-radius:8px; border:none;
-                       background:var(--accent); color:#fff; font-size:14px;
-                       font-weight:600; cursor:pointer; transition:opacity .15s ease">
-          ✏️ Save Name
-        </button>
+      <button type="submit"
+              style="padding:9px 24px; border-radius:8px; border:none;
+                     background:var(--accent); color:#fff; font-size:14px;
+                     font-weight:600; cursor:pointer; width:fit-content">
+        ✏️ Save Name
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Telegram account linking ──────────────────────────── -->
+<p class="section-label mt-md">Link Telegram Account</p>
+<div class="card mb-md">
+  {% if account.get('telegram_chat_id') %}
+  <p style="color:#4caf50; margin:0 0 8px">🔗 Your Telegram account is linked.</p>
+  <p style="color:var(--text-muted); font-size:13px; margin:0">
+    To re-link or change the linked Telegram account: send <strong>/link</strong> to
+    <strong>@suppenclaw_bot</strong> in Telegram, then enter the new code below.
+  </p>
+  {% else %}
+  <p style="color:var(--text-muted); font-size:13px; margin:0 0 12px">
+    Link this web account to your Telegram identity so both channels show as one account.
+  </p>
+  <ol style="color:var(--text-muted); font-size:13px; margin:0 0 16px; padding-left:18px; line-height:1.8">
+    <li>Open <strong>@suppenclaw_bot</strong> in Telegram</li>
+    <li>Send <strong>/link</strong> (or tap 🔗 Link web account in the menu)</li>
+    <li>Copy the 6-character code the bot sends you</li>
+    <li>Paste it below and click Link</li>
+  </ol>
+  {% endif %}
+  <form method="post" action="/profile/link-telegram" style="margin-top:{% if account.get('telegram_chat_id') %}16{% else %}0{% endif %}px">
+    <div style="display:flex; gap:8px; align-items:flex-end; max-width:360px; flex-wrap:wrap">
+      <div style="flex:1; min-width:120px">
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
+          Link Code <span style="font-weight:normal">(from Telegram)</span>
+        </label>
+        <input type="text" name="link_code" required maxlength="6" minlength="6"
+               placeholder="ABC123" autocomplete="off"
+               style="width:100%; padding:9px 12px; background:var(--surface-2);
+                      border:1px solid var(--border-color); border-radius:8px;
+                      color:var(--text-primary); font-size:16px; font-family:monospace;
+                      text-transform:uppercase; letter-spacing:3px; text-align:center">
       </div>
+      <button type="submit"
+              style="padding:9px 20px; border-radius:8px; border:none;
+                     background:var(--accent); color:#fff; font-size:14px;
+                     font-weight:600; cursor:pointer; white-space:nowrap">
+        🔗 Link
+      </button>
     </div>
   </form>
 </div>

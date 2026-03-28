@@ -215,6 +215,19 @@ def cmd_menu(message):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# /link — generate a web-account link code
+# ─────────────────────────────────────────────────────────────────────────────
+
+@bot.message_handler(commands=["link"])
+def cmd_link(message):
+    if not _is_allowed(message.chat.id):
+        _deny(message.chat.id)
+        return
+    _set_lang(message.chat.id, message.from_user)
+    _handle_web_link(message.chat.id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # /status
 # ─────────────────────────────────────────────────────────────────────────────
 

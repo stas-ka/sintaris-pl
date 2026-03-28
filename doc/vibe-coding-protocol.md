@@ -1013,3 +1013,42 @@ Every ~3 months, measure baseline health:
 | 08:23 UTC | 08:23 UTC | 08:45 UTC | 22 min | Update architecture docs: general overview + PicoClaw + OpenClaw variant docs with links to ecosystem projects | 1. overview.md: ecosystem matrix (5 projects), variant comparison table, 3-channel architecture diagram, module map, external links; 2. picoclaw.md (NEW): hardware, voice pipeline, LLM, services, deploy workflow; 3. openclaw-integration.md: full rewrite in English, all ecosystem links; 4. architecture.md index: added picoclaw.md; 5. llm-providers.md: added openclaw+ollama | 2 | 1 | claude-sonnet-4.6 | doc/arch/overview.md, doc/arch/picoclaw.md (new), doc/arch/openclaw-integration.md, doc/architecture.md, doc/arch/llm-providers.md, doc/vibe-coding-protocol.md | done |
 
 **Session 70 total: 1 item (architecture docs), ~1 turn — PicoClaw + OpenClaw variant docs ✅**
+
+---
+
+## Session 71 — 2026-03-28 (UTC)
+
+| Time | Time start | Time end | Duration | Request | Steps/Todos | Complexity | Requests used | Model | Files changed | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 09:40 UTC | 09:40 UTC | 09:55 UTC | 15 min | Continue last session: commit pipeline analytics logger (v2026.3.29) | 1. Run T32 test — 5/5 PASS; 2. bump BOT_VERSION 2026.3.28→2026.3.29; 3. prepend release_notes.json entry; 4. commit all 6 files | 2 | 1 | claude-sonnet-4.6 | src/core/pipeline_logger.py, src/bot_web.py, src/tests/test_voice_regression.py, src/core/bot_config.py, src/release_notes.json, .github/instructions/openclaw.instructions.md | done |
+
+**Session 71 total: 1 item (pipeline logger commit), ~1 turn ✅**
+
+---
+
+## Session 72 — 2026-03-28 (UTC)
+
+| Time | Time start | Time end | Duration | Request | Steps/Todos | Complexity | Requests used | Model | Files changed | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 09:50 UTC | 09:50 UTC | 09:58 UTC | 8 min | Fix: Web UI shows "Vosk" for STT even on OpenClaw (faster_whisper) | 1. Found two hardcoded "Vosk" fallbacks at lines 644+1791 in bot_web.py; 2. Added _STT_UI_LABELS dict + _STT_UI_LABEL module constant; 3. Synced bot_web.py + bot_config.py + templates + pipeline_logger.py to ~/.taris/; 4. Restart taris-web → v2026.3.29 ✅; 5. committed | 1 | 1 | claude-sonnet-4.6 | src/bot_web.py | done |
+
+**Session 72 total: 1 bugfix, ~1 turn ✅**
+
+---
+
+## Session 73 — 2026-03-28 (UTC)
+
+| Time | Time start | Time end | Duration | Request | Steps/Todos | Complexity | Requests used | Model | Files changed | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 10:09 UTC | 10:09 UTC | 10:18 UTC | 9 min | Add software release info to Web UI; deep-diagnose Vosk label (browser cache) | 1. Root cause: browser cached old HTML without Cache-Control; 2. _LLM_UI_LABEL + _DEVICE_UI_LABEL constants; 3. _ctx() injects all 3 labels globally; 4. base.html sidebar-stack block (STT+LLM row); 5. meta no-cache tags; 6. /api/version endpoint; 7. style.css .sidebar-stack/.stack-row; 8. deploy v2026.3.30 | 2 | 2 | claude-sonnet-4.6 | src/bot_web.py, src/web/templates/base.html, src/web/static/style.css, src/core/bot_config.py, src/release_notes.json | done |
+
+**Session 73 total: 1 feature, ~2 turns — Web UI stack info ✅**
+| 11:25 UTC | 11:25 UTC | 11:40 UTC | 15 min | Dual STT with fallback strategy (mirroring LLM _DISPATCH pattern) | 1. STT_FALLBACK_PROVIDER constant + auto-default; 2. _STT_DISPATCH table; 3. _stt_vosk_web() extracted; 4. _stt_web() primary→fallback chain; 5. openai_whisper provider + constants; 6. sl lang_map; 7. UI label shows Primary→Fallback; 8. _voice_pipeline_status fallback annotation; 9. T33 2/2 PASS; 10. TODO §19.5 + §19.4 | 3 | 2 | claude-sonnet-4.6 | src/core/bot_config.py, src/bot_web.py, src/tests/test_voice_regression.py, src/release_notes.json, TODO.md | done |
+
+**Session 74 total: 1 feature, ~2 turns — Dual STT fallback ✅**
+| 11:45 UTC | 11:45 UTC | 11:58 UTC | 13 min | Voice debug mode + audio download + LLM named fallback | 1. core/voice_debug.py VoiceDebugSession (7 stage savers + finalise + list_debug_sessions); 2. VOICE_DEBUG_MODE/DIR constants; 3. LLM_FALLBACK_PROVIDER + _ask_with_fallback refactor; 4. wire into voice_chat + voice_transcribe endpoints; 5. GET /voice/debug/sessions + /voice/debug/{id}/{file} endpoints; 6. voice.html download button (blob + debug link); 7. T34 3/3 PASS; 8. v2026.3.32 | 3 | 2 | claude-sonnet-4.6 | src/core/voice_debug.py(new), src/core/bot_config.py, src/core/bot_llm.py, src/bot_web.py, src/web/templates/voice.html, src/tests/test_voice_regression.py, src/release_notes.json | done |
+
+**Session 75 total: 3 features, ~2 turns — debug mode + download + LLM fallback ✅**
+| 12:18 UTC | 11:08 UTC | 12:18 UTC | 70m | Ollama install + LLM dual fallback | Install Ollama user-space, pull qwen2:0.5b, systemd service, OpenAI key, verify both | 2 | 3 | claude-sonnet-4.6 | bot_config.py, release_notes.json, bot.env | done |
+| 12:28 UTC | 11:22 UTC | 12:28 UTC | 66m | Fix web UI hang during voice tests | asyncio.to_thread in 7 endpoints: voice_chat, transcribe, tts, chat_text, chat_send, cal_parse, cal_console | 3 | 2 | claude-sonnet-4.6 | bot_web.py, bot_config.py, release_notes.json | done |
+| 12:39 UTC | | 12:00 UTC | | 12:39 UTC | 39m | LLM badge in chat + self-service password reset | LLM badge topbar+bubble, forgot/reset-password routes, reset tokens, SMTP config | 3 | 2 | claude-sonnet-4.6 | src/bot_web.py, src/core/bot_config.py, src/security/bot_auth.py, chat.html, _chat_messages.html, login.html, forgot_password.html, reset_password.html, release_notes.json | done |

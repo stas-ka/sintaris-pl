@@ -105,6 +105,7 @@ from security.bot_auth import (
     COOKIE_NAME, find_account_by_id, update_account, change_password,
     find_account_by_chat_id,
     generate_reset_token, validate_reset_token, consume_reset_token,
+    change_username,
 )
 from core.bot_llm import ask_llm, ask_llm_with_history, get_active_model, list_models, set_active_model
 from core.bot_prompts import PROMPTS, fmt_prompt
@@ -716,6 +717,49 @@ async def profile_update_name(request: Request, display_name: str = Form(...)):
         return RedirectResponse("/profile?error=Name+cannot+be+empty", status_code=302)
     update_account(user["sub"], display_name=display_name)
     return RedirectResponse("/profile?msg=name_saved", status_code=302)
+
+
+@app.post("/profile/change-username", response_class=HTMLResponse)
+async def profile_change_username(request: Request, new_username: str = Form(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    new_username = new_username.strip().lower()
+    if len(new_username) < 3:
+        return RedirectResponse("/profile?error=Username+must+be+at+least+3+characters", status_code=302)
+    if not new_username.replace("_", "").replace("-", "").isalnum():
+        return RedirectResponse("/profile?error=Username+may+only+contain+letters%2C+digits%2C+hyphens+and+underscores", status_code=302)
+    result = await asyncio.to_thread(lambda: change_username(user["sub"], new_username))
+    if result == "taken":
+        return RedirectResponse("/profile?error=Username+is+already+taken", status_code=302)
+    if result != "ok":
+        return RedirectResponse("/profile?error=Could+not+change+username", status_code=302)
+    # Re-issue JWT with new username
+    account = find_account_by_id(user["sub"]) or {}
+    new_token = create_token(user["sub"], new_username, account.get("role", "user"))
+    resp = RedirectResponse("/profile?msg=username_saved", status_code=302)
+    resp.set_cookie(COOKIE_NAME, new_token, httponly=True, samesite="lax", max_age=86400 * 7)
+    return resp
+
+
+@app.post("/profile/link-telegram", response_class=HTMLResponse)
+async def profile_link_telegram(request: Request, link_code: str = Form(...)):
+    """User enters the 6-char code from Telegram bot to link accounts."""
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    import core.bot_state as _st_web
+    tg_id = await asyncio.to_thread(lambda: _st_web.validate_web_link_code(link_code.strip()))
+    if tg_id is None:
+        return RedirectResponse("/profile?error=Invalid+or+expired+link+code.+Generate+a+new+one+in+Telegram+with+/link", status_code=302)
+    # If another account already claims this Telegram ID, unlink it first (merge)
+    existing = find_account_by_chat_id(tg_id)
+    if existing and existing.get("user_id") != user["sub"]:
+        update_account(existing["user_id"], telegram_chat_id=None)
+        log.info(f"[Auth] Unlinked Telegram {tg_id} from '{existing.get('username')}' (merging to '{user['username']}')")
+    update_account(user["sub"], telegram_chat_id=tg_id)
+    log.info(f"[Auth] Telegram {tg_id} linked to web account '{user['username']}'")
+    return RedirectResponse("/profile?msg=telegram_linked", status_code=302)
 
 
 @app.get("/settings", response_class=HTMLResponse)
