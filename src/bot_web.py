@@ -628,6 +628,7 @@ async def chat_page(request: Request):
         request, user, "chat",
         models=models_list,
         messages=messages,
+        stt_label="faster-whisper" if STT_PROVIDER == "faster_whisper" else "Vosk",
     ))
 
 
@@ -1774,6 +1775,7 @@ async def voice_page(request: Request):
         request, user, "voice",
         pipeline=_voice_pipeline_status(),
         transcript=transcript,
+        stt_label="faster-whisper" if STT_PROVIDER == "faster_whisper" else "Vosk",
         languages=[
             {
                 "code": "ru", "flag": "🇷🇺", "name": "Russian",

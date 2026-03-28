@@ -2032,6 +2032,27 @@ def t_web_stt_provider_routing(**_) -> list[TestResult]:
             else "MISSING — status page still hardcodes 'STT (Vosk)'",
         ))
 
+        # 6. Templates use stt_label variable (not hardcoded Vosk)
+        tmpl_dir = TARIS_DIR / "web" / "templates"
+        vosk_in_chat = False
+        vosk_in_voice = False
+        for tmpl_name, attr in [("chat.html", "vosk_in_chat"), ("voice.html", "vosk_in_voice")]:
+            tmpl_path = tmpl_dir / tmpl_name
+            if tmpl_path.exists():
+                t_src = tmpl_path.read_text()
+                import re as _re2
+                has_hardcoded = bool(_re2.search(r"(?<!\{)\bVosk\b(?!\})", t_src))
+                if attr == "vosk_in_chat":
+                    vosk_in_chat = has_hardcoded
+                else:
+                    vosk_in_voice = has_hardcoded
+        results.append(TestResult(
+            "web_stt_templates_no_hardcoded_vosk",
+            "FAIL" if (vosk_in_chat or vosk_in_voice) else "PASS",
+            time.time() - t0,
+            f"chat.html hardcoded={'YES' if vosk_in_chat else 'no'} voice.html hardcoded={'YES' if vosk_in_voice else 'no'}",
+        ))
+
     except Exception as e:
         results.append(TestResult("web_stt_provider_routing", "FAIL", time.time() - t0, str(e)))
 

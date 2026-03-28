@@ -80,7 +80,7 @@
           <div style="font-weight:700;color:#a78bfa;margin-bottom:5px">🎤 Voice Assistant — Голосовой ассистент</div>
           <div>Write a message or tap the <strong>🎤</strong> button, record your question and send it.</div>
           <div style="margin-top:6px;font-weight:600;color:#c4b5fd">🔊 Supported languages:</div>
-          <div style="margin-top:3px">🇷🇺 <strong style="color:#e2e8f0">Russian</strong> — speech recognition (Vosk) + voice reply (Piper TTS)</div>
+          <div style="margin-top:3px">🇷🇺 <strong style="color:#e2e8f0">Russian</strong> — speech recognition ({{ stt_label }}) + voice reply (Piper TTS)</div>
           <div style="margin-top:6px;color:var(--text-dim);font-size:11px">I will recognise your speech and reply with text&nbsp;+&nbsp;voice.&nbsp; Please wait after recording.</div>
         </div>
       </div>
@@ -149,7 +149,7 @@
       <div style="background:rgba(124,77,255,0.10);border:1px solid rgba(124,77,255,0.28);border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.65">
         <div style="font-weight:700;color:#a78bfa;margin-bottom:3px">🎤 Голосовой ассистент · Voice Assistant</div>
         <div>Запишите вопрос на <strong>🇷🇺 русском языке</strong> — I'll transcribe and reply with <strong>text&nbsp;+&nbsp;🔊 voice</strong>.</div>
-        <div style="color:var(--text-dim);font-size:11px;margin-top:3px">🔊 Supported: <strong style="color:#c4b5fd">Russian only</strong>&nbsp;&nbsp;·&nbsp;&nbsp;STT: Vosk&nbsp;&nbsp;·&nbsp;&nbsp;TTS: Piper ONNX</div>
+        <div style="color:var(--text-dim);font-size:11px;margin-top:3px">🔊 Supported: <strong style="color:#c4b5fd">Russian only</strong>&nbsp;&nbsp;·&nbsp;&nbsp;STT: {{ stt_label }}&nbsp;&nbsp;·&nbsp;&nbsp;TTS: Piper ONNX</div>
       </div>
       <div class="vc-status-row">
         <div id="waveform" class="waveform"></div>
@@ -391,7 +391,7 @@ function _showProcBar(show) {
   document.getElementById('proc-bar').style.display = show ? '' : 'none';
 }
 const _STAGE_LABELS = {
-  stt: '🎤 Transcribing speech (Vosk STT)…',
+  stt: '🎤 Transcribing speech ({{ stt_label }} STT)…',
   llm: '🤖 Taris thinking (LLM)…',
   tts: '🔊 Generating audio reply (Piper TTS)…'
 };

@@ -43,7 +43,7 @@
         ask the LLM, and reply with synthesised speech — the same pipeline as the Telegram bot.
       </div>
       <div style="color:#f59e0b; font-size:12px; margin-top:4px">
-        ⚠️ First turn ≈ 30–90 s on Pi 3 B+ (Vosk STT + LLM + Piper TTS)
+        ⚠️ First turn ≈ 30–90 s on Pi 3 B+ ({{ stt_label }} STT + LLM + Piper TTS)
       </div>
     </div>
     <!-- JS appends chat-bubble elements here -->
@@ -339,7 +339,7 @@ function vcAddRawBubble(id, role, inner, time) {
 }
 
 const _STAGE_LABELS = {
-  stt: '🎤 Transcribing speech (Vosk STT)…',
+  stt: '🎤 Transcribing speech ({{ stt_label }} STT)…',
   llm: '🤖 Taris thinking (LLM)…',
   tts: '🔊 Generating audio reply (Piper TTS)…'
 };
