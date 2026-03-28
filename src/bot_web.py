@@ -140,6 +140,17 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
+@app.middleware("http")
+async def _no_cache_html(request: Request, call_next):
+    """Prevent browser caching of HTML pages so template changes are always visible."""
+    response = await call_next(request)
+    ct = response.headers.get("content-type", "")
+    if "text/html" in ct:
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Auth helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -319,7 +330,7 @@ _VOICE_OPT_META = [
     ("warm_piper",       "Warm Piper Cache",  "Pre-load ONNX pages at startup",         "-10 s first call"),
     ("vad_prefilter",    "VAD Pre-filter",    "WebRTC VAD strips silence before STT",   "-3 s STT"),
     ("piper_low_model",  "Piper Low Model",   "Use low-quality voice (faster)",         "-13 s TTS"),
-    ("whisper_stt",      "Whisper STT",       "Use whisper.cpp instead of Vosk",        "Better WER"),
+    ("whisper_stt",      "Whisper STT",       "Use whisper.cpp binary (Pi only)",       "Better WER"),
     ("silence_strip",    "Silence Strip",     "ffmpeg silenceremove on incoming OGG",   "-1 s decode"),
 ]
 
