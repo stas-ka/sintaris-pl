@@ -1,11 +1,12 @@
 """
-bot_auth.py — Web authentication: accounts, passwords, JWT tokens.
+bot_auth.py — Web authentication: accounts, passwords, JWT tokens, password reset.
 
 Provides:
   - Account CRUD backed by ~/.taris/accounts.json
   - bcrypt password hashing (work factor 12)
   - PyJWT token create / verify (HS256, 24 h expiry)
   - Optional Telegram linking (chat_id ↔ user_id)
+  - Password reset tokens (60 min TTL, stored in reset_tokens.json)
 """
 
 import json
@@ -169,6 +170,73 @@ def verify_token(token: str) -> Optional[dict]:
         return jwt.decode(token, _JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Password reset tokens  (TTL = 60 min, stored in reset_tokens.json)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_RESET_TOKENS_FILE  = os.path.join(TARIS_DIR, "reset_tokens.json")
+RESET_TOKEN_TTL_MIN = 60
+
+
+def _load_reset_tokens() -> list[dict]:
+    try:
+        return json.loads(Path(_RESET_TOKENS_FILE).read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_reset_tokens(tokens: list[dict]) -> None:
+    Path(_RESET_TOKENS_FILE).parent.mkdir(parents=True, exist_ok=True)
+    Path(_RESET_TOKENS_FILE).write_text(json.dumps(tokens, indent=2), encoding="utf-8")
+
+
+def generate_reset_token(username: str) -> Optional[str]:
+    """Generate a one-time reset token (60 min TTL).  Returns token str, or None if user not found."""
+    account = find_account_by_username(username)
+    if not account:
+        return None
+    token   = uuid.uuid4().hex + uuid.uuid4().hex[:8]   # 40-char hex
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_TTL_MIN)).isoformat()
+    tokens  = [t for t in _load_reset_tokens() if t.get("username") != username.lower()]
+    tokens.append({"token": token, "username": username.lower(), "expires": expires, "used": False})
+    _save_reset_tokens(tokens)
+    log.info(f"[Auth] Reset token generated for '{username}'")
+    return token
+
+
+def validate_reset_token(token: str) -> Optional[str]:
+    """Return username if token is valid and not expired; None otherwise."""
+    now = datetime.now(timezone.utc)
+    for t in _load_reset_tokens():
+        if t.get("token") == token and not t.get("used"):
+            try:
+                exp = datetime.fromisoformat(t["expires"])
+                if now < exp:
+                    return t["username"]
+            except (KeyError, ValueError):
+                pass
+    return None
+
+
+def consume_reset_token(token: str) -> Optional[str]:
+    """Mark token used and return username; returns None if invalid/expired."""
+    tokens   = _load_reset_tokens()
+    username = None
+    now      = datetime.now(timezone.utc)
+    for t in tokens:
+        if t.get("token") == token and not t.get("used"):
+            try:
+                exp = datetime.fromisoformat(t["expires"])
+                if now < exp:
+                    username  = t["username"]
+                    t["used"] = True
+                    break
+            except (KeyError, ValueError):
+                pass
+    _save_reset_tokens(tokens)
+    return username
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
 
 {% block topbar_extra %}
 <div class="flex items-center gap-sm">
+  <span class="llm-badge" title="LLM provider">🤖 {{ llm_label }}</span>
   <select id="model-select" class="select-sm" style="max-width:190px"
           onchange="fetch('/chat/model',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'model='+encodeURIComponent(this.value)})">
     {% for m in models %}
@@ -27,6 +28,9 @@
 .chat-container   { display:flex; flex-direction:column; height:calc(100vh - 92px); }
 .chat-thread      { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:12px 0 4px; }
 .chat-meta        { font-size:11px; color:var(--text-dim); margin-bottom:2px; }
+.llm-badge        { display:inline-flex; align-items:center; gap:3px; padding:2px 8px;
+                    border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap;
+                    background:var(--bg-card); color:var(--accent); border:1px solid var(--border); }
 
 /* Processing pipeline bar */
 .proc-bar         { padding:8px 12px; border-top:1px solid var(--border); background:var(--bg-primary); }

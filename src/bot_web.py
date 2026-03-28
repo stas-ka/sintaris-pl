@@ -63,6 +63,7 @@ from core.bot_config import (
     OPENAI_API_KEY, OPENAI_BASE_URL,
     OLLAMA_MODEL,
     VOICE_DEBUG_MODE, VOICE_DEBUG_DIR,
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
 from core.voice_debug import VoiceDebugSession, list_debug_sessions
@@ -103,6 +104,7 @@ from security.bot_auth import (
     create_token, verify_token, list_accounts, ensure_admin_account,
     COOKIE_NAME, find_account_by_id, update_account, change_password,
     find_account_by_chat_id,
+    generate_reset_token, validate_reset_token, consume_reset_token,
 )
 from core.bot_llm import ask_llm, ask_llm_with_history, get_active_model, list_models, set_active_model
 from core.bot_prompts import PROMPTS, fmt_prompt
@@ -173,8 +175,55 @@ def _get_google_creds_obj(creds_data: dict) -> Optional[object]:
     return gc
 
 # ─────────────────────────────────────────────────────────────────────────────
-# App setup
+# Notification helpers  (password reset, admin alerts)
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _get_bot_token() -> str:
+    """Return BOT_TOKEN from env (safe even when WEB_ONLY=1)."""
+    import os as _os
+    return _os.environ.get("BOT_TOKEN", "")
+
+
+def _send_telegram_message(chat_id: int, text: str) -> bool:
+    """Send a Telegram message to a specific chat_id.  Returns True on success."""
+    token = _get_bot_token()
+    if not token or not chat_id:
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        resp = _requests_lib.post(url, json={"chat_id": chat_id, "text": text}, timeout=10)
+        return resp.status_code == 200
+    except Exception as exc:
+        log.warning(f"[Web] Telegram notify failed: {exc}")
+        return False
+
+
+def _send_reset_email(to_addr: str, username: str, reset_url: str) -> bool:
+    """Send a password reset e-mail.  Requires SMTP_HOST/USER/PASS to be configured."""
+    if not SMTP_HOST or not SMTP_USER:
+        return False
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        body = (
+            f"Hello {username},\n\n"
+            f"A password reset was requested for your taris account.\n\n"
+            f"Click the link below to set a new password (valid for 60 minutes):\n"
+            f"{reset_url}\n\n"
+            f"If you did not request this, please ignore this e-mail.\n"
+        )
+        msg            = MIMEText(body)
+        msg["Subject"] = f"[Taris] Password reset for {username}"
+        msg["From"]    = SMTP_FROM or SMTP_USER
+        msg["To"]      = to_addr
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.sendmail(msg["From"], [to_addr], msg.as_string())
+        return True
+    except Exception as exc:
+        log.warning(f"[Web] Reset e-mail failed → {to_addr}: {exc}")
+        return False
 
 app = FastAPI(title="Taris Bot Web UI")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -514,8 +563,117 @@ async def logout():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Settings (language + password)
+# Forgot password / self-service reset
 # ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request, msg: str = "", error: str = ""):
+    return templates.TemplateResponse("forgot_password.html",
+                                      {"request": request, "msg": msg, "error": error})
+
+
+@app.post("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_submit(request: Request):
+    form     = await request.form()
+    username = str(form.get("username", "")).strip().lower()
+    method   = str(form.get("method", "")).strip()    # "telegram" | "email" | "admin"
+
+    account = find_account_by_username(username)
+    if not account:
+        # Avoid username enumeration: always show the same page
+        return templates.TemplateResponse("forgot_password.html", {
+            "request": request,
+            "msg": ("If an account with that username exists, a reset notification has been sent."),
+        })
+
+    token     = await asyncio.to_thread(lambda: generate_reset_token(username))
+    base_url  = str(request.base_url).rstrip("/")
+    reset_url = f"{base_url}/reset-password/{token}"
+    sent_ok   = False
+
+    if method == "telegram":
+        tg_id = account.get("telegram_chat_id")
+        if tg_id:
+            msg_text = (
+                f"🔑 Password reset requested for your taris account '{username}'.\n\n"
+                f"Click the link to set a new password (valid 60 min):\n{reset_url}\n\n"
+                f"If you did not request this, ignore this message."
+            )
+            sent_ok = await asyncio.to_thread(lambda: _send_telegram_message(int(tg_id), msg_text))
+
+    elif method == "email":
+        email = account.get("email", "")
+        if email:
+            sent_ok = await asyncio.to_thread(
+                lambda: _send_reset_email(email, username, reset_url)
+            )
+
+    elif method == "admin":
+        # Notify all admin users via Telegram
+        from core.bot_config import ADMIN_USERS
+        msg_text = (
+            f"🔑 Password reset requested by user '{username}'.\n"
+            f"Reset link (60 min): {reset_url}"
+        )
+        for admin_id in ADMIN_USERS:
+            await asyncio.to_thread(lambda: _send_telegram_message(int(admin_id), msg_text))
+        # Also e-mail admin if configured
+        if ADMIN_EMAIL:
+            await asyncio.to_thread(
+                lambda: _send_reset_email(ADMIN_EMAIL, f"admin (for user {username})", reset_url)
+            )
+        sent_ok = True
+
+    if sent_ok:
+        return RedirectResponse("/forgot-password?msg=Notification+sent.+Check+your+channel.",
+                                status_code=302)
+    return templates.TemplateResponse("forgot_password.html", {
+        "request": request,
+        "error": "Could not send notification. Contact the administrator.",
+    })
+
+
+@app.get("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_page(request: Request, token: str, error: str = ""):
+    username = await asyncio.to_thread(lambda: validate_reset_token(token))
+    if not username:
+        return templates.TemplateResponse("forgot_password.html", {
+            "request": request,
+            "error": "Reset link is invalid or has expired. Please request a new one.",
+        })
+    return templates.TemplateResponse("reset_password.html",
+                                      {"request": request, "token": token,
+                                       "username": username, "error": error})
+
+
+@app.post("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_submit(request: Request, token: str):
+    form     = await request.form()
+    new_pw   = str(form.get("password", "")).strip()
+    confirm  = str(form.get("confirm", "")).strip()
+
+    if not new_pw or len(new_pw) < 6:
+        return templates.TemplateResponse("reset_password.html", {
+            "request": request, "token": token,
+            "username": "", "error": "Password must be at least 6 characters.",
+        })
+    if new_pw != confirm:
+        return templates.TemplateResponse("reset_password.html", {
+            "request": request, "token": token,
+            "username": "", "error": "Passwords do not match.",
+        })
+
+    username = await asyncio.to_thread(lambda: consume_reset_token(token))
+    if not username:
+        return templates.TemplateResponse("forgot_password.html", {
+            "request": request,
+            "error": "Reset link is invalid or has expired. Please request a new one.",
+        })
+
+    await asyncio.to_thread(lambda: change_password(username, new_pw))
+    log.info(f"[Auth] Password reset via token for user '{username}'")
+    return RedirectResponse("/login?msg=Password+reset+successful.+Please+log+in.",
+                            status_code=302)
 
 _SUPPORTED_LANGS = {"en": "🇬🇧 English", "ru": "🇷🇺 Русский", "de": "🇩🇪 Deutsch"}
 
@@ -710,11 +868,12 @@ async def chat_send(request: Request, message: str = Form(...)):
     history.append({"role": "bot", "text": reply, "time": now_str})
 
     return templates.TemplateResponse("_chat_messages.html", {
-        "request": request,
-        "user_text": message,
-        "user_time": now_str,
-        "bot_text": reply,
-        "bot_time": now_str,
+        "request":    request,
+        "user_text":  message,
+        "user_time":  now_str,
+        "bot_text":   reply,
+        "bot_time":   now_str,
+        "llm_label":  _LLM_UI_LABEL,
     })
 
 

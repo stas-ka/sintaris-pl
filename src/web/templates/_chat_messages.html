@@ -2,6 +2,9 @@
 <!-- user bubble is injected optimistically in before-request (chat.html) -->
 <div class="chat-bubble chat-bot">
   <div class="chat-avatar">🤖</div>
-  <div class="chat-meta">{{ bot_time }}</div>
+  <div class="chat-meta">
+    {{ bot_time }}
+    {% if llm_label %}<span class="llm-badge">{{ llm_label }}</span>{% endif %}
+  </div>
   <div class="chat-body">{{ bot_text }}</div>
 </div>

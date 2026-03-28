@@ -1,5 +1,21 @@
 [
   {
+    "version": "2026.3.35",
+    "date":    "2026-03-29",
+    "title":   "LLM indicator in chat + self-service password reset",
+    "changes": [
+      "Chat window: LLM provider badge in topbar (e.g. 'Ollama · qwen2:0.5b')",
+      "Chat messages: LLM provider shown in bot bubble meta line",
+      "Forgot password page (/forgot-password): username + delivery method selection",
+      "Password reset via Telegram message, e-mail, or admin notification",
+      "Reset link valid 60 min; stored in ~/.taris/reset_tokens.json",
+      "New templates: forgot_password.html, reset_password.html",
+      "Login page: Forgot password? link added",
+      "bot_auth.py: generate_reset_token / validate_reset_token / consume_reset_token",
+      "bot_config.py: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL constants"
+    ]
+  },
+  {
     "version": "2026.3.34",
     "date":    "2026-03-28",
     "title":   "Fix: web UI hang during voice/LLM — async event loop unblocked",

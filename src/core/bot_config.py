@@ -154,6 +154,16 @@ OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
 OPENAI_MODEL        = os.environ.get("OPENAI_MODEL",    "gpt-4o-mini")
 OPENAI_BASE_URL     = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SMTP — outgoing mail for password reset notifications
+# ─────────────────────────────────────────────────────────────────────────────
+SMTP_HOST    = os.environ.get("SMTP_HOST",    "")
+SMTP_PORT    = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER    = os.environ.get("SMTP_USER",    "")
+SMTP_PASS    = os.environ.get("SMTP_PASS",    "")
+SMTP_FROM    = os.environ.get("SMTP_FROM",    SMTP_USER)
+ADMIN_EMAIL  = os.environ.get("ADMIN_EMAIL",  "")    # for admin notifications
+
 # LLM provider tuning parameters
 YANDEXGPT_TEMPERATURE  = float(os.getenv("YANDEXGPT_TEMPERATURE", "0.6"))
 YANDEXGPT_MAX_TOKENS   = os.getenv("YANDEXGPT_MAX_TOKENS", "2000")
@@ -210,7 +220,7 @@ EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.34"
+BOT_VERSION        = "2026.3.35"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
