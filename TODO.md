@@ -403,10 +403,30 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 - [x] `STT_PROVIDER=openai_whisper` — OpenAI Whisper API provider added to `bot_web.py`
 - [x] `_stt_openai_whisper_web()` — PCM→WAV→POST to `/v1/audio/transcriptions`; reuses `OPENAI_API_KEY` + `OPENAI_BASE_URL`; graceful fallback to Vosk if key missing
 - [x] `STT_OPENAI_MODEL` constant (default `whisper-1`); `STT_LANG` constant (default `ru`); supports ru/en/de/sl
-- [x] `_stt_web()` updated: routes `faster_whisper` → `openai_whisper` → vosk fallback
-- [x] `_voice_pipeline_status()` shows `openai_whisper` API key status
+- [x] `_stt_web()` updated: dispatch table `_STT_DISPATCH` + primary→fallback chain (mirrors LLM `_DISPATCH`)
+- [x] `STT_FALLBACK_PROVIDER` constant (auto-default `vosk` when primary ≠ vosk)
+- [x] `_voice_pipeline_status()` shows provider + fallback status; UI label shows `Primary → Fallback`
 - [x] Slovenian (`sl`) added to `lang_map` in faster-whisper transcription
-- [x] `_STT_UI_LABELS` updated; `_STT_UI_LABEL` auto-resolves for all providers
+
+### 19.6 Voice Debug Mode + LLM Named Fallback ✅ Implemented (v2026.3.32)
+
+- [x] `core/voice_debug.py` — `VoiceDebugSession`: saves all pipeline stages per request when `VOICE_DEBUG_MODE=1`:
+  - `input.webm` raw audio · `decoded.pcm` + `decoded.wav` · `stt.txt` · `llm_answer.txt` · `tts_input.txt` · `tts_output.ogg` · `pipeline.json`
+- [x] `VOICE_DEBUG_MODE` / `VOICE_DEBUG_DIR` constants in `bot_config.py`
+- [x] `voice_chat_endpoint` + `voice_transcribe_endpoint` wired with `VoiceDebugSession`; return `debug_session_id` in JSON
+- [x] `GET /voice/debug/sessions` — list recent sessions (auth required)
+- [x] `GET /voice/debug/{session_id}/{filename}` — download any debug file (path traversal blocked)
+- [x] `voice.html` — 📥 download button next to every TTS audio player (server link when debug active, blob URL otherwise)
+- [x] `LLM_FALLBACK_PROVIDER` constant — named LLM fallback, mirrors `STT_FALLBACK_PROVIDER`
+  - Example: `LLM_PROVIDER=ollama` + `LLM_FALLBACK_PROVIDER=openai` → local first, cloud on failure
+- [x] `_ask_with_fallback()` in `bot_llm.py`: primary → named fallback → legacy `LLM_LOCAL_FALLBACK` chain
+- [x] `ask_llm()` + `ask_llm_or_raise()` refactored onto `_ask_with_fallback()`
+- [x] T34 `t_voice_debug_mode`: 3/3 PASS
+
+**⚠️ LLM currently unavailable**: `LLM_PROVIDER=ollama` but Ollama binary not installed → `Connection refused`.
+Fix: `curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b`
+Interim workaround: set `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` in `~/.taris/bot.env`
+Named fallback: add `LLM_FALLBACK_PROVIDER=openai` so Ollama failure automatically falls to OpenAI.
 
 ---
 
