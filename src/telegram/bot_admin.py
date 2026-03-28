@@ -8,6 +8,7 @@ Responsibilities:
   - Voice-optimization toggle menu
   - Release notes — load, format, version-change admin notification
   - LLM model switcher (taris models + OpenAI ChatGPT sub-menu)
+  - Unified user list: Telegram users + Web UI accounts
 """
 
 import re as _re
@@ -63,7 +64,7 @@ def _save_dynamic_users() -> None:
 
 
 def _user_info_block(uid: int, reg) -> str:
-    """Compact Markdown block with all available identity info for a user."""
+    """Compact Markdown block with all available identity info for a Telegram user."""
     if not reg:
         return f"\U0001f464 `{uid}` _(no registration record)_"
     first   = _escape_md(reg.get("first_name", ""))
@@ -77,6 +78,23 @@ def _user_info_block(uid: int, reg) -> str:
         f"\U0001f464 `{uid}`\n"
         f"  \u2022 Telegram: {tdisp}\n"
         f"  \u2022 Name: {name or '\u2014'}"
+    )
+
+
+def _web_account_block(account: dict, tg_ids_known: set) -> str:
+    """Compact Markdown block for a web UI account."""
+    uname    = _escape_md(account.get("username", ""))
+    display  = _escape_md(account.get("display_name", ""))
+    role     = account.get("role", "user")
+    tg_id    = account.get("telegram_chat_id")
+    created  = (account.get("created", "")[:10])
+    role_icon = "🔐" if role == "admin" else "👤"
+    tg_line   = f"`{tg_id}`" if tg_id else "_not linked_"
+    linked_note = " _(also in Telegram list above)_" if tg_id and int(tg_id) in tg_ids_known else ""
+    return (
+        f"{role_icon} *{uname}* ({display})\n"
+        f"  • Role: {role}  |  Created: {created}\n"
+        f"  • Telegram: {tg_line}{linked_note}"
     )
 
 
@@ -120,47 +138,62 @@ def _handle_admin_menu(chat_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_admin_list_users(chat_id: int) -> None:
-    """Show all users grouped by role: Admins, Allowed, Approved, Blocked."""
+    """Show all users: Telegram users + Web UI accounts (unified view)."""
     sections = []
+
+    # Track all Telegram IDs that appear in any section (for cross-reference)
+    all_tg_ids: set = set(ADMIN_USERS) | set(ALLOWED_USERS) | set(_dynamic_users())
 
     # 🔐 Admins (static from config)
     if ADMIN_USERS:
         blocks = [_user_info_block(uid, _find_registration(uid)) for uid in sorted(ADMIN_USERS)]
-        sections.append("🔐 *Admins:*\n\n" + "\n\n".join(blocks))
+        sections.append("🔐 *Telegram Admins:*\n\n" + "\n\n".join(blocks))
 
     # ✅ Static allowed users (not admins)
     static_only = sorted(uid for uid in ALLOWED_USERS if uid not in ADMIN_USERS)
     if static_only:
         blocks = [_user_info_block(uid, _find_registration(uid)) for uid in static_only]
-        sections.append("✅ *Allowed:*\n\n" + "\n\n".join(blocks))
+        sections.append("✅ *Telegram Allowed:*\n\n" + "\n\n".join(blocks))
 
     # 👤 Dynamically approved users (not already in static lists)
     dyn_only = sorted(uid for uid in _dynamic_users()
                       if uid not in ALLOWED_USERS and uid not in ADMIN_USERS)
     if dyn_only:
         blocks = [_user_info_block(uid, _find_registration(uid)) for uid in dyn_only]
-        sections.append("👤 *Approved:*\n\n" + "\n\n".join(blocks))
+        sections.append("👤 *Telegram Approved:*\n\n" + "\n\n".join(blocks))
 
     # 🚫 Blocked users
     blocked = [r for r in _load_registrations() if r.get("status") == "blocked"]
     if blocked:
-        blk_blocks = []
-        for r in blocked:
-            uid = r.get("chat_id")
-            blk_blocks.append(_user_info_block(uid, r))
-        sections.append("🚫 *Blocked:*\n\n" + "\n\n".join(blk_blocks))
+        blk_blocks = [_user_info_block(r.get("chat_id"), r) for r in blocked]
+        sections.append("🚫 *Telegram Blocked:*\n\n" + "\n\n".join(blk_blocks))
+
+    # 🌐 Web UI accounts (from accounts.json)
+    try:
+        from security.bot_auth import list_accounts as _list_web_accounts
+        web_accounts = _list_web_accounts()
+        if web_accounts:
+            web_blocks = [_web_account_block(a, all_tg_ids) for a in
+                          sorted(web_accounts, key=lambda a: (a.get("role","user") != "admin", a.get("username","")))]
+            sections.append("🌐 *Web UI Accounts:*\n\n" + "\n\n".join(web_blocks))
+    except Exception as exc:
+        sections.append(f"🌐 *Web UI Accounts:* _(error loading: {exc})_")
 
     if not sections:
         bot.send_message(chat_id, _t(chat_id, "no_guests"),
                          parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
         return
 
-    bot.send_message(
-        chat_id,
-        "\n\n" + "\n\n───────\n\n".join(sections),
-        parse_mode="Markdown",
-        reply_markup=_admin_keyboard(chat_id),
-    )
+    # Split into multiple messages if too long (Telegram 4096 char limit)
+    full_text = "\n\n" + "\n\n───────\n\n".join(sections)
+    if len(full_text) <= 4000:
+        bot.send_message(chat_id, full_text, parse_mode="Markdown",
+                         reply_markup=_admin_keyboard(chat_id))
+    else:
+        for i, section in enumerate(sections):
+            kb = _admin_keyboard(chat_id) if i == len(sections) - 1 else None
+            bot.send_message(chat_id, "\n\n" + section, parse_mode="Markdown",
+                             reply_markup=kb)
 
 
 def _start_admin_add_user(chat_id: int) -> None:
