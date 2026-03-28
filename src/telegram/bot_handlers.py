@@ -200,7 +200,7 @@ def _start_note_replace(chat_id: int, slug: str) -> None:
         parse_mode="Markdown",
     )
     from telebot.types import ForceReply
-    bot.send_message(chat_id, note_body or _t(chat_id, "note_empty_body"), reply_markup=ForceReply(selective=False))
+    bot.send_message(chat_id, note_body or _t(chat_id, "note_empty_body"), parse_mode=None, reply_markup=ForceReply(selective=False))
 
 
 def _handle_note_delete(chat_id: int, slug: str) -> None:
@@ -763,9 +763,11 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
 
         try:
             bot.edit_message_text(_truncate(reply), chat_id, msg.message_id,
+                                  parse_mode=None,
                                   reply_markup=_back_keyboard())
         except Exception:
             bot.send_message(chat_id, _truncate(reply),
+                             parse_mode=None,
                              reply_markup=_back_keyboard())
 
     threading.Thread(target=_run, daemon=True).start()

@@ -1119,6 +1119,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             bot.send_message(
                 chat_id,
                 f"Taris:\n{_truncate(response)}{_fmt_timing()}",
+                parse_mode=None,
                 reply_markup=_voice_back_keyboard(chat_id),
             )
 

@@ -12,29 +12,33 @@ from core.bot_config import BOT_TOKEN
 
 log = logging.getLogger(__name__)
 
-_409_BACKOFF = [30, 60, 90, 120]  # successive sleep seconds on repeated 409s
-
 
 class _409Handler(telebot.ExceptionHandler):
-    """Exponential-ish backoff on Telegram 409 Conflict.
+    """Fast retry on Telegram 409 Conflict.
 
-    409 happens when two getUpdates sessions exist (rapid restart or another
-    bot instance running the same token).  We sleep progressively longer so
-    the old session can expire (Telegram long-poll timeout = 20 s).
+    409 means two getUpdates sessions exist simultaneously.  Rather than
+    backing off (which lets the competing instance stay in control), we retry
+    quickly (1-2 s) so this instance wins the next polling slot.
+
+    A warning is logged on the first conflict.  If the conflict persists for
+    more than 30 consecutive attempts, a louder warning is emitted every 30
+    attempts so the operator knows another bot instance is running.
     """
     def __init__(self):
         self._count = 0
 
     def handle(self, exc) -> bool:
         if isinstance(exc, telebot.apihelper.ApiTelegramException) and getattr(exc, "error_code", 0) == 409:
-            delay = _409_BACKOFF[min(self._count, len(_409_BACKOFF) - 1)]
             self._count += 1
-            log.warning(f"[Bot] 409 Conflict (attempt {self._count}) — sleeping {delay} s; "
-                        "check that no other bot instance uses the same token.")
-            time.sleep(delay)
-            return True   # handled; telebot will retry
-        self._count = 0   # reset on non-409 error
-        return False      # not handled; telebot logs and retries normally
+            if self._count == 1:
+                log.warning("[Bot] 409 Conflict — another getUpdates session active; retrying fast…")
+            elif self._count % 30 == 0:
+                log.warning(f"[Bot] 409 Conflict: {self._count} attempts — ensure no other bot instance "
+                            "uses the same token (e.g. Pi service still running).")
+            time.sleep(1)   # retry quickly to win the next polling slot
+            return True     # handled; telebot will retry
+        self._count = 0     # reset on non-409 error
+        return False        # not handled; telebot logs and retries normally
 
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown", exception_handler=_409Handler())
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode=None, exception_handler=_409Handler())

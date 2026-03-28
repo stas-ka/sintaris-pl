@@ -1,5 +1,15 @@
 [
   {
+    "version": "2026.3.40",
+    "date":    "2026-03-28",
+    "title":   "Fix menu/keyboard silent loss due to Markdown parse failure",
+    "changes": [
+      "bot_instance.py: TeleBot default parse_mode changed from Markdown to None — prevents silent send failure when LLM/user content contains underscores or asterisks",
+      "bot_handlers.py: LLM chat response edit/send now use parse_mode=None; note body send uses parse_mode=None",
+      "bot_voice.py: voice fallback LLM response send uses parse_mode=None"
+    ]
+  },
+  {
     "version": "2026.3.39",
     "date":    "2026-03-28",
     "title":   "Fix 409 polling conflict on restart; add STT INFO logging",
