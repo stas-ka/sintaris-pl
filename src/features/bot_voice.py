@@ -35,7 +35,7 @@ from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _lang, _safe_edit, _back_keyboard, _voice_back_keyboard,
     _escape_tts, _escape_md, _truncate, _with_lang_voice,
-    _is_guest,
+    _is_guest, _is_admin,
 )
 from core.bot_llm import ask_llm
 from telegram.bot_users import (
@@ -1090,7 +1090,15 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             pass
 
         # ── System chat mode: route to system handler (admin-only, role-aware) ──
+        # Guard at routing level (mirrors text-mode handling in telegram_menu_bot.py)
         if _cur_mode == "system":
+            if not _is_admin(chat_id):
+                _st._user_mode.pop(chat_id, None)
+                _safe_edit(chat_id, msg.message_id,
+                            _t(chat_id, "security_admin_only"),
+                            reply_markup=_back_keyboard())
+                log.warning(f"[Security] non-admin voice system-chat attempt chat_id={chat_id}")
+                return
             from telegram.bot_handlers import _handle_system_message
             _handle_system_message(chat_id, _clean_text)
             return

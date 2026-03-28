@@ -3047,6 +3047,130 @@ def t_voice_lang_stt_lang_priority(**_) -> list[TestResult]:
     return results
 
 
+def t_set_lang_default_not_hardcoded_en(**_) -> list[TestResult]:
+    """T42: Source-inspection: _set_lang() uses _DEFAULT_LANG, not hardcoded 'en'.
+
+    Verifies the regression fix where non-ru/non-de Telegram users were always
+    assigned 'en' instead of the configured default language. With this fix,
+    a Russian-default instance stays Russian for new users with English Telegram clients.
+    """
+    t0 = time.time()
+    results = []
+    try:
+        src = os.path.join(os.path.dirname(__file__), "..", "telegram", "bot_access.py")
+        src = os.path.abspath(src)
+        if not os.path.exists(src):
+            results.append(TestResult("set_lang_default", "SKIP", time.time() - t0,
+                                      "bot_access.py not found"))
+            return results
+        code = open(src).read()
+
+        # The else branch in _set_lang must NOT hardcode "en"
+        import ast
+        tree = ast.parse(code)
+        found_set_lang = False
+        hardcoded_en = False
+        uses_default_lang = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_set_lang":
+                found_set_lang = True
+                func_src = ast.get_source_segment(code, node) or ""
+                # Hardcoded "en" in the else branch
+                if 'chat_id] = "en"' in func_src or "_user_lang[chat_id] = \"en\"" in func_src:
+                    hardcoded_en = True
+                # Uses _DEFAULT_LANG
+                if "_DEFAULT_LANG" in func_src:
+                    uses_default_lang = True
+                break
+
+        if not found_set_lang:
+            results.append(TestResult("set_lang_function_present", "FAIL", time.time() - t0,
+                                      "_set_lang() not found in bot_access.py"))
+            return results
+
+        results.append(TestResult("set_lang_function_present", "PASS", time.time() - t0,
+                                  "_set_lang() found"))
+
+        if hardcoded_en:
+            results.append(TestResult("set_lang_no_hardcoded_en", "FAIL", time.time() - t0,
+                                      "_set_lang() still hardcodes 'en' in else branch — use _DEFAULT_LANG"))
+        else:
+            results.append(TestResult("set_lang_no_hardcoded_en", "PASS", time.time() - t0,
+                                      "No hardcoded 'en' in _set_lang()"))
+
+        if uses_default_lang:
+            results.append(TestResult("set_lang_uses_default_lang", "PASS", time.time() - t0,
+                                      "_set_lang() uses _DEFAULT_LANG as fallback"))
+        else:
+            results.append(TestResult("set_lang_uses_default_lang", "FAIL", time.time() - t0,
+                                      "_set_lang() does not reference _DEFAULT_LANG — fallback language not configurable"))
+
+    except Exception as e:
+        results.append(TestResult("set_lang_default", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+def t_voice_system_admin_guard(**_) -> list[TestResult]:
+    """T43: Source-inspection: voice handler guards system-chat mode with admin check.
+
+    Verifies that _handle_voice_message() checks _is_admin() before routing to
+    _handle_system_message() in 'system' mode. This prevents non-admin users (or
+    other bot instances without admin context) from accessing system-chat commands
+    via voice messages.
+    """
+    t0 = time.time()
+    results = []
+    try:
+        src = os.path.join(os.path.dirname(__file__), "..", "features", "bot_voice.py")
+        src = os.path.abspath(src)
+        if not os.path.exists(src):
+            results.append(TestResult("voice_system_admin_guard", "SKIP", time.time() - t0,
+                                      "bot_voice.py not found"))
+            return results
+        code = open(src).read()
+
+        # Find the system-mode routing block
+        has_system_check = '_cur_mode == "system"' in code or "_cur_mode == 'system'" in code
+        if not has_system_check:
+            results.append(TestResult("voice_system_mode_routing", "FAIL", time.time() - t0,
+                                      "No system-mode routing found in bot_voice.py"))
+            return results
+
+        results.append(TestResult("voice_system_mode_routing", "PASS", time.time() - t0,
+                                  "system-mode check found"))
+
+        # The admin guard must appear in bot_voice.py (not just inside _handle_system_message)
+        has_admin_guard = "_is_admin" in code
+        if not has_admin_guard:
+            results.append(TestResult("voice_system_admin_guard", "FAIL", time.time() - t0,
+                                      "_is_admin not referenced in bot_voice.py — admin guard missing"))
+        else:
+            results.append(TestResult("voice_system_admin_guard", "PASS", time.time() - t0,
+                                      "_is_admin guard present in bot_voice.py"))
+
+        # _is_admin must be imported (top-level import, not just deferred)
+        import ast
+        tree = ast.parse(code)
+        admin_in_top_imports = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and "bot_access" in node.module:
+                    names = [alias.name for alias in node.names]
+                    if "_is_admin" in names:
+                        admin_in_top_imports = True
+                        break
+        if admin_in_top_imports:
+            results.append(TestResult("voice_is_admin_imported", "PASS", time.time() - t0,
+                                      "_is_admin in top-level import from bot_access"))
+        else:
+            results.append(TestResult("voice_is_admin_imported", "FAIL", time.time() - t0,
+                                      "_is_admin NOT in top-level import — guard may not work"))
+
+    except Exception as e:
+        results.append(TestResult("voice_system_admin_guard", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -3105,6 +3229,10 @@ TEST_FUNCTIONS = [
     t_voice_system_mode_routing_guard,
     # Voice lang: STT_LANG env override takes priority over Telegram UI lang (T41)
     t_voice_lang_stt_lang_priority,
+    # _set_lang uses _DEFAULT_LANG not hardcoded 'en' (T42)
+    t_set_lang_default_not_hardcoded_en,
+    # Voice system-chat admin guard at routing level (T43)
+    t_voice_system_admin_guard,
 ]
 
 

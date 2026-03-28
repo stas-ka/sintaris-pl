@@ -96,7 +96,9 @@ def _set_lang(chat_id: int, from_user) -> None:
     elif lc.startswith("de"):
         _user_lang[chat_id] = "de"
     else:
-        _user_lang[chat_id] = "en"
+        # Fall back to the configured default language (not hardcoded "en")
+        # so that new users on a Russian-default instance get Russian.
+        _user_lang[chat_id] = _DEFAULT_LANG
 
 
 def _lang(chat_id: int) -> str:
