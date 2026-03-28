@@ -1,5 +1,17 @@
 [
   {
+    "version": "2026.3.38",
+    "date":    "2026-03-28",
+    "title":   "Fix STT language: use STT_LANG config, not Telegram client language",
+    "changes": [
+      "bot_voice.py: STT uses STT_LANG from bot_config (default ru) — Telegram client language_code no longer overrides STT",
+      "bot_voice.py: Vosk fallback also uses STT_LANG (was using _lang(chat_id) = en for EN-client users)",
+      "bot.env: added STT_LANG=ru",
+      "registrations.json: persisted lang=ru for admin user",
+      "Root cause: _set_lang() used Telegram language_code=en from client, causing RU audio to transcribe as EN"
+    ]
+  },
+  {
     "version": "2026.3.37",
     "date":    "2026-03-28",
     "title":   "Fix voice LLM routing + Whisper hallucination guard",
