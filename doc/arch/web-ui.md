@@ -1,6 +1,6 @@
 # Taris — Web UI & Screen DSL Architecture
 
-**Version:** `2026.3.28`  
+**Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -71,6 +71,7 @@ The Web UI channel provides a browser-based interface with the same features as 
 | `POST` | `/api/admin/users/{id}/approve` | Approve user | ✅ admin |
 | `POST` | `/api/admin/llm/select` | Switch active LLM model | ✅ admin |
 | `POST` | `/api/admin/voice_opts` | Toggle voice optimisation flag | ✅ admin |
+| `GET` | `/screen/{screen_id}` | Dynamic Screen DSL renderer — serve YAML screen by ID | ✅ user auth |
 
 ### 17.4 Telegram↔Web Account Linking
 

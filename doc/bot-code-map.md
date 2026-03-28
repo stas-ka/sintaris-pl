@@ -3,7 +3,7 @@
 **Architecture:** 20-module split — Telegram core (v2026.3.19) + shared LLM/auth + Web UI layer (v2026.3.28)  
 **Entry point (Telegram):** `src/telegram_menu_bot.py` (~280 lines — handlers + `main()`)  
 **Entry point (Web):** `src/bot_web.py` — FastAPI application, all HTTP routes  
-**Version:** 2026.3.42
+**Version:** 2026.3.43
 
 Use this map to locate any function by module. Modules are organized into packages under `src/`:
 
@@ -300,7 +300,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`, `
 
 | Function | Purpose |
 |---|---|
-| `_admin_keyboard()` | Admin inline keyboard (shows pending-reg count) |
+| `_admin_keyboard(chat_id)` | Admin inline keyboard (shows pending-reg count); all labels localized via `_t(chat_id, ...)` (v2026.3.43) |
 | `_handle_admin_menu(chat_id)` | Show admin panel |
 
 ### Guest-user management
@@ -399,6 +399,13 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 | Function | Purpose |
 |---|---|
 | `_handle_chat_message(chat_id, user_text)` | Forward to LLM via `ask_llm()`, return reply; response sent with `parse_mode=None` to avoid silent failures on LLM-generated content containing Markdown special characters |
+
+### Screen DSL helpers (v2026.3.43)
+
+| Function | Purpose |
+|---|---|
+| `_screen_ctx(chat_id)` | Build a `ScreenContext` dict with user role, lang, and bot state for DSL rendering |
+| `_render(chat_id, path, variables)` | Load YAML screen at `path`, merge `variables` + `_screen_ctx()`, send via `render_telegram.render_screen()` |
 
 ---
 
@@ -893,6 +900,7 @@ Imports: all `bot_*` modules. Entry point for web channel. ~2000 lines, 41 route
 | `DELETE` | `/admin/user/{user_id}` | Delete web user account |
 | `POST` | `/admin/user/{user_id}/approve` | Approve pending web user |
 | `POST` | `/admin/user/{user_id}/block` | Block web user |
+| `GET` | `/screen/{screen_id}` | Dynamic Screen DSL renderer — serve YAML screen by ID (v2026.3.43) |
 
 ---
 
@@ -945,6 +953,10 @@ All `data=` keys handled in `callback_handler()`:
 | `voice_opts_menu` | `_handle_voice_opts_menu` |
 | `voice_opt_toggle:<key>` | `_handle_voice_opt_toggle` |
 | `admin_changelog` | `_handle_admin_changelog` |
+| `admin_rag_menu` | `_handle_admin_rag_menu` — RAG toggle + activity log (v2026.3.43) |
+| `admin_rag_toggle` | `_handle_admin_rag_toggle` — flip `RAG_FLAG_FILE` presence (v2026.3.43) |
+| `admin_rag_log` | `_handle_admin_rag_log` — show last 20 RAG queries + chunks (v2026.3.43) |
+| `reload_screens` | `reload_screens()` in `screen_loader` — hot-reload YAML screen cache (v2026.3.43) |
 | `menu_notes` | `_handle_notes_menu` |
 | `note_create` | `_start_note_create` |
 | `note_list` | `_handle_note_list` |

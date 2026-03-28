@@ -126,19 +126,19 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 
 ---
 
-### 4.1 Local RAG Knowledge Base ✅ FTS5 pipeline implemented (v2026.4.13); vector + settings UI pending
+### 4.1 Local RAG Knowledge Base ✅ FTS5 pipeline implemented (v2026.3.43); vector + settings UI pending
 → Implementation steps: **§24.6** (PicoClaw — FTS5-only) · **§25.6 Phases A–B** (OpenClaw — Hybrid Tiered RAG)
 → Architecture: [concept/rag-memory-architecture.md](concept/rag-memory-architecture.md) (Variant C — Hybrid Tiered RAG, score 4.45)
 
-- [x] RAG on/off toggle in Admin Panel via `RAG_FLAG_FILE` (`~/.taris/rag_disabled`); `RAG_ENABLED`, `RAG_TOP_K`, `RAG_CHUNK_SIZE` env-var constants in `bot_config.py`; admin callbacks `admin_rag_menu` / `admin_rag_toggle` / `admin_rag_log` wired (v2026.4.13)
+- [x] RAG on/off toggle in Admin Panel via `RAG_FLAG_FILE` (`~/.taris/rag_disabled`); `RAG_ENABLED`, `RAG_TOP_K`, `RAG_CHUNK_SIZE` env-var constants in `bot_config.py`; admin callbacks `admin_rag_menu` / `admin_rag_toggle` / `admin_rag_log` wired (v2026.3.43)
 - [ ] Configurable RAG settings from Admin Panel UI (top-K, chunk size, temperature editable at runtime — currently env-var only)
 - [x] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp — implemented in §3.1 (v2026.3.32)
-- [x] FTS5-only RAG pipeline: document upload → `_chunk_text()` (512-char) → `doc_chunks` FTS5 virtual table → `search_fts()` → LLM prompt injection in `bot_handlers.py` (v2026.4.13)
+- [x] FTS5-only RAG pipeline: document upload → `_chunk_text()` (512-char) → `doc_chunks` FTS5 virtual table → `search_fts()` → LLM prompt injection in `bot_handlers.py` (v2026.3.43)
 - [x] `install_sqlite_vec.sh` setup script + `vec_embeddings` table (sqlite-vec `vec0`, 384-dim) + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` adapter methods ready in `store_sqlite.py` — schema and plumbing in place (v2026.4.13)
 - [ ] `all-MiniLM-L6-v2` embeddings via ONNX Runtime: no `EMBED_MODEL` constant, no embedding generation code wired yet; Pi 5/Server only; graceful FTS5-only fallback on Pi 3
 - [ ] pgvector HNSW (OpenClaw/VPS) — §25.6 scope
 - [ ] Timeout monitoring for RAG / LLM calls; configurable `MCP_TIMEOUT` per provider
-- [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected (v2026.4.13)
+- [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected (v2026.3.43)
 
 ### 4.2 Remote RAG Service (MCP) 🔲
 → Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
@@ -479,7 +479,7 @@ incremental migration from Python-coded screens.
 
 → [Research report](doc/research-dynamic-ui-scenarios.md) · [Spec](doc/todo/21-screen-dsl-loader.md)
 
-### 21.1 Phase 1 — Core Loader ✅ Implemented (v2026.4.10)
+### 21.1 Phase 1 — Core Loader ✅ Implemented (v2026.3.43)
 
 - [x] Create `src/ui/screen_loader.py` (288 lines): `_WIDGET_BUILDERS` registry, `load_screen()`, all 10 widget builders
 - [x] JSON support (stdlib `json`) + YAML support (optional `pyyaml`)
@@ -491,16 +491,16 @@ incremental migration from Python-coded screens.
 - [x] Add `pyyaml` to `deploy/requirements.txt`
 - [x] Unit tests: 53 tests across 9 test classes — all pass on PI2
 
-### 21.2 Phase 2 — Proof of Concept ✅ Implemented (v2026.4.10)
+### 21.2 Phase 2 — Proof of Concept ✅ Implemented (v2026.3.43)
 
 - [x] Create `src/screens/` directory for YAML/JSON screen definitions
 - [x] Convert `help` screen to `screens/help.yaml`
 - [x] Wire Telegram callback: `load_screen("screens/help.yaml", ctx, t_func=_t_by_lang)` + `render_screen()`
 - [x] Add `GET /screen/{screen_id}` route in `bot_web.py` + `templates/dynamic.html`
 - [x] Add `reload_screens` admin callback → "✅ Screens reloaded"
-- [x] Smoke test: both services running v2026.4.10 on PI2, clean startup confirmed
+- [x] Smoke test: both services running v2026.3.43 on PI2, clean startup confirmed
 
-### 21.3 Phase 3 — Main & Admin Menus ✅ Implemented (v2026.4.10)
+### 21.3 Phase 3 — Main & Admin Menus ✅ Implemented (v2026.3.43)
 
 - [x] Convert main menu to `screens/main_menu.yaml` (with `visible_roles` for admin button row)
 - [x] Convert admin menu to `screens/admin_menu.yaml` (with `{pending_badge}` variable substitution)
@@ -508,14 +508,14 @@ incremental migration from Python-coded screens.
 - [x] Add 11 admin i18n keys to `strings.json` (ru/en/de)
 - [x] Test: py_compile OK, YAML validation OK, IDE error-free
 
-### 21.4 Phase 4 — Feature Screens ✅ Implemented (v2026.4.10)
+### 21.4 Phase 4 — Feature Screens ✅ Implemented (v2026.3.43)
 
 - [x] Convert notes list + note view + note edit screens (`notes_menu.yaml`, `note_view.yaml`, `note_raw.yaml`, `note_edit.yaml`)
 - [x] Convert settings/profile screen (`profile.yaml`, `profile_lang.yaml`, `profile_my_data.yaml`)
 - [x] Wire all 7 handlers in `bot_handlers.py` via `_render()` + `_screen_ctx()` helpers
 - [x] All 10 YAML screen files in `src/screens/`, validated with zero errors
 
-### 21.5 Phase 5 — Validation & Docs ✅ Implemented (v2026.4.10)
+### 21.5 Phase 5 — Validation & Docs ✅ Implemented (v2026.3.43)
 
 - [x] Create `src/screens/screen.schema.json` JSON Schema (draft-07, 14 definitions, 10 widget types)
 - [x] Add schema validation in `_load_file()` — log warning on invalid files

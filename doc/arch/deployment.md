@@ -1,6 +1,6 @@
 # Taris — Deployment, File Layout & Configuration
 
-**Version:** `2026.3.42`  
+**Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -224,7 +224,7 @@ It contains symlinks into `src/` and a `.taris/` data directory:
 | Constant | Value | Env override | Description |
 |---|---|---|---|
 | `TARIS_DIR` | `~/.taris` | `TARIS_HOME` | Runtime data directory — base for all paths |
-| `BOT_VERSION` | `"2026.3.42"` | — | Version string; bump on every user-visible change |
+| `BOT_VERSION` | `"2026.3.43"` | — | Version string; bump on every user-visible change |
 | `PIPER_BIN` | `/usr/local/bin/piper` | `PIPER_BIN` | Piper TTS wrapper binary |
 | `PIPER_MODEL` | `~/.taris/ru_RU-irina-medium.onnx` | `PIPER_MODEL` | Default Piper voice model |
 | `PIPER_MODEL_LOW` | `~/.taris/ru_RU-irina-low.onnx` | `PIPER_MODEL_LOW` | Low-quality Piper model |
@@ -250,6 +250,10 @@ It contains symlinks into `src/` and a `.taris/` data directory:
 | `LLAMA_CPP_URL` | `http://127.0.0.1:8081` | `LLAMA_CPP_URL` | Local llama.cpp server endpoint |
 | `LLM_LOCAL_FALLBACK` | `false` | `LLM_LOCAL_FALLBACK` | Set `true` to enable static auto-fallback to local LLM |
 | `LLM_FALLBACK_FLAG_FILE` | `~/.taris/llm_fallback_enabled` | — | Flag file; presence=fallback ON (runtime toggle, no restart needed) |
+| `RAG_ENABLED` | `true` | `RAG_ENABLED` | Master on/off switch for FTS5/RAG context injection |
+| `RAG_TOP_K` | `3` | `RAG_TOP_K` | Max document chunks injected per LLM request |
+| `RAG_CHUNK_SIZE` | `512` | `RAG_CHUNK_SIZE` | Characters per text chunk when indexing documents |
+| `RAG_FLAG_FILE` | `~/.taris/rag_disabled` | — | Flag file; presence=RAG OFF (runtime toggle, no restart needed) |
 
 ### `voice_assistant.py` CONFIG
 
@@ -295,7 +299,7 @@ Three-tier backup strategy:
 
 | Item | Value |
 |---|---|
-| Constant | `BOT_VERSION = "2026.3.42"` in `bot_config.py` |
+| Constant | `BOT_VERSION = "2026.3.43"` in `bot_config.py` |
 | Format | `YYYY.M.D` (no zero-padding) |
 | Changelog source | `release_notes.json` (deployed alongside bot) |
 | Tracking file | `~/.taris/last_notified_version.txt` (auto-created) |

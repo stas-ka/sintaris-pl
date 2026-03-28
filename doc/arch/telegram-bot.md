@@ -1,13 +1,13 @@
 # Taris — Telegram Bot Architecture
 
-**Version:** `2026.3.42`  
+**Version:** `2026.3.43`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.42"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
+**Version:** `BOT_VERSION = "2026.3.43"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
 
 The interactive Telegram bot is split into 14 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks. Shared Screen DSL modules (`bot_ui.py`, `bot_actions.py`, `render_telegram.py`) are used by both this channel and the Web UI channel.
 
@@ -37,7 +37,7 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_users.py` | Registration + notes file I/O (pure, no Telegram API calls) |
 | `bot_voice.py` | Full voice pipeline: STT/TTS/VAD, multi-part "Read aloud", orphan cleanup |
 | `bot_calendar.py` | Smart calendar: multi-event add, NL query, console, reminders, morning briefing, TTS |
-| `bot_admin.py` | Admin panel: users, LLM switcher, voice opts, release notes |
+| `bot_admin.py` | Admin panel: users, LLM switcher, voice opts, release notes, RAG toggle; all button labels localized via `_t(chat_id, ...)` (v2026.3.43) |
 | `bot_handlers.py` | User handlers: free chat, system chat, digest, notes, profile |
 | `bot_mail_creds.py` | Per-user IMAP credentials, consent flow, digest fetch + LLM summarise |
 | `bot_email.py` | "Send as email" SMTP for notes, digest, and calendar events |
@@ -77,6 +77,8 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | 📡 Local Fallback | `admin_llm_fallback_menu` | Toggle `~/.taris/llm_fallback_enabled`; shows ON/OFF status + URL/model |
 | ⚡ Voice Opts | `voice_opts_menu` | Toggle 10 voice optimisation flags |
 | 📝 Release Notes | `admin_changelog` | Full versioned changelog from `release_notes.json` |
+| 🖥 System Chat | `mode_system` | NL → bash command → confirm-gate → execute on Pi (moved from main menu in v2026.3.43) |
+| 📚 Knowledge Base | `admin_rag_menu` | RAG toggle + log viewer; `RAG_FLAG_FILE` runtime switch (v2026.3.43) |
 
 ### 3.4 Voice Optimization Flags (`⚡ Voice Opts`)
 

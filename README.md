@@ -44,9 +44,10 @@ On PicoClaw it listens for the wake word **"Пико"**, sends your Russian voic
 ### Architecture & Operations
 - **Deployment variants** — `DEVICE_VARIANT=picoclaw` (Raspberry Pi, default) · `DEVICE_VARIANT=openclaw` (Laptop/AI PC + OpenClaw gateway); controlled via `bot.env`
 - **OpenClaw integration** — when `DEVICE_VARIANT=openclaw`: REST API (`/api/status`, `/api/chat`) active; `LLM_PROVIDER=openclaw` routes LLM calls via `openclaw agent` subprocess; `skill-taris` in sintaris-openclaw can query Taris notes, calendar, status — see `doc/arch/openclaw-integration.md`
-- **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently
+- **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently; YAML screen files in `src/screens/` with variant support; 64 unit tests; `GET /screen/{screen_id}` web endpoint (v2026.3.43)
+- **FTS5/RAG knowledge base** — upload documents via `bot_documents.py`; chunked (512-char) FTS5 full-text search; top-K context injected into LLM prompts; RAG on/off toggle in admin panel via `RAG_FLAG_FILE`; activity log in DB (v2026.3.43)
 - **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
-- **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`
+- **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`; admin panel buttons fully localized (v2026.3.43)
 - **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `taris.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends (PostgreSQL + pgvector for OpenClaw)
 - **sqlite-vec vector search** — optional SQLite extension enabling KNN embedding search and local RAG; installed via `pip3 install sqlite-vec`; enabled automatically when present (see `src/setup/install_sqlite_vec.sh`)
 - **Embedding service** — `src/core/bot_embeddings.py` (`EmbeddingService`): fastembed-first with sentence-transformers fallback; `EMBED_MODEL` / `EMBED_DIMENSION` constants; wired into document upload pipeline

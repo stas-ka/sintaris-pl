@@ -141,45 +141,45 @@ These 8 files are changed in BOTH branches and require careful merging:
 When user confirms, Copilot should execute this checklist IN ORDER:
 
 ### ✅ Pre-merge validation
-- [ ] `C1` Run regression tests on taris-openclaw baseline: `PYTHONPATH=src python3 src/tests/test_voice_regression.py` — all T01–T39 pass (or SKIP for optional)
-- [ ] `C2` Confirm picoclaw clone is up to date: `git -C ../sintaris-pl-picoclaw fetch origin && git -C ../sintaris-pl-picoclaw status`
-- [ ] `C3` Create a pre-merge tag: `git tag pre-merge-ui-poc-2026-03-28`
+- [x] `C1` Run regression tests on taris-openclaw baseline: `PYTHONPATH=src python3 src/tests/test_voice_regression.py` — all T01–T39 pass (or SKIP for optional)
+- [x] `C2` Confirm picoclaw clone is up to date: `git -C ../sintaris-pl-picoclaw fetch origin && git -C ../sintaris-pl-picoclaw status`
+- [x] `C3` Create a pre-merge tag: `git tag pre-merge-ui-poc-2026-03-28`
 
 ### 🔧 Phase 1 — Bug fixes (cherry-pick)
-- [ ] `C4` Cherry-pick `333f210` from Taris-UI-POC: `git cherry-pick 333f210`
+- [x] `C4` Cherry-pick `333f210` from Taris-UI-POC: `git cherry-pick 333f210`
   - Expected: bot_admin.py (i18n fix), admin_menu.yaml (System Chat moved), strings.json (admin_btn_system key), chat.html (CSS fix), render_telegram.py (title fix)
   - After cherry-pick: resolve any conflicts in bot_admin.py (keep _web_account_block; take _t() i18n changes)
-- [ ] `C5` Verify admin menus show in user's language (ru/en/de) after cherry-pick
-- [ ] `C6` Cherry-pick `4119d75` from Taris-UI-POC (Whisper model path fix + regression analysis)
+- [x] `C5` Verify admin menus show in user's language (ru/en/de) after cherry-pick
+- [x] `C6` Cherry-pick `4119d75` from Taris-UI-POC (Whisper model path fix + regression analysis)
   - After cherry-pick: ensure T27 (faster_whisper_stt) still passes
 
 ### 🔧 Phase 2 — Screen DSL Loader
-- [ ] `C7` Cherry-pick `606ec57` (Screen DSL Phase 1+2 — screen_loader.py + YAML parser)
-- [ ] `C8` Cherry-pick `7a48543` (Screen DSL Phase 3 — main/admin menus)
-- [ ] `C9` Cherry-pick `3628079` (Screen DSL Phase 4+5 — notes/profile screens)
-- [ ] `C10` Verify YAML screens render correctly via: `PYTHONPATH=src python3 -c "from ui.screen_loader import load_screen; s=load_screen('main_menu'); print(s)"`
-- [ ] `C11` Verify System Chat is NOT in main_menu.yaml; IS in admin_menu.yaml
-- [ ] `C12` Verify both picoclaw and openclaw platforms (DEVICE_VARIANT=picoclaw / openclaw) render menus
-- [ ] `C13` Run regression tests: T01–T39 should still pass
+- [x] `C7` Cherry-pick `606ec57` (Screen DSL Phase 1+2 — screen_loader.py + YAML parser)
+- [x] `C8` Cherry-pick `7a48543` (Screen DSL Phase 3 — main/admin menus)
+- [x] `C9` Cherry-pick `3628079` (Screen DSL Phase 4+5 — notes/profile screens)
+- [x] `C10` Verify YAML screens render correctly via: `PYTHONPATH=src python3 -c "from ui.screen_loader import load_screen; s=load_screen('main_menu'); print(s)"`
+- [x] `C11` Verify System Chat is NOT in main_menu.yaml; IS in admin_menu.yaml
+- [x] `C12` Verify both picoclaw and openclaw platforms (DEVICE_VARIANT=picoclaw / openclaw) render menus
+- [x] `C13` Run regression tests: T01–T39 should still pass
 
 ### 🔧 Phase 3 — FTS5 / Document Management
-- [ ] `C14` Cherry-pick `a39a368` (FTS5 knowledge base + document management)
+- [x] `C14` Cherry-pick `a39a368` (FTS5 knowledge base + document management)
   - Resolve conflicts in: bot_web.py (keep voice_debug routes; take FTS5 routes), strings.json (merge all keys)
-- [ ] `C15` Validate bot_web.py document routes: `/api/documents`, `/documents` page accessible
-- [ ] `C16` Validate store.py: `PYTHONPATH=src python3 -c "from core.store import Store; s=Store('/tmp/test_fts5.db'); print(s.has_document_search())"`
+- [x] `C15` Validate bot_web.py document routes: `/api/documents`, `/documents` page accessible
+- [x] `C16` Validate store.py: `PYTHONPATH=src python3 -c "from core.store import Store; s=Store('/tmp/test_fts5.db'); print(s.has_document_search())"`
 
 ### 🔧 Phase 4 — Research docs
-- [ ] `C17` Copy `doc/concept/` folder from picoclaw clone: `cp -r ../sintaris-pl-picoclaw/doc/concept/ doc/`
-- [ ] `C18` Merge TODO §23 research roadmap entries into TODO.md
+- [x] `C17` Copy `doc/concept/` folder from picoclaw clone: `cp -r ../sintaris-pl-picoclaw/doc/concept/ doc/`
+- [x] `C18` Merge TODO §23 research roadmap entries into TODO.md
 
 ### ✅ Post-merge validation
-- [ ] `C19` Validate JSON: `python3 -c "import json,sys; json.load(sys.stdin)" < src/strings.json`
-- [ ] `C20` Validate JSON: `python3 -c "import json,sys; json.load(sys.stdin)" < src/release_notes.json`
-- [ ] `C21` Bump version to `2026.3.43` (merge commit) in `src/core/bot_config.py` + `src/release_notes.json`
-- [ ] `C22` Run full regression suite: `PYTHONPATH=src python3 src/tests/test_voice_regression.py`
-- [ ] `C23` Deploy to PI2 (taris-openclaw branch): sync files + restart + verify journal
-- [ ] `C24` Push branch: `git push origin taris-openclaw`
-- [ ] `C25` Update `doc/vibe-coding-protocol.md` with merge session entry
+- [x] `C19` Validate JSON: `python3 -c "import json,sys; json.load(sys.stdin)" < src/strings.json`
+- [x] `C20` Validate JSON: `python3 -c "import json,sys; json.load(sys.stdin)" < src/release_notes.json`
+- [x] `C21` Bump version to `2026.3.43` (merge commit) in `src/core/bot_config.py` + `src/release_notes.json`
+- [x] `C22` Run full regression suite: `PYTHONPATH=src python3 src/tests/test_voice_regression.py`
+- [x] `C23` Deploy to PI2 (taris-openclaw branch): sync files + restart + verify journal
+- [x] `C24` Push branch: `git push origin taris-openclaw`
+- [x] `C25` Update `doc/vibe-coding-protocol.md` with merge session entry
 
 ---
 
