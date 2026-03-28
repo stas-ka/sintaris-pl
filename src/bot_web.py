@@ -59,6 +59,14 @@ from core.bot_config import (
     STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
+
+# Human-readable STT label for UI templates — derived from STT_PROVIDER at import time
+_STT_UI_LABELS = {
+    "faster_whisper": "Faster-Whisper",
+    "vosk":           "Vosk",
+    "whisper":        "Whisper",
+}
+_STT_UI_LABEL = _STT_UI_LABELS.get(STT_PROVIDER, STT_PROVIDER.replace("_", "-").title())
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
     create_token, verify_token, list_accounts, ensure_admin_account,
@@ -641,7 +649,7 @@ async def chat_page(request: Request):
         request, user, "chat",
         models=models_list,
         messages=messages,
-        stt_label="faster-whisper" if STT_PROVIDER == "faster_whisper" else "Vosk",
+        stt_label=_STT_UI_LABEL,
     ))
 
 
@@ -1788,7 +1796,7 @@ async def voice_page(request: Request):
         request, user, "voice",
         pipeline=_voice_pipeline_status(),
         transcript=transcript,
-        stt_label="faster-whisper" if STT_PROVIDER == "faster_whisper" else "Vosk",
+        stt_label=_STT_UI_LABEL,
         languages=[
             {
                 "code": "ru", "flag": "🇷🇺", "name": "Russian",
