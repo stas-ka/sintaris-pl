@@ -3171,6 +3171,55 @@ def t_voice_system_admin_guard(**_) -> list[TestResult]:
     return results
 
 
+def t_openclaw_gateway_telegram_disabled(**_) -> list[TestResult]:
+    """T44: openclaw-gateway Telegram channel must be disabled to prevent 409 token conflict.
+
+    If openclaw-gateway runs with the same bot token as taris-telegram, they compete
+    for Telegram updates (409 Conflict). Whichever wins handles the message — openclaw
+    uses English, causing random language mixing in the UI. The fix is to set
+    channels.telegram.enabled = false in ~/.openclaw/openclaw.json.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    openclaw_cfg = os.path.expanduser("~/.openclaw/openclaw.json")
+
+    if not os.path.exists(openclaw_cfg):
+        results.append(TestResult("openclaw_no_config", "SKIP", time.time() - t0,
+                                  "~/.openclaw/openclaw.json not found — openclaw-gateway not installed"))
+        return results
+
+    try:
+        import json as _json
+        cfg = _json.load(open(openclaw_cfg))
+        tg = cfg.get("channels", {}).get("telegram", {})
+        tg_enabled = tg.get("enabled", True)
+        tg_token = tg.get("botToken", "")
+        taris_token = os.environ.get("BOT_TOKEN", "")
+
+        # Check if tokens match (conflict risk)
+        tokens_match = bool(tg_token and taris_token and tg_token == taris_token)
+
+        if not tg_enabled:
+            results.append(TestResult("openclaw_telegram_disabled", "PASS", time.time() - t0,
+                                      "openclaw-gateway Telegram channel is disabled — no 409 conflict"))
+        elif not tg_token:
+            results.append(TestResult("openclaw_telegram_no_token", "PASS", time.time() - t0,
+                                      "openclaw-gateway has no Telegram token configured"))
+        else:
+            detail = "openclaw-gateway Telegram channel ENABLED"
+            if tokens_match:
+                detail += " and uses SAME token as taris — WILL cause 409 conflict and language mixing!"
+            else:
+                detail += " but uses a different token — OK"
+            status = "FAIL" if tokens_match else "WARN"
+            results.append(TestResult("openclaw_telegram_conflict", status, time.time() - t0, detail))
+
+    except Exception as e:
+        results.append(TestResult("openclaw_gateway_telegram_disabled", "FAIL", time.time() - t0, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -3233,6 +3282,8 @@ TEST_FUNCTIONS = [
     t_set_lang_default_not_hardcoded_en,
     # Voice system-chat admin guard at routing level (T43)
     t_voice_system_admin_guard,
+    # openclaw-gateway Telegram channel disabled to prevent 409 token conflict (T44)
+    t_openclaw_gateway_telegram_disabled,
 ]
 
 

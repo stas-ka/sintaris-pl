@@ -152,6 +152,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T41 | `voice_lang_stt_lang_priority` | `_voice_lang()` respects `STT_LANG` env override over Telegram UI language | After changing language detection in `_voice_lang()` |
 | T42 | `set_lang_default_not_hardcoded_en` | `_set_lang()` uses `_DEFAULT_LANG` (not hardcoded `"en"`) as fallback for non-ru/non-de users | After changing language defaulting in `_set_lang()` |
 | T43 | `voice_system_admin_guard` | Voice handler guards system-chat routing with `_is_admin()` at routing level | After changing voice→system-chat routing |
+| T44 | `openclaw_gateway_telegram_disabled` | `~/.openclaw/openclaw.json` Telegram channel must be `enabled: false` to prevent 409 conflict with taris-telegram (same token → language mixing) | After any deploy or openclaw-gateway config change |
 
 ### 2.6 When specific tests are mandatory
 
@@ -175,6 +176,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After changing `_voice_lang()` or `STT_LANG` handling | T41 (`--test voice_lang_stt_lang_priority`) |
 | After changing `_set_lang()` or language-defaulting logic in `bot_access.py` | T42 (`--test set_lang_default_not_hardcoded_en`) |
 | After changing voice→system-chat routing or `_is_admin` import in `bot_voice.py` | T43 (`--test voice_system_admin_guard`) |
+| After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 
 ---
 
@@ -439,7 +441,7 @@ These tests run in **< 1 second** locally and should be run before every commit 
 |---|---|---|---|
 | **TariStation2 / OpenClawPI2** | `OpenClawPI2` / local `~/.taris/` | Engineering — all test types | All categories A–H |
 | **TariStation1 / OpenClawPI** | `OpenClawPI` / `SintAItion` | Production — stable deployments only | Category B (UI), Category E (smoke) |
-| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T43 |
+| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T44 |
 
 **Rules:**
 - Run destructive tests (audio hardware, regression) on engineering target (TariStation2/OpenClawPI2) first.

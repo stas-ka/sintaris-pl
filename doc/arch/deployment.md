@@ -60,6 +60,30 @@ User (Telegram)
 
 > Use the `/taris-deploy-openclaw-target` skill for step-by-step OpenClaw deployment (sync files, restart service, verify journal).
 
+### ⚠️ openclaw-gateway Telegram Conflict
+
+On TariStation2 the `openclaw-gateway.service` also runs. If its Telegram channel is enabled **with the same bot token** as `taris-telegram`, both services race for Telegram updates (HTTP 409 Conflict). Whichever wins handles the message — openclaw uses its own English UI, causing **language mixing** (Russian menu, English admin panel).
+
+**Required configuration** — `~/.openclaw/openclaw.json`:
+```json
+"channels": {
+  "telegram": {
+    "enabled": false,
+    ...
+  }
+}
+```
+
+Verify with regression test T44:
+```bash
+DEVICE_VARIANT=openclaw PYTHONPATH=src python3 src/tests/test_voice_regression.py --test t_openclaw_gateway_telegram_disabled
+```
+
+If T44 fails → disable the Telegram channel in `~/.openclaw/openclaw.json` and restart `openclaw-gateway`:
+```bash
+systemctl --user restart openclaw-gateway taris-telegram
+```
+
 ---
 
 ## 12. File Layout on Pi
