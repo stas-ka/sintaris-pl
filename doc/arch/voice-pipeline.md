@@ -1,6 +1,6 @@
 # Taris — Voice Pipeline Architecture
 
-**Version:** `2026.3.28`  
+**Version:** `2026.3.42`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -104,23 +104,29 @@ Telegram OGG Opus voice note
  STT:
   ├── [Vosk]   default              ← vosk-model-small-ru (48 MB, offline)
   │            KaldiRecognizer → transcript + [?word] confidence strip
-  └── [Whisper] if whisper_stt opt  ← whisper-cpp ggml-base.bin (142 MB)
-                better WER, ~2× slower; hallucination guard discards
-                sparse output (< 2 words/s) and falls back to Vosk
+  ├── [Whisper] if whisper_stt opt  ← whisper-cpp ggml-base.bin (142 MB)
+  │            better WER, ~2× slower; hallucination guard discards
+  │            sparse output (< 2 words/s) and falls back to Vosk
+  └── [faster-whisper] OpenClaw variant (STT_PROVIDER=faster_whisper)
+               FASTER_WHISPER_MODEL=small (default); model cache in HF_HOME
+               batch decode after Vosk hotword trigger
       │
       ▼
  SECURITY_PREAMBLE + lang hint
  + _wrap_user_input(transcript)            ← L2: [USER]…[/USER]
       │
       ▼
- _ask_taris(prompt, timeout=60)         ← subprocess: taris agent -m
+ [_cur_mode == "system"?]
+  ├── yes → _handle_system_message(chat_id, transcript)  ← admin role + confirm gate
+  └── no  → ask_llm(prompt, timeout=60)   ← pluggable LLM via bot_llm.py
       │
       ▼
  bot.send_message()                        ← text reply shown immediately
       │
       ▼
  [if audio not muted]
- _tts_to_ogg(response[:TTS_MAX_CHARS])
+ _tts_to_ogg(response[:TTS_MAX_CHARS],
+             lang=_voice_lang(chat_id))    ← uses STT_LANG, not Telegram UI lang
       │
       ▼
  bot.send_voice()                          ← OGG Opus voice reply

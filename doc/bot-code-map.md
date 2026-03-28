@@ -3,7 +3,7 @@
 **Architecture:** 20-module split — Telegram core (v2026.3.19) + shared LLM/auth + Web UI layer (v2026.3.28)  
 **Entry point (Telegram):** `src/telegram_menu_bot.py` (~280 lines — handlers + `main()`)  
 **Entry point (Web):** `src/bot_web.py` — FastAPI application, all HTTP routes  
-**Version:** 2026.3.28
+**Version:** 2026.3.42
 
 Use this map to locate any function by module. Modules are organized into packages under `src/`:
 
@@ -124,7 +124,8 @@ Imports: `bot_config` only.
 
 | Symbol | Purpose |
 |---|---|
-| `bot` | `telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")` — shared by all modules |
+| `_409Handler` | `ExceptionHandler` subclass; swallows `ApiException` with HTTP 409 (Conflict) so a stale long-poll connection on restart doesn't crash the process |
+| `bot` | `telebot.TeleBot(BOT_TOKEN, parse_mode=None, exception_handler=_409Handler())` — shared by all modules; `parse_mode=None` prevents silent send failures when LLM/user content contains Markdown special characters |
 
 ---
 
@@ -264,6 +265,7 @@ Imports: `bot_config` (incl. `TARIS_DIR`), `bot_state`, `bot_instance`, `bot_acc
 
 | Function | Purpose |
 |---|---|
+| `_voice_lang(chat_id)` | Returns TTS/voice language: `STT_LANG` if configured, else falls back to Telegram UI language (`_lang(chat_id)`). Ensures TTS speaks the user's voice language, not their Telegram client locale |
 | `_piper_model_path()` | Priority: tmpfs → low model → medium (default) |
 | `_setup_tmpfs_model(enable)` | Copy / remove ONNX to/from `/dev/shm/piper/` |
 | `_warm_piper_cache()` | Pre-run Piper with `"."` input to warm ONNX page cache |
@@ -277,6 +279,7 @@ Imports: `bot_config` (incl. `TARIS_DIR`), `bot_state`, `bot_instance`, `bot_acc
 |---|---|
 | `_vad_filter_pcm(raw_pcm, sample_rate)` | WebRTC VAD: strip non-speech frames (§5.3) |
 | `_stt_whisper(raw_pcm, sample_rate)` | whisper.cpp STT + hallucination guard (sparse-output check); returns transcript or `None` |
+| `_stt_faster_whisper(raw_pcm, sample_rate)` | faster-whisper batch STT; model size set by `FASTER_WHISPER_MODEL` (default `small`); lazy-loaded singleton keyed by `(model, device, compute_type)` |
 | `_load_vosk_model_cached()` | Test helper: lazy Vosk model singleton (used by T11) |
 
 ### Session + pipeline
@@ -284,7 +287,7 @@ Imports: `bot_config` (incl. `TARIS_DIR`), `bot_state`, `bot_instance`, `bot_acc
 | Function | Purpose |
 |---|---|
 | `_start_voice_session(chat_id)` | Set mode `'voice'`, show instructions |
-| `_handle_voice_message(chat_id, voice_obj)` | Full pipeline: OGG→PCM→[VAD]→[Whisper\|Vosk]→[NoteCmd\|LLM]→TTS→send |
+| `_handle_voice_message(chat_id, voice_obj)` | Full pipeline: OGG→PCM→[VAD]→[Whisper\|Vosk\|FasterWhisper]→[NoteCmd\|SystemChat\|LLM]→TTS→send; if `_user_mode=="system"` dispatches to `_handle_system_message()` so admin role guards apply in voice mode |
 | `_handle_note_read_aloud(chat_id, slug)` | Load note, synthesise body via Piper TTS, send as voice message with title caption |
 
 ---
@@ -395,7 +398,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 | Function | Purpose |
 |---|---|
-| `_handle_chat_message(chat_id, user_text)` | Forward to taris LLM, return reply |
+| `_handle_chat_message(chat_id, user_text)` | Forward to LLM via `ask_llm()`, return reply; response sent with `parse_mode=None` to avoid silent failures on LLM-generated content containing Markdown special characters |
 
 ---
 

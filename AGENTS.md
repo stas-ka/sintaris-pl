@@ -28,9 +28,9 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ## Current Bot Version
 
-`BOT_VERSION = "2026.3.25"` — deployed 2026-03-10
+`BOT_VERSION = "2026.3.42"` — deployed 2026-03-28
 
-## Current Feature State (v2026.3.25)
+## Current Feature State (v2026.3.42)
 
 ### Calendar
 - **Multi-Event Add:** LLM returns `{"events": [{title, dt}, ...]}`. 1 event → single confirm. N events → sequential "1 of N" with Save / Skip / Save All.

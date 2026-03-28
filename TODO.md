@@ -34,6 +34,10 @@
 | 0.9 Telegram-Web link code HTTP 500 on `/register` | Codes persisted to `~/.taris/web_link_codes.json`; shared between Telegram and Web services | v2026.3.33 |
 | 0.10 OpenAI model selection ignored active model | Fixed default `OPENAI_MODEL` + model catalog align in `bot_config.py` / `bot_llm.py`; admin model switch now reflected correctly | v2026.3.40 |
 | 0.11 System Chat bypassed multi-LLM dispatch | `_handle_system_message()` now calls `ask_llm()` (bot_llm.py) instead of legacy `_ask_taris()` | v2026.3.41 |
+| 0.12 Markdown parse_mode causes silent send failures | `bot_instance.py`: TeleBot default `parse_mode` changed to `None`; LLM/note responses in `bot_handlers.py` and voice fallback in `bot_voice.py` now use `parse_mode=None` | v2026.3.40 |
+| 0.13 TTS speaks wrong language (Telegram UI lang vs voice lang) | `_voice_lang(chat_id)` helper added to `bot_voice.py`; TTS now uses `STT_LANG` (configured speech language) instead of Telegram client locale | v2026.3.41 |
+| 0.14 Voice mode ignores user role in system chat | Voice pipeline checks `_cur_mode=="system"` and dispatches to `_handle_system_message()`, applying admin role guards and confirm gate | v2026.3.42 |
+| 0.15 Bot 409 Conflict on restart | `_409Handler` exception handler in `bot_instance.py`; `TimeoutStopSec=25` in `taris-telegram.service`; SIGTERM/SIGINT handlers call `bot.stop_polling()` | v2026.3.39/v2026.3.40 |
 ---
 
 ## 1. Open Issues &amp; Roadmap

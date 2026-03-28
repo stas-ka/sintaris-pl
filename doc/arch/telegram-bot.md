@@ -1,13 +1,13 @@
 # Taris — Telegram Bot Architecture
 
-**Version:** `2026.3.43`  
+**Version:** `2026.3.42`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.43"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
+**Version:** `BOT_VERSION = "2026.3.42"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
 
 The interactive Telegram bot is split into 14 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks. Shared Screen DSL modules (`bot_ui.py`, `bot_actions.py`, `render_telegram.py`) are used by both this channel and the Web UI channel.
 
@@ -123,7 +123,7 @@ Incoming text
       └─ else                             → show main menu
 ```
 
-Voice messages bypass the mode machine: all OGG Opus voice notes are unconditionally routed to `_handle_voice_message()` regardless of `_user_mode`.
+Voice messages are routed to `_handle_voice_message()` regardless of `_user_mode`, **except** when `_user_mode == "system"`: in that case the transcript is forwarded to `_handle_system_message()` so admin role guards and the bash-command confirm gate are applied in voice mode exactly as they are in text mode.
 
 ### 4.2 Free Chat (`mode_chat`)
 
@@ -178,3 +178,17 @@ All inline button taps arrive at a single `@bot.callback_query_handler`. Selecte
 | `errp_start` / `errp_send` / `errp_cancel` | error protocol | **admin** |
 | `cancel` | clear pending state, show menu | all |
 | `run:<hash>` | `_execute_pending_cmd` | **admin** |
+
+### 4.5 Graceful Shutdown
+
+`telegram_menu_bot.py` `main()` registers SIGTERM and SIGINT handlers so systemd can stop the bot cleanly:
+
+```python
+def _on_stop(signum, _frame):
+    bot.stop_polling()
+
+signal.signal(signal.SIGTERM, _on_stop)
+signal.signal(signal.SIGINT,  _on_stop)
+```
+
+`taris-telegram.service` sets `TimeoutStopSec=25` so systemd waits up to 25 s for the polling loop to exit before sending SIGKILL. This prevents the 409 Conflict error on the next startup caused by an abrupt disconnect.
