@@ -154,6 +154,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T43 | `voice_system_admin_guard` | Voice handler guards system-chat routing with `_is_admin()` at routing level | After changing voice→system-chat routing |
 | T44 | `openclaw_gateway_telegram_disabled` | `~/.openclaw/openclaw.json` Telegram channel must be `enabled: false` to prevent 409 conflict with taris-telegram (same token → language mixing) | After any deploy or openclaw-gateway config change |
 | T45 | `taris_bin_configured` | `TARIS_BIN` must point to an existing executable (picoclaw or taris). SKIP if `LLM_PROVIDER != "taris"`. Prevents silent LLM failures after STT. Also checks `~/.picoclaw/config.json` is present when binary is picoclaw. | After changing `TARIS_BIN` in bot.env or deploying to a new Pi device |
+| T46 | `vosk_fallback_openclaw_default` | `_VOICE_OPTS_DEFAULTS['vosk_fallback']` must be `False` when `DEVICE_VARIANT=openclaw` (Vosk not installed), `True` on picoclaw. Prevents "Ошибка Vosk" crash on OpenClaw when faster-whisper returns empty. | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT |
+| T47 | `faster_whisper_vad_retry` | Source-inspects `_stt_faster_whisper()` for dual-pass transcription: first pass with VAD filter, retry with `vad_filter=False` when empty. Catches silent drop of short voice messages ("да", "нет"). | After any change to `_stt_faster_whisper()` |
+| T48 | `system_chat_admin_menu_only` | `mode_system` absent from `main_menu.yaml` and `_menu_keyboard()`; present in `admin_menu.yaml`. Prevents System Chat leaking into the main menu. | After editing any menu YAML or `_menu_keyboard()` |
 
 ### 2.6 When specific tests are mandatory
 
@@ -179,6 +182,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After changing voice→system-chat routing or `_is_admin` import in `bot_voice.py` | T43 (`--test voice_system_admin_guard`) |
 | After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
+| After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |
+| After any change to `_stt_faster_whisper()` in `bot_voice.py` | T47 (`--test t_faster_whisper_vad_retry`) |
+| After editing any menu YAML (`main_menu.yaml`, `admin_menu.yaml`) or `_menu_keyboard()` | T48 (`--test t_system_chat_admin_menu_only`) |
 
 ---
 
@@ -443,7 +449,7 @@ These tests run in **< 1 second** locally and should be run before every commit 
 |---|---|---|---|
 | **TariStation2 / OpenClawPI2** | `OpenClawPI2` / local `~/.taris/` | Engineering — all test types | All categories A–H |
 | **TariStation1 / OpenClawPI** | `OpenClawPI` / `SintAItion` | Production — stable deployments only | Category B (UI), Category E (smoke) |
-| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T45 |
+| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T48 |
 
 **Rules:**
 - Run destructive tests (audio hardware, regression) on engineering target (TariStation2/OpenClawPI2) first.
