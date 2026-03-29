@@ -1,6 +1,6 @@
 # Taris — Deployment, File Layout & Configuration
 
-**Version:** `2026.3.43`  
+**Version:** `2026.3.29`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -53,10 +53,34 @@ User (Telegram)
 
 ### OpenClaw Target Hosts
 
-| Host | Role | Deploy method | Web UI |
-|---|---|---|---|
-| **TariStation2** | Local engineering workstation | `cp src/... ~/.taris/...` then `systemctl --user restart taris-web` | `http://localhost:8080/` |
-| **TariStation1** (SintAItion) | Production workstation | `scp src/... stas@SintAItion:~/.taris/...` then SSH restart | `http://SintAItion:8080/` |
+| Host | Role | Deploy method | Web UI (local) | Web UI (public) | Telegram bot |
+|---|---|---|---|---|---|
+| **TariStation2** (local, `192.168.178.43`) | Engineering workstation | `cp src/... ~/.taris/...` + `systemctl --user restart taris-web` | `http://localhost:8080/` | `https://agents.sintaris.net/supertaris2/` | `@suppenclaw_bot` |
+| **TariStation1** / SintAItion (`192.168.178.154`) | Production workstation | `scp src/... stas@SintAItion:~/.taris/...` + SSH restart | `http://192.168.178.154:8080/` | `https://agents.sintaris.net/supertaris/` | `@supertaris_bot` |
+
+### URL Routing Architecture (all 4 taris instances)
+
+All four instances are accessible via `https://agents.sintaris.net/` via nginx reverse proxy on VPS (`152.53.224.213` = `dev2null.de`):
+
+| Public URL | Bot | Target host | Tunnel / Route | Telegram bot |
+|---|---|---|---|---|
+| `/taris/` | Taris (PI1) | OpenClawPI (`192.168.178.160`) | SSH tunnel → VPS:8082 | `@taris_bot` |
+| `/taris2/` | Taris2 (PI2) | OpenClawPI2 (`192.168.178.165`) | SSH tunnel → VPS:8084 | `@suppenclaw_bot` *(shared)* |
+| `/supertaris/` | SuperTaris (TS1) | SintAItion (`192.168.178.154`) | SSH tunnel → VPS:8086 | `@supertaris_bot` |
+| `/supertaris2/` | SuperTaris2 (TS2) | TariStation2 (local, `192.168.178.43`) | SSH tunnel → VPS:8088 *(via SintAItion relay)* | `@suppenclaw_bot` |
+
+**Tunnel services:**
+- PI1: `/etc/systemd/system/taris-tunnel.service` → `autossh -R 8082:localhost:8080 picobridge@dev2null.de`
+- PI2: `/etc/systemd/system/taris-tunnel.service` → `autossh -R 8084:localhost:8080 picobridge@dev2null.de`
+- SintAItion: `~/.config/systemd/user/taris-tunnel.service` → `autossh -R 8086:localhost:8080 -R 8088:192.168.178.43:8080 picobridge@dev2null.de`
+
+All tunnels use key `/home/stas/.ssh/vps_tunnel_key` with user `picobridge` on VPS. The `picobridge` account is restricted (port-forwarding only, no shell).
+
+**ROOT_PATH configuration:**
+- SintAItion `~/.taris/bot.env`: `ROOT_PATH=/supertaris`
+- TariStation2 `~/.taris/bot.env`: `ROOT_PATH=/supertaris2`
+
+**VPS monitoring:** All 4 URLs are monitored by `/opt/sintaris-monitor/monitor.py` (runs every 5 min via systemd timer). Tunnel port health (8082/8084 direct; 8086/8088 via SintAItion tunnel) is checked by `check_taris_instances()`. Alerts sent to Telegram on failure.
 
 > Use the `/taris-deploy-openclaw-target` skill for step-by-step OpenClaw deployment (sync files, restart service, verify journal).
 
@@ -83,6 +107,55 @@ If T44 fails → disable the Telegram channel in `~/.openclaw/openclaw.json` and
 ```bash
 systemctl --user restart openclaw-gateway taris-telegram
 ```
+
+---
+
+### ⚠️ Known Installation Issues (OpenClaw)
+
+These issues are confirmed on Debian Bookworm + Python 3.12 systems (TariStation1/2, SintAItion).
+
+#### 1. `faster-whisper` not installed → STT fails silently
+
+**Symptom:** Voice messages return "not recognized" after 1 ms; journal shows `[FasterWhisper] no result`.  
+**Root cause:** `faster-whisper` is not a system package; it must be installed manually.  
+**Fix:**
+```bash
+python3 -m pip install --break-system-packages faster-whisper scipy
+```
+`setup_voice_openclaw.sh` installs this automatically — but on Debian Bookworm the old `pip3 install` (without `--break-system-packages`) fails silently.
+
+#### 2. `pip3 install` fails on Debian Bookworm with "externally-managed-environment"
+
+**Symptom:** `pip3 install <package>` exits 1 with PEP 668 error.  
+**Fix:** Always use `python3 -m pip install --break-system-packages` on Bookworm hosts. The updated `setup_voice_openclaw.sh` now does this.
+
+#### 3. Hardcoded `/usr/local/bin/piper` in bot_web.py (fixed in v2026.3.29+4)
+
+**Symptom:** Web UI TTS endpoint returns `❌ TTS error.`; journal shows `FileNotFoundError: /usr/local/bin/piper`.  
+**Root cause:** `bot_web.py` had 4 hardcoded piper paths. `setup_voice_openclaw.sh` installs Piper to `~/.taris/piper/piper`.  
+**Fix:** All 4 call sites now use `PIPER_BIN` from `bot_config`. **Ensure `PIPER_BIN` is set in `bot.env`:**
+```bash
+PIPER_BIN=~/.taris/piper/piper
+PIPER_MODEL=~/.taris/ru_RU-irina-medium.onnx
+```
+
+#### 4. `PIPER_BIN` symlink at `/usr/local/bin/piper` is unreliable
+
+**Symptom:** `PIPER_BIN=/usr/local/bin/piper` (config default) → "No such file".  
+**Root cause:** `setup_voice_openclaw.sh` only creates the symlink if `/usr/local/bin` is writable. On single-user workstations without sudo, this fails silently.  
+**Fix:** Always set `PIPER_BIN` and `PIPER_MODEL` explicitly in `~/.taris/bot.env`. See `src/setup/bot.env.example`.
+
+#### 5. Small faster-whisper model + VAD → empty segments
+
+**Symptom:** Short utterances return empty segments; `[FasterWhisper] no result`.  
+**Root cause:** `tiny` model with `vad_filter=True` rejects marginal speech.  
+**Fix:** Use `FASTER_WHISPER_MODEL=base` (set in `bot.env`). The code already retries with `vad_filter=False` on empty result.
+
+#### 6. Voice opts JSON file out of sync with SQLite
+
+**Symptom:** After restart, `Voice opts: all OFF` even though opts were set.  
+**Root cause:** `voice_opts.json` takes precedence over DB on startup; benchmark test may write `faster_whisper_stt=False` to the JSON file.  
+**Fix:** Edit `~/.taris/voice_opts.json` directly or delete it (bot will recreate from defaults).
 
 ---
 

@@ -62,8 +62,11 @@ info "System packages OK."
 
 # ─── Step 2: Python voice packages ───────────────────────────────────────────
 info "[2/5] Installing Python voice packages..."
-pip3 install --quiet vosk sounddevice webrtcvad
-info "vosk, sounddevice, webrtcvad installed."
+# On Debian Bookworm (Python 3.12+): --break-system-packages is required.
+# On older Debian / venv: the flag is silently ignored.
+PIP_FLAGS="--break-system-packages --quiet"
+python3 -m pip install $PIP_FLAGS vosk sounddevice webrtcvad scipy
+info "vosk, sounddevice, webrtcvad, scipy installed."
 
 # ─── Step 3: Vosk Russian model ──────────────────────────────────────────────
 VOSK_DIR="$TARIS_HOME/vosk-model-small-ru-0.22"
@@ -123,7 +126,7 @@ info "[6/6] Installing faster-whisper (STT for OpenClaw)..."
 if python3 -c "import faster_whisper" 2>/dev/null; then
     info "faster-whisper already installed."
 else
-    pip3 install faster-whisper --quiet
+    python3 -m pip install faster-whisper $PIP_FLAGS
     info "faster-whisper installed."
 fi
 # Warm up / pre-download model
