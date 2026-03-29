@@ -412,8 +412,8 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 
 ### 19.4 Pending
 
-- [ ] **Install Ollama** on this machine to restore LLM: `curl https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b`; Ollama binary not found — all LLM calls fail with `Connection refused` on port 11434.
-- [ ] **Upgrade faster-whisper model**: switch `FASTER_WHISPER_MODEL=medium` in `~/.taris/bot.env` — `base` model achieves only ~25% WER for Russian (1/4 benchmark phrases correct). `medium` (~1.5GB RAM) recommended given 7.6GB available; download: `python3 -c "from faster_whisper import WhisperModel; WhisperModel('medium', device='cpu', compute_type='int8')"`.
+- [x] **Install Ollama** — installed on SintAItion (v0.18.3); qwen3:14b fully in VRAM (14.8 GB AMD Radeon 890M); service: `~/.config/systemd/user/ollama.service`; `LLM_PROVIDER=openai`, `LLM_FALLBACK_PROVIDER=ollama` in `bot.env` (v2026.3.29+10)
+- [x] **Upgrade faster-whisper model** — upgraded to `small` model (244M params, WER ~5-8%); `base` (74M) had ~25% WER unacceptable for Russian commands; `FASTER_WHISPER_THREADS=8` for 24-core Ryzen AI; `setup_voice_openclaw.sh` default updated to `small` (v2026.3.29+10)
 - [x] **STT/LLM switch in admin menu** — `STT_PROVIDER` toggle (Vosk/FW) and FW model selection in Admin → Voice Config; LLM per-function provider switch in Admin → LLM Settings (v2026.3.29+8)
 - [ ] `src/setup/migrate_sqlite_to_pg.py` — taris.db → PostgreSQL migration script (§25.7)
 - [ ] pgvector HNSW index and full RAG pipeline on PostgreSQL (§25.6 Phase B)
@@ -444,10 +444,7 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 - [x] `ask_llm()` + `ask_llm_or_raise()` refactored onto `_ask_with_fallback()`
 - [x] T34 `t_voice_debug_mode`: 3/3 PASS
 
-**⚠️ LLM currently unavailable**: `LLM_PROVIDER=ollama` but Ollama binary not installed → `Connection refused`.
-Fix: `curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b`
-Interim workaround: set `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` in `~/.taris/bot.env`
-Named fallback: add `LLM_FALLBACK_PROVIDER=openai` so Ollama failure automatically falls to OpenAI.
+**✅ LLM operational on SintAItion**: Ollama v0.18.3 with qwen3:14b in VRAM; `LLM_PROVIDER=openai` (OpenAI API primary), `LLM_FALLBACK_PROVIDER=ollama` (local fallback). Bot config block injected into all prompts so the bot can answer "which model are you using?" (v2026.3.29+10)
 
 ---
 

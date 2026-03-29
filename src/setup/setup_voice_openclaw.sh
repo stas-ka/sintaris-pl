@@ -120,8 +120,10 @@ fi
 
 # ─── Step 6: faster-whisper (recommended STT for OpenClaw/laptop) ─────────────
 # faster-whisper uses CTranslate2 for much better WER than Vosk small model.
-# Works without GPU — base model is recommended for i7/i5 (no NVIDIA GPU).
-FASTER_WHISPER_MODEL_NAME="${FASTER_WHISPER_MODEL:-base}"
+# small model is recommended for all modern OpenClaw hardware (i5/i7/Ryzen).
+# base model (74M) achieves ~25% WER for Russian — insufficient for command use.
+# small model (244M) achieves ~5-8% WER and runs comfortably on modern CPUs/APUs.
+FASTER_WHISPER_MODEL_NAME="${FASTER_WHISPER_MODEL:-small}"
 info "[6/6] Installing faster-whisper (STT for OpenClaw)..."
 if python3 -c "import faster_whisper" 2>/dev/null; then
     info "faster-whisper already installed."
@@ -151,17 +153,25 @@ echo ""
 echo "Add to $TARIS_HOME/bot.env:"
 echo "  STT_PROVIDER=faster_whisper"
 echo "  FASTER_WHISPER_MODEL=${FASTER_WHISPER_MODEL_NAME}"
+echo "  FASTER_WHISPER_THREADS=4        # increase for multi-core (8+ for Ryzen/i9)"
 echo "  VOSK_MODEL_PATH=$VOSK_DIR"
 echo "  PIPER_BIN=$PIPER_BIN"
 echo "  PIPER_MODEL=$ONNX"
 echo "  VOICE_BACKEND=cpu"
 echo ""
-echo "STT comparison for i7-2640M (no GPU):"
-echo "  faster_whisper base  — WER ~8-12%, RTF ~0.3-0.5 (recommended)"
-echo "  faster_whisper small — WER ~5-8%,  RTF ~0.8-1.2 (slower but better)"
-echo "  vosk small-ru        — WER ~15-20%, RTF ~0.1    (Pi-tuned, still works)"
+echo "STT comparison (modern hardware, CPU-only):"
+echo "  faster_whisper small  — WER ~5-8%,  RTF ~0.4-0.8  (recommended default)"
+echo "  faster_whisper medium — WER ~3-5%,  RTF ~0.9-1.5  (best accuracy, ~1.5 GB)"
+echo "  faster_whisper base   — WER ~20-25%, RTF ~0.2-0.4  (insufficient WER for commands)"
+echo "  vosk small-ru         — WER ~15-20%, RTF ~0.1       (Pi-tuned, still works on Pi)"
 echo ""
 echo "For NVIDIA GPU (faster-whisper):"
 echo "  FASTER_WHISPER_DEVICE=cuda"
 echo "  FASTER_WHISPER_COMPUTE=float16"
+echo ""
+echo "For AMD GPU with ROCm (e.g. Radeon 890M on Ryzen AI):"
+echo "  FASTER_WHISPER_DEVICE=auto       # CTranslate2 auto-detects ROCm if installed"
+echo "  FASTER_WHISPER_COMPUTE=float16   # float16 requires ROCm ≥5.6"
+echo "  # Note: CPU int8 is usually faster than ROCm float16 for small/medium models"
+echo "  # Benchmark both before switching: set FASTER_WHISPER_DEVICE=cpu for baseline"
 echo ""
