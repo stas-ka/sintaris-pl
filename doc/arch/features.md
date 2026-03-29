@@ -217,3 +217,31 @@ The admin can enable/disable RAG at runtime without restarting the bot:
 | `store_sqlite.search_fts(query, top_k)` | `store_sqlite.py` | BM25-ranked FTS5 search, returns top-K chunks |
 | `_rag_context(text)` | `bot_llm.py` | Calls `search_fts`, formats chunks for prompt injection |
 | `POST /admin/rag/upload` | `bot_web.py` | Web UI upload endpoint (admin-only) |
+
+## 12. Notes (`bot_users.py`, `bot_handlers.py`)
+
+Personal user notes stored as Markdown files under `~/.taris/notes/<chat_id>/`.
+
+### 12.1 Note Actions
+
+| Action | Callback | Description |
+|---|---|---|
+| View note | `note_open:<hash>` | Shows full note text with Edit/Delete/Download buttons |
+| Append | `note_append:<hash>` → `note_append_content` mode | Appends text to existing note; returns to note view |
+| Replace | `note_edit:<hash>` → `note_edit_content` mode | Replaces note body; returns to note view |
+| Rename Title | `note_rename:<hash>` → `note_rename_title` mode | Sets new title (≤100 chars); rebuilds `# Title\n\nbody` format |
+| Delete (confirm) | `note_delete:<hash>` → confirm dialog → `note_del_confirm:<hash>` | Two-step delete with Yes/Cancel |
+| Download single | `note_download:<hash>` | Sends note as `.md` file |
+| Download all (ZIP) | `note_download_zip` | Packs all user notes in-memory via `io.BytesIO` + `zipfile.ZipFile`; sent as `notes.zip` |
+
+### 12.2 Storage
+
+- Primary: `~/.taris/notes/<chat_id>/<slug>.md` (file)
+- Index: `notes_index` SQLite table (`slug, chat_id, title, created_at, updated_at`)
+- `_list_notes_for()` reads from DB first; falls back to file scan if DB empty
+- `_save_note_file()` writes file + direct DB upsert (no double-write via `store.save_note()`)
+
+### 12.3 Callback Hash IDs
+
+Notes use `_note_cb_id(slug) → short_hex` to stay within Telegram's 64-byte callback_data limit.
+A per-session dict `_note_cb_map` maps short IDs back to full slugs.

@@ -305,17 +305,19 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 - [ ] `src/setup/migrate_sqlite_to_pg.py` — taris.db → PostgreSQL (Phase 5)
 - [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
 ### 9.1 Storing of user data in the local database not in files
+- [x] Notes reads from DB (`store.list_notes()`); file fallback preserved; double-write bug fixed (v2026.3.30)
 - [] all existed user data shall be migrated to database. create scripts for migration and migrate data.
-- [] Notes shall be storde in Database not in files (Attention restriction of size of notes shall be transparently for user)
+- [] Notes shall be stored in Database not in files (Attention: restriction of size of notes shall be transparent for user)
 - [] Calendar data shall be stored in database
 - [] profile user data and user settings shall be stored in database
-- [] all kinds of memory(conversations context) shall be stored in the database
+- [] all kinds of memory (conversations context) shall be stored in the database
 - [] all user contacts shall be stored in the database
-- [] last interactions, opened ui and status of ui shall be storde in the database 
-- [] all new implemented functions with focus of using of data shall be use database and fiels to save data
+- [] last interactions, opened ui and status of ui shall be stored in the database
+- [] all new implemented functions with focus of using of data shall use database and files to save data
 
 ## 10. Upload and using documents as Knowlegdes
--[] Function to upload and administration documents (upload, view,  delete , share to all , set title, set hash/label, share to other users in system)
+- [x] FTS5 RAG context injection: `_docs_rag_context()` in `bot_access.py`; called from `_with_lang()` and `_with_lang_voice()`; caps at 2000 chars; guard on `RAG_ENABLED` and user docs present (v2026.3.30)
+- [] Function to upload and administration documents (upload, view,  delete , share to all , set title, set hash/label, share to other users in system)
 - [] Using documents as knowledgebase in chat in multimodal RAG way
 - [] documents can be contain text, images, tables
 - [] documents used as knowledegs shall assigned to user or can be shared to use from all users as knowledges
@@ -544,11 +546,11 @@ incremental migration from Python-coded screens.
 
 ## 22. Notes
 ### 22.1. Download and Upload Notes
-- [] Every user can download all Notes(in Zip) or every Note seprate
-- [] Deleting of Note needs confiramtion of user  
-- [] Title of Note shall be changable now is only text is possible to change only text. Add function to Change Titel of Note 
-- [] Two steps to add or change content of Notes is not needed. Addding Add , Change function for Note already in First step. Second step to remove 
-- [] After Update is  Note not visible and operations to change is not more available. After update show Note and switch to previous step with visualisation buttons to add or Change of text  
+- [x] Every user can download all Notes(in Zip) or every Note separate (v2026.3.30)
+- [x] Deleting of Note needs confirmation of user (v2026.3.30)
+- [x] Title of Note shall be changeable: Add function to Change Title of Note (v2026.3.30)
+- [x] Two steps to add or change content of Notes is not needed — Append/Replace available in first step (v2026.3.30)
+- [x] After Update Note is visible and buttons to add/change are available (v2026.3.30)
 
 ---
 

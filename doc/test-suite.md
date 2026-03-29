@@ -159,6 +159,10 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T48 | `system_chat_admin_menu_only` | `mode_system` absent from `main_menu.yaml` and `_menu_keyboard()`; present in `admin_menu.yaml`. Prevents System Chat leaking into the main menu. | After editing any menu YAML or `_menu_keyboard()` |
 | T49 | `stt_fast_speech_accuracy` | FW small/medium model must correctly transcribe Russian at fast speaking speeds. Root cause: `base` model (74M params) mangled phonemes in clips <1.5s — "Сколько у тебя памяти" → "Куча панча". Generates Piper TTS audio at 4 speeds (0.65x/1.0x/1.5x/1.85x) via ffmpeg atempo, runs STT on each, asserts WER ≤ 35%. Also guards `FASTER_WHISPER_MODEL != "base"`. SKIP if Piper or faster-whisper not installed. | After changing `FASTER_WHISPER_MODEL`, upgrading model, or any STT accuracy fix |
 | T50 | `voice_chat_config_disclosure` | `_bot_config_block()` injects [BOT CONFIG] (LLM/STT/version) into every normal+voice chat LLM prompt. Security preamble rule 5 allows model/version self-disclosure. Fixes: bot refused "which model are you using?" with "I cannot provide infrastructure details". | After editing `bot_access.py` prompt builders or `prompts.json` security preamble |
+| T51 | `note_delete_confirm` | `note_del_confirm:` callback present in `bot_handlers.py` and wired in `telegram_menu_bot.py`. Guards that note deletion shows a confirmation dialog rather than deleting immediately. | After editing `_handle_note_delete()` or `bot_handlers.py` delete callbacks |
+| T52 | `note_rename_flow` | `note_rename_title` mode present in message handler; `_start_note_rename()` handler exists. Guards the multi-step rename flow. | After editing note rename handlers in `bot_handlers.py` or `telegram_menu_bot.py` |
+| T53 | `note_zip_download` | `_handle_note_download_zip`, `zipfile.ZipFile`, and `io.BytesIO` present in `bot_handlers.py`. Verifies in-memory ZIP generation for bulk note download. | After editing note download handlers |
+| T54 | `rag_context_injection` | `_docs_rag_context()` is called in both `_with_lang()` and `_with_lang_voice()` in `bot_access.py`. Guards FTS5 RAG context being injected into LLM prompts. | After editing prompt builders in `bot_access.py` |
 
 ### 2.6 When specific tests are mandatory
 
@@ -452,7 +456,7 @@ These tests run in **< 1 second** locally and should be run before every commit 
 |---|---|---|---|
 | **TariStation2 / OpenClawPI2** | `OpenClawPI2` / local `~/.taris/` | Engineering — all test types | All categories A–H |
 | **TariStation1 / OpenClawPI** | `OpenClawPI` / `SintAItion` | Production — stable deployments only | Category B (UI), Category E (smoke) |
-| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T50 |
+| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T54 |
 
 **Rules:**
 - Run destructive tests (audio hardware, regression) on engineering target (TariStation2/OpenClawPI2) first.

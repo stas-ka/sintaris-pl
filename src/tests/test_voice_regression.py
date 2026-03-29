@@ -3757,6 +3757,127 @@ def t_voice_chat_config_disclosure(**_):
     return results
 
 
+def t_note_delete_confirm(**_) -> list[TestResult]:
+    """T51: note_delete shows confirm dialog; note_del_confirm: callback wired."""
+    results = []
+    ts = time.time()
+    try:
+        handlers_path = Path(__file__).parent.parent / "telegram" / "bot_handlers.py"
+        src = handlers_path.read_text()
+        # confirm dialog must be shown (not immediate delete)
+        if "note_del_confirm:" not in src:
+            results.append(TestResult("note_delete_confirm_callback", "FAIL", time.time() - ts,
+                                      "note_del_confirm: callback_data not found in bot_handlers.py"))
+        else:
+            results.append(TestResult("note_delete_confirm_callback", "PASS", time.time() - ts,
+                                      "note_del_confirm: present in bot_handlers.py"))
+    except Exception as e:
+        results.append(TestResult("note_delete_confirm_callback", "FAIL", time.time() - ts, str(e)))
+
+    ts = time.time()
+    try:
+        menu_path = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        src = menu_path.read_text()
+        if "note_del_confirm:" not in src:
+            results.append(TestResult("note_del_confirm_wired", "FAIL", time.time() - ts,
+                                      "note_del_confirm: not wired in telegram_menu_bot.py"))
+        else:
+            results.append(TestResult("note_del_confirm_wired", "PASS", time.time() - ts,
+                                      "note_del_confirm: wired in dispatcher"))
+    except Exception as e:
+        results.append(TestResult("note_del_confirm_wired", "FAIL", time.time() - ts, str(e)))
+
+    return results
+
+
+def t_note_rename_flow(**_) -> list[TestResult]:
+    """T52: note_rename_title mode present in message handler; rename handler exists."""
+    results = []
+    ts = time.time()
+    try:
+        menu_path = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        src = menu_path.read_text()
+        if "note_rename_title" not in src:
+            results.append(TestResult("note_rename_mode", "FAIL", time.time() - ts,
+                                      "note_rename_title mode missing from telegram_menu_bot.py"))
+        else:
+            results.append(TestResult("note_rename_mode", "PASS", time.time() - ts,
+                                      "note_rename_title mode present"))
+    except Exception as e:
+        results.append(TestResult("note_rename_mode", "FAIL", time.time() - ts, str(e)))
+
+    ts = time.time()
+    try:
+        handlers_path = Path(__file__).parent.parent / "telegram" / "bot_handlers.py"
+        src = handlers_path.read_text()
+        if "_start_note_rename" not in src:
+            results.append(TestResult("note_rename_handler", "FAIL", time.time() - ts,
+                                      "_start_note_rename not found in bot_handlers.py"))
+        else:
+            results.append(TestResult("note_rename_handler", "PASS", time.time() - ts,
+                                      "_start_note_rename present"))
+    except Exception as e:
+        results.append(TestResult("note_rename_handler", "FAIL", time.time() - ts, str(e)))
+
+    return results
+
+
+def t_note_zip_download(**_) -> list[TestResult]:
+    """T53: ZIP download handler present; in-memory zipfile pattern used."""
+    results = []
+    ts = time.time()
+    try:
+        handlers_path = Path(__file__).parent.parent / "telegram" / "bot_handlers.py"
+        src = handlers_path.read_text()
+        checks = [
+            ("_handle_note_download_zip", "_handle_note_download_zip function"),
+            ("zipfile.ZipFile", "zipfile.ZipFile usage"),
+            ("io.BytesIO", "in-memory io.BytesIO buffer"),
+        ]
+        for symbol, desc in checks:
+            if symbol not in src:
+                results.append(TestResult(f"note_zip_{symbol[:20]}", "FAIL", time.time() - ts,
+                                          f"{desc} not found in bot_handlers.py"))
+            else:
+                results.append(TestResult(f"note_zip_{symbol[:20]}", "PASS", time.time() - ts,
+                                          f"{desc} present"))
+                ts = time.time()
+    except Exception as e:
+        results.append(TestResult("note_zip_download", "FAIL", time.time() - ts, str(e)))
+
+    return results
+
+
+def t_rag_context_injection(**_) -> list[TestResult]:
+    """T54: _docs_rag_context() called in _with_lang() and _with_lang_voice()."""
+    results = []
+    ts = time.time()
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).parent.parent))
+        from telegram import bot_access
+        import inspect
+
+        for fn_name in ("_with_lang", "_with_lang_voice"):
+            fn = getattr(bot_access, fn_name, None)
+            if fn is None:
+                results.append(TestResult(f"rag_{fn_name}", "FAIL", time.time() - ts,
+                                          f"{fn_name} not found in bot_access"))
+                continue
+            src = inspect.getsource(fn)
+            if "_docs_rag_context" not in src:
+                results.append(TestResult(f"rag_{fn_name}", "FAIL", time.time() - ts,
+                                          f"_docs_rag_context not called in {fn_name}"))
+            else:
+                results.append(TestResult(f"rag_{fn_name}", "PASS", time.time() - ts,
+                                          f"_docs_rag_context injected in {fn_name}"))
+            ts = time.time()
+    except Exception as e:
+        results.append(TestResult("rag_context_injection", "FAIL", time.time() - ts, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -3833,6 +3954,14 @@ TEST_FUNCTIONS = [
     t_stt_fast_speech_accuracy,
     # Bot config block injection in normal chat prompts (T50)
     t_voice_chat_config_disclosure,
+    # Notes delete confirmation dialog (T51)
+    t_note_delete_confirm,
+    # Notes rename title flow (T52)
+    t_note_rename_flow,
+    # Notes ZIP download handler (T53)
+    t_note_zip_download,
+    # RAG context injection in _with_lang / _with_lang_voice (T54)
+    t_rag_context_injection,
 ]
 
 
