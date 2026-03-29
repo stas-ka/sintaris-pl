@@ -27,8 +27,8 @@ from core.bot_config import (
     OLLAMA_URL, OLLAMA_MODEL,
     GEMINI_API_KEY, GEMINI_MODEL,
     ANTHROPIC_API_KEY, ANTHROPIC_MODEL,
-    STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
-    PIPER_BIN, PIPER_MODEL,
+    STT_PROVIDER, STT_FALLBACK_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
+    PIPER_BIN, PIPER_MODEL, STT_LANG,
     _VOICE_OPTS_DEFAULTS, DEVICE_VARIANT,
     _LOG_FILE, _ASSISTANT_LOG_FILE, _SECURITY_LOG_FILE, _VOICE_LOG_FILE, _DATASTORE_LOG_FILE,
     log,
@@ -425,10 +425,28 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
     active  = [k for k, v in opts.items() if v]
     status  = ("Active: " + ", ".join(active)) if active else "All OFF — stable defaults"
     status_esc = _escape_md(status)
+
+    # ── Current runtime config summary ──────────────────────────────────────
+    # STT line
+    fw_info = f" ({FASTER_WHISPER_MODEL}/{FASTER_WHISPER_DEVICE})" if "faster_whisper" in STT_PROVIDER else ""
+    stt_fallback = f" → {STT_FALLBACK_PROVIDER}" if STT_FALLBACK_PROVIDER else ""
+    stt_line = f"STT: {STT_PROVIDER}{fw_info}{stt_fallback}  ·  lang={STT_LANG}"
+
+    # TTS line
+    piper_ok = PIPER_BIN and Path(PIPER_BIN).exists()
+    model_name = Path(PIPER_MODEL).stem if PIPER_MODEL else "?"
+    tts_line = f"TTS: {'Piper' if piper_ok else 'Piper ⚠️ missing'} ({model_name})"
+
+    # Voice LLM line
+    voice_llm = get_per_func_provider("voice") or LLM_PROVIDER
+    voice_llm_line = f"LLM (voice): {voice_llm}"
+
+    config_block = "\n".join([stt_line, tts_line, voice_llm_line])
+
     text = (
-        "⚡ *Voice Pipeline Optimisations*\n\n"
-        "Default: all OFF (stable baseline). Toggle to test individually.\n"
-        "Settings persist across restarts.\n\n"
+        "⚡ *Voice Pipeline*\n\n"
+        f"```\n{config_block}\n```\n\n"
+        "*Optimisation toggles* (tap to switch):\n"
         f"_{status_esc}_"
     )
     try:
