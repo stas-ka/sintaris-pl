@@ -24,6 +24,8 @@ from core.bot_config import (
     ACTIVE_MODEL_FILE, TARIS_BIN,
     _STRINGS_FILE,
     log,
+    BOT_VERSION, LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
+    STT_PROVIDER, FASTER_WHISPER_MODEL, PIPER_MODEL,
 )
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS, fmt_prompt
@@ -154,12 +156,28 @@ def _resolve_lang(chat_id: int, user_text: str = "") -> str:
     return _DEFAULT_LANG if _DEFAULT_LANG in _SUPPORTED_LANGS else _FALLBACK_LANG
 
 
+def _bot_config_block() -> str:
+    """Return a concise [BOT CONFIG] block so the LLM can answer self-disclosure questions."""
+    from pathlib import Path as _Path
+    _llm_model = OLLAMA_MODEL if LLM_PROVIDER == "ollama" else OPENAI_MODEL
+    _stt_model = FASTER_WHISPER_MODEL if STT_PROVIDER in ("faster_whisper", "fw") else STT_PROVIDER
+    _piper = _Path(PIPER_MODEL).name if PIPER_MODEL else "piper"
+    return (
+        f"[BOT CONFIG]\n"
+        f"Name: {BOT_NAME} | Version: {BOT_VERSION}\n"
+        f"LLM: {LLM_PROVIDER}/{_llm_model}\n"
+        f"STT: {STT_PROVIDER}/{_stt_model}\n"
+        f"TTS: piper/{_piper}\n"
+        f"[END BOT CONFIG]\n\n"
+    )
+
+
 def _with_lang(chat_id: int, user_text: str) -> str:
-    """Prepend security preamble + language instruction, then wrap user text."""
+    """Prepend security preamble + bot config + language instruction, then wrap user text."""
     from security.bot_security import SECURITY_PREAMBLE, _wrap_user_input
     lang = _resolve_lang(chat_id, user_text)
     lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
-    return SECURITY_PREAMBLE + lang_instr + _wrap_user_input(user_text)
+    return SECURITY_PREAMBLE + _bot_config_block() + lang_instr + _wrap_user_input(user_text)
 
 
 def _with_lang_voice(chat_id: int, stt_text: str) -> str:
@@ -168,10 +186,11 @@ def _with_lang_voice(chat_id: int, stt_text: str) -> str:
     has_uncertain = bool(re.search(r'\[\?', stt_text))
     lang = _resolve_lang(chat_id, stt_text)
     instruction = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
+    config_block = _bot_config_block()
     if has_uncertain:
         stt_hint = PROMPTS["stt_hints"].get(lang, PROMPTS["stt_hints"]["en"])
-        return SECURITY_PREAMBLE + instruction + stt_hint + _wrap_user_input(stt_text)
-    return SECURITY_PREAMBLE + instruction + _wrap_user_input(stt_text)
+        return SECURITY_PREAMBLE + config_block + instruction + stt_hint + _wrap_user_input(stt_text)
+    return SECURITY_PREAMBLE + config_block + instruction + _wrap_user_input(stt_text)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
