@@ -88,41 +88,41 @@ if [[ "$GPU_MODE" -eq 1 ]]; then
         warn "Falling back to CPU mode."
         GPU_MODE=0
     else
-        # Convert 110500 → 11.0.3 override (use gfx1103 for Strix Point gfx1105)
-        MAJOR=$(( GFX_VER / 10000 ))
-        MINOR=$(( (GFX_VER % 10000) / 100 ))
-        # gfx1105 (Strix Point) → override to gfx1103 (Phoenix, known-good in ROCm)
-        if [[ "$GFX_VER" -ge 110400 ]] && [[ "$GFX_VER" -lt 110600 ]]; then
-            HSA_OVERRIDE="11.0.3"
-        else
-            HSA_OVERRIDE="${MAJOR}.0.$(( MINOR > 0 ? MINOR - 1 : 0 ))"
-        fi
-        ok "Detected AMD GPU gfx_target_version=$GFX_VER → HSA_OVERRIDE=${HSA_OVERRIDE}"
+        ok "Detected AMD GPU gfx_target_version=$GFX_VER"
+        # Note: HSA_OVERRIDE_GFX_VERSION is NOT set — Ollama 0.18.3+ detects gfx1150 natively.
+        # Setting it incorrectly causes GPU runner crashes.
 
-        # Add user to render+video groups
-        if ! groups | grep -qw render; then
-            info "  Adding $(whoami) to render+video groups (requires sudo)..."
-            sudo usermod -aG render,video "$(whoami)"
-            ok "Groups added. Changes take effect on next login (service uses SupplementaryGroups)."
+        # Ollama standard install creates a system 'ollama' user — that user owns models.
+        # We add 'ollama' to render+video so the GPU devices become accessible.
+        if id ollama &>/dev/null; then
+            info "  Adding ollama system user to render+video groups..."
+            sudo usermod -aG render,video ollama
+            ok "Groups added to ollama user."
         else
-            ok "User already in render group."
+            warn "No 'ollama' system user found. Falling back to current user."
+            sudo usermod -aG render,video "$(whoami)"
+        fi
+        # Also add the calling user to render+video for interactive ollama commands
+        if ! groups | grep -qw render; then
+            sudo usermod -aG render,video "$(whoami)"
+            ok "Added $(whoami) to render+video groups."
         fi
 
         # Create system Ollama service with GPU env
+        # Runs as User=ollama so it can access ~/.ollama/models owned by the ollama system user
         SERVICE_FILE=/etc/systemd/system/ollama.service
         info "  Creating GPU-accelerated system service at $SERVICE_FILE..."
+        OLLAMA_USER=$(id ollama &>/dev/null && echo ollama || echo "$(whoami)")
         sudo tee "$SERVICE_FILE" > /dev/null << SVCEOF
 [Unit]
 Description=Ollama AI LLM Server (GPU-accelerated AMD Radeon)
 After=network.target
 
 [Service]
-User=$(whoami)
+User=${OLLAMA_USER}
 Group=render
 SupplementaryGroups=video render
-Environment=HOME=$HOME
 Environment=OLLAMA_HOST=127.0.0.1:11434
-Environment=HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE}
 Environment=OLLAMA_FLASH_ATTENTION=1
 Environment=OLLAMA_KEEP_ALIVE=1h
 Environment=LD_LIBRARY_PATH=/usr/local/lib/ollama/rocm
