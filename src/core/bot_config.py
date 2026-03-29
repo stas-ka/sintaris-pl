@@ -171,6 +171,8 @@ YANDEXGPT_MAX_TOKENS   = os.getenv("YANDEXGPT_MAX_TOKENS", "2000")
 ANTHROPIC_MAX_TOKENS   = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
 LOCAL_MAX_TOKENS       = int(os.getenv("LOCAL_MAX_TOKENS", "512"))
 LOCAL_TEMPERATURE      = float(os.getenv("LOCAL_TEMPERATURE", "0.7"))
+OLLAMA_MIN_TIMEOUT     = int(os.getenv("OLLAMA_MIN_TIMEOUT", "90"))   # seconds; GPU is fast but first-token latency varies
+OLLAMA_THINK           = os.getenv("OLLAMA_THINK", "false").lower() not in ("0", "false", "no")  # qwen3: disable thinking by default
 
 # Conversation memory (Feature 2.1)
 CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"))
@@ -229,7 +231,7 @@ RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.29+8"
+BOT_VERSION        = "2026.3.29+9"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

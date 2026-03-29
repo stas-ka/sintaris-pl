@@ -28,6 +28,8 @@ from core.bot_config import (
     LLAMA_CPP_URL,
     LOCAL_MAX_TOKENS,
     LOCAL_TEMPERATURE,
+    OLLAMA_MIN_TIMEOUT,
+    OLLAMA_THINK,
     LLM_LOCAL_FALLBACK,
     LLM_FALLBACK_FLAG_FILE,
     LLM_FALLBACK_PROVIDER,
@@ -313,22 +315,30 @@ def _ask_local(prompt: str, timeout: int) -> str:
 
 
 def _ask_ollama(prompt: str, timeout: int) -> str:
-    """Call local Ollama server (OpenAI-compatible API on port 11434).
+    """Call local Ollama server via native /api/chat endpoint.
 
-    Ollama is the recommended local LLM for the OpenClaw (laptop/PC) variant.
+    Uses ``think: false`` to suppress extended-thinking tokens (qwen3 family).
+    Falls back gracefully if the server is not running.
+
     Install: curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b
     Config:  OLLAMA_URL=http://127.0.0.1:11434  OLLAMA_MODEL=qwen2:0.5b
+    GPU:     Set HSA_OVERRIDE_GFX_VERSION in Ollama service for AMD iGPU (Radeon 890M gfx1150).
     """
-    url = f"{OLLAMA_URL.rstrip('/')}/v1/chat/completions"
+    effective_timeout = max(timeout, OLLAMA_MIN_TIMEOUT)
+    url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
     headers = {"Content-Type": "application/json"}
     body: dict = {
         "model": OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": LOCAL_MAX_TOKENS,
-        "temperature": LOCAL_TEMPERATURE,
+        "stream": False,
+        "think": OLLAMA_THINK,
+        "options": {
+            "num_predict": LOCAL_MAX_TOKENS,
+            "temperature": LOCAL_TEMPERATURE,
+        },
     }
-    result = _http_post_json(url, headers, body, timeout)
-    return result["choices"][0]["message"]["content"].strip()
+    result = _http_post_json(url, headers, body, effective_timeout)
+    return result["message"]["content"].strip()
 
 
 def _ask_openclaw(prompt: str, timeout: int) -> str:
