@@ -165,9 +165,31 @@ def _notes_user_dir(chat_id: int) -> Path:
 
     If the Telegram chat_id is linked to a web account, uses the web UUID
     so that notes are shared between Telegram and the Web UI.
+
+    Auto-migration: if notes exist under the old str(chat_id) directory and
+    the resolved storage_id is a UUID (account was linked after notes were
+    created), the files are moved transparently so existing notes remain visible.
     """
-    p = Path(NOTES_DIR) / _resolve_storage_id(chat_id)
+    import shutil as _shutil
+    storage_id = _resolve_storage_id(chat_id)
+    p = Path(NOTES_DIR) / storage_id
     p.mkdir(parents=True, exist_ok=True)
+
+    # Migrate notes created before account linking from chat_id dir → UUID dir
+    if storage_id != str(chat_id):
+        old_dir = Path(NOTES_DIR) / str(chat_id)
+        if old_dir.exists() and any(old_dir.glob("*.md")):
+            for src in sorted(old_dir.glob("*.md")):
+                dst = p / src.name
+                if not dst.exists():
+                    _shutil.move(str(src), str(dst))
+                    log.info(f"[Notes] migrated '{src.name}' {old_dir.name} → {p.name}")
+            if not any(old_dir.glob("*.md")):
+                try:
+                    old_dir.rmdir()
+                    log.info(f"[Notes] removed empty old dir {old_dir.name}")
+                except Exception:
+                    pass
     return p
 
 
