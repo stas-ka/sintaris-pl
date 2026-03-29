@@ -157,6 +157,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T46 | `vosk_fallback_openclaw_default` | `_VOICE_OPTS_DEFAULTS['vosk_fallback']` must be `False` when `DEVICE_VARIANT=openclaw` (Vosk not installed), `True` on picoclaw. Prevents "Ошибка Vosk" crash on OpenClaw when faster-whisper returns empty. | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT |
 | T47 | `faster_whisper_vad_retry` | Source-inspects `_stt_faster_whisper()` for dual-pass transcription: first pass with VAD filter, retry with `vad_filter=False` when empty. Catches silent drop of short voice messages ("да", "нет"). | After any change to `_stt_faster_whisper()` |
 | T48 | `system_chat_admin_menu_only` | `mode_system` absent from `main_menu.yaml` and `_menu_keyboard()`; present in `admin_menu.yaml`. Prevents System Chat leaking into the main menu. | After editing any menu YAML or `_menu_keyboard()` |
+| T49 | `stt_fast_speech_accuracy` | FW small/medium model must correctly transcribe Russian at fast speaking speeds. Root cause: `base` model (74M params) mangled phonemes in clips <1.5s — "Сколько у тебя памяти" → "Куча панча". Generates Piper TTS audio at 4 speeds (0.65x/1.0x/1.5x/1.85x) via ffmpeg atempo, runs STT on each, asserts WER ≤ 35%. Also guards `FASTER_WHISPER_MODEL != "base"`. SKIP if Piper or faster-whisper not installed. | After changing `FASTER_WHISPER_MODEL`, upgrading model, or any STT accuracy fix |
 
 ### 2.6 When specific tests are mandatory
 
@@ -184,6 +185,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
 | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |
 | After any change to `_stt_faster_whisper()` in `bot_voice.py` | T47 (`--test t_faster_whisper_vad_retry`) |
+| After changing `FASTER_WHISPER_MODEL` or any STT accuracy fix | T49 (`--test t_stt_fast_speech_accuracy`) |
 | After editing any menu YAML (`main_menu.yaml`, `admin_menu.yaml`) or `_menu_keyboard()` | T48 (`--test t_system_chat_admin_menu_only`) |
 
 ---
@@ -449,7 +451,7 @@ These tests run in **< 1 second** locally and should be run before every commit 
 |---|---|---|---|
 | **TariStation2 / OpenClawPI2** | `OpenClawPI2` / local `~/.taris/` | Engineering — all test types | All categories A–H |
 | **TariStation1 / OpenClawPI** | `OpenClawPI` / `SintAItion` | Production — stable deployments only | Category B (UI), Category E (smoke) |
-| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T48 |
+| **Local dev machine** | `localhost` | Quick offline checks | Categories F, G, H; A source-inspection T17–T49 |
 
 **Rules:**
 - Run destructive tests (audio hardware, regression) on engineering target (TariStation2/OpenClawPI2) first.

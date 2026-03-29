@@ -395,8 +395,157 @@ def benchmark_stt(fw_models: list = None) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LLM Benchmark
+# STT Speed-Sensitivity Benchmark
 # ─────────────────────────────────────────────────────────────────────────────
+_SPEED_PHRASES = [
+    ("memory_query_ru", "Сколько у тебя памяти",   "сколько у тебя памяти",   "ru"),
+    ("greeting_ru",     "Привет, как дела",          "привет как дела",         "ru"),
+    ("command_ru",      "Добавь напоминание на завтра", "добавь напоминание на завтра", "ru"),
+]
+
+_SPEEDS = [
+    (0.60, "slow_0.6x"),
+    (0.80, "slow_0.8x"),
+    (1.00, "normal_1.0x"),
+    (1.40, "fast_1.4x"),
+    (1.80, "fast_1.8x"),
+]
+
+
+def _apply_speed_to_pcm(pcm_22k: bytes, speed: float) -> tuple[bytes, float]:
+    """Apply atempo speed change and resample to 16kHz PCM. Returns (pcm16k, duration_s)."""
+    if speed <= 0.5:
+        atempo = f"atempo=0.5,atempo={speed / 0.5:.3f}"
+    elif speed >= 2.0:
+        atempo = f"atempo=2.0,atempo={speed / 2.0:.3f}"
+    else:
+        atempo = f"atempo={speed:.3f}"
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
+        "-af", atempo,
+        "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1",
+        "-loglevel", "error",
+    ]
+    r = subprocess.run(cmd, input=pcm_22k, capture_output=True, timeout=30)
+    pcm = r.stdout
+    return pcm, len(pcm) / (SAMPLE_RATE * 2) if pcm else (b"", 0.0)
+
+
+def benchmark_stt_speed_sensitivity(fw_models: list = None) -> list[dict]:
+    """Benchmark STT accuracy across speech speeds for known-problematic phrases.
+
+    Tests the regression identified 2026-03-29: faster-whisper 'base' model
+    fails on fast Russian speech (<1.5s audio). Measures WER per model/speed combo.
+
+    Test phrase: 'Сколько у тебя памяти' — the exact phrase that triggered the bug.
+    """
+    if fw_models is None:
+        fw_models = ["base", "small"]
+
+    results = []
+    piper_ok = Path(PIPER_BIN).exists() and Path(PIPER_MODEL).exists()
+    if not piper_ok:
+        print("  SKIP: Piper not available — cannot generate audio fixtures")
+        return [{"suite": "stt_speed", "ok": False,
+                 "error": f"Piper not found ({PIPER_BIN})"}]
+
+    try:
+        import numpy as np
+        from faster_whisper import WhisperModel
+    except ImportError:
+        print("  SKIP: faster-whisper not installed")
+        return [{"suite": "stt_speed", "ok": False,
+                 "error": "faster-whisper not installed (pip install faster-whisper)"}]
+
+    # Pre-load models (avoid reload per phrase)
+    loaded_models: dict = {}
+    fw_threads = int(os.environ.get("FASTER_WHISPER_THREADS", "0")) or min(4, os.cpu_count() or 4)
+    for ms in fw_models:
+        try:
+            print(f"  Loading fw/{ms}...", end=" ", flush=True)
+            loaded_models[ms] = WhisperModel(ms, device=FW_DEVICE, compute_type=FW_COMPUTE,
+                                             cpu_threads=fw_threads)
+            print("OK")
+        except Exception as e:
+            print(f"FAIL ({e})")
+
+    for phrase_label, phrase_text, ref_text, lang in _SPEED_PHRASES:
+        # Generate base TTS audio at natural speed (22050 Hz raw PCM)
+        print(f"\n  Phrase: '{phrase_text}'")
+        piper_cmd = [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"]
+        r = subprocess.run(piper_cmd, input=phrase_text.encode("utf-8"),
+                           capture_output=True, timeout=30)
+        if r.returncode != 0 or not r.stdout:
+            print(f"  SKIP: Piper failed for '{phrase_text}'")
+            continue
+        pcm_22k = r.stdout
+        natural_dur = len(pcm_22k) / (22050 * 2)
+        print(f"  TTS generated: {natural_dur:.2f}s at natural speed")
+
+        print(f"  {'Speed':<14} {'Dur':>6} {'RTF':>6} {'WER':>6}  {'Transcript':<40}")
+        print(f"  {'-'*14} {'-'*6} {'-'*6} {'-'*6}  {'-'*40}")
+
+        for speed, speed_label in _SPEEDS:
+            pcm16k, dur = _apply_speed_to_pcm(pcm_22k, speed)
+            if not pcm16k:
+                print(f"  {speed_label:<14}  ffmpeg error")
+                continue
+
+            audio_np = np.frombuffer(pcm16k, dtype=np.int16).astype(np.float32) / 32768.0
+
+            for ms, fw_model in loaded_models.items():
+                try:
+                    t1 = time.time()
+                    segs, info = fw_model.transcribe(
+                        audio_np, language=lang, beam_size=5,
+                        vad_filter=True, condition_on_previous_text=False,
+                    )
+                    transcript = " ".join(seg.text.strip() for seg in segs).strip()
+                    inf_t = time.time() - t1
+
+                    # Retry without VAD for short clips
+                    if not transcript:
+                        segs2, _ = fw_model.transcribe(
+                            audio_np, language=lang, beam_size=5,
+                            vad_filter=False, condition_on_previous_text=False,
+                        )
+                        transcript = " ".join(seg.text.strip() for seg in segs2).strip()
+
+                    wer = _wer(ref_text, transcript.lower()) if transcript else 1.0
+                    rtf = inf_t / dur if dur > 0 else 0
+                    ok = wer <= 0.35
+
+                    row_label = f"{speed_label}/{ms}"
+                    trunc = transcript[:38] + ".." if len(transcript) > 38 else transcript
+                    flag = "✓" if ok else "✗"
+                    print(f"  {row_label:<14} {dur:>6.2f}s {rtf:>5.2f}x {wer:>5.0%}  "
+                          f"{flag} '{trunc}'")
+
+                    results.append({
+                        "suite": "stt_speed",
+                        "phrase": phrase_label,
+                        "speed": speed,
+                        "speed_label": speed_label,
+                        "model": ms,
+                        "transcript": transcript,
+                        "ref_text": ref_text,
+                        "wer": round(wer, 3),
+                        "latency_s": round(inf_t, 3),
+                        "audio_duration_s": round(dur, 3),
+                        "rtf": round(rtf, 3),
+                        "ok": ok,
+                    })
+                except Exception as e:
+                    print(f"  {speed_label}/{ms}: ERROR {e}")
+                    results.append({"suite": "stt_speed", "phrase": phrase_label,
+                                    "speed": speed, "model": ms, "ok": False, "error": str(e)})
+
+    return results
+
+
+
 def benchmark_llm(ollama_models: list = None, n_repeats: int = 2) -> list[dict]:
     """Benchmark Ollama LLM with different models and prompts."""
     if ollama_models is None:
@@ -658,6 +807,8 @@ def main() -> None:
     parser.add_argument("--skip-tts", action="store_true", help="Skip TTS benchmark")
     parser.add_argument("--skip-llm", action="store_true", help="Skip LLM benchmark")
     parser.add_argument("--skip-pipeline", action="store_true", help="Skip pipeline benchmark")
+    parser.add_argument("--speed-test", action="store_true",
+                        help="Run STT speed-sensitivity benchmark (Piper+FW required)")
     parser.add_argument("--output", default=None, help="JSON output file (append)")
     parser.add_argument("--compare", nargs="+", metavar="FILE",
                         help="Compare result JSON files and print table")
@@ -687,6 +838,12 @@ def main() -> None:
     if not args.skip_stt:
         print(f"\n🎤 STT benchmark — models: {', '.join(args.stt_models)}")
         r = benchmark_stt(args.stt_models)
+        all_results.extend(r)
+
+    # STT speed-sensitivity
+    if args.speed_test:
+        print(f"\n🏃 STT speed-sensitivity benchmark — models: {', '.join(args.stt_models)}")
+        r = benchmark_stt_speed_sensitivity(args.stt_models)
         all_results.extend(r)
 
     # LLM

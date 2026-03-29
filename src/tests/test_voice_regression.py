@@ -3486,6 +3486,198 @@ def t_system_chat_admin_menu_only(**_) -> list[TestResult]:
     return results
 
 
+def t_stt_fast_speech_accuracy(**_) -> list[TestResult]:
+    """T49: STT model must correctly transcribe fast Russian speech.
+
+    Root cause (2026-03-29): faster-whisper 'base' model (74M params) mangles
+    Russian phonemes in clips shorter than ~1.5s effective audio. The phrase
+    'Сколько у тебя памяти' was transcribed as 'Куча панча', 'Кутя Панти',
+    'Удя панча' when spoken at normal/fast speed, and only correctly when spoken
+    very slowly (3.4s clip).
+
+    This test:
+    1. Asserts FASTER_WHISPER_MODEL is NOT 'base' (structural guard)
+    2. Generates audio via Piper TTS + creates fast/slow variants via ffmpeg atempo
+    3. Runs STT on each speed variant and checks WER ≤ 0.35
+    4. Fails if any speed variant produces a WER > 0.35 (garbage output)
+
+    SKIP if Piper binary or faster-whisper not installed.
+    """
+    import subprocess as _sp
+
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # ── 1. Structural guard: model must NOT be 'base' ─────────────────────────
+    fw_model = os.environ.get("FASTER_WHISPER_MODEL", "base")
+    if fw_model == "base":
+        results.append(TestResult(
+            "stt_model_not_base", "FAIL", time.time() - t0,
+            "FASTER_WHISPER_MODEL=base — known to fail on fast Russian speech. "
+            "Set FASTER_WHISPER_MODEL=small or better in bot.env",
+        ))
+    else:
+        results.append(TestResult(
+            "stt_model_not_base", "PASS", time.time() - t0,
+            f"FASTER_WHISPER_MODEL={fw_model} ✓ (not base)",
+        ))
+
+    # ── 2. Check faster-whisper is installed ──────────────────────────────────
+    try:
+        from faster_whisper import WhisperModel  # type: ignore[import]
+    except ImportError:
+        results.append(TestResult(
+            "stt_fast_speech_inference", "SKIP", time.time() - t0,
+            "faster-whisper not installed — pip install faster-whisper",
+        ))
+        return results
+
+    # ── 3. Check Piper binary for audio generation ────────────────────────────
+    import sys as _sys
+    _src_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+    if _src_dir not in _sys.path:
+        _sys.path.insert(0, _src_dir)
+    try:
+        from core.bot_config import PIPER_BIN, PIPER_MODEL  # type: ignore
+    except ImportError:
+        PIPER_BIN = os.environ.get("PIPER_BIN", "")
+        PIPER_MODEL = os.environ.get("PIPER_MODEL", "")
+
+    if not PIPER_BIN or not os.path.exists(PIPER_BIN):
+        results.append(TestResult(
+            "stt_fast_speech_inference", "SKIP", time.time() - t0,
+            f"Piper binary not found ({PIPER_BIN}) — cannot generate test audio",
+        ))
+        return results
+
+    # ── 4. Generate reference audio via Piper TTS ─────────────────────────────
+    PHRASE = "Сколько у тебя памяти"
+    REF_WORDS = set("сколько у тебя памяти".split())  # expected words in output
+
+    def _gen_pcm_at_speed(speed: float) -> tuple[bytes, float]:
+        """Generate PCM for PHRASE at given speed via Piper + ffmpeg atempo."""
+        # Piper → raw PCM at 22050 Hz
+        piper_cmd = [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"]
+        r = _sp.run(piper_cmd, input=PHRASE.encode("utf-8"),
+                    capture_output=True, timeout=30)
+        if r.returncode != 0:
+            return b"", 0.0
+        raw_piper = r.stdout  # S16LE at model sample rate (22050)
+
+        # atempo must be between 0.5 and 2.0 (chain for extremes)
+        if speed <= 0.5:
+            atempo = f"atempo=0.5,atempo={speed / 0.5:.3f}"
+        elif speed >= 2.0:
+            atempo = f"atempo=2.0,atempo={speed / 2.0:.3f}"
+        else:
+            atempo = f"atempo={speed:.3f}"
+
+        # Resample piper output → 16kHz + apply speed + output S16LE
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
+            "-af", atempo,
+            "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1",
+            "-loglevel", "error",
+        ]
+        r2 = _sp.run(ffmpeg_cmd, input=raw_piper, capture_output=True, timeout=30)
+        pcm = r2.stdout
+        dur = len(pcm) / (16000 * 2) if pcm else 0.0
+        return pcm, dur
+
+    # ── 5. Load FW model once ──────────────────────────────────────────────────
+    fw_device = os.environ.get("FASTER_WHISPER_DEVICE", "cpu")
+    fw_compute = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
+    fw_threads = int(os.environ.get("FASTER_WHISPER_THREADS", "0")) or 4
+
+    try:
+        import numpy as _np
+        t_load = time.time()
+        model = WhisperModel(fw_model, device=fw_device, compute_type=fw_compute,
+                             cpu_threads=fw_threads)
+        load_t = time.time() - t_load
+        results.append(TestResult(
+            f"stt_model_load:{fw_model}",
+            "PASS", load_t,
+            f"Loaded {fw_model}/{fw_device}/{fw_compute} threads={fw_threads} in {load_t:.2f}s",
+        ))
+    except Exception as e:
+        results.append(TestResult("stt_model_load", "FAIL", time.time() - t0, str(e)))
+        return results
+
+    def _wer_simple(ref: str, hyp: str) -> float:
+        r = ref.lower().split()
+        h = hyp.lower().split()
+        if not r:
+            return 0.0 if not h else 1.0
+        n, m = len(r), len(h)
+        dp = [[0] * (m + 1) for _ in range(n + 1)]
+        for i in range(n + 1):
+            dp[i][0] = i
+        for j in range(m + 1):
+            dp[0][j] = j
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                dp[i][j] = dp[i - 1][j - 1] if r[i - 1] == h[j - 1] \
+                    else 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+        return dp[n][m] / n
+
+    # ── 6. Run inference at each speed ────────────────────────────────────────
+    SPEEDS = [
+        (0.65, "slow_0.65x"),
+        (1.00, "normal_1.0x"),
+        (1.50, "fast_1.5x"),
+        (1.85, "veryfast_1.85x"),
+    ]
+    WER_THRESHOLD = 0.35   # ≤35% word error rate required
+
+    for speed, label in SPEEDS:
+        ts = time.time()
+        try:
+            pcm, dur = _gen_pcm_at_speed(speed)
+            if not pcm:
+                results.append(TestResult(
+                    f"stt_speed:{label}", "SKIP", time.time() - ts,
+                    f"Audio generation failed (Piper/ffmpeg error) for speed={speed}",
+                ))
+                continue
+
+            audio_np = _np.frombuffer(pcm, dtype=_np.int16).astype(_np.float32) / 32768.0
+            t_inf = time.time()
+            segs, info = model.transcribe(
+                audio_np, language="ru", beam_size=5,
+                vad_filter=True, condition_on_previous_text=False,
+            )
+            transcript = " ".join(seg.text.strip() for seg in segs).strip()
+            inf_t = time.time() - t_inf
+
+            # Retry without VAD if empty (short clips)
+            if not transcript:
+                segs2, _ = model.transcribe(
+                    audio_np, language="ru", beam_size=5,
+                    vad_filter=False, condition_on_previous_text=False,
+                )
+                transcript = " ".join(seg.text.strip() for seg in segs2).strip()
+
+            wer = _wer_simple("сколько у тебя памяти", transcript.lower())
+            rtf = inf_t / dur if dur > 0 else 0
+            status = "PASS" if wer <= WER_THRESHOLD else "FAIL"
+
+            results.append(TestResult(
+                f"stt_speed:{label}",
+                status, time.time() - ts,
+                f"dur={dur:.2f}s RTF={rtf:.2f} WER={wer:.0%} "
+                f"transcript='{transcript[:60]}' "
+                f"(threshold={WER_THRESHOLD:.0%})",
+                metric=wer, metric_key=f"stt_speed_wer_{label}",
+            ))
+        except Exception as e:
+            results.append(TestResult(f"stt_speed:{label}", "FAIL",
+                                      time.time() - ts, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -3558,6 +3750,8 @@ TEST_FUNCTIONS = [
     t_faster_whisper_vad_retry,
     # System Chat accessible only via Admin menu, not main menu (T48)
     t_system_chat_admin_menu_only,
+    # STT fast-speech accuracy: 'Сколько у тебя памяти' at 4 speeds (T49)
+    t_stt_fast_speech_accuracy,
 ]
 
 
