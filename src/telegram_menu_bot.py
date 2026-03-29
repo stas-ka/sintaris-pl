@@ -33,7 +33,7 @@ from core.bot_logger import configure_alert_handler, attach_alerts_to_main_log
 from telegram.bot_access import (
     _is_allowed, _is_admin, _is_guest,
     _deny, _set_lang, _send_menu, _lang,
-    _t, _menu_keyboard, _back_keyboard, _escape_md,
+    _t, _t_by_lang, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
 )
 
@@ -1053,6 +1053,23 @@ def document_handler(message):
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _register_bot_commands() -> None:
+    """Register slash commands with BotFather for Telegram autocomplete."""
+    from telebot.types import BotCommand
+    _CMD_DEFS = [
+        ("/start",  "cmd_start_desc"),
+        ("/menu",   "cmd_menu_desc"),
+        ("/status", "cmd_status_desc"),
+    ]
+    try:
+        for lang in ("en", "ru", "de"):
+            cmds = [BotCommand(cmd, _t_by_lang(lang, key)) for cmd, key in _CMD_DEFS]
+            bot.set_my_commands(cmds, language_code=None if lang == "en" else lang)
+        log.info("BotFather commands registered (%d commands × 3 languages)", len(_CMD_DEFS))
+    except Exception as exc:
+        log.warning("set_my_commands failed (non-fatal): %s", exc)
+
+
 def main() -> None:
     from core.bot_db import init_db as _init_db
     _init_db()
@@ -1093,6 +1110,7 @@ def main() -> None:
     attach_alerts_to_main_log()
     _cal_reschedule_all()
     threading.Thread(target=_cal_morning_briefing_loop, daemon=True).start()
+    _register_bot_commands()
 
     log.info("Polling Telegram…")
     bot.infinity_polling(timeout=30, long_polling_timeout=20)

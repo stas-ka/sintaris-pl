@@ -114,6 +114,16 @@ def _t(chat_id: int, key: str, **kwargs) -> str:
         return text
 
 
+def _t_by_lang(lang: str, key: str, **kwargs) -> str:
+    """Look up a localised string by explicit language code (not chat_id)."""
+    text = _STRINGS.get(lang, _STRINGS.get("en", {})).get(key, key)
+    kwargs.setdefault("bot_name", BOT_NAME)
+    try:
+        return text.format(**kwargs)
+    except (KeyError, IndexError, ValueError):
+        return text
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Language detection & LLM prompt injection
 # ─────────────────────────────────────────────────────────────────────────────

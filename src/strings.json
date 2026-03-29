@@ -304,7 +304,10 @@
     "admin_rag_log_row":       "{i}. `{query}` → {n_chunks} фрагм., {chars} симв.  [{ts}]",
     "admin_rag_toggled_on":    "✅ RAG включён.",
     "admin_rag_toggled_off":   "⭕ RAG отключён.",
-    "admin_btn_toggle_rag":    "🔀 Вкл/Выкл RAG"
+    "admin_btn_toggle_rag":    "🔀 Вкл/Выкл RAG",
+    "cmd_start_desc":           "Запустить бота или зарегистрироваться",
+    "cmd_menu_desc":            "Открыть главное меню",
+    "cmd_status_desc":          "Показать статус бота и сервисов"
   },
   "en": {
     "btn_digest": "📧  Mail Digest",
@@ -611,7 +614,10 @@
     "admin_rag_log_row":       "{i}. `{query}` → {n_chunks} chunks, {chars}c  [{ts}]",
     "admin_rag_toggled_on":    "✅ RAG enabled.",
     "admin_rag_toggled_off":   "⭕ RAG disabled.",
-    "admin_btn_toggle_rag":    "🔀 Toggle RAG"
+    "admin_btn_toggle_rag":    "🔀 Toggle RAG",
+    "cmd_start_desc":           "Start bot or register",
+    "cmd_menu_desc":            "Open main menu",
+    "cmd_status_desc":          "Show bot and service status"
   },
   "de": {
     "btn_digest": "📧  E-Mail-Zusammenfassung",
@@ -918,6 +924,9 @@
     "admin_rag_log_row":       "{i}. `{query}` → {n_chunks} Abschn., {chars} Z.  [{ts}]",
     "admin_rag_toggled_on":    "✅ RAG aktiviert.",
     "admin_rag_toggled_off":   "⭕ RAG deaktiviert.",
-    "admin_btn_toggle_rag":    "🔀 RAG umschalten"
+    "admin_btn_toggle_rag":    "🔀 RAG umschalten",
+    "cmd_start_desc":           "Bot starten oder registrieren",
+    "cmd_menu_desc":            "Hauptmenü öffnen",
+    "cmd_status_desc":          "Bot- und Dienststatus anzeigen"
   }
 }
