@@ -447,7 +447,7 @@ class TestRegistration:
         """Registering with an existing username shows an error."""
         page = fresh_page(browser, base_url_or_default)
         page.goto(f"{base_url_or_default}/register")
-        page.fill("input[name='username']", "admin")  # already exists
+        page.fill("input[name='username']", ADMIN_USER)  # already exists
         page.fill("input[name='password']", "somepassword")
         # Some UIs have a display_name or confirm-password field — fill if present
         dn_input = page.locator("input[name='display_name']")

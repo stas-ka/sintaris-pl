@@ -8,8 +8,8 @@ Environment vars (override defaults):
     PICO_BASE_URL   — default https://openclawpi2:8080
     PICO_ADMIN_USER — default admin
     PICO_ADMIN_PASS — default admin
-    PICO_USER       — default stas
-    PICO_USER_PASS  — default zusammen20192
+    PICO_USER       — default testuser  (non-admin, auto-created if absent)
+    PICO_USER_PASS  — default testpass456
 """
 
 import os
@@ -21,9 +21,53 @@ import pytest
 BASE_URL    = os.environ.get("PICO_BASE_URL",    "https://openclawpi2:8080")
 ADMIN_USER  = os.environ.get("PICO_ADMIN_USER",  "admin")
 ADMIN_PASS  = os.environ.get("PICO_ADMIN_PASS",  "admin")
-NORMAL_USER = os.environ.get("PICO_USER",        "stas")
-NORMAL_PASS = os.environ.get("PICO_USER_PASS",   "zusammen20192")
+NORMAL_USER = os.environ.get("PICO_USER",        "testuser")
+NORMAL_PASS = os.environ.get("PICO_USER_PASS",   "testpass456")
 
+
+# ─── Ensure test accounts exist before any test runs ─────────────────────────
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_accounts():
+    """Create/update test accounts in accounts.json so all tests can log in."""
+    import sys, os as _os
+    _src = _os.path.join(_os.path.dirname(__file__), "..", "..")
+    if _src not in sys.path:
+        sys.path.insert(0, _src)
+    try:
+        from security.bot_auth import (
+            _load_accounts, _save_accounts, create_account
+        )
+        import bcrypt
+
+        def _ensure(uname, upass, role):
+            """Ensure account exists with correct pw_hash, role, status."""
+            accs = _load_accounts()
+            target = next((a for a in accs if a.get("username") == uname.lower()), None)
+            if target is None:
+                create_account(uname, upass, role=role,
+                               display_name=uname.capitalize(), status="active")
+                return
+            # Update in-place if needed
+            changed = False
+            if not target.get("pw_hash"):
+                target["pw_hash"] = bcrypt.hashpw(
+                    upass.encode(), bcrypt.gensalt(rounds=10)
+                ).decode()
+                changed = True
+            if role == "user" and target.get("role") in ("admin", "developer"):
+                target["role"] = "user"
+                changed = True
+            if target.get("status") != "active":
+                target["status"] = "active"
+                changed = True
+            if changed:
+                _save_accounts(accs)
+
+        _ensure(ADMIN_USER, ADMIN_PASS, "admin")
+        _ensure(NORMAL_USER, NORMAL_PASS, "user")
+    except Exception as e:
+        print(f"[conftest] WARNING: could not ensure test accounts: {e}")
 
 # ─── Playwright launch options ───────────────────────────────────────────────
 
