@@ -87,7 +87,7 @@
       <span id="vc-timer" class="fw-bold text-white"
             style="display:none; min-width:36px; text-align:right">0:00</span>
       <button id="vc-btn" class="btn btn-primary" onclick="toggleVoiceChat()"
-              style="min-width:130px; padding:10px 20px; font-size:15px">
+              style="min-width:130px; padding:10px 20px; font-size:15px; touch-action:manipulation; min-height:48px">
         🎤 Record
       </button>
     </div>
@@ -219,15 +219,40 @@ async function vcStartRecord() {
 
 /* ── Stop recording ───────────────────────────────────────────────────────── */
 function vcStopRecord() {
-  if (vcRec && vcRec.state !== 'inactive') vcRec.stop();
   clearInterval(vcInterval); cancelAnimationFrame(vcAnimFrame);
   document.getElementById('vc-timer').style.display = 'none';
   document.getElementById('vc-waveform').style.display = 'none';
-  if (vcStream) { vcStream.getTracks().forEach(t => t.stop()); vcStream = null; }
   if (vcAudioCtx) { vcAudioCtx.close(); vcAudioCtx = null; }
   const btn = document.getElementById('vc-btn');
   btn.textContent = '🎤 Record'; btn.classList.replace('btn-danger', 'btn-primary');
   vcSetStatus('⏳ Sending audio to server…');
+
+  if (vcRec && vcRec.state !== 'inactive') {
+    /* iOS Safari: request final chunk, then stop. onstop fires after last data. */
+    vcRec.requestData && vcRec.requestData();
+    vcRec.stop();
+    /* Safety fallback: if onstop doesn't fire within 3 s, send what we have */
+    const rec = vcRec;
+    const chunks = vcChunks;
+    const mime = rec.mimeType || 'audio/webm';
+    const stream = vcStream;
+    const timeout = setTimeout(() => {
+      if (vcBusy) return;   /* onstop already fired */
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (chunks.length > 0) vcSendChat(new Blob(chunks, { type: mime }));
+      else { vcSetStatus('⚠️ No audio captured — tap again'); vcBusy = false; }
+    }, 3000);
+    /* Wrap onstop so it also clears the fallback and stops the stream */
+    const origOnStop = rec.onstop;
+    rec.onstop = () => {
+      clearTimeout(timeout);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      origOnStop();
+    };
+    vcStream = null;
+  } else {
+    if (vcStream) { vcStream.getTracks().forEach(t => t.stop()); vcStream = null; }
+  }
 }
 
 /* ── Send to /voice/chat — full STT → LLM → TTS pipeline ─────────────────── */

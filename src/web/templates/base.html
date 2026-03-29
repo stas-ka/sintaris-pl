@@ -40,8 +40,11 @@
 <body>
 <div class="app-layout">
 
+  <!-- ── Sidebar drawer overlay (mobile only) ─────────────── -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
   <!-- ── Sidebar ──────────────────────────────────────────── -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-avatar">🤖</div>
       <div>
@@ -106,6 +109,7 @@
   <!-- ── Main area ────────────────────────────────────────── -->
   <main class="main-area">
     <header class="topbar">
+      <button class="hamburger" onclick="openSidebar()" aria-label="Menu">☰</button>
       <h1>{% block page_title %}Dashboard{% endblock %}</h1>
       <div class="flex items-center gap-sm">
         {% block topbar_right %}{% endblock %}
@@ -118,7 +122,37 @@
     </div>
   </main>
 
+  <!-- ── Mobile bottom navigation ────────────────────────── -->
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}">
+      <span class="nav-icon">🏠</span><span>Home</span></a>
+    <a href="/chat" class="{% if active_page == 'chat' %}active{% endif %}">
+      <span class="nav-icon">🤖</span><span>Chat</span></a>
+    <a href="/notes" class="{% if active_page == 'notes' %}active{% endif %}">
+      <span class="nav-icon">📝</span><span>Notes</span></a>
+    <a href="/calendar" class="{% if active_page == 'calendar' %}active{% endif %}">
+      <span class="nav-icon">🗓</span><span>Calendar</span></a>
+    <a href="/voice" class="{% if active_page == 'voice' %}active{% endif %}">
+      <span class="nav-icon">🎤</span><span>Voice</span></a>
+  </nav>
+
 </div>
 {% block extra_scripts %}{% endblock %}
+<script>
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+// Close sidebar on nav link click (mobile)
+document.querySelectorAll('.sidebar-nav a').forEach(function(a) {
+  a.addEventListener('click', function() { closeSidebar(); });
+});
+</script>
 </body>
 </html>

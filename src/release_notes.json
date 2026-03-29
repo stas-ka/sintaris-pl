@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.29",
+    "date":    "2026-03-29",
+    "title":   "Mobile Web UI optimization",
+    "notes":   "- Mobile bottom navigation bar (Home, Chat, Notes, Calendar, Voice)\n- Hamburger menu opens sidebar drawer on mobile\n- Touch targets minimum 44px, fonts optimized for mobile\n- Voice recording stop fixed on iOS Safari (MediaRecorder.onstop fallback)\n- Bottom nav safe-area support for notched devices"
+  },
+  {
     "version": "2026.3.43",
     "date": "2026-03-28",
     "title": "Merge Taris-UI-POC features: Screen DSL + RAG + admin i18n fixes",
