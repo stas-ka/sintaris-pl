@@ -26,6 +26,7 @@ from core.bot_config import (
     log,
     BOT_VERSION, LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
     STT_PROVIDER, FASTER_WHISPER_MODEL, PIPER_MODEL,
+    RAG_ENABLED, RAG_TOP_K,
 )
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS, fmt_prompt
@@ -172,12 +173,39 @@ def _bot_config_block() -> str:
     )
 
 
+def _docs_rag_context(chat_id: int, query: str) -> str:
+    """Return a [KNOWLEDGE] context block from user's FTS5 document search, or empty string.
+
+    Only runs when RAG_ENABLED=1 and the user has uploaded documents.
+    Keeps context to top-3 chunks, capped at 2000 chars total to stay within LLM context.
+    """
+    if not RAG_ENABLED:
+        return ""
+    try:
+        from core.store import store
+        # Quick check: skip FTS search if user has no documents
+        if not store.list_documents(chat_id):
+            return ""
+        results = store.search_fts(query, chat_id, top_k=RAG_TOP_K)
+        if not results:
+            return ""
+        chunks = [r["chunk_text"] for r in results if r.get("chunk_text")]
+        if not chunks:
+            return ""
+        combined = "\n---\n".join(chunks)[:2000]
+        return f"[KNOWLEDGE FROM USER DOCUMENTS]\n{combined}\n[END KNOWLEDGE]\n\n"
+    except Exception as _e:
+        log.debug("[RAG] docs context failed: %s", _e)
+        return ""
+
+
 def _with_lang(chat_id: int, user_text: str) -> str:
-    """Prepend security preamble + bot config + language instruction, then wrap user text."""
+    """Prepend security preamble + bot config + RAG context + language instruction, then wrap user text."""
     from security.bot_security import SECURITY_PREAMBLE, _wrap_user_input
     lang = _resolve_lang(chat_id, user_text)
     lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
-    return SECURITY_PREAMBLE + _bot_config_block() + lang_instr + _wrap_user_input(user_text)
+    rag_ctx = _docs_rag_context(chat_id, user_text)
+    return SECURITY_PREAMBLE + _bot_config_block() + rag_ctx + lang_instr + _wrap_user_input(user_text)
 
 
 def _with_lang_voice(chat_id: int, stt_text: str) -> str:
@@ -187,10 +215,11 @@ def _with_lang_voice(chat_id: int, stt_text: str) -> str:
     lang = _resolve_lang(chat_id, stt_text)
     instruction = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
     config_block = _bot_config_block()
+    rag_ctx = _docs_rag_context(chat_id, stt_text)
     if has_uncertain:
         stt_hint = PROMPTS["stt_hints"].get(lang, PROMPTS["stt_hints"]["en"])
-        return SECURITY_PREAMBLE + config_block + instruction + stt_hint + _wrap_user_input(stt_text)
-    return SECURITY_PREAMBLE + config_block + instruction + _wrap_user_input(stt_text)
+        return SECURITY_PREAMBLE + config_block + rag_ctx + instruction + stt_hint + _wrap_user_input(stt_text)
+    return SECURITY_PREAMBLE + config_block + rag_ctx + instruction + _wrap_user_input(stt_text)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

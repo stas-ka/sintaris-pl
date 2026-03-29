@@ -5,14 +5,16 @@ Responsibilities:
   - Mail digest (show last + refresh)
   - System chat (natural language → bash → confirm → run)
   - Free chat (taris LLM)
-  - Notes UI (menu, list, create, open, edit, delete)
+  - Notes UI (menu, list, create, open, edit, delete, rename, download ZIP)
 """
 
 import hashlib
+import io
 import re
 import subprocess
 import threading
 import time
+import zipfile
 import unicodedata
 from pathlib import Path
 from typing import Optional
@@ -116,6 +118,7 @@ def _notes_list_keyboard(chat_id: int, notes: list[dict]) -> InlineKeyboardMarku
             InlineKeyboardButton(_t(chat_id, "btn_delete"), callback_data=f"note_delete:{cid}"),
         )
     kb.add(InlineKeyboardButton(_t(chat_id, "note_btn_create"), callback_data="note_create"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_download_zip"), callback_data="note_download_zip"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="menu"))
     return kb
 
@@ -234,6 +237,29 @@ def _start_note_replace(chat_id: int, slug: str) -> None:
 
 
 def _handle_note_delete(chat_id: int, slug: str) -> None:
+    """Show delete confirmation before actually deleting the note."""
+    text = _load_note_text(chat_id, slug)
+    if text is None:
+        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
+    title = text.splitlines()[0].lstrip("# ").strip() if text else slug
+    slug_id = _note_cb_id(slug)
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "btn_note_del_confirm"),
+                             callback_data=f"note_del_confirm:{slug_id}"),
+        InlineKeyboardButton("❌ " + _t(chat_id, "btn_back_short"),
+                             callback_data=f"note_open:{slug_id}"),
+    )
+    bot.send_message(chat_id,
+                     _t(chat_id, "note_delete_confirm", title=_escape_md(title)),
+                     parse_mode="Markdown",
+                     reply_markup=kb)
+
+
+def _handle_note_delete_confirmed(chat_id: int, slug: str) -> None:
+    """Perform actual note deletion after user confirmed."""
     deleted = _delete_note_file(chat_id, slug)
     if deleted:
         bot.send_message(chat_id, _t(chat_id, "note_deleted"),
@@ -242,6 +268,56 @@ def _handle_note_delete(chat_id: int, slug: str) -> None:
     else:
         bot.send_message(chat_id, _t(chat_id, "note_not_found"),
                          reply_markup=_notes_menu_keyboard(chat_id))
+
+
+def _start_note_rename(chat_id: int, slug: str) -> None:
+    """Prompt user to enter a new title for the note."""
+    text = _load_note_text(chat_id, slug)
+    if text is None:
+        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
+    current_title = text.splitlines()[0].lstrip("# ").strip() if text else slug
+    _st._user_mode[chat_id]    = "note_rename_title"
+    _st._pending_note[chat_id] = {"step": "rename_title", "slug": slug}
+    from telebot.types import ForceReply
+    bot.send_message(chat_id,
+                     _t(chat_id, "note_rename_prompt", title=_escape_md(current_title)),
+                     parse_mode="Markdown",
+                     reply_markup=ForceReply(selective=False))
+
+
+def _handle_note_download(chat_id: int, slug: str) -> None:
+    """Send a single note as a .md file attachment."""
+    text = _load_note_text(chat_id, slug)
+    if text is None:
+        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
+    title = text.splitlines()[0].lstrip("# ").strip() if text else slug
+    safe_name = re.sub(r"[^\w\s-]", "", title).strip().replace(" ", "_") or slug
+    buf = io.BytesIO(text.encode("utf-8"))
+    buf.name = f"{safe_name}.md"
+    bot.send_document(chat_id, buf)
+
+
+def _handle_note_download_zip(chat_id: int) -> None:
+    """Pack all user notes into a ZIP archive and send it."""
+    notes = _list_notes_for(chat_id)
+    if not notes:
+        bot.send_message(chat_id, _t(chat_id, "notes_zip_empty"),
+                         reply_markup=_notes_menu_keyboard(chat_id))
+        return
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for note in notes:
+            text = _load_note_text(chat_id, note["slug"])
+            if text:
+                safe = re.sub(r"[^\w\s-]", "", note["title"]).strip().replace(" ", "_") or note["slug"]
+                zf.writestr(f"{safe}.md", text)
+    buf.seek(0)
+    buf.name = "notes.zip"
+    bot.send_document(chat_id, buf, caption=_t(chat_id, "notes_zip_ready"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

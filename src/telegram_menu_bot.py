@@ -83,8 +83,10 @@ from telegram.bot_handlers import (
     _handle_chat_message,
     _handle_system_message, _execute_pending_cmd,
     _handle_notes_menu, _handle_note_list, _start_note_create,
-    _handle_note_open, _handle_note_raw, _start_note_edit, _handle_note_delete,
+    _handle_note_open, _handle_note_raw, _start_note_edit,
+    _handle_note_delete, _handle_note_delete_confirmed,
     _start_note_append, _start_note_replace,
+    _start_note_rename, _handle_note_download, _handle_note_download_zip,
     _notes_menu_keyboard,
     _note_slug_from_cb,
     _handle_profile,
@@ -599,6 +601,34 @@ def callback_handler(call):
             _handle_note_delete(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_del_confirm:"):
+        if not _is_guest(cid):
+            slug = _note_slug_from_cb(cid, data[len("note_del_confirm:"):]) or data[len("note_del_confirm:"):]
+            _handle_note_delete_confirmed(cid, slug)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_rename:"):
+        if not _is_guest(cid):
+            slug = _note_slug_from_cb(cid, data[len("note_rename:"):]) or data[len("note_rename:"):]
+            _start_note_rename(cid, slug)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_download:"):
+        if not _is_guest(cid):
+            slug = _note_slug_from_cb(cid, data[len("note_download:"):]) or data[len("note_download:"):]
+            _handle_note_download(cid, slug)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "note_download_zip":
+        if not _is_guest(cid):
+            _handle_note_download_zip(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Send as email ───────────────────────────────────────────────────────
     elif data.startswith("note_email:"):
         from telegram.bot_users import _load_note_text
@@ -932,11 +962,7 @@ def text_handler(message):
         title_line = (existing or "").splitlines()[0] if existing else f"# {slug}"
         content    = f"{title_line}\n\n{message.text.strip()}"
         _save_note_file(cid, slug, content)
-        title = title_line.lstrip("# ").strip()
-        bot.send_message(cid,
-                         _t(cid, "note_updated", title=_escape_md(title)),
-                         parse_mode="Markdown",
-                         reply_markup=_notes_menu_keyboard(cid))
+        _handle_note_open(cid, slug)
         return
 
     if mode == "note_append_content":
@@ -953,12 +979,31 @@ def text_handler(message):
         existing   = _load_note_text(cid, slug) or ""
         content    = existing.rstrip() + "\n\n" + message.text.strip()
         _save_note_file(cid, slug, content)
-        title_line = existing.splitlines()[0] if existing else f"# {slug}"
-        title = title_line.lstrip("# ").strip()
-        bot.send_message(cid,
-                         _t(cid, "note_updated", title=_escape_md(title)),
-                         parse_mode="Markdown",
-                         reply_markup=_notes_menu_keyboard(cid))
+        _handle_note_open(cid, slug)
+        return
+
+    if mode == "note_rename_title":
+        if _is_guest(cid):
+            _st._user_mode.pop(cid, None)
+            _st._pending_note.pop(cid, None)
+            return
+        info = _st._pending_note.pop(cid, {})
+        _st._user_mode.pop(cid, None)
+        slug = info.get("slug")
+        if not slug:
+            _send_menu(cid, greeting=False)
+            return
+        new_title  = message.text.strip()[:100]
+        existing   = _load_note_text(cid, slug)
+        if existing is None:
+            bot.send_message(cid, _t(cid, "note_not_found"),
+                             reply_markup=_notes_menu_keyboard(cid))
+            return
+        lines = existing.splitlines()
+        body_lines = lines[2:] if len(lines) > 2 else (lines[1:] if len(lines) > 1 else [])
+        content = f"# {new_title}\n\n" + "\n".join(body_lines).strip()
+        _save_note_file(cid, slug, content)
+        _handle_note_open(cid, slug)
         return
 
     # ── Email recipient address entry ─────────────────────────────────

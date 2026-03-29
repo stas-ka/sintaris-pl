@@ -312,7 +312,20 @@
     "openclaw_status_offline": "❌ OpenClaw недоступен",
     "system_cmd_confirm": "🖥️ Выполню команду:\n\n```\n{cmd}\n```\n\nПодтвердить?",
     "system_answer": "ℹ️ {answer}",
-    "admin_btn_voice_config": "🎙️ Голосовые настройки"
+    "admin_btn_voice_config": "🎙️ Голосовые настройки",
+    "note_delete_confirm": "🗑 Удалить заметку *{title}*? Это действие нельзя отменить.",
+    "btn_note_del_confirm": "✅ Да, удалить",
+    "note_rename_prompt": "✏️ Введите новый заголовок для заметки *{title}*:",
+    "note_title_changed": "✏️ Заголовок заметки изменён на *{title}*.",
+    "btn_note_rename": "✏️ Переименовать",
+    "btn_download_zip": "⬇️ Скачать все (ZIP)",
+    "btn_download_note": "⬇️ Скачать",
+    "notes_zip_empty": "📭 У вас нет заметок для скачивания.",
+    "notes_zip_ready": "📦 Все ваши заметки упакованы в архив.",
+    "docs_search_prompt": "🔍 Введите запрос для поиска по документам:",
+    "docs_search_empty": "🔍 По запросу *{query}* ничего не найдено.",
+    "docs_search_result": "🔍 *Результаты поиска: {query}*\n\n{results}",
+    "docs_context_used": "📚 Использованы ваши документы как контекст."
   },
   "en": {
     "btn_digest": "📧  Mail Digest",
@@ -627,7 +640,20 @@
     "openclaw_status_offline": "❌ OpenClaw not reachable",
     "system_cmd_confirm": "🖥️ I will run:\n\n```\n{cmd}\n```\n\nConfirm?",
     "system_answer": "ℹ️ {answer}",
-    "admin_btn_voice_config": "🎙️ Voice Config"
+    "admin_btn_voice_config": "🎙️ Voice Config",
+    "note_delete_confirm": "🗑 Delete note *{title}*? This cannot be undone.",
+    "btn_note_del_confirm": "✅ Yes, delete",
+    "note_rename_prompt": "✏️ Enter a new title for note *{title}*:",
+    "note_title_changed": "✏️ Note title changed to *{title}*.",
+    "btn_note_rename": "✏️ Rename",
+    "btn_download_zip": "⬇️ Download all (ZIP)",
+    "btn_download_note": "⬇️ Download",
+    "notes_zip_empty": "📭 You have no notes to download.",
+    "notes_zip_ready": "📦 All your notes packed as archive.",
+    "docs_search_prompt": "🔍 Enter a search query for your documents:",
+    "docs_search_empty": "🔍 Nothing found for *{query}*.",
+    "docs_search_result": "🔍 *Search results: {query}*\n\n{results}",
+    "docs_context_used": "📚 Your documents used as context."
   },
   "de": {
     "btn_digest": "📧  E-Mail-Zusammenfassung",
@@ -942,6 +968,19 @@
     "openclaw_status_offline": "❌ OpenClaw nicht erreichbar",
     "system_cmd_confirm": "🖥️ Führe aus:\n\n```\n{cmd}\n```\n\nBestätigen?",
     "system_answer": "ℹ️ {answer}",
-    "admin_btn_voice_config": "🎙️ Sprachkonfiguration"
+    "admin_btn_voice_config": "🎙️ Sprachkonfiguration",
+    "note_delete_confirm": "🗑 Notiz *{title}* löschen? Dies kann nicht rückgängig gemacht werden.",
+    "btn_note_del_confirm": "✅ Ja, löschen",
+    "note_rename_prompt": "✏️ Neuen Titel für Notiz *{title}* eingeben:",
+    "note_title_changed": "✏️ Titel der Notiz geändert zu *{title}*.",
+    "btn_note_rename": "✏️ Umbenennen",
+    "btn_download_zip": "⬇️ Alle herunterladen (ZIP)",
+    "btn_download_note": "⬇️ Herunterladen",
+    "notes_zip_empty": "📭 Keine Notizen zum Herunterladen vorhanden.",
+    "notes_zip_ready": "📦 Alle Notizen als Archiv gepackt.",
+    "docs_search_prompt": "🔍 Suchanfrage für Dokumente eingeben:",
+    "docs_search_empty": "🔍 Keine Ergebnisse für *{query}*.",
+    "docs_search_result": "🔍 *Suchergebnisse: {query}*\n\n{results}",
+    "docs_context_used": "📚 Ihre Dokumente als Kontext verwendet."
   }
 }

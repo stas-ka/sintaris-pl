@@ -203,7 +203,20 @@ def _notes_user_dir(chat_id: int) -> Path:
 
 
 def _list_notes_for(chat_id: int) -> list[dict]:
-    """Return [{slug, title, mtime}] sorted by modification time (newest first)."""
+    """Return [{slug, title, mtime}] sorted by modification time (newest first).
+
+    Reads from the DB index (store.list_notes) if available; falls back to
+    scanning .md files for backward compatibility with non-migrated data.
+    """
+    try:
+        db_notes = store.list_notes(chat_id)
+        if db_notes:
+            return [{"slug": n["slug"], "title": n["title"],
+                     "mtime": 0} for n in db_notes]
+    except Exception as _e:
+        log.debug("[Notes] store.list_notes failed (%s), using file scan", _e)
+
+    # File-based fallback: scan notes directory
     d = _notes_user_dir(chat_id)
     notes = []
     for f in sorted(d.glob("*.md"), key=lambda x: -x.stat().st_mtime):
@@ -222,17 +235,26 @@ def _load_note_text(chat_id: int, slug: str) -> Optional[str]:
 
 
 def _save_note_file(chat_id: int, slug: str, content: str) -> None:
-    """Write note file (creates or overwrites)."""
+    """Write note file (creates or overwrites) and update DB index."""
     p = _notes_user_dir(chat_id) / f"{slug}.md"
     p.write_text(content, encoding="utf-8")
     log.info(f"[Notes] saved '{slug}' for user {chat_id}")
     try:
         _title = (content.splitlines()[0].lstrip("# ").strip()
                   if content.strip() else slug.replace("_", " "))
-        store.save_note(chat_id, slug, _title, content)
-        p.write_text(content, encoding="utf-8")  # restore: store overwrites with # header
+        # Update DB index only (file is already written above)
+        from core.bot_db import get_db
+        db = get_db()
+        db.execute(
+            """INSERT INTO notes_index (slug, chat_id, title, created_at, updated_at)
+               VALUES (?, ?, ?, datetime('now'), datetime('now'))
+               ON CONFLICT(slug, chat_id) DO UPDATE SET
+                   title = excluded.title, updated_at = datetime('now')""",
+            (slug, chat_id, _title),
+        )
+        db.commit()
     except Exception as _e:
-        log.warning("[Notes] store.save_note failed: %s", _e)
+        log.warning("[Notes] DB index update failed: %s", _e)
 
 
 def _delete_note_file(chat_id: int, slug: str) -> bool:
