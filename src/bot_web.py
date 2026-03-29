@@ -64,6 +64,7 @@ from core.bot_config import (
     OLLAMA_MODEL,
     VOICE_DEBUG_MODE, VOICE_DEBUG_DIR,
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL,
+    PIPER_BIN, PIPER_MODEL,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
 from core.voice_debug import VoiceDebugSession, list_debug_sessions
@@ -226,7 +227,10 @@ def _send_reset_email(to_addr: str, username: str, reset_url: str) -> bool:
         log.warning(f"[Web] Reset e-mail failed → {to_addr}: {exc}")
         return False
 
-app = FastAPI(title="Taris Bot Web UI")
+app = FastAPI(
+    title="Taris Bot Web UI",
+    root_path=os.environ.get("ROOT_PATH", ""),
+)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -2045,7 +2049,7 @@ def _voice_pipeline_status() -> list[dict]:
     ffmpeg_ok = Path("/usr/bin/ffmpeg").exists()
     vosk_ok = (d / "vosk-model-small-ru").is_dir()
     taris_ok = Path(TARIS_BIN).exists()
-    piper_bin_ok = Path("/usr/local/bin/piper").exists()
+    piper_bin_ok = Path(PIPER_BIN).exists()
     piper_med = (d / "ru_RU-irina-medium.onnx").exists()
     piper_low = (d / "ru_RU-irina-low.onnx").exists()
     active_model = get_active_model() or "default"
@@ -2185,7 +2189,7 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
     if not text:
         raise HTTPException(400, "Text is empty after stripping")
 
-    piper_bin = "/usr/local/bin/piper"
+    piper_bin = PIPER_BIN
     if not Path(piper_bin).exists():
         raise HTTPException(503, "Piper TTS not installed")
 
@@ -2193,12 +2197,15 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
     tmpfs_model = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
     low_model   = d / "ru_RU-irina-low.onnx"
     med_model   = d / "ru_RU-irina-medium.onnx"
+    # Prefer tmpfs → low → medium (by preference), else fall back to PIPER_MODEL config
     if tmpfs_model.exists():
         model_path = str(tmpfs_model)
     elif low_model.exists():
         model_path = str(low_model)
     elif med_model.exists():
         model_path = str(med_model)
+    elif Path(PIPER_MODEL).exists():
+        model_path = PIPER_MODEL
     else:
         raise HTTPException(503, "No Piper TTS voice model found")
 
@@ -2383,11 +2390,12 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
             tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
             low_m     = d / "ru_RU-irina-low.onnx"
             med_m     = d / "ru_RU-irina-medium.onnx"
-            piper_bin = "/usr/local/bin/piper"
+            piper_bin = PIPER_BIN
             model_path = (
                 str(tmpfs_m) if tmpfs_m.exists() else
                 str(low_m)   if low_m.exists()   else
-                str(med_m)   if med_m.exists()   else None
+                str(med_m)   if med_m.exists()   else
+                PIPER_MODEL  if Path(PIPER_MODEL).exists() else None
             )
             if model_path and Path(piper_bin).exists():
                 try:
@@ -2470,11 +2478,12 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
         tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
         low_m     = d / "ru_RU-irina-low.onnx"
         med_m     = d / "ru_RU-irina-medium.onnx"
-        piper_bin = "/usr/local/bin/piper"
+        piper_bin = PIPER_BIN
         model_path = (
             str(tmpfs_m) if tmpfs_m.exists() else
             str(low_m)   if low_m.exists()   else
-            str(med_m)   if med_m.exists()   else None
+            str(med_m)   if med_m.exists()   else
+            PIPER_MODEL  if Path(PIPER_MODEL).exists() else None
         )
         if model_path and Path(piper_bin).exists():
             try:
@@ -2797,9 +2806,10 @@ async def api_benchmark(request: Request):
     # ── TTS benchmark (if piper available) ────────────────────────────────
     tts_text = (llm_reply or prompt)[:200]
     d = Path(_TARIS_DIR)
-    piper_bin = "/usr/local/bin/piper"
+    piper_bin = PIPER_BIN
     model_path = next(
-        (str(p) for p in [d / "ru_RU-irina-low.onnx", d / "ru_RU-irina-medium.onnx"]
+        (str(p) for p in [d / "ru_RU-irina-low.onnx", d / "ru_RU-irina-medium.onnx",
+                           Path(PIPER_MODEL)]
          if p.exists()), None
     )
     if model_path and Path(piper_bin).exists():
@@ -2926,4 +2936,6 @@ if __name__ == "__main__":
     else:
         log.warning("[Web] No SSL cert found in ssl/key.pem + ssl/cert.pem — "
                     "serving plain HTTP (mic API will not work in browsers)")
-    uvicorn.run("bot_web:app", host="0.0.0.0", port=8080, reload=False, **_ssl_kwargs)
+    _root_path = os.environ.get("ROOT_PATH", "")
+    uvicorn.run("bot_web:app", host="0.0.0.0", port=8080, reload=False,
+                root_path=_root_path, **_ssl_kwargs)

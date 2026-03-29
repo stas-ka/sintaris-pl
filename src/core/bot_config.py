@@ -228,7 +228,7 @@ RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
 # Bot version — bump on every user-visible deployment
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.29+3"
+BOT_VERSION        = "2026.3.29+4"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

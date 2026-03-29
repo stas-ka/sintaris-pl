@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.29+4",
+    "date": "2026-03-29",
+    "title": "Fix web TTS hardcoded Piper path",
+    "notes": "- Fix web UI TTS endpoint using hardcoded /usr/local/bin/piper instead of PIPER_BIN config\n- Affects all 4 TTS call sites in bot_web.py\n- Web TTS now works on TariStation2 and SintAItion"
+  },
+  {
     "version": "2026.3.29+3",
     "date": "2026-03-29",
     "title": "Clean chat welcome + admin pipeline diagnostics",
