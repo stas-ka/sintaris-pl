@@ -3878,6 +3878,63 @@ def t_rag_context_injection(**_) -> list[TestResult]:
     return results
 
 
+def t_no_hardcoded_strings(**_) -> list[TestResult]:
+    """T55: Key user-visible strings use _t() not hardcoded literals in Python source."""
+    results = []
+
+    checks = [
+        # (file, bad_literal, good_description)
+        ("features/bot_calendar.py",
+         "Записал' if lang == 'ru' else 'Saved'",
+         "cal_event_saved_prefix must use _t(), not inline Russian/English conditional"),
+        ("features/bot_voice.py",
+         "Генерация аудио прервана (бот перезапущен)",
+         "audio_interrupted must use _t(), not hardcoded Russian"),
+        ("features/bot_voice.py",
+         "Заметка / Note:",
+         "voice_note_msg must use _t(), not hardcoded bilingual label"),
+    ]
+    for rel_path, bad_literal, desc in checks:
+        ts = time.time()
+        full_path = Path(__file__).parent.parent / rel_path
+        try:
+            src = full_path.read_text(encoding="utf-8")
+            if bad_literal in src:
+                results.append(TestResult(
+                    f"no_hardcoded:{Path(rel_path).stem}",
+                    "FAIL", time.time() - ts,
+                    f"{desc} — literal still present in {rel_path}",
+                ))
+            else:
+                results.append(TestResult(
+                    f"no_hardcoded:{Path(rel_path).stem}",
+                    "PASS", time.time() - ts,
+                    f"{desc}",
+                ))
+        except Exception as e:
+            results.append(TestResult(f"no_hardcoded:{Path(rel_path).stem}", "FAIL",
+                                      time.time() - ts, str(e)))
+
+    # Also verify the new keys are in all 3 languages
+    ts = time.time()
+    try:
+        strings = json.loads((Path(__file__).parent.parent / "strings.json")
+                             .read_text(encoding="utf-8"))
+        new_keys = ["voice_note_msg", "cal_event_saved_prefix"]
+        missing = [(lang, k) for k in new_keys for lang in ("ru", "en", "de")
+                   if k not in strings.get(lang, {})]
+        if missing:
+            results.append(TestResult("i18n_new_keys_present", "FAIL", time.time() - ts,
+                                      f"Missing keys: {missing}"))
+        else:
+            results.append(TestResult("i18n_new_keys_present", "PASS", time.time() - ts,
+                                      f"New i18n keys present in ru/en/de: {new_keys}"))
+    except Exception as e:
+        results.append(TestResult("i18n_new_keys_present", "FAIL", time.time() - ts, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -3962,6 +4019,8 @@ TEST_FUNCTIONS = [
     t_note_zip_download,
     # RAG context injection in _with_lang / _with_lang_voice (T54)
     t_rag_context_injection,
+    # No hardcoded user-visible strings in Python source (T55)
+    t_no_hardcoded_strings,
 ]
 
 

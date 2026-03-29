@@ -163,6 +163,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T52 | `note_rename_flow` | `note_rename_title` mode present in message handler; `_start_note_rename()` handler exists. Guards the multi-step rename flow. | After editing note rename handlers in `bot_handlers.py` or `telegram_menu_bot.py` |
 | T53 | `note_zip_download` | `_handle_note_download_zip`, `zipfile.ZipFile`, and `io.BytesIO` present in `bot_handlers.py`. Verifies in-memory ZIP generation for bulk note download. | After editing note download handlers |
 | T54 | `rag_context_injection` | `_docs_rag_context()` is called in both `_with_lang()` and `_with_lang_voice()` in `bot_access.py`. Guards FTS5 RAG context being injected into LLM prompts. | After editing prompt builders in `bot_access.py` |
+| T55 | `no_hardcoded_strings` | Key user-visible strings use `_t()` not hardcoded literals: `cal_event_saved_prefix` in `bot_calendar.py`, `audio_interrupted` and `voice_note_msg` in `bot_voice.py`. New i18n keys present in ru/en/de. | After editing bot_calendar.py, bot_voice.py, or strings.json |
 
 ### 2.6 When specific tests are mandatory
 

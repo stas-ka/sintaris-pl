@@ -703,7 +703,7 @@ def _cal_do_confirm_save(chat_id: int) -> None:
     dt_fmt = dt.strftime("%d.%m.%Y %H:%M")
 
     confirm = (
-        f"✅ *{'Записал' if lang == 'ru' else 'Saved'}:*\n"
+        f"✅ *{_t(chat_id, 'cal_event_saved_prefix')}*\n"
         f"📌 {_escape_md(title)}\n"
         f"📅 {dt_fmt}  {cdown}"
     )

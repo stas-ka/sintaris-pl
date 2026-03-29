@@ -102,9 +102,9 @@ def _cleanup_orphaned_tts() -> None:
     for chat_id_str, msg_id in list(data.items()):
         try:
             bot.edit_message_text(
-                "⚠️ Генерация аудио прервана (бот перезапущен)\n"
-                "⚠️ Audio generation interrupted (bot restarted)",
+                _t(int(chat_id_str), "audio_interrupted"),
                 int(chat_id_str), msg_id,
+                parse_mode="Markdown",
             )
             cleaned += 1
         except Exception:
@@ -1110,7 +1110,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             _save_note_file(chat_id, note_slug, note_content)
             reply = _t(chat_id, "note_voice_saved", title=note_title)
             _safe_edit(chat_id, msg.message_id,
-                       f"📝 *Заметка / Note:* _{_escape_md(text)}_\n\n{_escape_md(reply)}",
+                       _t(chat_id, "voice_note_msg", text=_escape_md(text), reply=_escape_md(reply)),
                        parse_mode="Markdown",
                        reply_markup=_voice_back_keyboard(chat_id))
             audio_on = (not opts.get("user_audio_toggle")

@@ -55,7 +55,7 @@ plink -pw "%HOSTPWD%" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/te
 | T10 | `whisper_stt` | whisper.cpp WER ≤ 40% (SKIP if absent) |
 | T11 | `whisper_hallucination_guard` | Sparse-output guard rejects hallucinations; Vosk fallback |
 | T12 | `regression_check` | All timings within 30% of baseline |
-| T13 | `i18n_string_coverage` | ru/en/de keys identical, no empty values, 188 keys |
+| T13 | `i18n_string_coverage` | ru/en/de keys identical, no empty values, 328 keys |
 | T14 | `lang_routing` | `_piper_model_path(lang)` + vosk routing for ru/en/de |
 | T15 | `de_tts_synthesis` | German Piper TTS (SKIP if absent) |
 | T16 | `de_vosk_model` | German Vosk model loads (SKIP if absent) |

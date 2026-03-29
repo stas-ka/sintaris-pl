@@ -1,9 +1,15 @@
 [
   {
+    "version": "2026.3.30+1",
+    "date": "2026-03-30",
+    "title": "Fix hardcoded strings + i18n cleanup",
+    "notes": "- Move cal_event_saved_prefix, voice_note_msg, audio_interrupted from hardcoded Python to strings.json\n- T55 regression test: no hardcoded user-visible strings in Python source\n- Update key count references (188 -> 328)"
+  },
+  {
     "version": "2026.3.30",
-    "date":    "2026-03-30",
-    "title":   "Notes enhancements, DB reads, Documents RAG context",
-    "notes":   "- §22 Notes: delete confirmation dialog before deleting\n- §22 Notes: rename title (new Rename button in edit menu)\n- §22 Notes: download single note as .md or all notes as ZIP\n- §22 Notes: after edit/append show note immediately (no return to menu)\n- §9.1 Notes: list reads from DB index (store.list_notes) with file fallback\n- §9.1 Notes: save uses direct DB upsert (no double-write bug)\n- §10 RAG: user document chunks injected as [KNOWLEDGE] block in all chat prompts\n- §10 RAG: FTS5 search runs per-request when user has uploaded documents\n- update_from_git.sh: package subdir support (core/ telegram/ features/ etc.)\n- setup_voice_openclaw.sh: faster-whisper default model base to small"
+    "date": "2026-03-30",
+    "title": "Notes enhancements, DB reads, Documents RAG context",
+    "notes": "- §22 Notes: delete confirmation dialog before deleting\n- §22 Notes: rename title (new Rename button in edit menu)\n- §22 Notes: download single note as .md or all notes as ZIP\n- §22 Notes: after edit/append show note immediately (no return to menu)\n- §9.1 Notes: list reads from DB index (store.list_notes) with file fallback\n- §9.1 Notes: save uses direct DB upsert (no double-write bug)\n- §10 RAG: user document chunks injected as [KNOWLEDGE] block in all chat prompts\n- §10 RAG: FTS5 search runs per-request when user has uploaded documents\n- update_from_git.sh: package subdir support (core/ telegram/ features/ etc.)\n- setup_voice_openclaw.sh: faster-whisper default model base to small"
   },
   {
     "version": "2026.3.29+10",

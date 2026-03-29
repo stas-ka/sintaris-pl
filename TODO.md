@@ -15,7 +15,7 @@
 - [] German voice models absent on both PIs (`de_DE-thorsten-medium.onnx`, `vosk-model-small-de`)
 - [] PI2 has no Whisper model (`ggml-base.bin`) — Whisper tests SKIP
 - [] Vosk WER regression on short audio (`audio_2026-03-08_08-34-23.ogg`) — WER 0.70 vs threshold 0.35
-- [] Static textes for UI defined partialy in the python . For example bot_calendar.py contains strings in english or urssian languages. It is not allowed to define string directly in the python. strings.json shall be used overall. Fix it in all python scripts and move textes in the strings.json
+- [x] Static texts hardcoded in Python — `bot_calendar.py` `cal_event_saved_prefix`, `bot_voice.py` `audio_interrupted` + `voice_note_msg` moved to strings.json; T55 regression test added (v2026.3.30+1)
 
 
 
