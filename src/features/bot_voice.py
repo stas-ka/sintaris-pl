@@ -382,6 +382,23 @@ def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
 _fw_model_cache: dict = {}   # {(model_size, device, compute): WhisperModel}
 
 
+def _fw_preload() -> None:
+    """Preload the faster-whisper model into memory at startup.
+
+    Called in a background thread from telegram_menu_bot.py when
+    STT_PROVIDER=faster_whisper or faster_whisper_stt voice opt is enabled.
+    Eliminates the ~0.3-1s cold-load on the first voice message.
+    """
+    try:
+        import numpy as _np
+        # 0.5s of silence @ 16kHz, S16LE — just enough to trigger model load
+        silence_pcm = _np.zeros(8000, dtype=_np.int16).tobytes()
+        _stt_faster_whisper(silence_pcm, 16000, "ru")
+        log.info("[FasterWhisper] model preloaded at startup — first voice call will be fast")
+    except Exception as exc:
+        log.debug(f"[FasterWhisper] startup preload skipped: {exc}")
+
+
 def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> Optional[str]:
     """Run faster-whisper on raw S16LE PCM.  Returns transcript or None.
 
@@ -426,6 +443,11 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
                 if _snaps:
                     model_arg = str(_snaps[-1])   # latest snapshot
                     log.info(f"[FasterWhisper] using local cache: {model_arg}")
+            # If we resolved a local snapshot, set HF_HUB_OFFLINE to prevent
+            # network version check on every load (saves ~0.5-1s per process start).
+            import os as _os
+            if model_arg != FASTER_WHISPER_MODEL:
+                _os.environ.setdefault("HF_HUB_OFFLINE", "1")
             _fw_model_cache[cache_key] = WhisperModel(
                 model_arg,
                 device=FASTER_WHISPER_DEVICE,

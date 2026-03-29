@@ -22,7 +22,7 @@ import threading
 # ─── Core ────────────────────────────────────────────────────────────────────
 from core.bot_config import (
     BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
-    PIPER_MODEL_TMPFS, LLM_PROVIDER,
+    PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER,
     log,
 )
 import core.bot_state as _st
@@ -54,7 +54,7 @@ from telegram.bot_users import (
 from features.bot_voice import (
     _handle_voice_message, _handle_note_read_aloud, _handle_digest_tts,
     _warm_piper_cache, _start_persistent_piper, _setup_tmpfs_model,
-    _cleanup_orphaned_tts,
+    _cleanup_orphaned_tts, _fw_preload,
 )
 
 # ─── Admin handlers ───────────────────────────────────────────────────────────
@@ -1143,6 +1143,11 @@ def main() -> None:
     if _st._voice_opts.get("persistent_piper"):
         log.info("[VoiceOpt] persistent_piper enabled — starting Piper keepalive")
         threading.Thread(target=_start_persistent_piper, daemon=True).start()
+
+    # Preload faster-whisper model if it will be used — eliminates first-call cold-load
+    if STT_PROVIDER == "faster_whisper" or _st._voice_opts.get("faster_whisper_stt"):
+        log.info("[FasterWhisper] preloading model in background thread")
+        threading.Thread(target=_fw_preload, daemon=True).start()
 
     # ── Startup tasks ─────────────────────────────────────────────────────
     _st.load_conversation_history()
