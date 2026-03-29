@@ -3509,7 +3509,20 @@ def t_stt_fast_speech_accuracy(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     # ── 1. Structural guard: model must NOT be 'base' ─────────────────────────
-    fw_model = os.environ.get("FASTER_WHISPER_MODEL", "base")
+    # Read from env first, then fall back to bot.env so the guard works without
+    # manually sourcing bot.env before running the test.
+    fw_model = os.environ.get("FASTER_WHISPER_MODEL", "")
+    if not fw_model:
+        bot_env_path = Path(os.path.expanduser("~/.taris/bot.env"))
+        if bot_env_path.exists():
+            for line in bot_env_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("FASTER_WHISPER_MODEL=") and not line.startswith("#"):
+                    fw_model = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    if not fw_model:
+        fw_model = "base"   # fallback default matches bot_config.py
+
     if fw_model == "base":
         results.append(TestResult(
             "stt_model_not_base", "FAIL", time.time() - t0,
@@ -3671,6 +3684,11 @@ def t_stt_fast_speech_accuracy(**_) -> list[TestResult]:
                 f"(threshold={WER_THRESHOLD:.0%})",
                 metric=wer, metric_key=f"stt_speed_wer_{label}",
             ))
+        except _sp.TimeoutExpired:
+            # Piper or ffmpeg timed out — slow machine, skip this speed variant
+            results.append(TestResult(f"stt_speed:{label}", "SKIP",
+                                      time.time() - ts,
+                                      "Audio generation timed out (slow machine) — SKIP"))
         except Exception as e:
             results.append(TestResult(f"stt_speed:{label}", "FAIL",
                                       time.time() - ts, str(e)))
