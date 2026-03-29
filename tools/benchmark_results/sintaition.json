@@ -1,0 +1,494 @@
+[
+  {
+    "target": "sintaition",
+    "timestamp": "2026-03-29T11:22:21",
+    "sysinfo": {
+      "hostname": "SintAItion",
+      "cpu": "AMD Ryzen AI 9 HX 470 w/ Radeon 890M",
+      "ram_gb": 46.7,
+      "python": "3.12.3",
+      "arch": "x86_64"
+    },
+    "config": {
+      "piper_model": "ru_RU-irina-medium.onnx",
+      "piper_bin": "/home/stas/.taris/piper/piper",
+      "fw_device": "cpu",
+      "fw_compute": "int8",
+      "ollama_url": "http://127.0.0.1:11434",
+      "ollama_models": [
+        "qwen2:0.5b"
+      ]
+    },
+    "results": [
+      {
+        "suite": "stt",
+        "label": "short_ru",
+        "ok": false,
+        "error": "TTS fixture unavailable (piper missing)"
+      },
+      {
+        "suite": "stt",
+        "label": "medium_ru",
+        "ok": false,
+        "error": "TTS fixture unavailable (piper missing)"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "factual_short",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "factual_medium",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "creative",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "command_like",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      }
+    ]
+  },
+  {
+    "target": "sintaition",
+    "timestamp": "2026-03-29T11:20:34",
+    "sysinfo": {
+      "hostname": "SintAItion",
+      "cpu": "AMD Ryzen AI 9 HX 470 w/ Radeon 890M",
+      "ram_gb": 46.7,
+      "python": "3.12.3",
+      "arch": "x86_64"
+    },
+    "config": {
+      "piper_model": "ru_RU-irina-medium.onnx",
+      "piper_bin": "/home/stas/.taris/piper/piper",
+      "fw_device": "cpu",
+      "fw_compute": "int8",
+      "ollama_url": "http://127.0.0.1:11434",
+      "ollama_models": [
+        "qwen2:0.5b",
+        "qwen3:14b"
+      ]
+    },
+    "results": [
+      {
+        "suite": "stt",
+        "label": "short_ru",
+        "ok": false,
+        "error": "TTS fixture unavailable (piper missing)"
+      },
+      {
+        "suite": "stt",
+        "label": "medium_ru",
+        "ok": false,
+        "error": "TTS fixture unavailable (piper missing)"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "factual_short",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "factual_medium",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "creative",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "command_like",
+        "ok": false,
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "factual_short",
+        "prompt_text": "Сколько планет в солнечной системе? Ответь одним словом.",
+        "response_preview": "",
+        "latency_s": 27.223,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "factual_medium",
+        "prompt_text": "Объясни кратко (2-3 предложения) как работает нейронная сеть.",
+        "response_preview": "",
+        "latency_s": 24.594,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "creative",
+        "prompt_text": "Напиши короткое (3-4 предложения) стихотворение о весне на русском языке.",
+        "response_preview": "",
+        "latency_s": 24.687,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "command_like",
+        "prompt_text": "Добавь напоминание: позвонить маме в 18:00.",
+        "response_preview": "",
+        "latency_s": 24.719,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      }
+    ]
+  },
+  {
+    "target": "sintaition",
+    "timestamp": "2026-03-29T11:24:20",
+    "sysinfo": {
+      "hostname": "SintAItion",
+      "cpu": "AMD Ryzen AI 9 HX 470 w/ Radeon 890M",
+      "ram_gb": 46.7,
+      "python": "3.12.3",
+      "arch": "x86_64"
+    },
+    "config": {
+      "piper_model": "ru_RU-irina-medium.onnx",
+      "piper_bin": "/home/stas/.taris/piper/piper",
+      "fw_device": "cpu",
+      "fw_compute": "int8",
+      "ollama_url": "http://127.0.0.1:11434",
+      "ollama_models": [
+        "qwen2:0.5b",
+        "qwen3:14b"
+      ]
+    },
+    "results": [
+      {
+        "suite": "tts",
+        "label": "short_ru",
+        "ok": true,
+        "chars": 29,
+        "words": 5,
+        "latency_s": 0.303,
+        "audio_duration_s": 4.395,
+        "rtf": 0.069,
+        "ms_per_char": 10.4,
+        "model": "ru_RU-irina-medium.onnx"
+      },
+      {
+        "suite": "tts",
+        "label": "medium_ru",
+        "ok": true,
+        "chars": 105,
+        "words": 19,
+        "latency_s": 0.457,
+        "audio_duration_s": 11.143,
+        "rtf": 0.041,
+        "ms_per_char": 4.4,
+        "model": "ru_RU-irina-medium.onnx"
+      },
+      {
+        "suite": "tts",
+        "label": "long_ru",
+        "ok": true,
+        "chars": 204,
+        "words": 33,
+        "latency_s": 0.775,
+        "audio_duration_s": 21.259,
+        "rtf": 0.036,
+        "ms_per_char": 3.8,
+        "model": "ru_RU-irina-medium.onnx"
+      },
+      {
+        "suite": "tts",
+        "label": "short_de",
+        "ok": true,
+        "chars": 23,
+        "words": 5,
+        "latency_s": 0.26,
+        "audio_duration_s": 3.991,
+        "rtf": 0.065,
+        "ms_per_char": 11.3,
+        "model": "ru_RU-irina-medium.onnx"
+      },
+      {
+        "suite": "tts",
+        "label": "short_en",
+        "ok": true,
+        "chars": 38,
+        "words": 7,
+        "latency_s": 0.237,
+        "audio_duration_s": 3.735,
+        "rtf": 0.063,
+        "ms_per_char": 6.2,
+        "model": "ru_RU-irina-medium.onnx"
+      },
+      {
+        "suite": "stt",
+        "engine": "vosk",
+        "ok": false,
+        "error": "model not found: /home/stas/.taris/vosk-model-small-ru",
+        "label": "short_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "faster-whisper",
+        "model": "tiny",
+        "device": "cpu",
+        "compute": "int8",
+        "text": "Привет! Как дела? Что нового?",
+        "ref_text": "привет как дела что нового",
+        "wer": 0.6,
+        "latency_s": 0.37,
+        "model_load_s": 3.172,
+        "audio_duration_s": 4.235,
+        "rtf": 0.087,
+        "detected_lang": "ru",
+        "lang_prob": 1,
+        "ok": true,
+        "label": "short_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "faster-whisper",
+        "model": "base",
+        "device": "cpu",
+        "compute": "int8",
+        "text": "Привет, как дела? Что нового?",
+        "ref_text": "привет как дела что нового",
+        "wer": 0.6,
+        "latency_s": 0.38,
+        "model_load_s": 4.499,
+        "audio_duration_s": 4.235,
+        "rtf": 0.09,
+        "detected_lang": "ru",
+        "lang_prob": 1,
+        "ok": true,
+        "label": "short_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "faster-whisper",
+        "model": "small",
+        "device": "cpu",
+        "compute": "int8",
+        "text": "Привет! Как дела? Что нового?",
+        "ref_text": "привет как дела что нового",
+        "wer": 0.6,
+        "latency_s": 0.926,
+        "model_load_s": 13.912,
+        "audio_duration_s": 4.235,
+        "rtf": 0.219,
+        "detected_lang": "ru",
+        "lang_prob": 1,
+        "ok": true,
+        "label": "short_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "vosk",
+        "ok": false,
+        "error": "model not found: /home/stas/.taris/vosk-model-small-ru",
+        "label": "medium_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "faster-whisper",
+        "model": "tiny",
+        "device": "cpu",
+        "compute": "int8",
+        "text": "Напомним не завтра в девять утра, а встречи с врачом. Также добавь в список покупок молоко, хлеб и яблоки.",
+        "ref_text": "напомни мне завтра в девять утра о встрече с врачом также добавь в список покупок молоко хлеб и яблоки",
+        "wer": 0.421,
+        "latency_s": 0.368,
+        "model_load_s": 0.207,
+        "audio_duration_s": 11.223,
+        "rtf": 0.033,
+        "detected_lang": "ru",
+        "lang_prob": 1,
+        "ok": true,
+        "label": "medium_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "faster-whisper",
+        "model": "base",
+        "device": "cpu",
+        "compute": "int8",
+        "text": "Напомни мне завтра в 9 утра встречи с врачом. Также добавь в список покупок молоко, хлеб и яблоки.",
+        "ref_text": "напомни мне завтра в девять утра о встрече с врачом также добавь в список покупок молоко хлеб и яблоки",
+        "wer": 0.316,
+        "latency_s": 0.506,
+        "model_load_s": 0.231,
+        "audio_duration_s": 11.223,
+        "rtf": 0.045,
+        "detected_lang": "ru",
+        "lang_prob": 1,
+        "ok": true,
+        "label": "medium_ru"
+      },
+      {
+        "suite": "stt",
+        "engine": "faster-whisper",
+        "model": "small",
+        "device": "cpu",
+        "compute": "int8",
+        "text": "Напомним мне завтра в 9 утра встречи с врачом. Также добавь в список покупок молоко, хлеб и яблоки.",
+        "ref_text": "напомни мне завтра в девять утра о встрече с врачом также добавь в список покупок молоко хлеб и яблоки",
+        "wer": 0.368,
+        "latency_s": 1.284,
+        "model_load_s": 0.391,
+        "audio_duration_s": 11.223,
+        "rtf": 0.114,
+        "detected_lang": "ru",
+        "lang_prob": 1,
+        "ok": true,
+        "label": "medium_ru"
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "factual_short",
+        "prompt_text": "Сколько планет в солнечной системе? Ответь одним словом.",
+        "response_preview": "Всего три.",
+        "latency_s": 0.529,
+        "response_chars": 12,
+        "chars_per_sec": 23.6,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "factual_medium",
+        "prompt_text": "Объясни кратко (2-3 предложения) как работает нейронная сеть.",
+        "response_preview": "Нейронная сеть, или мозг, - это сложный процесс, который позволяет компьютеру обрабатывать и анализи",
+        "latency_s": 1.463,
+        "response_chars": 699,
+        "chars_per_sec": 477.8,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "creative",
+        "prompt_text": "Напиши короткое (3-4 предложения) стихотворение о весне на русском языке.",
+        "response_preview": "Весенняя лирика, как волшебная эзоптическая сказка,\nЗолотистый лунный свет, божественный дар,\nСолнце",
+        "latency_s": 0.826,
+        "response_chars": 244,
+        "chars_per_sec": 295.9,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen2:0.5b",
+        "prompt": "command_like",
+        "prompt_text": "Добавь напоминание: позвонить маме в 18:00.",
+        "response_preview": "\"Звоните маме в 18:00.\"",
+        "latency_s": 0.189,
+        "response_chars": 23,
+        "chars_per_sec": 121.9,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "factual_short",
+        "prompt_text": "Сколько планет в солнечной системе? Ответь одним словом.",
+        "response_preview": "",
+        "latency_s": 25.195,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "factual_medium",
+        "prompt_text": "Объясни кратко (2-3 предложения) как работает нейронная сеть.",
+        "response_preview": "Нейронная сеть состоит из слоёв искусственных нейронов, которые обрабатыва",
+        "latency_s": 25.51,
+        "response_chars": 37,
+        "chars_per_sec": 1.5,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "creative",
+        "prompt_text": "Напиши короткое (3-4 предложения) стихотворение о весне на русском языке.",
+        "response_preview": "",
+        "latency_s": 25.245,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "llm",
+        "model": "qwen3:14b",
+        "prompt": "command_like",
+        "prompt_text": "Добавь напоминание: позвонить маме в 18:00.",
+        "response_preview": "",
+        "latency_s": 25.268,
+        "response_chars": 0,
+        "chars_per_sec": 0.0,
+        "n_repeats": 2,
+        "ok": true
+      },
+      {
+        "suite": "pipeline",
+        "fw_model": "small",
+        "llm_model": "qwen2:0.5b",
+        "fixture_s": 0.507,
+        "stt_s": 1.543,
+        "stt_ok": true,
+        "stt_text": "Привет! Как дела? Что нового?",
+        "llm_s": 1.674,
+        "llm_ok": true,
+        "tts_reply_s": 0.334,
+        "tts_ok": true,
+        "total_s": 4.058,
+        "ok": true
+      }
+    ]
+  }
+]
