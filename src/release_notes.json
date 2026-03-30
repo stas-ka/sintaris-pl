@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.30+4",
+    "date":    "2026-03-30",
+    "title":   "RAG pipeline fixes and admin LLM temperature control",
+    "notes":   "- Fix: store.log_rag_activity() was never called — RAG log was always empty; now called after every FTS retrieval\n- Fix: FTS search now enforced with rag_timeout via concurrent.futures (no more silent hangs)\n- Feature: LLM temperature configurable at runtime via Admin > RAG Settings (range 0.0-2.0)\n- Feature: _effective_temperature() in bot_llm.py reads runtime setting, falls back to LOCAL_TEMPERATURE\n- Feature: MAX_DOC_SIZE_MB=20 constant; upload rejects oversized files with user-visible error\n- Improvement: docs_restrictions_info now shows max file size (20 MB) in all 3 languages\n- Test: T58 regression test (8 checks) for all §4 RAG pipeline fixes\n- Docs: 3 Mermaid architecture diagrams added to doc/architecture/stacks.md"
+  },
+  {
     "version": "2026.3.30+3",
     "date": "2026-03-30",
     "title": "Multi-turn context and system message fix",

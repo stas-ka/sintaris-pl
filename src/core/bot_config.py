@@ -219,6 +219,7 @@ EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
 RAG_ENABLED    = os.environ.get("RAG_ENABLED",    "1") == "1"
 RAG_TOP_K      = int(os.environ.get("RAG_TOP_K",      "3"))
 RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
+MAX_DOC_SIZE_MB = int(os.environ.get("MAX_DOC_SIZE_MB", "20"))  # Telegram max = 20 MB
 RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
 RAG_SETTINGS_FILE = os.path.expanduser("~/.taris/rag_settings.json")
 # LLM / RAG call timeouts (seconds) — overridable at runtime via Admin Panel
@@ -226,7 +227,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.30+3"
+BOT_VERSION        = "2026.3.30+4"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

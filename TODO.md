@@ -55,12 +55,12 @@ Role validation on every command/callback, security event logging, configurable 
 ---
 
 ## 4. Content & Knowledge
-- [ ] Timeout monitoring by using RAG services or by waiting for answer from LLM
-- [ ] settings for using LLM+RAG configurable (temperature, sead, system prompt, role, chunk counts) via Admin panel
-- [ ] settings incl. credentials to connect to remote RAG MCP service via Admin panel
-- [ ] information for the user about restrictions for uploadable documents and size of database over telegram and web ui
-- [ ] logging in DB information about  founded chunks and prompt by requests to llm (input) and results from llm inclusive returned system information . Access via Admin panel to last RAG activities(log outpus)
-- [ ] after uploading document shall be saved statistic about source document parsing, chuncking, embedding as protocol in the database . Output statistic for Admin by loading documents 
+- [x] Timeout monitoring — FTS search enforced with `rag_timeout` via `concurrent.futures` (v2026.3.30+4)
+- [x] Settings for LLM+RAG configurable via Admin Panel: top-K, chunk size, timeout, **temperature** (0.0–2.0) editable at runtime (v2026.3.30+4; seed/system-prompt/role are open)
+- [ ] Settings incl. credentials to connect to remote RAG MCP service via Admin panel → §4.2
+- [x] Information for the user about upload restrictions (Max 20 MB shown in docs menu and enforced at upload; `MAX_DOC_SIZE_MB=20` constant) (v2026.3.30+4)
+- [x] `store.log_rag_activity()` now called after every FTS retrieval — RAG log populated; Admin Panel shows last 20 queries (v2026.3.30+4; LLM prompt/response preview still open)
+- [ ] After uploading: save parse/chunk/embed stats as protocol in DB; show per-document stats to Admin (stats stored in meta — no UI yet)
 
 
 ---
@@ -70,14 +70,14 @@ Role validation on every command/callback, security event logging, configurable 
 → Architecture: [concept/rag-memory-architecture.md](concept/rag-memory-architecture.md) (Variant C — Hybrid Tiered RAG, score 4.45)
 
 - [x] RAG on/off toggle in Admin Panel via `RAG_FLAG_FILE` (`~/.taris/rag_disabled`); `RAG_ENABLED`, `RAG_TOP_K`, `RAG_CHUNK_SIZE` env-var constants in `bot_config.py`; admin callbacks `admin_rag_menu` / `admin_rag_toggle` / `admin_rag_log` wired (v2026.3.43)
-- [ ] Configurable RAG settings from Admin Panel UI (top-K, chunk size, temperature editable at runtime — currently env-var only)
+- [x] Configurable RAG settings from Admin Panel UI: top-K, chunk size, timeout, **temperature** (float 0.0–2.0) editable at runtime via `_effective_temperature()` in `bot_llm.py` (v2026.3.30+4; seed/system-prompt still open)
 - [x] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp — implemented in §3.1 (v2026.3.32)
 - [x] FTS5-only RAG pipeline: document upload → `_chunk_text()` (512-char) → `doc_chunks` FTS5 virtual table → `search_fts()` → LLM prompt injection in `bot_handlers.py` (v2026.3.43)
 - [x] `install_sqlite_vec.sh` setup script + `vec_embeddings` table (sqlite-vec `vec0`, 384-dim) + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` adapter methods ready in `store_sqlite.py` — schema and plumbing in place (v2026.4.13)
 - [ ] `all-MiniLM-L6-v2` embeddings via ONNX Runtime: no `EMBED_MODEL` constant, no embedding generation code wired yet; Pi 5/Server only; graceful FTS5-only fallback on Pi 3
 - [ ] pgvector HNSW (OpenClaw/VPS) — §25.6 scope
-- [ ] Timeout monitoring for RAG / LLM calls; configurable `MCP_TIMEOUT` per provider
-- [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected (v2026.3.43)
+- [x] Timeout monitoring for RAG/LLM calls — FTS enforced via `concurrent.futures` with `RAG_TIMEOUT` constant; `MCP_TIMEOUT` per provider still open (v2026.3.30+4)
+- [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected; `log_rag_activity()` called after every FTS retrieval (v2026.3.30+4)
 
 ### 4.2 Remote RAG Service (MCP) 🔲
 → Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
