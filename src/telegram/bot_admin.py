@@ -1216,6 +1216,7 @@ def _handle_admin_rag_stats(chat_id: int) -> None:
 
 
 
+def _handle_admin_llm_trace(chat_id: int) -> None:
     """Show a detailed context trace of recent LLM calls for this user.
 
     Displays: provider/model, temperature, history count/chars, RAG chunks,
