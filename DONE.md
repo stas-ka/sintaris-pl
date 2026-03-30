@@ -29,6 +29,8 @@
 | 0.18 STT shows "Vosk" in Web UI on OpenClaw | STT provider label in web UI now reads from `STT_PROVIDER` env var, not hardcoded | v2026.3.29+4 |
 | 0.19 Notes "All Notes" button hangs / 400 BUTTON_DATA_INVALID | Cyrillic slugs exceeded 64-byte Telegram callback_data limit; fixed with SHA1 hash IDs (`_note_cb_id`) + reverse lookup; `_slug()` truncates at 48 bytes | v2026.3.29+7 |
 | 0.20 Web TTS hardcoded Piper path | Fixed web TTS to use `PIPER_BIN` config constant instead of hardcoded path | v2026.3.29+4 |
+| 0.21 Voice pipeline ignored conversation history | `bot_voice.py` called bare `ask_llm()` (stateless); fixed to use `ask_llm_with_history()` with system message + long-term memory + history + `_voice_user_turn_content()`; both user and assistant turns now saved to `chat_history` via `add_to_history()`; T59 regression test added | v2026.3.30+5 |
+| 0.22 LLM context contamination (1837 year anchoring) | Added LLM call context trace tool: `llm_calls` table extended (model, temperature, system_chars, history_chars, rag_chunks, response_preview, context_snapshot); `db_get_llm_trace()`; Admin → LLM → 🔍 Context Trace panel shows last 5 calls with full breakdown; voice pipeline now logs to `llm_calls`; T60 (12 checks) | v2026.3.30+6 |
 ---
 
 
@@ -262,6 +264,38 @@ Full regression test run on both PIs. **Vosk wins decisively** on Raspberry Pi h
 - [x] Document screen file format as new section §19 in `doc/dev-patterns.md`
 - [x] Update `doc/bot-code-map.md` with `screen_loader.py` entry
 
+---
+
+## 2. Conversation & Memory
+
+### 2.1 Conversation Memory System ✅ Implemented (v2026.3.33 / v2026.3.30+5)
+
+Per-user sliding window history stored in SQLite `chat_history` table; injected as `role:system` + prior turns into every LLM call.
+
+- [x] Store per-user conversation history (sliding window, default 15 messages)
+- [x] Inject last N messages as context into LLM prompt
+- [x] Persist across restarts — stored in SQLite `chat_history` (not JSON)
+- [x] Delete personal context (memory) via Profile menu after confirmation (v2026.3.30+)
+- [x] Voice pipeline uses `ask_llm_with_history()` with full system message + long-term memory + history + `_voice_user_turn_content()`; both user and assistant turns saved via `add_to_history()` (v2026.3.30+5)
+
+---
+
+## 20.3 Copilot Optimization — Larger Refactors ✅ All done
+
+- [x] **P-5** ~~Split `src/bot_web.py`~~ — superseded by §21 (Screen DSL + YAML Loader): declarative screen files naturally modularize UI without risky file split. Screen logic migrates to `src/screens/*.yaml`; `bot_web.py` gains a single `/dynamic/{screen_id}` route instead of N hardcoded render blocks.
+- [x] **P-11** Back-link footers added to all 9 `doc/todo/*.md` specs; `storage-architecture.md` noted as 18 KB (> 10 KB target, trimming deferred) — ✅ done
+
+---
+
+## 22. Notes ✅ All implemented (v2026.3.30)
+
+### 22.1 Download, Upload, Edit Notes
+
+- [x] Every user can download all Notes (in Zip) or every Note separately (v2026.3.30)
+- [x] Deleting a Note requires confirmation from user (v2026.3.30)
+- [x] Note title is changeable — function to change title of Note added (v2026.3.30)
+- [x] Two-step add/change content flow eliminated — Append/Replace available in first step (v2026.3.30)
+- [x] After updating Note, it is immediately visible with add/change buttons available (v2026.3.30)
 
 ---
 

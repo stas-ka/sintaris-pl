@@ -42,18 +42,6 @@ Role validation on every command/callback, security event logging, configurable 
 ---
 
 
-## 2. Conversation & Memory
-
-### 2.1 Conversation Memory System ✅ Implemented (v2026.3.33)
-
-- [x] Store per-user conversation history (sliding window, default 15 messages)
-- [x] Inject last N messages as context into LLM prompt
-- [x] Optional: persist across restarts (JSON / SQLite)
-- [x] Delete personal context (memory) via Profile menu after confirmation (v2026.3.30+)
-
-
----
-
 ## 4. Content & Knowledge
 - [x] Timeout monitoring — FTS search enforced with `rag_timeout` via `concurrent.futures` (v2026.3.30+4)
 - [x] Settings for LLM+RAG configurable via Admin Panel: top-K, chunk size, timeout, **temperature** (0.0–2.0) editable at runtime (v2026.3.30+4; seed/system-prompt/role are open)
@@ -282,18 +270,6 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 - [ ] pgvector HNSW index and full RAG pipeline on PostgreSQL (§25.6 Phase B)
 - [ ] Screen DSL: `visible_variants: [openclaw]` buttons shown only on OpenClaw (§21.6)
 
-## 20. Copilot Performance Optimization ✅ Implemented (v2026.3.43)
-
-Reduce context-window consumption so Copilot sessions sustain 8–10 turns without compaction.  
-→ [Analysis & Proposals](concept/copilot_optimization.md) | [Vibe Coding Guidelines](doc/vibe-coding-guidelines.md)
-
-**Root causes:** auto-loaded instructions too large, duplicate deploy steps in 4 locations, "ALWAYS read" pulls 39 KB docs, `safe-update.instructions.md` scoped to `**`.
-
-### 20.3 Larger refactors
-
-- [x] **P-5** ~~Split `src/bot_web.py`~~ — **superseded by TODO 21** (Screen DSL + YAML Loader): declarative screen files naturally modularize UI without risky file split. Screen logic migrates to `src/screens/*.yaml`; `bot_web.py` gains a single `/dynamic/{screen_id}` route instead of N hardcoded render blocks.
-- [x] **P-11** Back-link footers added to all 9 `doc/todo/*.md` specs; `storage-architecture.md` noted as 18 KB (> 10 KB target, trimming deferred) — ✅ done
-
 ## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader �
 
 Extend the existing Screen DSL with a declarative file loader that reads screen
@@ -307,16 +283,6 @@ incremental migration from Python-coded screens.
 - [ ] Admin panel page: CodeMirror YAML editor + live preview pane
 - [ ] `PUT /admin/screens/{id}` route to save edited YAML to `src/screens/`
 - [ ] Auto-trigger `reload_screens()` on save
-
-## 22. Notes
-### 22.1. Download and Upload Notes
-- [x] Every user can download all Notes(in Zip) or every Note separate (v2026.3.30)
-- [x] Deleting of Note needs confirmation of user (v2026.3.30)
-- [x] Title of Note shall be changeable: Add function to Change Title of Note (v2026.3.30)
-- [x] Two steps to add or change content of Notes is not needed — Append/Replace available in first step (v2026.3.30)
-- [x] After Update Note is visible and buttons to add/change are available (v2026.3.30)
-
----
 
 ## 23. Research & Comparison — Hybrid RAG vs Google Grounding 🔲
 
