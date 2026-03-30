@@ -53,7 +53,58 @@ Modifying user roles, adding access guards, changing `bot_security.py`, `bot_acc
 
 ---
 
-## 6.4 Runtime Secrets
+## 6.5 Planned RBAC Extensions
+
+> ⏳ All items in this section are **not yet implemented** unless marked ✅.
+
+### Full Role Model (Target)
+
+| Role | Status | System Chat | Admin Panel | Dev Menu | Features |
+|---|---|---|---|---|---|
+| **Admin** | ✅ Implemented | ✅ Read + config ops | ✅ Full | ❌ No | ✅ Full |
+| **Developer** | ✅ Infra done | ✅ All ops + restart | ✅ Full | ⏳ Menu not built | ✅ Full |
+| **Full User** | ✅ Implemented | ❌ No | ❌ No | ❌ No | ✅ Full |
+| **Approved Guest** | ✅ Implemented | ❌ No | ❌ No | ❌ No | ✅ Full (dynamic) |
+| **Limited Guest** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ Subset only |
+| **Read-only** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ View only, no writes |
+| **Per-feature user** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ e.g. calendar-only |
+| **Group/shared** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ Shared chat_id namespace |
+
+→ Spec: [doc/todo/1.1-rbac.md](../todo/1.1-rbac.md) · [doc/todo/1.3-developer-role.md](../todo/1.3-developer-role.md)
+
+### Developer Menu (Planned)
+
+> ⏳ **OPEN:** Dev menu not yet built — infra (`_is_developer()`, allowlists) is ready. → [TODO.md §1.1](../TODO.md)
+
+| Button | Action | Allowlist class |
+|---|---|---|
+| 💬 Dev Chat | LLM with source context injected | n/a |
+| 🔄 Restart Bot | `systemctl restart taris-telegram` + confirm gate | `DEVELOPER_ALLOWED_CMDS` |
+| 📋 View Log | Last 30 lines `telegram_bot.log` | `ADMIN_ALLOWED_CMDS` |
+| 🐛 Last Error | Last ERROR line from journal | `ADMIN_ALLOWED_CMDS` |
+| 📂 File List | `~/.taris/*.py` with sizes + mtimes | `ADMIN_ALLOWED_CMDS` |
+
+### MicoGuard — Central Security Layer (Planned)
+
+> ⏳ **OPEN:** Not started. → [TODO.md §1.2](../TODO.md)
+
+| Feature | Description |
+|---|---|
+| Centralised role check | Every callback/command validated at a single entry point |
+| Security event logging | Separate `security.log`, not mixed with `telegram_bot.log` |
+| Configurable policies | Access rules via admin UI + config file |
+| Runtime policy updates | No service restart needed |
+
+### Web UI Auth (Planned)
+
+> ⏳ **OPEN:** Current Web UI uses local password hash. OAuth2/SSO planned. → [TODO.md §1](../TODO.md)
+
+| Feature | Status |
+|---|---|
+| Local password (`WEBCHAT_PWD_HASH` bcrypt) | ✅ Implemented |
+| JWT session tokens | ✅ Implemented (`python-jose`) |
+| OAuth2 / OIDC | ⏳ Planned |
+| Telegram Login Widget | ⏳ Planned |
 
 Secrets never in source code. All loaded from `~/.taris/bot.env` via `os.environ.get()` with safe defaults.
 

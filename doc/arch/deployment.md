@@ -1,6 +1,6 @@
 # Taris — Deployment, File Layout & Configuration
 
-**Version:** `2026.3.29`  
+**Version:** `2026.3.30+3`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -13,6 +13,56 @@ Taris supports two deployment targets, controlled by `DEVICE_VARIANT` in `bot.en
 |---|---|---|---|---|
 | **PicoClaw** | `picoclaw` (default) | Raspberry Pi 4/5 | `taris` / `openai` / `local` | No (not needed) |
 | **OpenClaw** | `openclaw` | Laptop / Mini-PC | `openclaw` → GPT-5+ / `openai` | Yes (`/api/status`, `/api/chat`) |
+
+---
+
+## Hardware Requirements
+
+### PicoClaw — Raspberry Pi
+
+| Spec | Minimum (Pi 3 B+) | Recommended (Pi 4 B) | Optimal (Pi 5) |
+|---|---|---|---|
+| **RAM** | 1 GB | 4 GB | 8 GB |
+| **CPU** | 4× Cortex-A53 1.2 GHz | 4× Cortex-A72 1.5 GHz | 4× Cortex-A76 2.4 GHz |
+| **Storage** | 8 GB microSD | 32 GB microSD | 64 GB microSD or NVMe HAT |
+| **Audio** | USB microphone + speaker | RB-TalkingPI HAT or USB | RB-TalkingPI HAT or USB |
+| **Network** | 100 Mbit Ethernet or WiFi | Gigabit Ethernet | Gigabit Ethernet |
+| **LLM local** | ❌ Not practical | ✅ 7B GGUF (slow ~3 tok/s) | ✅ 7B GGUF (usable ~8 tok/s) |
+| **Vosk STT** | ✅ small model only | ✅ small or medium | ✅ any model |
+| **Piper TTS** | ✅ irina-low preferred | ✅ irina-medium | ✅ irina-medium |
+
+**Audio HAT note:** Philips SPC 520 USB webcam mic fails on Pi 3 DWC_OTG USB controller — isochronous transfers return zero data. Use a standard USB microphone or RB-TalkingPI I2S HAT.
+
+**OS:** Raspberry Pi OS Bookworm 64-bit Lite (no desktop). Enable SSH, set hostname, disable GUI.
+
+### OpenClaw — Laptop / Mini-PC (x86_64)
+
+| Spec | Minimum | Recommended |
+|---|---|---|
+| **OS** | Ubuntu 22.04 / Debian Bookworm | Ubuntu 22.04 LTS |
+| **CPU** | 4-core x86_64, 2+ GHz | 4-core i5/Ryzen, 3+ GHz |
+| **RAM** | 8 GB | 16+ GB |
+| **Storage** | 20 GB free | 50+ GB (for LLM models) |
+| **GPU** | ❌ Optional | AMD Radeon (ROCm) or NVIDIA (CUDA) |
+| **Audio** | USB microphone + speaker | USB headset or built-in |
+| **Network** | Ethernet or WiFi | Gigabit Ethernet |
+| **Ollama models** | qwen2:0.5b (1 GB) | qwen3:8b (5 GB) |
+| **faster-whisper** | base (300 MB) | small or medium |
+
+**GPU acceleration:** AMD ROCm and NVIDIA CUDA both supported via Ollama + faster-whisper.  
+Without GPU: `qwen2:0.5b` (~1 tok/s faster-whisper base) — usable for all features.  
+With GPU (Radeon RX 5700 XT): `qwen3:8b` + `faster-whisper small` — full quality.  
+→ See [openclaw-integration.md](openclaw-integration.md) §GPU for ROCm setup.
+
+### Port Requirements
+
+| Service | Port | Accessible from |
+|---|---|---|
+| Telegram Bot | n/a | Outbound only (api.telegram.org) |
+| Web UI (FastAPI) | 8080 (default) | Local network |
+| Ollama API | 11434 | localhost only |
+| sintaris-openclaw gateway | 18789 | localhost only |
+| PostgreSQL | 5432 | localhost only |
 
 ### Variant: PicoClaw (Raspberry Pi)
 

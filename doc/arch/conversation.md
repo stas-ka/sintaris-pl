@@ -106,6 +106,33 @@ OGG → ffmpeg → PCM → STT → mode check:
 
 ---
 
+## Context Data Sources — What the LLM knows
+
+The following sources are combined into the LLM prompt at every text chat request:
+
+| Source | How injected | Size limit | Who controls |
+|---|---|---|---|
+| Security preamble | `role:system` prefix | Fixed (~300 chars) | `SECURITY_PREAMBLE` constant |
+| Bot identity (name, version, variant) | `role:system` | ~50 chars | `_build_system_message()` |
+| Language instruction | `role:system` | ~30 chars | User language setting |
+| Long-term memory (summary of summaries) | `role:system` | ~300–500 chars | Auto: `CONV_MID_MAX` threshold |
+| Mid-term memory (session summaries) | `role:system` | ~200 chars each | Auto: `CONV_SUMMARY_THRESHOLD` |
+| Live chat history (last N turns) | history messages | `CONV_MAX_HISTORY` turns | `load_conversation_history()` |
+| RAG document chunks | `role:user` prefix | `RAG_TOP_K × RAG_CHUNK_SIZE` chars | `_user_turn_content()` |
+| User text | `[USER]…[/USER]` | unlimited | user input |
+
+**Sources NOT yet injected (planned):**
+
+| Source | Status | TODO ref |
+|---|---|---|
+| User notes (personal KB) | ⏳ Planned | [TODO.md §10](../TODO.md) |
+| Calendar events (today/upcoming) | ⏳ Planned | [TODO.md §10](../TODO.md) |
+| Contact book entries | ⏳ Planned | [TODO.md §4](../TODO.md) |
+
+→ Full knowledge source architecture: [knowledge-base.md](knowledge-base.md)
+
+---
+
 ## ⏳ Open items
 
 | Item | TODO ref |

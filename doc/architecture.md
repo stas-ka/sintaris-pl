@@ -22,3 +22,5 @@ Do NOT read this file beyond the table below — load only the specific topic fi
 | LLM provider abstraction, multi-provider dispatch, offline fallback | [llm-providers.md](arch/llm-providers.md) | Modifying `bot_llm.py` or adding LLM providers |
 | **Conversation architecture** — message structure, routing, tiered memory, RAG | [conversation.md](arch/conversation.md) | Modifying LLM message structure, history, memory, RAG injection |
 | **Data layer** — SQLite/Postgres backends, schema, store API, file paths | [data-layer.md](arch/data-layer.md) | Adding DB columns, switching backends, data paths |
+| **Software stacks** — all libraries, binaries, third-party services per variant | [stacks.md](arch/stacks.md) | Checking dependencies, upgrading packages, adding third-party tools |
+| **Knowledge base** — RAG pipeline, document indexing, knowledge sources for conversation | [knowledge-base.md](arch/knowledge-base.md) | Modifying RAG, documents, notes-as-KB, calendar context injection |

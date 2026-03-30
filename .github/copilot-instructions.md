@@ -53,6 +53,8 @@ taris is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/
 | Feature domains (mail, calendar, contacts, docs) | [`doc/arch/features.md`](../doc/arch/features.md) | Adding or modifying user features |
 | **Conversation, memory, multi-turn context, RAG** | [`doc/arch/conversation.md`](../doc/arch/conversation.md) | Modifying LLM call structure, history, memory, RAG injection |
 | **Data layer (SQLite/Postgres, schema, stores)** | [`doc/arch/data-layer.md`](../doc/arch/data-layer.md) | Adding DB columns, switching backends, data file paths |
+| **Software stacks (all libs, binaries, third-party)** | [`doc/arch/stacks.md`](../doc/arch/stacks.md) | Checking deps, upgrading packages, adding third-party tools |
+| **Knowledge base (RAG, documents, KB sources)** | [`doc/arch/knowledge-base.md`](../doc/arch/knowledge-base.md) | Modifying RAG pipeline, document indexing, notes/calendar as KB |
 | Deployment, file layout, config, backup | [`doc/arch/deployment.md`](../doc/arch/deployment.md) | Deploying or changing config constants |
 | Multilanguage / i18n, `_t()` | [`doc/arch/multilanguage.md`](../doc/arch/multilanguage.md) | Adding i18n strings or a new language |
 | Web UI (FastAPI, routes, auth, Screen DSL) | [`doc/arch/web-ui.md`](../doc/arch/web-ui.md) | Modifying `bot_web.py` or templates |

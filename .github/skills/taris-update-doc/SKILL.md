@@ -138,6 +138,8 @@ Architecture docs are **Copilot navigation maps**. They must remain concise, tab
 | Feature domains (mail, calendar, contacts, docs) | `doc/arch/features.md` | User features |
 | **Conversation, memory, multi-turn, RAG** | `doc/arch/conversation.md` | `bot_handlers.py`, `bot_state.py`, `bot_llm.py` (history) |
 | **Data layer (SQLite/Postgres, schema)** | `doc/arch/data-layer.md` | `bot_db.py`, `store*.py`, new tables |
+| **Software stacks (all libs, binaries)** | `doc/arch/stacks.md` | New dependency, package upgrade, new binary |
+| **Knowledge base (RAG, documents, KB sources)** | `doc/arch/knowledge-base.md` | `bot_documents.py`, RAG config, notes/calendar as KB |
 | Deployment, file layout, config constants | `doc/arch/deployment.md` | Deploy changes, new constants |
 | Multilanguage / i18n | `doc/arch/multilanguage.md` | `strings.json`, `_t()` |
 | Web UI (FastAPI, routes, auth, Screen DSL) | `doc/arch/web-ui.md` | `bot_web.py`, templates |

@@ -1,6 +1,6 @@
 # Taris — Voice Pipeline Architecture
 
-**Version:** `2026.3.42`  
+**Version:** `2026.3.30+3`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -202,3 +202,52 @@ default:  ~/.taris/ru_RU-irina-medium.onnx
 | Confidence filter | strips `[?word]` → `word` | n/a |
 | Hallucination guard | n/a | discards output with < 2 words/s; falls back to Vosk |
 | Parallel threads | single-threaded | `--threads 4` (all Pi 3 cores) |
+
+---
+
+## 6. Hardware-Specific Optimization
+
+### 6.1 Voice Config Recommendations per Platform
+
+| Platform | RAM | STT | TTS model | Piper tmpfs | VAD | low_sample_rate |
+|---|---|---|---|---|---|---|
+| Pi 3 B+ (1 GB) | 1 GB | Vosk small (48MB) | irina-low (18MB) | ❌ (no RAM) | ✅ recommended | ✅ saves ~30% latency |
+| Pi 4 B (4 GB) | 4 GB | Vosk small | irina-medium (66MB) | ✅ recommended | ✅ | ❌ not needed |
+| Pi 5 (8 GB) | 8 GB | Vosk small or Whisper base | irina-medium | ✅ | optional | ❌ |
+| OpenClaw (no GPU) | 8-16 GB | faster-whisper base (300MB) | irina-medium | ✅ | optional | ❌ |
+| OpenClaw (GPU) | 8+ GB | faster-whisper medium | irina-medium | ✅ | optional | ❌ |
+
+### 6.2 Latency Targets (end-to-end: OGG received → voice reply sent)
+
+| Stage | Pi 3 B+ | Pi 4 B | OpenClaw (no GPU) |
+|---|---|---|---|
+| OGG → PCM (ffmpeg) | 0.3–0.5 s | 0.1–0.2 s | 0.05–0.1 s |
+| STT (5s audio clip) | 12–18 s | 4–6 s | 1–3 s |
+| LLM (cloud, short) | 2–5 s | 2–5 s | 2–5 s |
+| TTS (medium model, 200 chars) | 2.5–4 s | 1–2 s | 0.5–1.5 s |
+| **Total (typical short query)** | **~18–28 s** | **~8–14 s** | **~4–10 s** |
+
+To enable timing logs: `VOICE_TIMING_DEBUG=1` in `bot.env` — emits per-stage `[Voice]` log lines.
+
+### 6.3 Pi 3 Survival Config (1 GB RAM)
+
+These voice opts reduce peak RAM and latency on Pi 3:
+
+| Voice opt | Effect | Set via |
+|---|---|---|
+| `piper_low_model=true` | Uses 18 MB irina-low instead of 66 MB irina-medium | Admin Voice Config |
+| `low_sample_rate=true` | Downsamples audio to 8 kHz before STT (-30% STT time) | Admin Voice Config |
+| `silence_strip=true` | Strips silence via ffmpeg before STT (shorter audio = faster) | Admin Voice Config |
+| `vad_prefilter=true` | WebRTC VAD removes non-speech frames (saves STT time) | Admin Voice Config |
+| `persistent_piper=false` | Don't keep Piper process warm (saves ~150 MB RAM, +0.5s startup) | Auto on Pi 3 if low RAM |
+| `tmpfs_model=false` | Don't load Piper model to tmpfs (Pi 3 has no spare RAM) | Admin Voice Config |
+
+### 6.4 OpenClaw GPU Acceleration
+
+| Engine | GPU support | Speedup vs CPU | Config |
+|---|---|---|---|
+| faster-whisper | CUDA / ROCm | 3–10× | `FASTER_WHISPER_DEVICE=cuda` or `rocm` in `bot.env` |
+| Ollama | CUDA / ROCm / Metal | 5–20× | Ollama auto-detects GPU; verify with `ollama list` |
+
+AMD ROCm tested on: Radeon RX 5700 XT — see [openclaw-integration.md](openclaw-integration.md) §GPU.  
+Set `FASTER_WHISPER_COMPUTE=float16` for GPU; keep `int8` for CPU-only.
