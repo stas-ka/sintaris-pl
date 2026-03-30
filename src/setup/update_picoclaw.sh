@@ -72,7 +72,18 @@ done
 
 # ── Auto-detect hostname ──────────────────────────────────────────────────────
 if [[ -z "$PI_HOST" ]]; then
-  [[ "$TARGET" == "pi2" ]] && PI_HOST="OpenClawPI2.local" || PI_HOST="OpenClawPI.local"
+  # Read from .env first (DEV_HOST / PROD_HOST), fallback to .local mDNS
+  _ENV="${PROJECT}/.env"
+  if [[ -f "$_ENV" ]]; then
+    if [[ "$TARGET" == "pi2" ]]; then
+      _H=$(grep -E '^DEV_HOST=' "$_ENV" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    else
+      _H=$(grep -E '^PROD_HOST=' "$_ENV" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    fi
+    [[ -n "$_H" ]] && PI_HOST="${_H}.local" || true
+  fi
+  # Fallback defaults
+  [[ -z "$PI_HOST" ]] && { [[ "$TARGET" == "pi2" ]] && PI_HOST="OpenClawPI2.local" || PI_HOST="OpenClawPI.local"; }
 fi
 
 # ── Load credentials ─────────────────────────────────────────────────────────
@@ -81,21 +92,20 @@ ENV_FILE="${PROJECT}/.env"
 PI_PWD=""
 
 # Try .credentials first, then .env, then prompt
-if [[ -f "$CREDS_FILE" ]]; then
-  # shellcheck disable=SC1090
+for _cfile in "$CREDS_FILE" "$ENV_FILE"; do
+  [[ -f "$_cfile" ]] || continue
   if [[ "$TARGET" == "pi2" ]]; then
-    PI_PWD=$(grep -E '^DEV_HOSTPWD=' "$CREDS_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    # Support both naming conventions: DEV_HOSTPWD and DEV_HOST_PWD
+    PI_PWD=$(grep -E '^DEV_HOSTPWD=' "$_cfile" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    [[ -z "$PI_PWD" ]] && \
+      PI_PWD=$(grep -E '^DEV_HOST_PWD=' "$_cfile" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
   else
-    PI_PWD=$(grep -E '^PROD_HOSTPWD=' "$CREDS_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    PI_PWD=$(grep -E '^PROD_HOSTPWD=' "$_cfile" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    [[ -z "$PI_PWD" ]] && \
+      PI_PWD=$(grep -E '^PROD_HOST_PWD=' "$_cfile" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
   fi
-fi
-if [[ -z "$PI_PWD" ]] && [[ -f "$ENV_FILE" ]]; then
-  if [[ "$TARGET" == "pi2" ]]; then
-    PI_PWD=$(grep -E '^DEV_HOSTPWD=' "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
-  else
-    PI_PWD=$(grep -E '^PROD_HOSTPWD=' "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
-  fi
-fi
+  [[ -n "$PI_PWD" ]] && break
+done
 if [[ -z "$PI_PWD" ]]; then
   printf "Enter SSH password for ${PI_USER}@${PI_HOST}: "
   read -rs PI_PWD; echo ""
@@ -304,13 +314,18 @@ hdr "Step 7/7 — Smoke tests"
 if [[ "$NO_TESTS" == true ]]; then
   warn "Skipping smoke tests (--no-tests)"
 else
-  SMOKE="model_files_present i18n_string_coverage bot_name_injection note_edit_append_replace"
-  SMOKE_RESULT=$(_ssh \
-    "PYTHONPATH=${TARIS_HOME_PI} python3 ${TARIS_HOME_PI}/tests/test_voice_regression.py \
-     --test ${SMOKE} 2>&1 | tail -5" 2>/dev/null || echo "FAIL test runner error")
-  echo "$SMOKE_RESULT"
-  if echo "$SMOKE_RESULT" | grep -q "FAIL"; then
-    warn "Some smoke tests FAILED — review output above"
+  # Run each smoke test individually (--test accepts a single substring filter)
+  SMOKE_TESTS="model_files_present i18n_string_coverage bot_name_injection note_edit_append_replace"
+  SMOKE_FAIL=0
+  for T in $SMOKE_TESTS; do
+    RESULT=$(_ssh \
+      "PYTHONPATH=${TARIS_HOME_PI} python3 ${TARIS_HOME_PI}/tests/test_voice_regression.py \
+       --test ${T} 2>&1 | grep -E 'PASS|FAIL|SKIP|WARN' | tail -2" 2>/dev/null || echo "FAIL runner error")
+    echo "  $T: $RESULT"
+    echo "$RESULT" | grep -q "FAIL" && SMOKE_FAIL=$((SMOKE_FAIL+1)) || true
+  done
+  if [[ $SMOKE_FAIL -gt 0 ]]; then
+    warn "$SMOKE_FAIL smoke test(s) FAILED — review output above"
   else
     ok "Smoke tests passed ✓"
   fi
