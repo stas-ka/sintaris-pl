@@ -1,0 +1,378 @@
+[
+  {
+    "target": "ts2",
+    "timestamp": "2026-03-31T00:02:23",
+    "sysinfo": {
+      "hostname": "IniCoS-1",
+      "cpu": "Intel(R) Core(TM) i7-2640M CPU @ 2.80GHz",
+      "ram_gb": 7.6,
+      "python": "3.12.3",
+      "arch": "x86_64"
+    },
+    "ollama_url": "http://127.0.0.1:11434",
+    "models": [
+      "qwen2:0.5b"
+    ],
+    "n_repeats": 1,
+    "results": [
+      {
+        "suite": "conversation_memory",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "ok": true,
+        "memory_score": 1.0,
+        "facts_recalled": 3,
+        "facts_total": 3,
+        "turn1_s": 23.828,
+        "turn2_s": 17.445,
+        "total_s": 41.273,
+        "reply_preview": "Меня зовут Алексей, и я - 35-й человек. Я живу в Берлине. Как я могу помочь вам сегодня?"
+      },
+      {
+        "suite": "response_quality",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "ok": true,
+        "relevance_score": 0.294,
+        "keyword_hits": 5,
+        "keywords_total": 17,
+        "questions_passed": 4,
+        "questions_total": 5,
+        "details": [
+          {
+            "question": "Что такое фотосинтез?",
+            "keywords": [
+              "свет",
+              "растени",
+              "хлорофил",
+              "углекислый",
+              "кислород"
+            ],
+            "keyword_hits": 0,
+            "passed": false,
+            "latency_s": 26.239,
+            "reply_preview": "Фотосинтез - это процесс, в котором генетически изменяются белки и фолликулы, чтобы создать новые фо"
+          },
+          {
+            "question": "Назови столицу Франции.",
+            "keywords": [
+              "Париж",
+              "Paris"
+            ],
+            "keyword_hits": 1,
+            "passed": true,
+            "latency_s": 7.198,
+            "reply_preview": "Столицей Франции является Париж."
+          },
+          {
+            "question": "Сколько дней в году?",
+            "keywords": [
+              "365",
+              "366",
+              "триста"
+            ],
+            "keyword_hits": 1,
+            "passed": true,
+            "latency_s": 5.458,
+            "reply_preview": "В году 365 дней."
+          },
+          {
+            "question": "Что такое Интернет?",
+            "keywords": [
+              "сеть",
+              "данн",
+              "компьютер",
+              "информац"
+            ],
+            "keyword_hits": 1,
+            "passed": true,
+            "latency_s": 30.472,
+            "reply_preview": "Интернет - это интернет-сайт, который предоставляет доступ к информации и услуги в формате электронн"
+          },
+          {
+            "question": "Как звали первого космонавта?",
+            "keywords": [
+              "Гагарин",
+              "Юрий",
+              "Gagarin"
+            ],
+            "keyword_hits": 2,
+            "passed": true,
+            "latency_s": 11.55,
+            "reply_preview": "Вот первое имя, которое было названо первым косmonautом: Юрий Гагарин."
+          }
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 1,
+        "ok": true,
+        "total_s": 18.644,
+        "avg_turn_s": 18.644,
+        "turn_latencies_s": [
+          18.644
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 3,
+        "ok": true,
+        "total_s": 69.912,
+        "avg_turn_s": 23.304,
+        "turn_latencies_s": [
+          11.295,
+          25.255,
+          33.362
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 5,
+        "ok": false,
+        "error": "timed out"
+      }
+    ]
+  },
+  {
+    "target": "ts2",
+    "timestamp": "2026-03-31T00:26:11",
+    "sysinfo": {
+      "hostname": "IniCoS-1",
+      "cpu": "Intel(R) Core(TM) i7-2640M CPU @ 2.80GHz",
+      "ram_gb": 7.6,
+      "python": "3.12.3",
+      "arch": "x86_64"
+    },
+    "ollama_url": "http://127.0.0.1:11434",
+    "models": [
+      "qwen2:0.5b"
+    ],
+    "n_repeats": 1,
+    "results": [
+      {
+        "suite": "conversation_memory",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "ok": true,
+        "memory_score": 1.0,
+        "facts_recalled": 3,
+        "facts_total": 3,
+        "turn1_s": 21.369,
+        "turn2_s": 12.69,
+        "total_s": 34.059,
+        "reply_preview": "Мои имя - Алексей, я 35 лет. Я живу в Берлине."
+      },
+      {
+        "suite": "response_quality",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "ok": true,
+        "relevance_score": 0.294,
+        "keyword_hits": 5,
+        "keywords_total": 17,
+        "questions_passed": 4,
+        "questions_total": 5,
+        "details": [
+          {
+            "question": "Что такое фотосинтез?",
+            "keywords": [
+              "свет",
+              "растени",
+              "хлорофил",
+              "углекислый",
+              "кислород"
+            ],
+            "keyword_hits": 0,
+            "passed": false,
+            "latency_s": 34.137,
+            "reply_preview": "Фотосинтез - это процесс, в котором химические реакции происходят между гидроксидах и водородом, что"
+          },
+          {
+            "question": "Назови столицу Франции.",
+            "keywords": [
+              "Париж",
+              "Paris"
+            ],
+            "keyword_hits": 1,
+            "passed": true,
+            "latency_s": 7.432,
+            "reply_preview": "Столицей Франции является Париж."
+          },
+          {
+            "question": "Сколько дней в году?",
+            "keywords": [
+              "365",
+              "366",
+              "триста"
+            ],
+            "keyword_hits": 1,
+            "passed": true,
+            "latency_s": 5.226,
+            "reply_preview": "В году 365 дней."
+          },
+          {
+            "question": "Что такое Интернет?",
+            "keywords": [
+              "сеть",
+              "данн",
+              "компьютер",
+              "информац"
+            ],
+            "keyword_hits": 1,
+            "passed": true,
+            "latency_s": 27.247,
+            "reply_preview": "Интернет - это интернет-сайт, который предоставляет доступ к информации и услуги в виде электронных "
+          },
+          {
+            "question": "Как звали первого космонавта?",
+            "keywords": [
+              "Гагарин",
+              "Юрий",
+              "Gagarin"
+            ],
+            "keyword_hits": 2,
+            "passed": true,
+            "latency_s": 11.143,
+            "reply_preview": "Вот первое имя, которое было названо первым космонавтом: Юрий Гагарин."
+          }
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 1,
+        "ok": true,
+        "total_s": 18.979,
+        "avg_turn_s": 18.979,
+        "turn_latencies_s": [
+          18.979
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 3,
+        "ok": true,
+        "total_s": 78.484,
+        "avg_turn_s": 26.161,
+        "turn_latencies_s": [
+          12.368,
+          21.351,
+          44.765
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 5,
+        "ok": true,
+        "total_s": 261.337,
+        "avg_turn_s": 52.267,
+        "turn_latencies_s": [
+          11.266,
+          27.31,
+          29.023,
+          91.393,
+          102.345
+        ]
+      }
+    ]
+  },
+  {
+    "target": "ts2",
+    "timestamp": "2026-03-31T00:34:22",
+    "sysinfo": {
+      "hostname": "IniCoS-1",
+      "cpu": "Intel(R) Core(TM) i7-2640M CPU @ 2.80GHz",
+      "ram_gb": 7.6,
+      "python": "3.12.3",
+      "arch": "x86_64"
+    },
+    "ollama_url": "http://127.0.0.1:11434",
+    "models": [
+      "qwen2:0.5b"
+    ],
+    "n_repeats": 1,
+    "results": [
+      {
+        "suite": "context_isolation",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "ok": true,
+        "isolation_score": 0.5,
+        "isolation_hits": 1,
+        "checks_total": 2,
+        "pollution_detected": false,
+        "details": [
+          {
+            "question": "В каком году умер Михаил Лермонтов?",
+            "expected": "1841",
+            "reply_preview": "Михаил Лермонтов умер в 1829 году.",
+            "correct": false,
+            "polluted": false,
+            "latency_s": 12.272
+          },
+          {
+            "question": "В каком году родился Лев Толстой?",
+            "expected": "1828",
+            "reply_preview": "Лев Толстый родился в 1828 году.",
+            "correct": true,
+            "polluted": false,
+            "latency_s": 9.245
+          }
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 1,
+        "ok": true,
+        "total_s": 19.821,
+        "avg_turn_s": 19.821,
+        "turn_latencies_s": [
+          19.821
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 3,
+        "ok": true,
+        "total_s": 78.115,
+        "avg_turn_s": 26.038,
+        "turn_latencies_s": [
+          13.183,
+          22.383,
+          42.549
+        ]
+      },
+      {
+        "suite": "llm_latency_multiturn",
+        "model": "qwen2:0.5b",
+        "rep": 0,
+        "n_turns": 5,
+        "ok": true,
+        "total_s": 253.584,
+        "avg_turn_s": 50.717,
+        "turn_latencies_s": [
+          13.206,
+          28.698,
+          39.866,
+          122.051,
+          49.763
+        ]
+      }
+    ]
+  }
+]
