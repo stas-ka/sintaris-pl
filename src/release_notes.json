@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.3.30+3",
+    "date": "2026-03-30",
+    "title": "Multi-turn context and system message fix",
+    "notes": "- Fix: Ollama ask_llm_with_history now sends native messages array (was falling to single-turn fallback)\n- Fix: role:system message now prepended to every multi-turn call (bot identity + memory note for LLM)\n- Fix: Security preamble and bot config no longer stuffed into last user message only\n- Add: _build_system_message() and _user_turn_content() helper functions in bot_access.py\n- Test: T56 regression test for ollama native history\n- Test: T57 regression test for system message architecture"
+  },
+  {
     "version": "2026.3.30+2",
     "date": "2026-03-30",
     "title": "Tiered memory, document admin, RAG settings",

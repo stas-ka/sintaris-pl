@@ -3996,6 +3996,75 @@ def t_ollama_history_native_messages(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T57 — Proper system message in multi-turn context
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_multiturn_system_message(**_) -> list[TestResult]:
+    """T57: _handle_chat_message must send role:system as messages[0].
+
+    Previously security preamble + bot config were stuffed into the LAST user turn only.
+    History messages had zero bot framing, causing the LLM to say 'I have no memory'
+    and answer without knowing it is Taris.
+
+    Fix: _build_system_message + _user_turn_content in bot_handlers.py.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    try:
+        bot_access_src  = open(Path(__file__).parent.parent / "telegram" / "bot_access.py").read()
+        bot_handlers_src = open(Path(__file__).parent.parent / "telegram" / "bot_handlers.py").read()
+
+        has_build_system = "def _build_system_message(" in bot_access_src
+        has_user_turn    = "def _user_turn_content(" in bot_access_src
+        has_memory_note  = "conversation history shown in this context" in bot_access_src
+        imports_system   = "_build_system_message" in bot_handlers_src
+        uses_system_role = ('"role": "system"' in bot_handlers_src or
+                            "'role': 'system'" in bot_handlers_src)
+        uses_user_turn_fn = "_user_turn_content(" in bot_handlers_src
+
+        results.append(TestResult(
+            "build_system_message_defined",
+            "PASS" if has_build_system else "FAIL",
+            time.time() - t0,
+            "_build_system_message() present" if has_build_system
+            else "MISSING: _build_system_message in bot_access.py",
+        ))
+        results.append(TestResult(
+            "user_turn_content_defined",
+            "PASS" if has_user_turn else "FAIL",
+            time.time() - t0,
+            "_user_turn_content() present" if has_user_turn
+            else "MISSING: _user_turn_content in bot_access.py",
+        ))
+        results.append(TestResult(
+            "memory_note_in_system_msg",
+            "PASS" if has_memory_note else "FAIL",
+            time.time() - t0,
+            "LLM told it has conversation history via system msg" if has_memory_note
+            else "MISSING: memory note — LLM will say 'I have no memory'",
+        ))
+        results.append(TestResult(
+            "system_role_in_messages_list",
+            "PASS" if uses_system_role else "FAIL",
+            time.time() - t0,
+            "role:system prepended to messages list" if uses_system_role
+            else "REGRESSION: no role:system — bot identity lost in multi-turn",
+        ))
+        results.append(TestResult(
+            "user_turn_fn_used_in_handlers",
+            "PASS" if uses_user_turn_fn else "FAIL",
+            time.time() - t0,
+            "_user_turn_content() used in bot_handlers.py" if uses_user_turn_fn
+            else "MISSING: _user_turn_content call in bot_handlers.py",
+        ))
+    except Exception as e:
+        results.append(TestResult("multiturn_system_message", "FAIL", time.time() - t0, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -4084,6 +4153,8 @@ TEST_FUNCTIONS = [
     t_no_hardcoded_strings,
     # Ollama multi-turn context: native messages array in ask_llm_with_history (T56)
     t_ollama_history_native_messages,
+    # System message architecture: role:system prepended in multi-turn chat (T57)
+    t_multiturn_system_message,
 ]
 
 

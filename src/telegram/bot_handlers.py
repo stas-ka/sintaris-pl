@@ -35,6 +35,7 @@ from telegram.bot_access import (
     _t, _is_admin, _is_allowed, _is_developer, _is_guest, _lang,
     _with_lang, _escape_md, _truncate,
     _safe_edit, _back_keyboard, _run_subprocess,
+    _build_system_message, _user_turn_content,
 )
 from ui.screen_loader import load_screen
 from ui.render_telegram import render_screen
@@ -880,40 +881,26 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
         history_ids = [m["_db_id"] for m in history_entries if m.get("_db_id")]
         history_msgs = [{"role": m["role"], "content": m["content"]} for m in history_entries]
 
-        # Build message list: past history + current user turn (with lang hint)
-        current_content = _with_lang(chat_id, user_text)
-        # ── Memory context injection (tiered long/mid-term summaries) ─────
+        # ── System message: security preamble + bot config + memory note + lang ──
+        system_content = _build_system_message(chat_id, user_text)
+        # Inject tiered long/mid-term memory summaries into the system message
         try:
             from core.bot_state import get_memory_context
             _mem_ctx = get_memory_context(chat_id)
             if _mem_ctx:
-                current_content = _mem_ctx + current_content
+                system_content = system_content + "\n\n" + _mem_ctx
         except Exception as _mem_e:
             log.debug("[Memory] context injection failed: %s", _mem_e)
-        # ── RAG context injection ──────────────────────────────────────────
-        import os as _os
-        if RAG_ENABLED and not _os.path.exists(RAG_FLAG_FILE):
-            try:
-                from core.store import store as _store
-                if _store.has_document_search():
-                    _MAX_CHUNK_CHARS = 400
-                    _MAX_RAG_CHARS   = 1600
-                    _chunks = _store.search_fts(user_text, chat_id, top_k=RAG_TOP_K)
-                    if _chunks:
-                        _rag_ctx = "\n---\n".join(
-                            c["chunk_text"][:_MAX_CHUNK_CHARS] for c in _chunks
-                        )
-                        _injected = len(_rag_ctx[:_MAX_RAG_CHARS])
-                        current_content = (
-                            f"[Relevant context:\n{_rag_ctx[:_MAX_RAG_CHARS]}]\n\n{current_content}"
-                        )
-                        log.debug("[RAG] injected %d chars from %d chunks", _injected, len(_chunks))
-                        _store.log_rag_activity(chat_id, user_text, len(_chunks), _injected)
-            except Exception as _rag_e:
-                log.debug("[RAG] search failed: %s", _rag_e)
-        messages = history_msgs + [{"role": "user", "content": current_content}]
 
-        # Record the raw user text (without lang prefix) before calling the LLM
+        # ── Current user turn: RAG context + user text (no preamble — that's in system) ──
+        current_content = _user_turn_content(chat_id, user_text)
+
+        # ── Build full messages list: [system] + history + current_user_turn ──
+        messages = [{"role": "system", "content": system_content}] + history_msgs + [{"role": "user", "content": current_content}]
+        log.debug("[Chat] history=%d msgs, system=%d chars, turn=%d chars",
+                  len(history_msgs), len(system_content), len(current_content))
+
+        # Record the raw user text (without preamble) before calling the LLM
         add_to_history(chat_id, "user", user_text, call_id=call_id)
 
         response = ask_llm_with_history(messages, timeout=60, use_case="chat")

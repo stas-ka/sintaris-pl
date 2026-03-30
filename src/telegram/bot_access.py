@@ -200,12 +200,42 @@ def _docs_rag_context(chat_id: int, query: str) -> str:
 
 
 def _with_lang(chat_id: int, user_text: str) -> str:
-    """Prepend security preamble + bot config + RAG context + language instruction, then wrap user text."""
+    """Prepend security preamble + bot config + RAG context + language instruction, then wrap user text.
+    Used for single-turn LLM calls (ask_llm). For multi-turn use _build_system_message + _user_turn_content.
+    """
     from security.bot_security import SECURITY_PREAMBLE, _wrap_user_input
     lang = _resolve_lang(chat_id, user_text)
     lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
     rag_ctx = _docs_rag_context(chat_id, user_text)
     return SECURITY_PREAMBLE + _bot_config_block() + rag_ctx + lang_instr + _wrap_user_input(user_text)
+
+
+def _build_system_message(chat_id: int, user_text: str = "") -> str:
+    """Build the content for a role:system message in multi-turn LLM calls.
+
+    Contains: security preamble + bot config + memory context note + language instruction.
+    The same content was previously crammed into the last user turn via _with_lang(),
+    which meant history messages lacked framing and the LLM didn't know who it was.
+    """
+    from security.bot_security import SECURITY_PREAMBLE
+    lang = _resolve_lang(chat_id, user_text)
+    lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
+    memory_note = (
+        "You have access to the conversation history shown in this context. "
+        "Use it to maintain coherent, context-aware responses across all turns.\n\n"
+    )
+    return SECURITY_PREAMBLE + _bot_config_block() + memory_note + lang_instr
+
+
+def _user_turn_content(chat_id: int, user_text: str) -> str:
+    """Build the current user turn for a multi-turn call.
+
+    Only contains RAG context (query-specific) + wrapped user text.
+    Security preamble, bot config and lang instruction go in the system message.
+    """
+    from security.bot_security import _wrap_user_input
+    rag_ctx = _docs_rag_context(chat_id, user_text)
+    return rag_ctx + _wrap_user_input(user_text)
 
 
 def _with_lang_voice(chat_id: int, stt_text: str) -> str:
