@@ -26,7 +26,41 @@ argument-hint: 'Which files changed? (e.g. all, bot_admin.py, strings.json) and 
 
 ---
 
-## Procedure
+## 🚀 Quick Deploy via Script (Recommended)
+
+Use the interactive deploy scripts from the developer machine for all standard deployments:
+
+```bash
+# Deploy to PI2 (engineering target) — ALWAYS first
+bash src/setup/update_picoclaw.sh --target pi2
+
+# Deploy to PI1 (production target) — only after PI2 verified + user confirmed
+bash src/setup/update_picoclaw.sh --target pi1
+
+# Options:
+#   --yes                Non-interactive (CI mode)
+#   --no-backup          Skip backup (iteration only)
+#   --no-tests           Skip smoke tests
+#   --upgrade-picoclaw   Also download + install latest picoclaw binary
+```
+
+The script handles: connectivity check → backup → deploy all packages → service files → restart → journal check → smoke tests → summary.
+
+**Fresh install** (first-time setup on a new Raspberry Pi):
+```bash
+# First, deploy the install script to the Pi:
+scp src/setup/install_picoclaw.sh stas@OpenClawPI2.local:/tmp/
+# Then run it on the Pi:
+ssh stas@OpenClawPI2.local "sudo bash /tmp/install_picoclaw.sh"
+```
+
+---
+
+## Manual Step-by-Step (for partial deploys / debugging)
+
+Use the steps below for fine-grained control (e.g. deploying only a single file). For full deploys, prefer the script above.
+
+---
 
 ### Step 0 — Pre-Deploy: Version Bump & Release Notes *(mandatory for user-facing changes)*
 

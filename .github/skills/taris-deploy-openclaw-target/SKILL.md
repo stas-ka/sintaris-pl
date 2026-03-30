@@ -52,6 +52,39 @@ TariStation2 is the local machine — no SSH credentials needed.
 
 ---
 
+## 🚀 Quick Deploy via Script (Recommended)
+
+Use the interactive deploy scripts instead of manual steps for all standard deployments:
+
+```bash
+# Deploy to TariStation2 (local engineering target) — ALWAYS first
+bash src/setup/update_openclaw.sh --target ts2
+
+# Deploy to TariStation1 (remote production) — only after TS2 verified + user confirmed
+bash src/setup/update_openclaw.sh --target ts1
+
+# Options:
+#   --yes          Non-interactive (CI mode)
+#   --no-backup    Skip backup (iteration only)
+#   --no-tests     Skip smoke tests
+#   --force-restart  Restart even if no change detected
+```
+
+The script handles: backup → deploy all packages → service files → restart → journal check → smoke tests → summary.
+
+**Fresh install** (first-time setup on a new TariStation machine):
+```bash
+bash src/setup/install_openclaw.sh [--variant ts2] [--gpu] [--no-postgres]
+```
+
+---
+
+## Manual Step-by-Step (for partial deploys / debugging)
+
+Use the steps below when you need fine-grained control (e.g. deploying only web templates, or debugging a specific package). For full deploys, prefer the script above.
+
+---
+
 ## Step 0 — Pre-Deploy: Version Bump & Release Notes *(mandatory for user-facing changes)*
 
 > ⚠️ Do this **BEFORE** deploying. If skipped, `BOT_VERSION` stays unchanged and no Telegram notification fires.
