@@ -27,7 +27,7 @@ description: Setup, configure, troubleshoot, and extend the OpenClaw variant of 
 - **Service**: `systemctl --user start/stop/restart taris-web`
 - **Logs**: `journalctl --user -u taris-web -n 40 --no-pager`
 - **API base**: `http://localhost:8080`
-- **Reference doc**: `doc/arch/openclaw-integration.md`
+- **Reference doc**: `doc/architecture/openclaw-integration.md`
 
 ---
 

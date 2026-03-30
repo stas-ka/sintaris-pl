@@ -58,7 +58,7 @@ and is picoclaw-only. `taris-openclaw` is OpenClaw-focused but uses the same bot
 | K14 | Voice mode role check fix (admin in system chat via voice) | `src/features/bot_voice.py` | Bug fix v2026.3.42 |
 | K15 | Regression tests T35–T39 (STT/TTS/voice/LLM) | `src/tests/test_voice_regression.py` | Tests |
 | K16 | OpenClaw LLM tests (`test_ask_openclaw.py`) + benchmark_stt.py | `src/tests/llm/`, `src/tests/benchmark_stt.py` | Tests |
-| K17 | OpenClaw documentation | `doc/arch/openclaw-integration.md`, `doc/arch/picoclaw.md`, `doc/install-new-target.md` | Docs |
+| K17 | OpenClaw documentation | `doc/architecture/openclaw-integration.md`, `doc/architecture/picoclaw.md`, `doc/install-new-target.md` | Docs |
 
 ---
 

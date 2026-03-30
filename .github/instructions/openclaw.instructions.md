@@ -118,7 +118,7 @@ T29/T30 must always PASS. T27/T28 SKIP if packages not installed (OK).
 ## Documentation Maintenance
 
 When adding OpenClaw features, update in the same commit:
-- `doc/arch/openclaw-integration.md` — Implementation Status table + relevant section
+- `doc/architecture/openclaw-integration.md` — Implementation Status table + relevant section
 - `TODO.md` — §19 or §25 items
 
 Skill reference: `/taris-openclaw-setup` for setup/troubleshoot workflows.

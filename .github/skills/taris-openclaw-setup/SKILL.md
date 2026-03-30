@@ -18,7 +18,7 @@ argument-hint: >
 | Service | `systemctl --user {start\|stop\|restart} taris-web` |
 | Logs | `journalctl --user -u taris-web -n 40 --no-pager` |
 | API | `http://localhost:8080` |
-| Reference | `doc/arch/openclaw-integration.md` |
+| Reference | `doc/architecture/openclaw-integration.md` |
 
 ---
 
@@ -182,5 +182,5 @@ Expected results:
 
 ## Mandatory: Test After Every Change
 
-> See `doc/arch/openclaw-integration.md` — OpenClaw Coding Instructions for full pattern guide.
+> See `doc/architecture/openclaw-integration.md` — OpenClaw Coding Instructions for full pattern guide.
 > Every change: source → sync → restart → verify API → run T27–T30.

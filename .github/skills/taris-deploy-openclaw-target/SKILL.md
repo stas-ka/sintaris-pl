@@ -491,7 +491,7 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
 ## References
 
 - OpenClaw coding patterns: `.github/copilot-instructions.md` §OpenClaw Variant
-- Architecture: `doc/arch/deployment.md`
+- Architecture: `doc/architecture/deployment.md`
 - Voice regression tests: `doc/test-suite.md`
-- Screen DSL: `doc/arch/web-ui.md` §18
+- Screen DSL: `doc/architecture/web-ui.md` §18
 - Safe update protocol: `.github/skills/taris-deploy-openclaw-target/SKILL.md` §Safe Update

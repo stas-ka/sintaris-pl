@@ -43,7 +43,7 @@ On PicoClaw it listens for the wake word **"Пико"**, sends your Russian voic
 
 ### Architecture & Operations
 - **Deployment variants** — `DEVICE_VARIANT=picoclaw` (Raspberry Pi, default) · `DEVICE_VARIANT=openclaw` (Laptop/AI PC + OpenClaw gateway); controlled via `bot.env`
-- **OpenClaw integration** — when `DEVICE_VARIANT=openclaw`: REST API (`/api/status`, `/api/chat`) active; `LLM_PROVIDER=openclaw` routes LLM calls via `openclaw agent` subprocess; `skill-taris` in sintaris-openclaw can query Taris notes, calendar, status — see `doc/arch/openclaw-integration.md`
+- **OpenClaw integration** — when `DEVICE_VARIANT=openclaw`: REST API (`/api/status`, `/api/chat`) active; `LLM_PROVIDER=openclaw` routes LLM calls via `openclaw agent` subprocess; `skill-taris` in sintaris-openclaw can query Taris notes, calendar, status — see `doc/architecture/openclaw-integration.md`
 - **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently; YAML screen files in `src/screens/` with variant support; 64 unit tests; `GET /screen/{screen_id}` web endpoint (v2026.3.43)
 - **FTS5/RAG knowledge base** — upload documents via `bot_documents.py`; chunked (512-char) FTS5 full-text search; top-K context injected into LLM prompts; RAG on/off toggle in admin panel via `RAG_FLAG_FILE`; activity log in DB (v2026.3.43)
 - **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
@@ -62,8 +62,8 @@ On PicoClaw it listens for the wake word **"Пико"**, sends your Russian voic
 | Document | Description |
 |---|---|
 | [doc/architecture.md](doc/architecture.md) | Full pipeline diagram, all components, file layout, configuration reference |
-| [doc/arch/openclaw-integration.md](doc/arch/openclaw-integration.md) | **OpenClaw variant** — integration architecture, PicoClaw vs OpenClaw comparison, LLM fallback chain, loop prevention, API contract |
-| [doc/arch/deployment.md](doc/arch/deployment.md) | Deployment variants (PicoClaw / OpenClaw), file layout, `bot.env` config reference, backup system |
+| [doc/architecture/openclaw-integration.md](doc/architecture/openclaw-integration.md) | **OpenClaw variant** — integration architecture, PicoClaw vs OpenClaw comparison, LLM fallback chain, loop prevention, API contract |
+| [doc/architecture/deployment.md](doc/architecture/deployment.md) | Deployment variants (PicoClaw / OpenClaw), file layout, `bot.env` config reference, backup system |
 | [doc/install-new-target.md](doc/install-new-target.md) | Step-by-step installation guide for new targets (Raspberry Pi and OpenClaw laptop) |
 | [doc/howto_bot.md](doc/howto_bot.md) | End-user guide — Telegram bot menus, Web UI access, roles, voice, admin panel |
 | [doc/web-ui/concept-web-interface.md](doc/web-ui/concept-web-interface.md) | Web UI architecture: Screen DSL, multi-channel rendering, FastAPI + HTMX |
@@ -110,7 +110,7 @@ Most standard USB microphones work fine. The Philips SPC 520/525NC USB webcam mi
 | OS | Ubuntu 22.04 LTS / Debian 12 | Ubuntu 22.04 LTS |
 | GPU | — | NVIDIA (CUDA) for local LLM / NPU acceleration |
 
-Requires **[sintaris-openclaw](https://github.com/stas-ka/sintaris-openclaw)** (Node.js AI gateway) installed on the same machine. See `doc/arch/openclaw-integration.md` for the full integration guide.
+Requires **[sintaris-openclaw](https://github.com/stas-ka/sintaris-openclaw)** (Node.js AI gateway) installed on the same machine. See `doc/architecture/openclaw-integration.md` for the full integration guide.
 
 ---
 

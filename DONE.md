@@ -127,7 +127,7 @@ Full regression test run on both PIs. **Vosk wins decisively** on Raspberry Pi h
 - [x] `LLM_PROVIDER=openclaw` — `_ask_openclaw()` in `bot_llm.py`; JSON output parsing; plaintext fallback
 - [x] REST API: `POST /api/chat` + `GET /api/status` in `bot_web.py`; Bearer-token auth via `TARIS_API_TOKEN`
 - [x] `skill-taris` in sintaris-openclaw calls these endpoints → bidirectional integration
-- [x] Loop-prevention guard: documented in `doc/arch/openclaw-integration.md`
+- [x] Loop-prevention guard: documented in `doc/architecture/openclaw-integration.md`
 - [x] Fallback chain: `openclaw` → `taris/picoclaw` → local `llama.cpp`
 - [x] 18 unit tests for `_ask_openclaw()` in `src/tests/llm/` — all green
 - [x] `TARIS_HOME` env var — configurable data directory for local dev and multi-instance
@@ -157,7 +157,7 @@ Full regression test run on both PIs. **Vosk wins decisively** on Raspberry Pi h
 - [x] `sintaris-openclaw-local-deploy/` — symlink launcher for running Taris locally
 - [x] `run_all.sh` / `run_telegram.sh` / `run_web.sh` — start/stop scripts with `TARIS_HOME` set
 - [x] `sintaris-openclaw` (`skill-taris`) installed and connected to local Taris instance
-- [x] Documentation: `doc/arch/openclaw-integration.md`; `doc/arch/deployment.md §13 Local Development Deploy`
+- [x] Documentation: `doc/architecture/openclaw-integration.md`; `doc/architecture/deployment.md §13 Local Development Deploy`
 
 ### 19.5 Dual STT — Local + Remote ✅ Implemented (v2026.3.31)
 
@@ -193,7 +193,7 @@ Full regression test run on both PIs. **Vosk wins decisively** on Raspberry Pi h
 
 ### 20.1 Quick wins ✅ All done
 
-- [x] **P-4** Split `doc/architecture.md` into `doc/arch/*.md` (8 topic files) — ✅ done
+- [x] **P-4** Split `doc/architecture.md` into `doc/architecture/*.md` (8 topic files) — ✅ done
 - [x] **P-3** Replace "ALWAYS read bot-code-map.md" with "search it" instruction — ✅ done
 - [x] **P-8** Add `doc/quick-ref.md` — single 3 KB always-read index — ✅ done
 - [x] **P-2** Slim `copilot-instructions.md` — remove T01–T21 table and duplicate patterns — ✅ done

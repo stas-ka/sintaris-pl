@@ -198,10 +198,10 @@ The code map is an *index*. Copilot's code search and grep capabilities make rea
 **Impact:** Reduces context load from 13 800 tokens to 1 500–3 000 tokens per query  
 **Risk:** Low — restructuring only, no source code changes
 
-Split the 55 KB monolith into focused topic files in `doc/arch/`:
+Split the 55 KB monolith into focused topic files in `doc/architecture/`:
 
 ```
-doc/arch/
+doc/architecture/
   overview.md        (~3 KB)  — system diagram + 3-channel summary
   voice-pipeline.md  (~8 KB)  — audio capture, Vosk, VAD, Piper, TTS chain
   web-ui.md          (~6 KB)  — FastAPI, JWT, templates, HTMX, PWA
@@ -318,7 +318,7 @@ Instead of loading full files, VS Code Copilot can be directed to specific secti
 
 ```markdown
 # Good — read only the voice section
-#file:doc/arch/voice-pipeline.md
+#file:doc/architecture/voice-pipeline.md
 
 # Bad — loads 55 KB
 #file:doc/architecture.md
@@ -401,13 +401,13 @@ CHANGES NEEDED (no source code modified):
 NEW files:
 concept/copilot_optimization.md             → THIS FILE (proposal only)
 doc/quick-ref.md                             → New 3 KB always-read reference
-doc/arch/overview.md                         → Split from architecture.md
-doc/arch/voice-pipeline.md                   → Split from architecture.md
-doc/arch/web-ui.md                           → Split from architecture.md
+doc/architecture/overview.md                         → Split from architecture.md
+doc/architecture/voice-pipeline.md                   → Split from architecture.md
+doc/architecture/web-ui.md                           → Split from architecture.md
 ...
 
 SPLIT:
-doc/architecture.md → doc/arch/*.md (keep architecture.md as index + pointers)
+doc/architecture.md → doc/architecture/*.md (keep architecture.md as index + pointers)
 
 OPTIONAL SPLIT (separate task):
 src/bot_web.py → src/bot_web_app.py + src/bot_web_api.py + src/bot_web_render.py
@@ -474,7 +474,7 @@ After implementing the proposals, measure:
 | P-1 | Fix `safe-update` `applyTo: "**"` → narrow glob | ✅ Done |
 | P-2 | Slim `copilot-instructions.md` — remove T01–T21 table, patterns, remote host | ✅ Done |
 | P-3 | Replace "ALWAYS read bot-code-map.md" with "search it" | ✅ Done |
-| P-4 | Split `doc/architecture.md` into `doc/arch/*.md` (8 topic files) | ✅ Done |
+| P-4 | Split `doc/architecture.md` into `doc/architecture/*.md` (8 topic files) | ✅ Done |
 | P-5 | Split `src/bot_web.py` (83 KB → 3 modules) | 🔲 Deferred (4–8 h, deployment risk — standalone sprint) |
 | P-6 | Shorten `bot-deploy.instructions.md` + `safe-update.instructions.md` | ✅ Done |
 | P-7 | Move accounting task from `INSTRUCTIONS.md` to `concept/` | ✅ Done |

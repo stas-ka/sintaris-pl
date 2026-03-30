@@ -2,7 +2,7 @@
 name: taris-update-doc
 description: >
   Update project documentation after code changes, version bumps, new features,
-  new skills/prompts, or any structural change. Syncs: doc/arch/*.md topic files,
+  new skills/prompts, or any structural change. Syncs: doc/architecture/*.md topic files,
   doc/bot-code-map.md, TODO.md (with links to doc/todo/ spec files), README.md,
   Copilot skill registry, Web UI route inventory, User Guide (doc/howto_bot.md),
   and in-bot Help text (strings.json help_* keys).
@@ -65,34 +65,34 @@ Map each changed file to one or more documentation targets using this table:
 
 | Changed file / area | Update target |
 |---|---|
-| `src/core/bot_config.py` | `doc/arch/deployment.md` §13, `doc/bot-code-map.md` §bot_config |
+| `src/core/bot_config.py` | `doc/architecture/deployment.md` §13, `doc/bot-code-map.md` §bot_config |
 | `src/core/bot_state.py` | `doc/bot-code-map.md` §bot_state |
 | `src/telegram/bot_access.py` | `doc/bot-code-map.md` §bot_access |
-| `src/telegram/bot_admin.py` | `doc/bot-code-map.md` §bot_admin, `doc/arch/telegram-bot.md` §3.3 |
+| `src/telegram/bot_admin.py` | `doc/bot-code-map.md` §bot_admin, `doc/architecture/telegram-bot.md` §3.3 |
 | `src/telegram/bot_handlers.py` | `doc/bot-code-map.md` §bot_handlers |
 | `src/telegram/bot_users.py` | `doc/bot-code-map.md` §bot_users |
-| `src/features/bot_voice.py` | `doc/arch/voice-pipeline.md`, `doc/bot-code-map.md` §bot_voice |
-| `src/features/bot_calendar.py` | `doc/arch/features.md` §8, `doc/bot-code-map.md` §bot_calendar |
+| `src/features/bot_voice.py` | `doc/architecture/voice-pipeline.md`, `doc/bot-code-map.md` §bot_voice |
+| `src/features/bot_calendar.py` | `doc/architecture/features.md` §8, `doc/bot-code-map.md` §bot_calendar |
 | `src/features/bot_contacts.py` | `doc/bot-code-map.md` §bot_contacts |
-| `src/features/bot_mail_creds.py` | `doc/arch/features.md` §7, `doc/bot-code-map.md` §bot_mail_creds |
-| `src/features/bot_email.py` | `doc/arch/features.md` §9, `doc/bot-code-map.md` §bot_email |
+| `src/features/bot_mail_creds.py` | `doc/architecture/features.md` §7, `doc/bot-code-map.md` §bot_mail_creds |
+| `src/features/bot_email.py` | `doc/architecture/features.md` §9, `doc/bot-code-map.md` §bot_email |
 | `src/features/bot_error_protocol.py` | `doc/bot-code-map.md` §bot_error_protocol |
-| `src/security/bot_security.py` | `doc/arch/security.md` §6 |
-| `src/security/bot_auth.py` | `doc/arch/web-ui.md` §17.2, `doc/bot-code-map.md` §bot_auth |
-| `src/core/bot_llm.py` | `doc/arch/llm-providers.md`, `doc/arch/conversation.md`, `doc/bot-code-map.md` §bot_llm |
-| `src/core/bot_db.py` | `doc/arch/data-layer.md` (schema table) |
-| `src/core/store*.py` | `doc/arch/data-layer.md` (backend protocol / config) |
-| `src/core/bot_state.py` | `doc/arch/conversation.md` (tiered memory), `doc/bot-code-map.md` §bot_state |
-| `src/telegram/bot_handlers.py` | `doc/arch/conversation.md` (message structure), `doc/bot-code-map.md` §bot_handlers |
-| `src/telegram/bot_access.py` | `doc/arch/conversation.md` (system msg helpers), `doc/arch/security.md`, `doc/bot-code-map.md` §bot_access |
-| `src/ui/bot_ui.py` | `doc/bot-code-map.md` §bot_ui, `doc/arch/web-ui.md` §18.2 |
+| `src/security/bot_security.py` | `doc/architecture/security.md` §6 |
+| `src/security/bot_auth.py` | `doc/architecture/web-ui.md` §17.2, `doc/bot-code-map.md` §bot_auth |
+| `src/core/bot_llm.py` | `doc/architecture/llm-providers.md`, `doc/architecture/conversation.md`, `doc/bot-code-map.md` §bot_llm |
+| `src/core/bot_db.py` | `doc/architecture/data-layer.md` (schema table) |
+| `src/core/store*.py` | `doc/architecture/data-layer.md` (backend protocol / config) |
+| `src/core/bot_state.py` | `doc/architecture/conversation.md` (tiered memory), `doc/bot-code-map.md` §bot_state |
+| `src/telegram/bot_handlers.py` | `doc/architecture/conversation.md` (message structure), `doc/bot-code-map.md` §bot_handlers |
+| `src/telegram/bot_access.py` | `doc/architecture/conversation.md` (system msg helpers), `doc/architecture/security.md`, `doc/bot-code-map.md` §bot_access |
+| `src/ui/bot_ui.py` | `doc/bot-code-map.md` §bot_ui, `doc/architecture/web-ui.md` §18.2 |
 | `src/ui/bot_actions.py` | `doc/bot-code-map.md` §bot_actions |
 | `src/ui/render_telegram.py` | `doc/bot-code-map.md` §render_telegram |
-| `src/bot_web.py` | `doc/arch/web-ui.md` §17.3, `doc/bot-code-map.md` §bot_web |
-| `src/telegram_menu_bot.py` | `doc/bot-code-map.md` §callback keys, `doc/arch/telegram-bot.md` §3.4 |
-| `src/strings.json` | `doc/arch/multilanguage.md` §14.3 |
-| `src/core/bot_config.py` (version bump) | `README.md`, `doc/arch/deployment.md` §16 |
-| New service file added | `doc/arch/deployment.md` §12, `doc/arch/overview.md` §11 |
+| `src/bot_web.py` | `doc/architecture/web-ui.md` §17.3, `doc/bot-code-map.md` §bot_web |
+| `src/telegram_menu_bot.py` | `doc/bot-code-map.md` §callback keys, `doc/architecture/telegram-bot.md` §3.4 |
+| `src/strings.json` | `doc/architecture/multilanguage.md` §14.3 |
+| `src/core/bot_config.py` (version bump) | `README.md`, `doc/architecture/deployment.md` §16 |
+| New service file added | `doc/architecture/deployment.md` §12, `doc/architecture/overview.md` §11 |
 | New Copilot skill / prompt | `.github/copilot-instructions.md`, `doc/copilot-skills-guide.md` |
 
 ---
@@ -109,7 +109,7 @@ Edit only the matching section. Never rewrite prose in sections you did not touc
 
 ---
 
-### Step 2 — Update `doc/arch/*.md` topic files
+### Step 2 — Update `doc/architecture/*.md` topic files
 
 #### ⚠️ Architecture Doc Style — MANDATORY
 
@@ -129,21 +129,21 @@ Architecture docs are **Copilot navigation maps**. They must remain concise, tab
 
 | Topic | File | Changed by |
 |---|---|---|
-| System overview, variant comparison | `doc/arch/overview.md` | New service, variant flag |
-| PicoClaw variant (Pi, Vosk, Piper) | `doc/arch/picoclaw.md` | Pi-specific code, HAT |
-| OpenClaw variant (faster-whisper, Ollama) | `doc/arch/openclaw-integration.md` | OpenClaw code |
-| Voice pipeline (STT/TTS/VAD/hotword) | `doc/arch/voice-pipeline.md` | `bot_voice.py`, `voice_assistant.py` |
-| Telegram bot modules + callbacks | `doc/arch/telegram-bot.md` | New handlers, menus |
-| Security, RBAC, prompt injection | `doc/arch/security.md` | Access logic, roles |
-| Feature domains (mail, calendar, contacts, docs) | `doc/arch/features.md` | User features |
-| **Conversation, memory, multi-turn, RAG** | `doc/arch/conversation.md` | `bot_handlers.py`, `bot_state.py`, `bot_llm.py` (history) |
-| **Data layer (SQLite/Postgres, schema)** | `doc/arch/data-layer.md` | `bot_db.py`, `store*.py`, new tables |
-| **Software stacks (all libs, binaries)** | `doc/arch/stacks.md` | New dependency, package upgrade, new binary |
-| **Knowledge base (RAG, documents, KB sources)** | `doc/arch/knowledge-base.md` | `bot_documents.py`, RAG config, notes/calendar as KB |
-| Deployment, file layout, config constants | `doc/arch/deployment.md` | Deploy changes, new constants |
-| Multilanguage / i18n | `doc/arch/multilanguage.md` | `strings.json`, `_t()` |
-| Web UI (FastAPI, routes, auth, Screen DSL) | `doc/arch/web-ui.md` | `bot_web.py`, templates |
-| LLM providers, multi-turn, tiered memory | `doc/arch/llm-providers.md` | `bot_llm.py`, providers |
+| System overview, variant comparison | `doc/architecture/overview.md` | New service, variant flag |
+| PicoClaw variant (Pi, Vosk, Piper) | `doc/architecture/picoclaw.md` | Pi-specific code, HAT |
+| OpenClaw variant (faster-whisper, Ollama) | `doc/architecture/openclaw-integration.md` | OpenClaw code |
+| Voice pipeline (STT/TTS/VAD/hotword) | `doc/architecture/voice-pipeline.md` | `bot_voice.py`, `voice_assistant.py` |
+| Telegram bot modules + callbacks | `doc/architecture/telegram-bot.md` | New handlers, menus |
+| Security, RBAC, prompt injection | `doc/architecture/security.md` | Access logic, roles |
+| Feature domains (mail, calendar, contacts, docs) | `doc/architecture/features.md` | User features |
+| **Conversation, memory, multi-turn, RAG** | `doc/architecture/conversation.md` | `bot_handlers.py`, `bot_state.py`, `bot_llm.py` (history) |
+| **Data layer (SQLite/Postgres, schema)** | `doc/architecture/data-layer.md` | `bot_db.py`, `store*.py`, new tables |
+| **Software stacks (all libs, binaries)** | `doc/architecture/stacks.md` | New dependency, package upgrade, new binary |
+| **Knowledge base (RAG, documents, KB sources)** | `doc/architecture/knowledge-base.md` | `bot_documents.py`, RAG config, notes/calendar as KB |
+| Deployment, file layout, config constants | `doc/architecture/deployment.md` | Deploy changes, new constants |
+| Multilanguage / i18n | `doc/architecture/multilanguage.md` | `strings.json`, `_t()` |
+| Web UI (FastAPI, routes, auth, Screen DSL) | `doc/architecture/web-ui.md` | `bot_web.py`, templates |
+| LLM providers, multi-turn, tiered memory | `doc/architecture/llm-providers.md` | `bot_llm.py`, providers |
 
 #### Update rules
 
@@ -151,8 +151,8 @@ Architecture docs are **Copilot navigation maps**. They must remain concise, tab
 - Update the `**Version:**` header line to match the new `BOT_VERSION`.
 - Add new functions/routes/flags to the relevant table; remove deleted ones.
 - Do _not_ add sections that are not already in the file unless a major feature makes it unavoidable.
-- If a **new** `doc/arch/*.md` topic file is created, also update `doc/architecture.md` — add a row to the Topic Index table (topic name, file link, "When to read" description).
-- When adding a new `doc/arch/*.md` topic file, also add it to the Architecture Topic Files table in `.github/copilot-instructions.md`.
+- If a **new** `doc/architecture/*.md` topic file is created, also update `doc/architecture.md` — add a row to the Topic Index table (topic name, file link, "When to read" description).
+- When adding a new `doc/architecture/*.md` topic file, also add it to the Architecture Topic Files table in `.github/copilot-instructions.md`.
 
 ---
 
@@ -238,11 +238,11 @@ Both tables must stay in sync.
 
 ---
 
-### Step 7 — Update Web UI route inventory (`doc/arch/web-ui.md` §17.3)
+### Step 7 — Update Web UI route inventory (`doc/architecture/web-ui.md` §17.3)
 
 When `src/bot_web.py` gains or loses routes:
 
-Open `doc/arch/web-ui.md`, find the `### 17.3 Route Inventory` table, and add/remove rows:
+Open `doc/architecture/web-ui.md`, find the `### 17.3 Route Inventory` table, and add/remove rows:
 
 ```markdown
 | `METHOD` | `/path` | Description | Auth |
@@ -356,10 +356,10 @@ Use `feat: <feature> + docs:` for commits that include both code and documentati
 | No raw hardcoded bot name in changed doc | No "PicoClaw" / "taris" in user-facing text (use `{bot_name}`) | Replace with `{bot_name}` placeholder |
 | `TODO.md` has no stale completed items | All `[x]` bullets collapsed to `✅ Implemented (vX.Y.Z)` | Collapse to one line |
 | All `doc/todo/*.md` spec files linked | Every spec file has a `→ [Full spec]()` back-link in `TODO.md` | Add missing back-link |
-| `doc/arch/` version headers updated | All edited topic files have updated `**Version:**` | Update version line |
+| `doc/architecture/` version headers updated | All edited topic files have updated `**Version:**` | Update version line |
 | `doc/bot-code-map.md` callback table complete | Every callback key in `telegram_menu_bot.py` has a row in the table | Add missing rows |
 | User Guide matches current menu | `doc/howto_bot.md` sections match `_menu_keyboard()` in `bot_access.py` | Update mismatched sections |
 | Help text present in all 3 languages | `help_text*` keys exist in `ru`, `en`, `de` in `strings.json` | Add missing translations |
 | Playwright tests pass (Web UI changes) | All `test_ui.py` assertions pass against PI2 | Fix route/label mismatch before committing |
-| `doc/architecture.md` index updated | Every `doc/arch/*.md` file has a row in the index table | Add missing row to Topic Index |
+| `doc/architecture.md` index updated | Every `doc/architecture/*.md` file has a row in the index table | Add missing row to Topic Index |
 | Git diff is clean after commit | `git status` shows no unstaged changes in `doc/` or tracked doc files | Stage and commit missing files |

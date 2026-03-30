@@ -136,7 +136,7 @@ Before deploying, ask: *"Which target(s) shall I deploy to? (OpenClawPI / OpenCl
 
 ## Documentation Maintenance
 
-When adding features: update `doc/arch/<topic>.md` + `README.md` in same commit.  
+When adding features: update `doc/architecture/<topic>.md` + `README.md` in same commit.  
 Full doc update: use `/taris-update-doc` skill.
 
 ## Continuous Test Improvement — MANDATORY

@@ -268,7 +268,7 @@ Before implementaion of memories shall be analyse how can be implemented . here 
 Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alongside the PicoClaw (Raspberry Pi) variant.
 → Full deployment plan: **§25 Deployment Plan: OpenClaw (Laptop / AI X1 / Pi 5 8 GB / RK3588)**
 → Hardware specs and options: [doc/hw-requirements-report.md §1.3](doc/hw-requirements-report.md)
-→ Integration architecture: [doc/arch/openclaw-integration.md](doc/arch/openclaw-integration.md)
+→ Integration architecture: [doc/architecture/openclaw-integration.md](doc/architecture/openclaw-integration.md)
 → Related project: [sintaris-openclaw](https://github.com/stas-ka/sintaris-openclaw) — Node.js AI gateway + `skill-taris` + MCP server
 
 ### 19.4 Pending

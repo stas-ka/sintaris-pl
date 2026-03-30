@@ -7,7 +7,7 @@
 
 Use this guide for a complete fresh deployment from a bare OS image.
 For incremental updates to an existing host, see `doc/update_strategy.md`.
-For integration architecture (PicoClaw ↔ OpenClaw), see `doc/arch/openclaw-integration.md`.
+For integration architecture (PicoClaw ↔ OpenClaw), see `doc/architecture/openclaw-integration.md`.
 
 ---
 
@@ -637,4 +637,4 @@ infinite loop. Safe usage pattern:
 - `skill-taris` → call `POST /api/chat` to query notes/calendar ✅
 - `skill-taris` → relay general LLM chat to Taris ❌ (loop if `LLM_PROVIDER=openclaw`)
 
-See `doc/arch/openclaw-integration.md` for the full loop-prevention guide.
+See `doc/architecture/openclaw-integration.md` for the full loop-prevention guide.

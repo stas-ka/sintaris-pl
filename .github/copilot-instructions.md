@@ -14,7 +14,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/taris-run-full-tests` | Run full test suite: telegram offline, screen loader, LLM, voice regression (local + Pi), Web UI Playwright |
 | `/taris-bump-version` | Update `BOT_VERSION`, prepend release note, commit |
 | `/taris-test-software` | Auto-select tests based on changed files (also triggered by plain "test software") |
-| `/taris-update-doc` | Sync project documentation (`doc/arch/`, code-map, TODO, README) with current implementation |
+| `/taris-update-doc` | Sync project documentation (`doc/architecture/`, code-map, TODO, README) with current implementation |
 | `/taris-test-ui` | Run Web UI Playwright + Telegram smoke tests; detect and fill coverage gaps via playwright-mcp |
 | `/taris-openclaw-setup` | Setup, configure, troubleshoot, and extend the OpenClaw variant (STT, LLM, sync, tests) |
 
@@ -44,21 +44,21 @@ taris is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/
 
 | Topic | File | Read when |
 |---|---|---|
-| System overview, variant comparison, module map | [`doc/arch/overview.md`](../doc/arch/overview.md) | Understanding overall structure, adding a new service |
-| PicoClaw variant (Pi, Vosk, Piper, systemd) | [`doc/arch/picoclaw.md`](../doc/arch/picoclaw.md) | Pi-specific code, service files, audio HAT |
-| OpenClaw variant (faster-whisper, Ollama, REST) | [`doc/arch/openclaw-integration.md`](../doc/arch/openclaw-integration.md) | OpenClaw-specific code, skill integration |
-| Voice pipeline (STT/TTS/VAD/hotword) | [`doc/arch/voice-pipeline.md`](../doc/arch/voice-pipeline.md) | Modifying `bot_voice.py` or `voice_assistant.py` |
-| Telegram bot modules, routing, callbacks | [`doc/arch/telegram-bot.md`](../doc/arch/telegram-bot.md) | Adding handlers, callbacks, menu buttons |
-| Security, RBAC, user roles, prompt injection | [`doc/arch/security.md`](../doc/arch/security.md) | Modifying access logic, roles, `bot_security.py` |
-| Feature domains (mail, calendar, contacts, docs) | [`doc/arch/features.md`](../doc/arch/features.md) | Adding or modifying user features |
-| **Conversation, memory, multi-turn context, RAG** | [`doc/arch/conversation.md`](../doc/arch/conversation.md) | Modifying LLM call structure, history, memory, RAG injection |
-| **Data layer (SQLite/Postgres, schema, stores)** | [`doc/arch/data-layer.md`](../doc/arch/data-layer.md) | Adding DB columns, switching backends, data file paths |
-| **Software stacks (all libs, binaries, third-party)** | [`doc/arch/stacks.md`](../doc/arch/stacks.md) | Checking deps, upgrading packages, adding third-party tools |
-| **Knowledge base (RAG, documents, KB sources)** | [`doc/arch/knowledge-base.md`](../doc/arch/knowledge-base.md) | Modifying RAG pipeline, document indexing, notes/calendar as KB |
-| Deployment, file layout, config, backup | [`doc/arch/deployment.md`](../doc/arch/deployment.md) | Deploying or changing config constants |
-| Multilanguage / i18n, `_t()` | [`doc/arch/multilanguage.md`](../doc/arch/multilanguage.md) | Adding i18n strings or a new language |
-| Web UI (FastAPI, routes, auth, Screen DSL) | [`doc/arch/web-ui.md`](../doc/arch/web-ui.md) | Modifying `bot_web.py` or templates |
-| LLM providers, multi-turn, tiered memory | [`doc/arch/llm-providers.md`](../doc/arch/llm-providers.md) | Modifying `bot_llm.py` or adding providers |
+| System overview, variant comparison, module map | [`doc/architecture/overview.md`](../doc/architecture/overview.md) | Understanding overall structure, adding a new service |
+| PicoClaw variant (Pi, Vosk, Piper, systemd) | [`doc/architecture/picoclaw.md`](../doc/architecture/picoclaw.md) | Pi-specific code, service files, audio HAT |
+| OpenClaw variant (faster-whisper, Ollama, REST) | [`doc/architecture/openclaw-integration.md`](../doc/architecture/openclaw-integration.md) | OpenClaw-specific code, skill integration |
+| Voice pipeline (STT/TTS/VAD/hotword) | [`doc/architecture/voice-pipeline.md`](../doc/architecture/voice-pipeline.md) | Modifying `bot_voice.py` or `voice_assistant.py` |
+| Telegram bot modules, routing, callbacks | [`doc/architecture/telegram-bot.md`](../doc/architecture/telegram-bot.md) | Adding handlers, callbacks, menu buttons |
+| Security, RBAC, user roles, prompt injection | [`doc/architecture/security.md`](../doc/architecture/security.md) | Modifying access logic, roles, `bot_security.py` |
+| Feature domains (mail, calendar, contacts, docs) | [`doc/architecture/features.md`](../doc/architecture/features.md) | Adding or modifying user features |
+| **Conversation, memory, multi-turn context, RAG** | [`doc/architecture/conversation.md`](../doc/architecture/conversation.md) | Modifying LLM call structure, history, memory, RAG injection |
+| **Data layer (SQLite/Postgres, schema, stores)** | [`doc/architecture/data-layer.md`](../doc/architecture/data-layer.md) | Adding DB columns, switching backends, data file paths |
+| **Software stacks (all libs, binaries, third-party)** | [`doc/architecture/stacks.md`](../doc/architecture/stacks.md) | Checking deps, upgrading packages, adding third-party tools |
+| **Knowledge base (RAG, documents, KB sources)** | [`doc/architecture/knowledge-base.md`](../doc/architecture/knowledge-base.md) | Modifying RAG pipeline, document indexing, notes/calendar as KB |
+| Deployment, file layout, config, backup | [`doc/architecture/deployment.md`](../doc/architecture/deployment.md) | Deploying or changing config constants |
+| Multilanguage / i18n, `_t()` | [`doc/architecture/multilanguage.md`](../doc/architecture/multilanguage.md) | Adding i18n strings or a new language |
+| Web UI (FastAPI, routes, auth, Screen DSL) | [`doc/architecture/web-ui.md`](../doc/architecture/web-ui.md) | Modifying `bot_web.py` or templates |
+| LLM providers, multi-turn, tiered memory | [`doc/architecture/llm-providers.md`](../doc/architecture/llm-providers.md) | Modifying `bot_llm.py` or adding providers |
 
 ### Architecture Doc Style Rules (enforced when writing or updating arch docs)
 
@@ -66,7 +66,7 @@ These rules ensure docs stay useful as Copilot navigation tools and don't waste 
 
 1. **Tables over prose.** Every section must lead with a table (functions, files, config constants, routing rules). Prose only for decisions that can't be expressed as a table.
 2. **File + function pointers are mandatory.** Every documented behaviour must reference the exact file and function name where the code lives.
-3. **"When to read this file" header required.** Every `doc/arch/*.md` file must open with a 1–2 line "When to read" statement so Copilot can decide whether to load it.
+3. **"When to read this file" header required.** Every `doc/architecture/*.md` file must open with a 1–2 line "When to read" statement so Copilot can decide whether to load it.
 4. **No background or history.** Don't explain why something was built this way. Only document what it is and where to change it.
 5. **⏳ OPEN labels for unimplemented items.** Any feature that is planned but not yet in code gets `> ⏳ **OPEN:** <one line description> → See [TODO.md §N](../TODO.md#section)`. This lets Copilot know not to rely on it.
 6. **Version header must match `BOT_VERSION`.** Update `**Version:**` on every edit.
@@ -104,7 +104,7 @@ taris/
 - **Strings:** add to all three languages (`ru`, `en`, `de`) in `src/strings.json`.
 - **Service files:** always deploy to Pi in the same commit/operation as code changes. See [bot-deploy](.github/instructions/bot-deploy.instructions.md).
 - **UI changes:** apply to both Telegram and Web UI simultaneously. See [bot-coding](.github/instructions/bot-coding.instructions.md).
-- **Docs:** update the relevant `doc/arch/<topic>.md` file and `README.md` in the same commit as the code change.
+- **Docs:** update the relevant `doc/architecture/<topic>.md` file and `README.md` in the same commit as the code change.
 - **TODO.md:** keep current; collapse completed items to `✅ Implemented (vX.Y.Z)`.
 - **Deployment pipeline:** ALL changes MUST be deployed and tested on the engineering target **PI2** (`OpenClawPI2`) first. Only after tests pass and the change is committed and pushed to git may it be deployed to the production target **PI1** (`OpenClawPI`). Never deploy directly to PI1 without prior PI2 validation.
 - **Continuous test improvement:** Every bug fix MUST add a regression test that would have caught the bug. Every new feature MUST add tests covering the happy path and the main failure modes. Tests live in `src/tests/test_voice_regression.py` (T-numbered) for voice/config/LLM; add new test IDs sequentially. Update `doc/test-suite.md` with the new test IDs in the same commit. No exceptions.
