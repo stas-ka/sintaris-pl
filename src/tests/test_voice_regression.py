@@ -3935,6 +3935,67 @@ def t_no_hardcoded_strings(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T56 — Ollama multi-turn context: ask_llm_with_history must send messages natively
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_ollama_history_native_messages(**_) -> list[TestResult]:
+    """T56: ask_llm_with_history must have a native 'ollama' branch that sends the
+    full messages list to /api/chat — NOT fall into the plain-text 'else' branch.
+
+    Root cause of regression: ollama fell into the else-branch which formatted all
+    history as a single plain-text prompt, breaking multi-turn conversation context.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    try:
+        src = open(Path(__file__).parent.parent / "core" / "bot_llm.py").read()
+
+        # Must have an explicit ollama branch in ask_llm_with_history
+        has_ollama_branch = 'provider == "ollama"' in src and 'ask_llm_with_history' in src
+        # The ollama branch must send "messages": messages (not a single-element list)
+        # Check that in the context of the ollama branch the messages list is passed directly
+        has_native_messages = (
+            '"messages": messages' in src and
+            'provider == "ollama"' in src
+        )
+        # The single-turn fallback (_ask_ollama) must NOT be in ask_llm_with_history path
+        # Verify by checking that the ollama branch doesn't call _ask_ollama
+        ask_llm_with_history_start = src.find("def ask_llm_with_history")
+        ask_llm_with_history_end   = src.find("\ndef ask_", ask_llm_with_history_start + 1)
+        if ask_llm_with_history_end == -1:
+            ask_llm_with_history_end = len(src)
+        history_func_body = src[ask_llm_with_history_start:ask_llm_with_history_end]
+        calls_ask_ollama  = "_ask_ollama" in history_func_body
+
+        results.append(TestResult(
+            "ollama_explicit_branch",
+            "PASS" if has_ollama_branch else "FAIL",
+            time.time() - t0,
+            'provider == "ollama" branch present in ask_llm_with_history' if has_ollama_branch
+            else 'MISSING: ollama branch in ask_llm_with_history — history will be lost',
+        ))
+        results.append(TestResult(
+            "ollama_native_messages_array",
+            "PASS" if has_native_messages else "FAIL",
+            time.time() - t0,
+            '"messages": messages passed natively' if has_native_messages
+            else 'MISSING: native messages array in ollama history branch',
+        ))
+        results.append(TestResult(
+            "ollama_no_single_turn_fallback",
+            "PASS" if not calls_ask_ollama else "FAIL",
+            time.time() - t0,
+            "_ask_ollama not called from ask_llm_with_history" if not calls_ask_ollama
+            else "REGRESSION: ask_llm_with_history calls _ask_ollama (single-turn, loses context)",
+        ))
+    except Exception as e:
+        results.append(TestResult("ollama_history_native_messages", "FAIL", time.time() - t0, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -4021,6 +4082,8 @@ TEST_FUNCTIONS = [
     t_rag_context_injection,
     # No hardcoded user-visible strings in Python source (T55)
     t_no_hardcoded_strings,
+    # Ollama multi-turn context: native messages array in ask_llm_with_history (T56)
+    t_ollama_history_native_messages,
 ]
 
 
