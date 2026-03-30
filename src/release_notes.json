@@ -1,5 +1,18 @@
 [
   {
+    "version": "2026.3.32",
+    "date": "2026-03-30",
+    "changes": [
+      "PyMuPDF PDF extraction with image placeholders; pdfminer fallback",
+      "RAG monitoring dashboard: rag_stats(), latency_ms+query_type in rag_log, Admin > RAG Stats",
+      "Per-user RAG settings in Profile: rag_top_k, rag_chunk_size (user_prefs table)",
+      "Developer Menu (bot_dev.py): Dev Chat, Restart, Log, Last Error, Files, Security Log",
+      "RAG: classify_query() adaptive routing + RRF fusion + hardware-tier detection (bot_rag.py)",
+      "Security logging: security_events table, log_security_event(), log_access_denied()",
+      "T66-T72 regression tests for Phase B/C and User Rights"
+    ]
+  },
+  {
     "version": "2026.3.31",
     "date": "2026-03-30",
     "title": "DB-primary storage, memory toggle, doc dedup",

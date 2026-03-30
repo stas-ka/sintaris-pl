@@ -403,8 +403,10 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
   - [x] pgvector HNSW — `store_postgres.py` with pgvector; `search_similar()` (v2026.4.13)
   - [x] `rag_log` table — in `bot_db.py`; retrieval logged with query + chunks
   - [x] `RAG_TOP_K` / `RAG_CHUNK_SIZE` / `RAG_TIMEOUT` — configurable via `rag_settings.py`
-  - [ ] `classify_query()` adaptive routing — not implemented
-  - [ ] RRF fusion (k=60) combining FTS5 + vector results — not implemented
+  - [x] `classify_query()` adaptive routing — `bot_rag.py`; heuristic simple/factual/contextual (v2026.3.32)
+  - [x] RRF fusion (k=60) combining FTS5 + vector results — `reciprocal_rank_fusion()` in `bot_rag.py` (v2026.3.32)
+  - [x] Hardware-tier detection — `detect_rag_capability()` FTS5_ONLY/HYBRID/FULL (v2026.3.32)
+  - [x] RAG monitoring dashboard — `_handle_admin_rag_stats()`, `rag_stats()`, latency_ms+query_type in rag_log (v2026.3.32)
   - [ ] sqlite-vec HNSW for PicoClaw/SQLite backend — `install_sqlite_vec.sh` missing
 - [~] **Phase C — Document Management (partial):**
   - [x] Upload/chunk pipeline (`RAG_CHUNK_SIZE=512`, overlap=50) — `bot_documents.py` (v2026.3.30)
@@ -412,8 +414,8 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
   - [x] Admin sharing controls — share/unshare buttons in doc detail view
   - [x] `rag_settings` system-wide config — `src/core/rag_settings.py`
   - [x] Document deduplication — hash-based replace/keep-both flow (v2026.3.31)
-  - [ ] `PyMuPDF` for PDF + image extraction — currently uses `pdfminer` (text only)
-  - [ ] Per-user `rag_settings` — settings are currently system-wide, not per-user
+  - [x] `PyMuPDF` for PDF + image extraction — try fitz first, [IMAGE: page N] placeholders, pdfminer fallback (v2026.3.32)
+  - [x] Per-user `rag_settings` — rag_top_k/rag_chunk_size in user_prefs; Profile > ⚙️ RAG Settings (v2026.3.32)
   - [ ] Separate `doc_sharing` permission table — sharing is a flag on documents row
 - [ ] **Phase D — Remote RAG + MCP (4–6 d):** expose `search_knowledge()` as MCP tool; `MCP_REMOTE_URL` client; circuit breaker + fallback; see `concept/rag-memory-architecture.md §4.3`
 - [ ] **Phase E — Multimodal (future, GPU/Pi 5+ only):** CLIP embeddings for image search; `docling` for complex PDFs; vision API fallback
