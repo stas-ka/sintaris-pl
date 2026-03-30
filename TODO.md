@@ -396,9 +396,25 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - Previously (v2026.4.13): `VOICE_BACKEND=cpu|cuda|openvino` + whisper-cpp `--device cuda` support
 
 ### 25.6 RAG Implementation — Variant C (Hybrid Tiered RAG)
-- [ ] **Phase A — Memory System (3–5 d):** `bot_memory.py`; DB tables `memory_summaries` + `memory_long`; `compact_short_to_middle()` / `compact_middle_to_long()` — see `concept/rag-memory-architecture.md §6.3`
-- [ ] **Phase B — Enhanced RAG (5–7 d):** FTS5 + pgvector HNSW + RRF fusion (k=60); `EmbeddingService` (ONNX Runtime); `classify_query()` routing; `rag_log` table; `RAG_TOP_K=5`, `RAG_MAX_CHARS=2000`
-- [ ] **Phase C — Document Management (3–4 d):** upload/chunk pipeline (`RAG_CHUNK_SIZE=512`, overlap=50); `doc_sharing` table; admin sharing controls; `PyMuPDF` for PDF+image; `rag_settings` per-user config
+- [x] **Phase A — Memory System:** Tiered short/mid/long-term memory in `bot_state.py`; `conversation_summaries` DB table (tier=mid/long); `_summarize_session_async()` at `CONV_SUMMARY_THRESHOLD`; compact mid→long at `CONV_MID_MAX`; `get_memory_context()` injects into LLM prompts; per-user toggle + Admin panel config (v2026.3.31) _(implemented as bot_state.py not bot_memory.py; table is conversation_summaries with tier column)_
+- [~] **Phase B — Enhanced RAG (partial):**
+  - [x] FTS5 BM25 search — `store.search_fts()`, `_docs_rag_context()` (v2026.3.30)
+  - [x] `EmbeddingService` (ONNX Runtime) — `src/core/bot_embeddings.py`
+  - [x] pgvector HNSW — `store_postgres.py` with pgvector; `search_similar()` (v2026.4.13)
+  - [x] `rag_log` table — in `bot_db.py`; retrieval logged with query + chunks
+  - [x] `RAG_TOP_K` / `RAG_CHUNK_SIZE` / `RAG_TIMEOUT` — configurable via `rag_settings.py`
+  - [ ] `classify_query()` adaptive routing — not implemented
+  - [ ] RRF fusion (k=60) combining FTS5 + vector results — not implemented
+  - [ ] sqlite-vec HNSW for PicoClaw/SQLite backend — `install_sqlite_vec.sh` missing
+- [~] **Phase C — Document Management (partial):**
+  - [x] Upload/chunk pipeline (`RAG_CHUNK_SIZE=512`, overlap=50) — `bot_documents.py` (v2026.3.30)
+  - [x] Document sharing — `is_shared` flag + `_handle_doc_share_toggle()` (v2026.3.30)
+  - [x] Admin sharing controls — share/unshare buttons in doc detail view
+  - [x] `rag_settings` system-wide config — `src/core/rag_settings.py`
+  - [x] Document deduplication — hash-based replace/keep-both flow (v2026.3.31)
+  - [ ] `PyMuPDF` for PDF + image extraction — currently uses `pdfminer` (text only)
+  - [ ] Per-user `rag_settings` — settings are currently system-wide, not per-user
+  - [ ] Separate `doc_sharing` permission table — sharing is a flag on documents row
 - [ ] **Phase D — Remote RAG + MCP (4–6 d):** expose `search_knowledge()` as MCP tool; `MCP_REMOTE_URL` client; circuit breaker + fallback; see `concept/rag-memory-architecture.md §4.3`
 - [ ] **Phase E — Multimodal (future, GPU/Pi 5+ only):** CLIP embeddings for image search; `docling` for complex PDFs; vision API fallback
 
