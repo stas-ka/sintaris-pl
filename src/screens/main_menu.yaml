@@ -61,6 +61,12 @@ widgets:
         action: admin_menu
 
   - type: button_row
+    visible_roles: [developer]
+    buttons:
+      - label_key: btn_dev_menu
+        action: dev_menu
+
+  - type: button_row
     visible_variants: [openclaw]
     buttons:
       - label_key: btn_openclaw_agent

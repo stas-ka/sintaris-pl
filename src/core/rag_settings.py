@@ -7,13 +7,14 @@ Settings are loaded lazily and cached; call invalidate() after save.
 import json
 import os
 from pathlib import Path
-from core.bot_config import RAG_SETTINGS_FILE, RAG_TOP_K, RAG_CHUNK_SIZE, LLM_TIMEOUT, RAG_TIMEOUT, log
+from core.bot_config import RAG_SETTINGS_FILE, RAG_TOP_K, RAG_CHUNK_SIZE, LLM_TIMEOUT, RAG_TIMEOUT, LOCAL_TEMPERATURE, log
 
 _DEFAULTS = {
-    "rag_top_k":     RAG_TOP_K,
-    "rag_chunk_size": RAG_CHUNK_SIZE,
-    "llm_timeout":   LLM_TIMEOUT,
-    "rag_timeout":   RAG_TIMEOUT,
+    "rag_top_k":       RAG_TOP_K,
+    "rag_chunk_size":  RAG_CHUNK_SIZE,
+    "llm_timeout":     LLM_TIMEOUT,
+    "rag_timeout":     RAG_TIMEOUT,
+    "llm_temperature": LOCAL_TEMPERATURE,
 }
 _cache: dict | None = None
 

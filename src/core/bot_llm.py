@@ -61,6 +61,16 @@ from core.bot_config import (
 # Empty string or missing key → use global LLM_PROVIDER.
 # Supported use_case values: "system" (admin system chat), "chat" (user free chat).
 
+
+def _effective_temperature() -> float:
+    """Return runtime LLM temperature from rag_settings; falls back to LOCAL_TEMPERATURE."""
+    try:
+        from core.rag_settings import get as _rget
+        return float(_rget("llm_temperature"))
+    except Exception:
+        return LOCAL_TEMPERATURE
+
+
 def get_per_func_provider(use_case: str) -> str:
     """Return admin-set provider for this use_case, or '' for global default."""
     try:
@@ -306,7 +316,7 @@ def _ask_local(prompt: str, timeout: int) -> str:
     body: dict = {
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": LOCAL_MAX_TOKENS,
-        "temperature": LOCAL_TEMPERATURE,
+        "temperature": _effective_temperature(),
     }
     if LLAMA_CPP_MODEL:
         body["model"] = LLAMA_CPP_MODEL
@@ -334,11 +344,11 @@ def _ask_ollama(prompt: str, timeout: int) -> str:
         "think": OLLAMA_THINK,
         "options": {
             "num_predict": LOCAL_MAX_TOKENS,
-            "temperature": LOCAL_TEMPERATURE,
+            "temperature": _effective_temperature(),
         },
     }
     result = _http_post_json(url, headers, body, effective_timeout)
-    return result["message"]["content"].strip()
+    return result["message"]["content"].strip()  # _ask_ollama return
 
 
 def _ask_openclaw(prompt: str, timeout: int) -> str:
@@ -532,10 +542,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
         elif provider == "local":
             url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
             headers = {"Content-Type": "application/json"}
-            body: dict = {"messages": messages, "max_tokens": LOCAL_MAX_TOKENS, "temperature": LOCAL_TEMPERATURE}
-            if LLAMA_CPP_MODEL:
-                body["model"] = LLAMA_CPP_MODEL
-            result = _http_post_json(url, headers, body, timeout)
+            body: dict = {"messages": messages, "max_tokens": LOCAL_MAX_TOKENS, "temperature": _effective_temperature()}
             return result["choices"][0]["message"]["content"].strip()
 
         elif provider == "yandexgpt":
@@ -593,7 +600,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
                 "think": OLLAMA_THINK,
                 "options": {
                     "num_predict": LOCAL_MAX_TOKENS,
-                    "temperature": LOCAL_TEMPERATURE,
+                    "temperature": _effective_temperature(),
                 },
             }
             result = _http_post_json(_url, _headers, _body, effective_timeout)
@@ -621,7 +628,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
         )
         try:
             url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
-            body_fb: dict = {"messages": messages, "max_tokens": LOCAL_MAX_TOKENS, "temperature": LOCAL_TEMPERATURE}
+            body_fb: dict = {"messages": messages, "max_tokens": LOCAL_MAX_TOKENS, "temperature": _effective_temperature()}
             if LLAMA_CPP_MODEL:
                 body_fb["model"] = LLAMA_CPP_MODEL
             result = _http_post_json(
