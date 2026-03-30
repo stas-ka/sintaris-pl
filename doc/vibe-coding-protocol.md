@@ -1115,3 +1115,5 @@ Every ~3 months, measure baseline health:
 | 11:30 UTC | 11:30 UTC | 11:38 UTC | 8m | refactor: doc/arch/ → doc/architecture/ | git mv 15 files; updated links in 21 files (README, TODO, DONE, doc/architecture.md, .github/, concept/); committed 32c702e | 1 | 1 | claude-sonnet-4.6 | doc/architecture/*.md (15 renames), doc/architecture.md, README.md, TODO.md, DONE.md, .github/** | done |
 
 | 13:50 UTC | 13:40 UTC | 13:50 UTC | 10m | fix: §0 bug audit + TODO cleanup | Tests: PASS 115 FAIL 0; system chat bug confirmed fixed in v2026.3.30 rewrite; profile_clear_memory marked done; PI2/PI1 infrastructure bugs annotated; TODO §0 restructured with Fixed/Infrastructure categories; committed 33cc190 | 1 | 3 | claude-sonnet-4.6 | TODO.md | done |
+
+| 11:45 UTC | 11:39 UTC | 11:45 UTC | 6m | docs: 3 Mermaid architecture diagrams in stacks.md | Deployment topology + Full software stack + Voice pipeline comparison; color-coded 🔵 PicoClaw / 🟢 OpenClaw / 🟣 both / 🟠 cloud; 113 lines added; GitHub-native rendering | 2 | 1 | claude-sonnet-4.6 | doc/architecture/stacks.md | done |
