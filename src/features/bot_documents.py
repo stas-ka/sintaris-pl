@@ -44,6 +44,25 @@ def _extract_text(file_path: Path, file_ext: str) -> str:
     if file_ext in (".txt", ".md"):
         return file_path.read_text(encoding="utf-8", errors="replace")
     if file_ext == ".pdf":
+        # Try PyMuPDF first (faster, handles images), fall back to pdfminer
+        try:
+            import fitz  # PyMuPDF
+            doc = fitz.open(str(file_path))
+            parts = []
+            for page_num, page in enumerate(doc, 1):
+                parts.append(page.get_text())
+                # Note image presence as placeholder
+                img_list = page.get_images(full=False)
+                if img_list:
+                    parts.append(f"[IMAGE: page {page_num}, {len(img_list)} image(s)]")
+            doc.close()
+            result = "\n".join(parts).strip()
+            if result:
+                return result
+        except ImportError:
+            pass
+        except Exception as e:
+            log.warning("[Docs] PyMuPDF extraction failed: %s — trying pdfminer", e)
         try:
             from pdfminer.high_level import extract_text as pdf_extract
             return pdf_extract(str(file_path)) or ""

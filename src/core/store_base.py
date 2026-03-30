@@ -238,7 +238,8 @@ class DataStore(Protocol):
         """Remove all FTS5 text chunks for a document. Silent if not found."""
         ...
 
-    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int) -> None:
+    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
+                         latency_ms: int = 0, query_type: str = "contextual") -> None:
         """Record a RAG retrieval event for auditing / admin log viewer."""
         ...
 

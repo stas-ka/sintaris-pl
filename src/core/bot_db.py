@@ -177,11 +177,16 @@ CREATE TABLE IF NOT EXISTS rag_log (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     chat_id        INTEGER NOT NULL,
     query          TEXT    NOT NULL,
+    query_type     TEXT    NOT NULL DEFAULT 'contextual',
     n_chunks       INTEGER NOT NULL DEFAULT 0,
     chars_injected INTEGER NOT NULL DEFAULT 0,
+    latency_ms     INTEGER NOT NULL DEFAULT 0,
     created_at     TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_rag_log_chat ON rag_log(chat_id, created_at DESC);
+-- Migration: add columns to pre-existing rag_log (ALTER TABLE IF NOT EXISTS column missing)
+-- SQLite does not support IF NOT EXISTS in ALTER TABLE, so we use a workaround in init_db.
+
 
 -- Conversation summaries — tiered short/mid/long-term memory
 CREATE TABLE IF NOT EXISTS conversation_summaries (
@@ -263,6 +268,15 @@ def init_db() -> None:
         conn.commit()
     except Exception:
         pass  # column already exists
+    # rag_log latency_ms + query_type columns (added in v2026.3.32)
+    for _col_sql in [
+        "ALTER TABLE rag_log ADD COLUMN query_type TEXT NOT NULL DEFAULT 'contextual'",
+        "ALTER TABLE rag_log ADD COLUMN latency_ms INTEGER NOT NULL DEFAULT 0",
+    ]:
+        try:
+            conn.execute(_col_sql)
+        except Exception:
+            pass  # column already exists
     conn.commit()
     log.info(f"[DB] init OK : {DB_PATH}")
 

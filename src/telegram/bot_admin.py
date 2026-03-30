@@ -1067,6 +1067,7 @@ def _handle_admin_rag_menu(chat_id: int) -> None:
     ])
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),   callback_data="admin_rag_log"))
+    kb.add(InlineKeyboardButton("📊 RAG Stats",                       callback_data="admin_rag_stats"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"), callback_data="admin_rag_toggle"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),   callback_data="admin_rag_settings"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin"))
@@ -1181,7 +1182,40 @@ def _handle_admin_rag_log(chat_id: int) -> None:
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", text))
 
 
-def _handle_admin_llm_trace(chat_id: int) -> None:
+def _handle_admin_rag_stats(chat_id: int) -> None:
+    """Show aggregate RAG monitoring stats: avg latency, top queries, query type breakdown."""
+    from core.store import store as _store
+    try:
+        stats = _store.rag_stats()
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ RAG stats unavailable: {e}")
+        return
+    lines = [
+        "📊 *RAG Monitoring*\n",
+        f"• Total retrievals: *{stats['total']}*",
+        f"• Avg latency: *{stats['avg_latency_ms']} ms*",
+        f"• Avg chunks/query: *{stats['avg_chunks']}*",
+        f"• Total chunks served: *{stats['total_chunks']}*",
+        f"• Total chars injected: *{stats['total_chars']}*",
+    ]
+    if stats.get("query_types"):
+        lines.append("\n*Query types:*")
+        for qt, cnt in stats["query_types"].items():
+            lines.append(f"  · {qt}: {cnt}")
+    if stats.get("top_queries"):
+        lines.append("\n*Top queries:*")
+        for i, q in enumerate(stats["top_queries"], 1):
+            lines.append(f"  {i}. {q['query'][:40]} ({q['cnt']}×)")
+    text = "\n".join(lines)
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔙 RAG", callback_data="admin_rag_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+
     """Show a detailed context trace of recent LLM calls for this user.
 
     Displays: provider/model, temperature, history count/chars, RAG chunks,

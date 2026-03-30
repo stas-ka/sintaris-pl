@@ -631,23 +631,52 @@ class SQLiteStore:
         db.execute("DELETE FROM doc_chunks WHERE doc_id = ?", (str(doc_id),))
         db.commit()
 
-    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int) -> None:
+    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
+                         latency_ms: int = 0, query_type: str = "contextual") -> None:
         """Insert one RAG retrieval record into rag_log."""
         db = self._db()
         db.execute(
-            "INSERT INTO rag_log(chat_id, query, n_chunks, chars_injected) VALUES (?,?,?,?)",
-            (chat_id, query, n_chunks, chars),
+            "INSERT INTO rag_log(chat_id, query, query_type, n_chunks, chars_injected, latency_ms)"
+            " VALUES (?,?,?,?,?,?)",
+            (chat_id, query, query_type, n_chunks, chars, latency_ms),
         )
         db.commit()
 
     def list_rag_log(self, limit: int = 20) -> list[dict]:
         """Return up to *limit* most recent RAG log rows, newest first."""
         rows = self._db().execute(
-            "SELECT id, chat_id, query, n_chunks, chars_injected, created_at "
+            "SELECT id, chat_id, query, query_type, n_chunks, chars_injected,"
+            " latency_ms, created_at "
             "FROM rag_log ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def rag_stats(self) -> dict:
+        """Return aggregate RAG stats for the admin monitoring page."""
+        db = self._db()
+        row = db.execute(
+            "SELECT COUNT(*) as total, AVG(latency_ms) as avg_latency_ms,"
+            " AVG(n_chunks) as avg_chunks, SUM(n_chunks) as total_chunks,"
+            " SUM(chars_injected) as total_chars"
+            " FROM rag_log"
+        ).fetchone()
+        top = db.execute(
+            "SELECT query, COUNT(*) as cnt FROM rag_log"
+            " GROUP BY query ORDER BY cnt DESC LIMIT 5"
+        ).fetchall()
+        types = db.execute(
+            "SELECT query_type, COUNT(*) as cnt FROM rag_log GROUP BY query_type"
+        ).fetchall()
+        return {
+            "total": row["total"] or 0,
+            "avg_latency_ms": round(row["avg_latency_ms"] or 0, 1),
+            "avg_chunks": round(row["avg_chunks"] or 0, 1),
+            "total_chunks": row["total_chunks"] or 0,
+            "total_chars": row["total_chars"] or 0,
+            "top_queries": [dict(r) for r in top],
+            "query_types": {r["query_type"]: r["cnt"] for r in types},
+        }
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 

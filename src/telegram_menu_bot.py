@@ -74,7 +74,7 @@ from telegram.bot_admin import (
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
     _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
     _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
-    _handle_admin_rag_settings, _start_admin_rag_set, _finish_admin_rag_set,
+    _handle_admin_rag_settings, _handle_admin_rag_stats, _start_admin_rag_set, _finish_admin_rag_set,
     _handle_admin_llm_trace,
     _handle_admin_memory_menu, _handle_admin_mem_set_start,
     _admin_keyboard,
@@ -99,6 +99,7 @@ from telegram.bot_handlers import (
     _handle_profile_lang, _set_profile_lang, _handle_profile_my_data,
     _handle_profile_clear_memory, _handle_profile_clear_memory_confirmed,
     _handle_profile_toggle_memory,
+    _handle_profile_rag_settings, _handle_profile_rag_adjust, _handle_profile_rag_reset,
     _pending_profile,
 )
 
@@ -386,6 +387,19 @@ def callback_handler(call):
     elif data == "profile_toggle_memory":
         if not _is_allowed(cid): return _deny(cid)
         _handle_profile_toggle_memory(cid)
+    elif data == "profile_rag_settings":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_rag_settings(cid)
+    elif data in ("profile_rag_topk_inc", "profile_rag_topk_dec",
+                  "profile_rag_chunk_inc", "profile_rag_chunk_dec"):
+        if not _is_allowed(cid): return _deny(cid)
+        key   = "topk" if "topk" in data else "chunk"
+        delta = 1 if data.endswith("_inc") else -1
+        if key == "chunk": delta *= 200
+        _handle_profile_rag_adjust(cid, key, delta)
+    elif data == "profile_rag_reset":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_rag_reset(cid)
     # ── Developer menu ─────────────────────────────────────────────────────
     elif data == "dev_menu":
         _handle_dev_menu(cid)
@@ -540,6 +554,12 @@ def callback_handler(call):
     elif data == "admin_rag_log":
         if _is_admin(cid):
             _handle_admin_rag_log(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_stats":
+        if _is_admin(cid):
+            _handle_admin_rag_stats(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

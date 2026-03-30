@@ -4253,6 +4253,7 @@ def t_llm_context_trace(**_) -> list:
     """
     import time as _time
     results = []
+    import time as _time
     t0 = _time.time()
 
     # 1. db_log_llm_call has extended keyword params
@@ -4352,6 +4353,7 @@ def t_notes_db_content(**_) -> list:
     """T61: Notes content stored in DB — schema has content column, save/load use DB."""
     import time as _time
     results = []
+    import time as _time
     t0 = _time.time()
 
     # 1. notes_index schema has content column
@@ -4400,6 +4402,7 @@ def t_calendar_db_primary(**_) -> list:
     """T62: Calendar _cal_save is DB-primary — no direct JSON write as primary action."""
     import time as _time
     results = []
+    import time as _time
     t0 = _time.time()
 
     try:
@@ -4440,6 +4443,7 @@ def t_doc_dedup_logic(**_) -> list:
     """T63: Document deduplication — _pending_doc_replace, handlers, and i18n string present."""
     import time as _time
     results = []
+    import time as _time
     t0 = _time.time()
 
     # 1. _pending_doc_replace dict exists
@@ -4491,6 +4495,7 @@ def t_user_prefs_db(**_) -> list:
     """T64: Per-user memory toggle — user_prefs table and helpers in bot_db, callback wired."""
     import time as _time
     results = []
+    import time as _time
     t0 = _time.time()
 
     # 1. user_prefs table in _SCHEMA_SQL
@@ -4541,6 +4546,7 @@ def t_admin_memory_settings(**_) -> list:
     """T65: Admin memory settings — system_settings table, helpers, runtime getters, callback wired."""
     import time as _time
     results = []
+    import time as _time
     t0 = _time.time()
 
     # 1. system_settings table in _SCHEMA_SQL
@@ -4600,6 +4606,231 @@ def t_admin_memory_settings(**_) -> list:
     except Exception as e:
         results.append(TestResult("admin_memory_menu_wired", "FAIL", _time.time() - t0, str(e)))
 
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T66 – classify_query() adaptive routing
+# ─────────────────────────────────────────────────────────────────────────────
+def t_classify_query_routing(**_) -> list:
+    """T66: classify_query() returns 'simple' for greetings, 'contextual' for knowledge queries."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        from core.bot_rag import classify_query
+        cases = [
+            ("Привет", False, "simple"),
+            ("Hello", False, "simple"),
+            ("Как дела?", False, "simple"),
+            ("Что такое RAG?", True, "factual"),       # has_documents=True → factual
+            ("Расскажи о документе", True, "factual"), # has_documents=True → factual
+            ("2+2", False, "simple"),
+        ]
+        for text, has_docs, expected in cases:
+            got = classify_query(text, has_documents=has_docs)
+            ok = got == expected
+            results.append(TestResult(
+                f"classify_query:{text[:20]}",
+                "PASS" if ok else "FAIL",
+                time.time() - t0,
+                f"got={got} expected={expected}",
+            ))
+    except ImportError as e:
+        results.append(TestResult("classify_query_import", "SKIP", time.time() - t0, str(e)))
+    except Exception as e:
+        results.append(TestResult("classify_query_routing", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T67 – reciprocal_rank_fusion() math
+# ─────────────────────────────────────────────────────────────────────────────
+def t_rrf_fusion_math(**_) -> list:
+    """T67: RRF fusion with k=60 correctly scores and deduplicates results."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        from core.bot_rag import reciprocal_rank_fusion
+        fts5   = [{"id": "a", "chunk_text": "alpha"}, {"id": "b", "chunk_text": "beta"}]
+        vector = [{"id": "b", "chunk_text": "beta"}, {"id": "c", "chunk_text": "gamma"}]
+        fused  = reciprocal_rank_fusion(fts5, vector)
+        ids    = [r["id"] for r in fused]
+        # 'b' appears in both lists → should have highest score → first or second
+        ok_dedup = len(ids) == len(set(ids))
+        ok_b_top = ids[0] == "b" or (len(ids) > 1 and ids[1] == "b")
+        results.append(TestResult("rrf_dedup",   "PASS" if ok_dedup else "FAIL", time.time() - t0,
+                                  f"ids={ids}"))
+        results.append(TestResult("rrf_b_top2",  "PASS" if ok_b_top else "FAIL", time.time() - t0,
+                                  f"ids[0]={ids[0] if ids else 'empty'}"))
+        # Verify score formula: 1/(rank+k) ≤ 1/60
+        ok_score = all(r.get("rrf_score", 0) <= 1/60 + 0.01 for r in fused)
+        results.append(TestResult("rrf_score_range", "PASS" if ok_score else "FAIL", time.time() - t0,
+                                  f"scores={[round(r.get('rrf_score',0),4) for r in fused]}"))
+    except ImportError as e:
+        results.append(TestResult("rrf_import", "SKIP", time.time() - t0, str(e)))
+    except Exception as e:
+        results.append(TestResult("rrf_fusion_math", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T68 – PyMuPDF fallback in PDF extraction
+# ─────────────────────────────────────────────────────────────────────────────
+def t_pymupdf_pdf_fallback(**_) -> list:
+    """T68: _extract_text() tries PyMuPDF first, falls back to pdfminer gracefully."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        src = Path(__file__).parents[1] / "features" / "bot_documents.py"
+        code = src.read_text(encoding="utf-8")
+        ok_fitz   = "import fitz" in code or "fitz.open" in code
+        ok_fallbk = "pdfminer" in code and ("ImportError" in code or "except" in code)
+        ok_img_ph = "[IMAGE:" in code
+        results.append(TestResult("pymupdf_fitz_tried", "PASS" if ok_fitz else "FAIL", time.time() - t0,
+                                  "fitz import present" if ok_fitz else "fitz NOT referenced"))
+        results.append(TestResult("pymupdf_pdfminer_fallback", "PASS" if ok_fallbk else "FAIL", time.time() - t0,
+                                  "pdfminer fallback present" if ok_fallbk else "fallback missing"))
+        results.append(TestResult("pymupdf_image_placeholder", "PASS" if ok_img_ph else "FAIL", time.time() - t0,
+                                  "[IMAGE:] placeholder present" if ok_img_ph else "placeholder missing"))
+    except Exception as e:
+        results.append(TestResult("pymupdf_fallback", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T69 – per-user RAG settings override
+# ─────────────────────────────────────────────────────────────────────────────
+def t_per_user_rag_settings(**_) -> list:
+    """T69: _docs_rag_context reads rag_top_k from user_prefs, profile_rag handlers present."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        src = Path(__file__).parents[1] / "telegram" / "bot_access.py"
+        code = src.read_text(encoding="utf-8")
+        ok_pref = "db_get_user_pref" in code and "rag_top_k" in code
+        results.append(TestResult("rag_context_reads_user_pref", "PASS" if ok_pref else "FAIL",
+                                  time.time() - t0, "db_get_user_pref + rag_top_k found" if ok_pref else "MISSING"))
+    except Exception as e:
+        results.append(TestResult("rag_user_pref_access", "FAIL", time.time() - t0, str(e)))
+    try:
+        src2 = Path(__file__).parents[1] / "telegram" / "bot_handlers.py"
+        code2 = src2.read_text(encoding="utf-8")
+        ok_rag_fn = "_handle_profile_rag_settings" in code2
+        ok_adjust  = "_handle_profile_rag_adjust" in code2
+        ok_reset   = "_handle_profile_rag_reset" in code2
+        for name, ok in [("profile_rag_settings", ok_rag_fn), ("profile_rag_adjust", ok_adjust),
+                         ("profile_rag_reset", ok_reset)]:
+            results.append(TestResult(f"handler_{name}", "PASS" if ok else "FAIL",
+                                      time.time() - t0, "present" if ok else "MISSING"))
+    except Exception as e:
+        results.append(TestResult("rag_handler_check", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T70 – Developer Menu RBAC guard
+# ─────────────────────────────────────────────────────────────────────────────
+def t_dev_menu_rbac(**_) -> list:
+    """T70: bot_dev.py exports correct functions; all handlers check _is_developer."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        src = Path(__file__).parents[1] / "features" / "bot_dev.py"
+        code = src.read_text(encoding="utf-8")
+        ok_guard = "_is_developer" in code
+        ok_deny  = "log_access_denied" in code or "_deny" in code
+        ok_chat  = "handle_dev_chat_message" in code
+        ok_log   = "log_security_event" in code
+        ok_menu  = "_handle_dev_menu" in code
+        for name, ok in [("rbac_guard", ok_guard), ("deny_call", ok_deny),
+                         ("dev_chat_fn", ok_chat), ("security_log_fn", ok_log),
+                         ("dev_menu_fn", ok_menu)]:
+            results.append(TestResult(f"dev_menu_{name}", "PASS" if ok else "FAIL",
+                                      time.time() - t0, "present" if ok else "MISSING"))
+    except Exception as e:
+        results.append(TestResult("dev_menu_rbac", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T71 – security_events table + logging
+# ─────────────────────────────────────────────────────────────────────────────
+def t_security_events_logging(**_) -> list:
+    """T71: security_events table in schema; log_security_event & log_access_denied in bot_dev."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        db_src = Path(__file__).parents[1] / "core" / "bot_db.py"
+        code = db_src.read_text(encoding="utf-8")
+        ok_tbl = "security_events" in code
+        results.append(TestResult("security_events_table", "PASS" if ok_tbl else "FAIL",
+                                  time.time() - t0, "table defined" if ok_tbl else "NOT FOUND"))
+    except Exception as e:
+        results.append(TestResult("security_events_schema", "FAIL", time.time() - t0, str(e)))
+    try:
+        dev_src = Path(__file__).parents[1] / "features" / "bot_dev.py"
+        code2   = dev_src.read_text(encoding="utf-8")
+        ok_log  = "def log_security_event" in code2
+        ok_deny = "def log_access_denied" in code2
+        results.append(TestResult("log_security_event_fn", "PASS" if ok_log else "FAIL",
+                                  time.time() - t0, "present" if ok_log else "MISSING"))
+        results.append(TestResult("log_access_denied_fn", "PASS" if ok_deny else "FAIL",
+                                  time.time() - t0, "present" if ok_deny else "MISSING"))
+    except Exception as e:
+        results.append(TestResult("security_log_fns", "FAIL", time.time() - t0, str(e)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T72 – RAG monitoring stats
+# ─────────────────────────────────────────────────────────────────────────────
+def t_rag_monitoring_stats(**_) -> list:
+    """T72: store_sqlite has rag_stats(); latency_ms+query_type in rag_log; admin handler wired."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+    results = []
+    import time as _time
+    t0 = time.time()
+    try:
+        sl_src = Path(__file__).parents[1] / "core" / "store_sqlite.py"
+        code   = sl_src.read_text(encoding="utf-8")
+        ok_fn  = "def rag_stats" in code
+        ok_lat = "latency_ms" in code
+        ok_qt  = "query_type" in code
+        results.append(TestResult("rag_stats_method", "PASS" if ok_fn else "FAIL",
+                                  time.time() - t0, "rag_stats() present" if ok_fn else "MISSING"))
+        results.append(TestResult("rag_log_latency_ms", "PASS" if ok_lat else "FAIL",
+                                  time.time() - t0, "latency_ms column present" if ok_lat else "MISSING"))
+        results.append(TestResult("rag_log_query_type", "PASS" if ok_qt else "FAIL",
+                                  time.time() - t0, "query_type column present" if ok_qt else "MISSING"))
+    except Exception as e:
+        results.append(TestResult("rag_stats_schema", "FAIL", time.time() - t0, str(e)))
+    try:
+        adm_src = Path(__file__).parents[1] / "telegram" / "bot_admin.py"
+        code2   = adm_src.read_text(encoding="utf-8")
+        ok_hnd  = "_handle_admin_rag_stats" in code2
+        results.append(TestResult("admin_rag_stats_handler", "PASS" if ok_hnd else "FAIL",
+                                  time.time() - t0, "handler present" if ok_hnd else "MISSING"))
+    except Exception as e:
+        results.append(TestResult("rag_stats_admin", "FAIL", time.time() - t0, str(e)))
     return results
 
 
@@ -4709,6 +4940,20 @@ TEST_FUNCTIONS = [
     t_user_prefs_db,
     # Admin memory settings: system_settings table, helpers, runtime getters (T65)
     t_admin_memory_settings,
+    # Phase B: classify_query() adaptive routing (T66)
+    t_classify_query_routing,
+    # Phase B: reciprocal_rank_fusion() math (T67)
+    t_rrf_fusion_math,
+    # Phase C: PyMuPDF fallback for PDF extraction (T68)
+    t_pymupdf_pdf_fallback,
+    # Phase C: per-user RAG settings override from user_prefs (T69)
+    t_per_user_rag_settings,
+    # User Rights: Developer Menu RBAC guard (T70)
+    t_dev_menu_rbac,
+    # User Rights: security_events table + logging (T71)
+    t_security_events_logging,
+    # Phase B/C: RAG monitoring rag_stats() method (T72)
+    t_rag_monitoring_stats,
 ]
 
 

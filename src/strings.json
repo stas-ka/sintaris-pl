@@ -394,7 +394,11 @@
     "dev_restart_confirm": "Да, перезапустить",
     "dev_restarting": "♻️ Перезапускаю сервис...",
     "dev_no_access": "⛔ Требуется роль разработчика.",
-    "btn_dev_menu": "🛠 Dev"
+    "btn_dev_menu": "🛠 Dev",
+    "profile_btn_rag_settings": "⚙️ Настройки RAG",
+    "profile_rag_settings_title": "⚙️ *Настройки RAG*\n\nTopK: *{top_k}* · Размер чанка: *{chunk}*",
+    "profile_rag_reset": "↺ Сбросить к системным",
+    "profile_rag_reset_ok": "✅ Настройки RAG сброшены."
   },
   "en": {
     "btn_digest": "📧  Mail Digest",
@@ -791,7 +795,11 @@
     "dev_restart_confirm": "Yes, restart",
     "dev_restarting": "♻️ Restarting service...",
     "dev_no_access": "⛔ Developer role required.",
-    "btn_dev_menu": "🛠 Dev"
+    "btn_dev_menu": "🛠 Dev",
+    "profile_btn_rag_settings": "⚙️ RAG Settings",
+    "profile_rag_settings_title": "⚙️ *RAG Settings*\n\nTopK: *{top_k}* · Chunk size: *{chunk}*",
+    "profile_rag_reset": "↺ Reset to defaults",
+    "profile_rag_reset_ok": "✅ RAG settings reset to defaults."
   },
   "de": {
     "btn_digest": "📧  E-Mail-Zusammenfassung",
@@ -1188,6 +1196,10 @@
     "dev_restart_confirm": "Ja, neu starten",
     "dev_restarting": "♻️ Dienst wird neu gestartet...",
     "dev_no_access": "⛔ Entwicklerrolle erforderlich.",
-    "btn_dev_menu": "🛠 Dev"
+    "btn_dev_menu": "🛠 Dev",
+    "profile_btn_rag_settings": "⚙️ RAG-Einstellungen",
+    "profile_rag_settings_title": "⚙️ *RAG-Einstellungen*\n\nTopK: *{top_k}* · Chunk-Größe: *{chunk}*",
+    "profile_rag_reset": "↺ Zurücksetzen",
+    "profile_rag_reset_ok": "✅ RAG-Einstellungen zurückgesetzt."
   }
 }

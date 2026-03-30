@@ -180,33 +180,42 @@ def _docs_rag_context(chat_id: int, query: str) -> str:
     Uses adaptive routing (classify_query) to skip RAG for simple queries.
     Uses RRF fusion when vector search is available (HYBRID/FULL tier).
     Falls back to FTS5-only on constrained hardware.
-    Logs every retrieval to rag_log.
+    Logs every retrieval to rag_log with latency_ms and query_type.
     """
     if not RAG_ENABLED:
         return ""
     try:
+        import time
         from core.bot_rag import retrieve_context, classify_query
         from core.store import store
         from core.rag_settings import get as _rget
+        from core.bot_db import db_get_user_pref
 
         rag_timeout = float(_rget("rag_timeout"))
+        # Per-user overrides (user_prefs)
+        top_k_pref = db_get_user_pref(chat_id, "rag_top_k")
+        top_k = int(top_k_pref) if top_k_pref else int(_rget("rag_top_k"))
 
+        t0 = time.monotonic()
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-            _fut = _pool.submit(retrieve_context, chat_id, query,
-                                int(_rget("rag_top_k")), 2000)
+            _fut = _pool.submit(retrieve_context, chat_id, query, top_k, 2000)
             try:
                 chunks, assembled, strategy = _fut.result(timeout=rag_timeout)
             except concurrent.futures.TimeoutError:
                 log.warning("[RAG] timeout (%.0fs) chat_id=%s", rag_timeout, chat_id)
                 return ""
 
+        latency_ms = int((time.monotonic() - t0) * 1000)
+
         if strategy == "skipped" or not assembled:
             return ""
 
-        log.debug("[RAG] strategy=%s chunks=%d chars=%d", strategy, len(chunks), len(assembled))
+        log.debug("[RAG] strategy=%s chunks=%d chars=%d latency=%dms",
+                  strategy, len(chunks), len(assembled), latency_ms)
         try:
-            store.log_rag_activity(chat_id, query, len(chunks), len(assembled))
+            store.log_rag_activity(chat_id, query, len(chunks), len(assembled),
+                                   latency_ms=latency_ms, query_type=strategy)
         except Exception:
             pass
         return f"[KNOWLEDGE FROM USER DOCUMENTS]\n{assembled}\n[END KNOWLEDGE]\n\n"
