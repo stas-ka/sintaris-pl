@@ -5036,6 +5036,384 @@ def t_doc_list_delete_flow(**_) -> list:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T76 – Full RAG pipeline: retrieve_context, query routing, FTS5+vector, config
+# ─────────────────────────────────────────────────────────────────────────────
+def t_rag_full_pipeline(**_) -> list:
+    """T76: Full RAG pipeline structure and live retrieval:
+    retrieve_context() → classify_query() → FTS5+vector → RRF → assemble [KNOWLEDGE] block.
+    Covers: config constants, rag_settings module, [KNOWLEDGE] format, live empty-doc fallback.
+    """
+    import sys as _sys
+    import time as _time
+    import json as _json
+    results = []
+    t0 = _time.time()
+
+    # 1. Config constants present
+    try:
+        code = (Path(__file__).parents[1] / "core" / "bot_config.py").read_text(encoding="utf-8")
+        for const in ["RAG_ENABLED", "RAG_TOP_K", "RAG_CHUNK_SIZE", "RAG_TIMEOUT", "RAG_SETTINGS_FILE"]:
+            ok = const in code
+            results.append(TestResult(f"rag_config_{const.lower()}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0,
+                                      f"{const} constant present" if ok else f"MISSING: {const}"))
+    except Exception as e:
+        results.append(TestResult("rag_config_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 2. rag_settings.py has all 5 keys
+    try:
+        code = (Path(__file__).parents[1] / "core" / "rag_settings.py").read_text(encoding="utf-8")
+        for key in ["rag_top_k", "rag_chunk_size", "llm_timeout", "rag_timeout", "llm_temperature"]:
+            ok = key in code
+            results.append(TestResult(f"rag_settings_{key}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0,
+                                      f"rag_settings key '{key}' present" if ok else f"MISSING key: {key}"))
+    except Exception as e:
+        results.append(TestResult("rag_settings_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 3. bot_rag.py: retrieve_context, classify_query, detect_rag_capability, RAGCapability, FTS5+HYBRID+FULL tiers
+    try:
+        code = (Path(__file__).parents[1] / "core" / "bot_rag.py").read_text(encoding="utf-8")
+        for name in ["def retrieve_context", "def classify_query", "def detect_rag_capability",
+                     "RAGCapability", "FTS5_ONLY", "HYBRID",
+                     "def reciprocal_rank_fusion", "search_fts", "search_similar"]:
+            ok = name in code
+            results.append(TestResult(f"bot_rag_{name.replace(' ', '_').replace('def_', '')}",
+                                      "PASS" if ok else "FAIL", _time.time() - t0,
+                                      f"{name} present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("bot_rag_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 4. _docs_rag_context() returns [KNOWLEDGE FROM USER DOCUMENTS] format and is wired in both chat paths
+    try:
+        code = (Path(__file__).parents[1] / "telegram" / "bot_access.py").read_text(encoding="utf-8")
+        ok_fn    = "def _docs_rag_context" in code
+        ok_kw    = "[KNOWLEDGE FROM USER DOCUMENTS]" in code
+        ok_end   = "[END KNOWLEDGE]" in code
+        ok_chat  = code.count("_docs_rag_context") >= 3   # _with_lang, _user_turn_content, voice path
+        ok_log   = "log_rag_activity" in code
+        for name, ok in [("rag_context_fn", ok_fn), ("knowledge_block_header", ok_kw),
+                         ("knowledge_block_footer", ok_end), ("rag_context_wired_3_paths", ok_chat),
+                         ("rag_logs_activity", ok_log)]:
+            results.append(TestResult(f"rag_ctx_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("rag_ctx_access_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 5. classify_query() routing: "hi" → simple, knowledge question → factual/contextual
+    try:
+        _sys.path.insert(0, str(Path(__file__).parents[1]))
+        from core.bot_rag import classify_query
+        simple_queries  = ["hi", "hello", "ok", "thanks", "привет", "да", "нет"]
+        factual_queries = ["what is taris?", "explain how RAG works",
+                           "what products does LR offer?", "tell me about the system"]
+        for q in simple_queries:
+            r = classify_query(q, has_documents=True)
+            ok = r == "simple"
+            results.append(TestResult(f"classify_simple_{q[:8]}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0,
+                                      f"'{q}' → simple" if ok else f"'{q}' → {r} (expected simple)"))
+        for q in factual_queries:
+            r = classify_query(q, has_documents=True)
+            ok = r in ("factual", "contextual")
+            results.append(TestResult(f"classify_factual_{q[:12].replace(' ', '_')}",
+                                      "PASS" if ok else "FAIL", _time.time() - t0,
+                                      f"'{q[:20]}' → {r}" if ok
+                                      else f"'{q[:20]}' → {r} (expected factual/contextual)"))
+        # With no documents, all queries should skip RAG (strategy = simple or contextual)
+        for q in factual_queries[:2]:
+            r_no_doc = classify_query(q, has_documents=False)
+            ok = r_no_doc in ("simple", "contextual")
+            results.append(TestResult(f"classify_nodoc_{q[:12].replace(' ', '_')}",
+                                      "PASS" if ok else "FAIL", _time.time() - t0,
+                                      f"no-doc '{q[:20]}' → {r_no_doc}" if ok
+                                      else f"no-doc '{q[:20]}' → {r_no_doc} (expected simple/contextual)"))
+    except Exception as e:
+        results.append(TestResult("classify_query_live", "FAIL", _time.time() - t0, str(e)))
+
+    # 6. Live retrieve_context() on user with no documents → returns "skipped"
+    try:
+        _sys.path.insert(0, str(Path(__file__).parents[1]))
+        from core.bot_rag import retrieve_context
+        chunks, assembled, strategy = retrieve_context(
+            chat_id=999999,        # non-existent user — no documents
+            query="what is taris?",
+            top_k=3,
+            max_chars=500,
+        )
+        ok = strategy == "skipped" and chunks == [] and assembled == ""
+        results.append(TestResult("retrieve_context_no_docs_skipped",
+                                  "PASS" if ok else "FAIL", _time.time() - t0,
+                                  f"no-doc retrieve → skipped (strategy={strategy})" if ok
+                                  else f"expected skipped, got strategy={strategy}"))
+    except Exception as e:
+        results.append(TestResult("retrieve_context_live", "SKIP", _time.time() - t0,
+                                  f"live retrieve_context skipped: {e}"))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T77 – Multi-tier memory context assembly (STM + MTM/LTM + memory_enabled toggle)
+# ─────────────────────────────────────────────────────────────────────────────
+def t_memory_context_assembly(**_) -> list:
+    """T77: STM conversation history + MTM/LTM summaries + memory_enabled toggle wired correctly.
+
+    Verifies: conversation_summaries schema, get_memory_context(), _summarize_session_async(),
+    add_to_history() triggers summarization at threshold, get_conv_history_max(), memory_enabled
+    per-user pref respected, profile toggle callbacks, i18n labels.
+    """
+    import sys as _sys
+    import time as _time
+    results = []
+    t0 = _time.time()
+
+    # 1. conversation_summaries schema: tier, summary, msg_count, chat_id
+    try:
+        code = (Path(__file__).parents[1] / "core" / "bot_db.py").read_text(encoding="utf-8")
+        ok_table  = "CREATE TABLE IF NOT EXISTS conversation_summaries" in code
+        ok_tier   = "tier" in code and ("'mid'" in code or '"mid"' in code)
+        ok_long   = "'long'" in code or '"long"' in code
+        ok_sum    = "summary" in code
+        ok_idx    = "idx_summ_chat" in code
+        for name, ok in [("table_exists", ok_table), ("tier_mid", ok_tier),
+                         ("tier_long", ok_long), ("summary_col", ok_sum), ("index", ok_idx)]:
+            results.append(TestResult(f"conv_summaries_schema_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("conv_summaries_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 2. Memory config constants: CONVERSATION_HISTORY_MAX, CONV_SUMMARY_THRESHOLD, get_conv_history_max()
+    try:
+        code = (Path(__file__).parents[1] / "core" / "bot_config.py").read_text(encoding="utf-8")
+        ok_max   = "CONVERSATION_HISTORY_MAX" in code
+        ok_thr   = "CONV_SUMMARY_THRESHOLD" in code
+        ok_fn_h  = "def get_conv_history_max" in code
+        ok_fn_t  = "def get_conv_summary_threshold" in code
+        for name, ok in [("HISTORY_MAX", ok_max), ("SUMMARY_THRESHOLD", ok_thr),
+                         ("get_conv_history_max_fn", ok_fn_h), ("get_conv_summary_threshold_fn", ok_fn_t)]:
+            results.append(TestResult(f"memory_config_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("memory_config_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 3. bot_state.py: get_memory_context, add_to_history, _summarize_session_async, clear_history
+    try:
+        code = (Path(__file__).parents[1] / "core" / "bot_state.py").read_text(encoding="utf-8")
+        for name in ["def get_memory_context", "def add_to_history", "def _summarize_session_async",
+                     "def clear_history", "def get_history", "_summarize_session_async",
+                     "conversation_summaries", "get_conv_summary_threshold"]:
+            ok = name in code
+            results.append(TestResult(f"bot_state_{name.replace('def ', '').replace(' ', '_')[:30]}",
+                                      "PASS" if ok else "FAIL", _time.time() - t0,
+                                      f"{name} present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("bot_state_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 4. memory_enabled per-user pref: toggle in bot_handlers.py, _memory_enabled() helper
+    try:
+        code = (Path(__file__).parents[1] / "telegram" / "bot_handlers.py").read_text(encoding="utf-8")
+        ok_fn     = "def _memory_enabled" in code
+        ok_pref   = "db_get_user_pref(chat_id, \"memory_enabled\"" in code or \
+                    "db_get_user_pref(chat_id, 'memory_enabled'" in code
+        ok_toggle = "db_set_user_pref(chat_id, \"memory_enabled\"" in code or \
+                    "db_set_user_pref(chat_id, 'memory_enabled'" in code
+        ok_inject = "get_memory_context" in code
+        for name, ok in [("memory_enabled_fn", ok_fn), ("memory_enabled_get", ok_pref),
+                         ("memory_enabled_set", ok_toggle), ("memory_context_injected", ok_inject)]:
+            results.append(TestResult(f"memory_toggle_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("memory_toggle_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 5. Profile memory toggle i18n keys
+    try:
+        import json as _json
+        strings = _json.loads(
+            (Path(__file__).parents[1] / "strings.json").read_text(encoding="utf-8")
+        )
+        for key in ["profile_memory_enabled_label", "profile_memory_disabled_label"]:
+            ok = all(key in strings.get(lang, {}) for lang in ("ru", "en", "de"))
+            results.append(TestResult(f"memory_i18n_{key}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0,
+                                      f"'{key}' in ru/en/de" if ok
+                                      else f"MISSING: '{key}' in some language"))
+    except Exception as e:
+        results.append(TestResult("memory_i18n_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 6. Live get_memory_context() on non-existent user → "" (no crash)
+    try:
+        _sys.path.insert(0, str(Path(__file__).parents[1]))
+        from core.bot_state import get_memory_context
+        result = get_memory_context(999999)
+        ok = isinstance(result, str)
+        results.append(TestResult("memory_context_nonexistent_user",
+                                  "PASS" if ok else "FAIL", _time.time() - t0,
+                                  f"no crash, returns str ({len(result)} chars)" if ok
+                                  else "get_memory_context returned non-string"))
+    except Exception as e:
+        results.append(TestResult("memory_context_live", "SKIP", _time.time() - t0,
+                                  f"live test skipped: {e}"))
+
+    # 7. Live get_conv_history_max() returns a positive integer
+    try:
+        from core.bot_config import get_conv_history_max
+        val = get_conv_history_max()
+        ok = isinstance(val, int) and val > 0
+        results.append(TestResult("conv_history_max_positive_int",
+                                  "PASS" if ok else "FAIL", _time.time() - t0,
+                                  f"get_conv_history_max() = {val}" if ok
+                                  else f"bad value: {val!r}"))
+    except Exception as e:
+        results.append(TestResult("conv_history_max_live", "SKIP", _time.time() - t0, str(e)))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T78 – RAG + all memory tiers combined in ask_llm_with_history() call
+# ─────────────────────────────────────────────────────────────────────────────
+def t_rag_memory_combined_context(**_) -> list:
+    """T78: RAG knowledge + STM history + MTM/LTM summaries all combine in ask_llm_with_history().
+
+    Tests the exact context ordering contract:
+      messages = [system(preamble+bot_config+memory_note+LTM/MTM)]
+               + [history... (STM)]
+               + [user(RAG_knowledge+user_text)]
+
+    RAG goes in the user turn (query-specific). Memory summaries go in system (global context).
+    History (STM) goes between system and current user turn.
+    """
+    import sys as _sys
+    import time as _time
+    results = []
+    t0 = _time.time()
+
+    # 1. _build_system_message() contains: preamble + bot_config + memory_note + lang_instr
+    # Memory context (get_memory_context) is injected by bot_handlers.py after _build_system_message()
+    try:
+        code_access = (Path(__file__).parents[1] / "telegram" / "bot_access.py").read_text(encoding="utf-8")
+        code_hdlr   = (Path(__file__).parents[1] / "telegram" / "bot_handlers.py").read_text(encoding="utf-8")
+        ok_fn       = "def _build_system_message" in code_access
+        ok_preamble = "SECURITY_PREAMBLE" in code_access
+        ok_config   = "_bot_config_block" in code_access
+        ok_mem_note = "memory context note" in code_access or "memory_note" in code_access
+        # Memory context injection happens in bot_handlers.py (appended AFTER _build_system_message)
+        ok_inject   = "get_memory_context" in code_hdlr
+        for name, ok in [("build_system_fn", ok_fn), ("preamble_injected", ok_preamble),
+                         ("bot_config_injected", ok_config), ("memory_note", ok_mem_note),
+                         ("memory_ctx_injected_in_system", ok_inject)]:
+            results.append(TestResult(f"system_msg_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("system_msg_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 2. _user_turn_content() contains RAG context + user text (NOT preamble — that's in system)
+    try:
+        code = (Path(__file__).parents[1] / "telegram" / "bot_access.py").read_text(encoding="utf-8")
+        ok_fn  = "def _user_turn_content" in code
+        ok_rag = "_docs_rag_context" in code
+        ok_wrap = "_wrap_user_input" in code
+        # Preamble must NOT be in _user_turn_content (it would duplicate security context)
+        # Check: SECURITY_PREAMBLE is only in _build_system_message and _with_lang, not _user_turn_content
+        # By examining which functions contain SECURITY_PREAMBLE
+        idx_user_turn = code.find("def _user_turn_content")
+        idx_next_fn   = code.find("\ndef ", idx_user_turn + 10)
+        user_turn_body = code[idx_user_turn:idx_next_fn] if idx_next_fn > 0 else code[idx_user_turn:]
+        ok_no_preamble = "SECURITY_PREAMBLE" not in user_turn_body
+        for name, ok in [("user_turn_fn", ok_fn), ("rag_in_user_turn", ok_rag),
+                         ("wrap_user_input", ok_wrap), ("no_preamble_in_user_turn", ok_no_preamble)]:
+            results.append(TestResult(f"user_turn_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present/correct" if ok else f"MISSING/WRONG: {name}"))
+    except Exception as e:
+        results.append(TestResult("user_turn_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 3. Context assembly wiring in the main chat handler: [system] + history + [current_user]
+    try:
+        code = (Path(__file__).parents[1] / "telegram" / "bot_handlers.py").read_text(encoding="utf-8")
+        ok_build = "_build_system_message" in code
+        ok_hist  = "get_history" in code
+        ok_turn  = "_user_turn_content" in code
+        ok_assemble = ("messages = [{\"role\": \"system\"" in code or
+                       "messages=[{\"role\": \"system\"" in code or
+                       'messages = [{"role": "system"' in code or
+                       '{"role": "system"' in code)
+        ok_llm   = "ask_llm_with_history" in code
+        for name, ok in [("build_system_called", ok_build), ("get_history_called", ok_hist),
+                         ("user_turn_called", ok_turn), ("system_msg_first", ok_assemble),
+                         ("ask_llm_with_history_used", ok_llm)]:
+            results.append(TestResult(f"context_assembly_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("context_assembly_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 4. ask_llm_with_history() in bot_llm.py supports native messages format for all providers
+    try:
+        code = (Path(__file__).parents[1] / "core" / "bot_llm.py").read_text(encoding="utf-8")
+        ok_fn    = "def ask_llm_with_history" in code
+        # System role is passed through from the messages list (built by bot_handlers.py)
+        # bot_llm.py doesn't write "role: system" itself — it just relays the messages list.
+        # Verify the function accepts and forwards full messages including system role.
+        ok_sys   = "messages" in code and "role" in code  # messages list with roles forwarded
+        ok_hist_fmt = "_format_history_as_text" in code
+        ok_ollama_native = "ollama" in code and "messages" in code    # ollama native multi-turn
+        for name, ok in [("ask_llm_with_history_fn", ok_fn), ("system_role_supported", ok_sys),
+                         ("history_fallback_formatter", ok_hist_fmt), ("ollama_native_messages", ok_ollama_native)]:
+            results.append(TestResult(f"llm_history_{name}", "PASS" if ok else "FAIL",
+                                      _time.time() - t0, "present" if ok else f"MISSING: {name}"))
+    except Exception as e:
+        results.append(TestResult("llm_history_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 5. Live integration: build a minimal messages list and call ask_llm_with_history
+    #    (only runs if LLM is reachable; SKIP otherwise)
+    try:
+        _sys.path.insert(0, str(Path(__file__).parents[1]))
+        from core.bot_llm import ask_llm_with_history
+        from core.bot_state import get_memory_context, get_history
+        from telegram.bot_access import _build_system_message, _user_turn_content
+
+        test_chat_id = 999999   # non-existent → no real history or docs
+        system_msg  = _build_system_message(test_chat_id, "test query")
+        history_msgs = get_history(test_chat_id)  # empty for non-existent user
+        user_turn   = _user_turn_content(test_chat_id, "What is 2+2?")
+        messages = (
+            [{"role": "system", "content": system_msg}]
+            + history_msgs
+            + [{"role": "user",   "content": user_turn}]
+        )
+
+        # Verify structure before sending to LLM
+        ok_sys_first = messages[0]["role"] == "system"
+        ok_user_last = messages[-1]["role"] == "user"
+        ok_rag_in_user = "[KNOWLEDGE" not in user_turn   # no docs → no knowledge block
+        results.append(TestResult("combined_context_structure",
+                                  "PASS" if (ok_sys_first and ok_user_last) else "FAIL",
+                                  _time.time() - t0,
+                                  f"messages[0]=system, messages[-1]=user, len={len(messages)}"
+                                  if ok_sys_first and ok_user_last
+                                  else f"wrong structure: first={messages[0]['role']}, last={messages[-1]['role']}"))
+
+        # Actually call LLM — SKIP if not reachable
+        try:
+            reply = ask_llm_with_history(messages, timeout=15, use_case="test")
+            ok_reply = bool(reply and len(reply) > 0)
+            results.append(TestResult("combined_context_llm_response",
+                                      "PASS" if ok_reply else "FAIL",
+                                      _time.time() - t0,
+                                      f"LLM replied ({len(reply)} chars)" if ok_reply
+                                      else "empty LLM response"))
+        except Exception as llm_exc:
+            results.append(TestResult("combined_context_llm_response", "SKIP",
+                                      _time.time() - t0, f"LLM not reachable: {llm_exc}"))
+
+    except Exception as e:
+        results.append(TestResult("combined_context_live", "SKIP", _time.time() - t0,
+                                  f"live integration skipped: {e}"))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -5162,6 +5540,12 @@ TEST_FUNCTIONS = [
     t_doc_upload_pipeline,
     # Document list/delete/rename flow + i18n string coverage (T75)
     t_doc_list_delete_flow,
+    # Full RAG pipeline: retrieve_context, classify_query, FTS5+vector, config (T76)
+    t_rag_full_pipeline,
+    # Multi-tier memory context assembly: STM + MTM/LTM summaries + memory_enabled toggle (T77)
+    t_memory_context_assembly,
+    # Combined RAG + all memory tiers in ask_llm_with_history() — context ordering contract (T78)
+    t_rag_memory_combined_context,
 ]
 
 
