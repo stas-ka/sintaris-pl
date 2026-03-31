@@ -726,13 +726,18 @@ class TestChatMode:
 
         _reset_state(user_chat_id)
 
-    def test_no_mode_shows_menu(
+    def test_no_mode_defaults_to_chat(
         self,
         mock_bot,
         user_chat_id,
         make_message,
     ):
-        """With no active mode, text_handler should show the main menu."""
+        """With no active mode, text_handler should default to chat mode (v2026.3.46 fix).
+
+        Previously mode=None showed the main menu, causing the 'second message
+        shows menu instead of LLM reply' bug.  Now mode=None → chat mode so the
+        user always gets an LLM response.
+        """
         msg = make_message(user_chat_id, "random text")
         _reset_state(user_chat_id)
         # Explicitly ensure no mode is set
@@ -746,14 +751,9 @@ class TestChatMode:
              patch("telegram_menu_bot._handle_chat_message") as mock_chat:
             tmb.text_handler(msg)
 
-        # Either _send_menu is called directly, or _handle_chat_message was NOT
-        # called with the text (some bots silently ignore unrouted text):
-        # accept either behaviour as a pass condition.
-        chat_called = mock_chat.called
-        menu_called = mock_send_menu.called
-        assert menu_called or not chat_called, (
-            "Unrouted text should show the menu, not enter chat mode silently"
-        )
+        # Since v2026.3.46: mode=None → default to chat, NOT menu
+        assert mock_chat.called, "mode=None should route to chat, not show menu"
+        assert not mock_send_menu.called, "mode=None must not show menu (second-message bug)"
 
         _reset_state(user_chat_id)
 

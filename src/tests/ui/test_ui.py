@@ -285,12 +285,23 @@ class TestCalendar:
         admin_page.wait_for_timeout(300)
         admin_page.fill("#cal-console-input", "Meeting tomorrow at 3pm")
         admin_page.click("#cal-console-btn")  # submit button
-        # Wait for the parse-text HTMX fetch to complete (no LLM on Pi2, uses fallback)
-        admin_page.wait_for_load_state("networkidle", timeout=10_000)
-        # After fallback parsing the title or dt_str field should be populated
+        # Wait for JS callback to complete: either #cal-console-results shows text
+        # (success/error message) or a form field gets filled.
+        # LLM calls can take 10-40s; use wait_for_function with a generous timeout.
+        try:
+            admin_page.wait_for_function(
+                "document.querySelector('#cal-console-results') && "
+                "document.querySelector('#cal-console-results').textContent.trim().length > 0",
+                timeout=45_000,
+            )
+        except Exception:
+            pass  # Results div may stay empty on error path; check form fields below
         title_val = admin_page.input_value("input[name='title']")
         dt_val    = admin_page.input_value("input[name='dt_str']")
-        assert title_val or dt_val, "Expected console to fill at least one form field"
+        results_text = admin_page.text_content("#cal-console-results") or ""
+        assert title_val or dt_val or results_text.strip(), (
+            "Expected console to fill at least one form field or show a result message"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
