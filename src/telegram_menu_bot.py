@@ -1010,7 +1010,9 @@ def text_handler(message):
     mode = _st._user_mode.get(cid)
 
     if mode is None:
-        _send_menu(cid, greeting=False)
+        # Default to chat mode — don't force menu on every unrouted text
+        _st._user_mode[cid] = "chat"
+        _handle_chat_message(cid, message.text)
         return
 
     # ── Profile self-service text flows ────────────────────────────────────────

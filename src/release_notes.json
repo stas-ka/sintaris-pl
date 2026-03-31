@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.3.46",
+    "date": "2026-03-31",
+    "changes": [
+      "Fix: text message without active mode now routes to chat instead of showing main menu"
+    ]
+  },
+  {
     "version": "2026.3.45",
     "date": "2026-03-31",
     "changes": [
