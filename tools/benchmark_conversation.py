@@ -109,6 +109,34 @@ def _sys_info() -> dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Ollama concurrency guard
+# ─────────────────────────────────────────────────────────────────────────────
+_BENCH_LOCK = Path("/tmp/taris_benchmark.lock")
+
+def _acquire_bench_lock() -> bool:
+    """Write a lock file. Warn if one already exists (benchmark already running)."""
+    if _BENCH_LOCK.exists():
+        try:
+            pid = int(_BENCH_LOCK.read_text().strip())
+            import os as _os
+            _os.kill(pid, 0)   # check if PID is alive
+            print(f"\n⚠️  WARNING: Another benchmark (PID {pid}) is already using Ollama.")
+            print("   Running concurrent benchmarks may cause bot LLM timeouts.")
+            print("   Use Ctrl-C to cancel, or wait for the other benchmark to finish.\n")
+            return False
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass  # stale lock — overwrite
+    _BENCH_LOCK.write_text(str(os.getpid()))
+    return True
+
+def _release_bench_lock() -> None:
+    try:
+        _BENCH_LOCK.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 def _ollama_check(url: str = OLLAMA_URL) -> bool:
     """Return True if Ollama is reachable."""
     try:
@@ -733,48 +761,52 @@ def main() -> None:
         print(f"\nResults saved to {out_path}")
         return
 
+    _acquire_bench_lock()   # warn if another benchmark is already running
+
     all_results: list[dict] = []
+    try:
+        for model in models:
+            print(f"\n── Model: {model} {'─' * 50}")
 
-    for model in models:
-        print(f"\n── Model: {model} {'─' * 50}")
+            if not args.skip_memory:
+                print("\n🧠 conversation_memory …")
+                all_results.extend(benchmark_conversation_memory(model, n, url))
 
-        if not args.skip_memory:
-            print("\n🧠 conversation_memory …")
-            all_results.extend(benchmark_conversation_memory(model, n, url))
+            if not args.skip_isolation:
+                print("\n🔒 context_isolation …")
+                all_results.extend(benchmark_context_isolation(model, n, url))
 
-        if not args.skip_isolation:
-            print("\n🔒 context_isolation …")
-            all_results.extend(benchmark_context_isolation(model, n, url))
+            if not args.skip_quality:
+                print("\n✅ response_quality …")
+                all_results.extend(benchmark_response_quality(model, n, url))
 
-        if not args.skip_quality:
-            print("\n✅ response_quality …")
-            all_results.extend(benchmark_response_quality(model, n, url))
+            if not args.skip_multilang:
+                print("\n🌍 conversation_multilang …")
+                all_results.extend(benchmark_conversation_multilang(model, n, url))
 
-        if not args.skip_multilang:
-            print("\n🌍 conversation_multilang …")
-            all_results.extend(benchmark_conversation_multilang(model, n, url))
+            if not args.skip_latency:
+                print("\n⚡ llm_latency_multiturn …")
+                all_results.extend(benchmark_llm_latency_multiturn(model, n, url))
 
-        if not args.skip_latency:
-            print("\n⚡ llm_latency_multiturn …")
-            all_results.extend(benchmark_llm_latency_multiturn(model, n, url))
+        sysinfo = _sys_info()
+        run_result = {
+            "target": args.target,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "sysinfo": sysinfo,
+            "ollama_url": url,
+            "models": models,
+            "n_repeats": n,
+            "results": all_results,
+        }
 
-    sysinfo = _sys_info()
-    run_result = {
-        "target": args.target,
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "sysinfo": sysinfo,
-        "ollama_url": url,
-        "models": models,
-        "n_repeats": n,
-        "results": all_results,
-    }
+        _print_run_report(run_result)
 
-    _print_run_report(run_result)
-
-    out_path = Path(args.output)
-    existing = _load_results(out_path)
-    _save_results(out_path, existing + [run_result])
-    print(f"\n  Results saved → {out_path}")
+        out_path = Path(args.output)
+        existing = _load_results(out_path)
+        _save_results(out_path, existing + [run_result])
+        print(f"\n  Results saved → {out_path}")
+    finally:
+        _release_bench_lock()
 
 
 if __name__ == "__main__":

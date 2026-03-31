@@ -691,14 +691,27 @@ def _handle_admin_logs_show(chat_id: int, category: str) -> None:
     if path is None:
         bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard(chat_id))
         return
-    lines = tail_log(path, n=50)
+    lines = tail_log(path, n=50) or _t(chat_id, "admin_logs_empty")
     header = _t(chat_id, "admin_logs_header", n=50, cat=category)
-    text = f"{header}\n\n```\n{lines or _t(chat_id, 'admin_logs_empty')}\n```"
+
+    # Telegram limit is 4096 chars; reserve space for header + code fence
+    _MAX = 3800
+    code_block = f"```\n{lines}\n```"
+    if len(header) + len(code_block) + 4 > _MAX:
+        # Trim lines from the top until it fits, preserving most-recent tail
+        raw_lines = lines.splitlines()
+        while raw_lines and len(header) + len("\n".join(raw_lines)) + 20 > _MAX:
+            raw_lines = raw_lines[1:]
+        lines = "\n".join(raw_lines)
+        code_block = f"```\n…(trimmed)\n{lines}\n```"
+
+    text = f"{header}\n\n{code_block}"
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
     except Exception:
-        bot.send_message(chat_id, f"{header}\n\n{lines or _t(chat_id, 'admin_logs_empty')}",
-                         reply_markup=_admin_keyboard(chat_id))
+        # Fallback: plain text, no code fence
+        plain = f"{header}\n\n{lines}"[:4000]
+        bot.send_message(chat_id, plain, reply_markup=_admin_keyboard(chat_id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
