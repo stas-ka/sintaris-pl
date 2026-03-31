@@ -46,16 +46,16 @@
       <!-- Pagination -->
       {% if pages > 1 %}
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; font-size:0.85rem">
-        {% if page > 0 %}
-        <a href="/contacts?q={{ q }}&page={{ page - 1 }}" class="btn btn-sm">◀</a>
+        {% if pg > 0 %}
+        <a href="/contacts?q={{ q }}&pg={{ pg - 1 }}" class="btn btn-sm">◀</a>
         {% else %}
         <span class="btn btn-sm" style="opacity:0.3">◀</span>
         {% endif %}
 
-        <span class="text-muted">{{ page + 1 }} / {{ pages }}</span>
+        <span class="text-muted">{{ pg + 1 }} / {{ pages }}</span>
 
-        {% if page + 1 < pages %}
-        <a href="/contacts?q={{ q }}&page={{ page + 1 }}" class="btn btn-sm">▶</a>
+        {% if pg + 1 < pages %}
+        <a href="/contacts?q={{ q }}&pg={{ pg + 1 }}" class="btn btn-sm">▶</a>
         {% else %}
         <span class="btn btn-sm" style="opacity:0.3">▶</span>
         {% endif %}

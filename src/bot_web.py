@@ -1418,20 +1418,20 @@ def _contacts_for(chat_id: int, q: str = "", offset: int = 0) -> tuple[list[dict
 
 
 @app.get("/contacts", response_class=HTMLResponse)
-async def contacts_page(request: Request, q: str = "", page: int = 0):
+async def contacts_page(request: Request, q: str = "", pg: int = 0):
     user = _get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
-    offset = page * PAGE_SIZE
+    offset = pg * PAGE_SIZE
     contacts, total = _contacts_for(chat_id, q=q, offset=offset)
     pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     return templates.TemplateResponse(
         request, "contacts.html",
         _ctx(request, user, "contacts",
              contacts=contacts, total=total, q=q,
-             page=page, pages=pages, page_size=PAGE_SIZE),
+             pg=pg, pages=pages, page_size=PAGE_SIZE),
     )
 
 
@@ -1443,7 +1443,7 @@ async def contacts_new_form(request: Request):
     return templates.TemplateResponse(
         request, "contacts.html",
         _ctx(request, user, "contacts",
-             contacts=[], total=0, q="", page=0, pages=1, page_size=PAGE_SIZE,
+             contacts=[], total=0, q="", pg=0, pages=1, page_size=PAGE_SIZE,
              show_form=True, form_contact=None),
     )
 
@@ -1486,7 +1486,7 @@ async def contacts_detail(request: Request, cid: str):
     return templates.TemplateResponse(
         request, "contacts.html",
         _ctx(request, user, "contacts",
-             contacts=[], total=0, q="", page=0, pages=1, page_size=PAGE_SIZE,
+             contacts=[], total=0, q="", pg=0, pages=1, page_size=PAGE_SIZE,
              show_form=True, form_contact=contact),
     )
 

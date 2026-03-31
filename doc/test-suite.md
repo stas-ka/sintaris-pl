@@ -249,6 +249,9 @@ py -m pytest src/tests/ui/ -v
 | `TestAdmin` | 4 tests | Admin access for admin role, user list, LLM section, non-admin blocked |
 | `TestNavigation` | 3 tests (+ parametrized) | All sidebar nav links load correct page, clicking nav, logout link |
 | `TestRegistration` | 3 tests | Register form, login→register link, duplicate username error |
+| `TestProfile` | 4 tests | Profile page, account info, display name form, unauthenticated redirect |
+| `TestSettings` | 4 tests | Settings page, language buttons, password form, unauthenticated redirect |
+| `TestContacts` | 5 tests | Contacts list, search form, new contact form, create flow, unauthenticated redirect |
 
 ### 3.4 When to run
 

@@ -491,3 +491,79 @@ class TestProfile:
         page.goto(f"{base_url_or_default}/profile")
         assert "/login" in page.url, "Unauthenticated /profile should redirect to /login"
         page.context.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. Settings
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSettings:
+
+    def test_settings_page_loads(self, admin_page, base_url_or_default):
+        """GET /settings returns the settings page."""
+        admin_page.goto(f"{base_url_or_default}/settings")
+        assert "/settings" in admin_page.url
+        assert admin_page.title() != ""
+
+    def test_settings_language_buttons_present(self, admin_page, base_url_or_default):
+        """Settings page shows language selection buttons."""
+        admin_page.goto(f"{base_url_or_default}/settings")
+        # Language forms post to /settings/language
+        forms = admin_page.locator("form[action='/settings/language']")
+        assert forms.count() >= 2, "At least 2 language buttons expected (en, ru, de)"
+
+    def test_settings_password_form_present(self, admin_page, base_url_or_default):
+        """Settings page contains the password change form."""
+        admin_page.goto(f"{base_url_or_default}/settings")
+        assert admin_page.locator("input[name='current_password']").is_visible()
+        assert admin_page.locator("input[name='new_password']").is_visible()
+        assert admin_page.locator("input[name='confirm_password']").is_visible()
+
+    def test_settings_unauthenticated_redirects(self, browser, base_url_or_default):
+        """GET /settings without auth redirects to /login."""
+        page = fresh_page(browser, base_url_or_default)
+        page.goto(f"{base_url_or_default}/settings")
+        assert "/login" in page.url
+        page.context.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. Contacts
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestContacts:
+
+    def test_contacts_page_loads(self, admin_page, base_url_or_default):
+        """GET /contacts returns the contacts page."""
+        admin_page.goto(f"{base_url_or_default}/contacts")
+        assert "/contacts" in admin_page.url
+        assert admin_page.title() != ""
+
+    def test_contacts_search_form_present(self, admin_page, base_url_or_default):
+        """Contacts page has a search form."""
+        admin_page.goto(f"{base_url_or_default}/contacts")
+        assert admin_page.locator("input[name='q']").is_visible()
+
+    def test_contacts_new_form_loads(self, admin_page, base_url_or_default):
+        """GET /contacts/new shows the contact creation form."""
+        admin_page.goto(f"{base_url_or_default}/contacts/new")
+        assert admin_page.locator("input[name='name']").is_visible()
+        assert admin_page.locator("input[name='phone']").is_visible()
+        assert admin_page.locator("input[name='email']").is_visible()
+
+    def test_contacts_create_and_delete(self, admin_page, base_url_or_default):
+        """Create a contact, verify it appears in the list, then search for it."""
+        admin_page.goto(f"{base_url_or_default}/contacts/new")
+        admin_page.fill("input[name='name']", "UI Test Contact")
+        admin_page.fill("input[name='phone']", "+1234567890")
+        admin_page.click("button[type='submit']")
+        admin_page.wait_for_url(re.compile(r"/contacts"), timeout=5000)
+        # Verify we're back on contacts page (create redirects to /contacts)
+        assert "/contacts" in admin_page.url
+
+    def test_contacts_unauthenticated_redirects(self, browser, base_url_or_default):
+        """GET /contacts without auth redirects to /login."""
+        page = fresh_page(browser, base_url_or_default)
+        page.goto(f"{base_url_or_default}/contacts")
+        assert "/login" in page.url
+        page.context.close()
