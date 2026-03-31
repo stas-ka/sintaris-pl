@@ -1386,7 +1386,10 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _on_stop)
     signal.signal(signal.SIGINT,  _on_stop)
 
-    bot.infinity_polling(timeout=30, long_polling_timeout=20)
+    # timeout > long_polling_timeout: HTTP socket waits longer than Telegram holds the connection
+    # long_polling_timeout=55: Telegram holds connection 55s (was 20s) → fewer reconnects → better responsiveness
+    # interval=1: 1s backoff between attempts when errors occur → prevents CPU tight-loop on network issues
+    bot.infinity_polling(timeout=90, long_polling_timeout=55, interval=1)
 
 
 if __name__ == "__main__":
