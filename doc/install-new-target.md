@@ -513,25 +513,55 @@ ln -sf ~/projects/sintaris-pl/src/web ./web
 ```bash
 mkdir -p ~/projects/sintaris-openclaw-local-deploy/.taris
 
-# Create bot.env with your secrets
-cat > ~/projects/sintaris-openclaw-local-deploy/.taris/bot.env << 'EOF'
+# Generate a secure API token
+TARIS_API_TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+
+# Create bot.env — choose the LLM section matching your hardware (see comments)
+cat > ~/projects/sintaris-openclaw-local-deploy/.taris/bot.env << EOF
 BOT_TOKEN=<your_telegram_bot_token>
 ALLOWED_USERS=<your_telegram_user_id>
 ADMIN_USERS=<your_telegram_user_id>
 DEVICE_VARIANT=openclaw
-LLM_PROVIDER=openclaw
-TARIS_API_TOKEN=<generate_with: python3 -c "import secrets; print(secrets.token_hex(32))">
+TARIS_API_TOKEN=$TARIS_API_TOKEN
+
+# ── LLM: choose one block ──────────────────────────────────────────────────
+# Option A — Local Ollama with AMD/NVIDIA GPU (recommended for SintAItion / GPU machines)
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen3:14b
+OLLAMA_THINK=false
+OLLAMA_MIN_TIMEOUT=90
+LLM_LOCAL_FALLBACK=1
+# OPENAI_API_KEY=sk-...         # set if you want OpenAI as fallback
+
+# Option B — OpenAI (for CPU-only machines without Ollama)
+# LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-...
+# LLM_LOCAL_FALLBACK=1          # retry on local Ollama if OpenAI times out
+
+# ── STT: choose device ─────────────────────────────────────────────────────
+STT_PROVIDER=faster_whisper
+# CPU:      FASTER_WHISPER_DEVICE=cpu  FASTER_WHISPER_COMPUTE=int8   MODEL=base
+# AMD GPU:  FASTER_WHISPER_DEVICE=cuda FASTER_WHISPER_COMPUTE=float16 MODEL=small
+#           + add HSA_OVERRIDE_GFX_VERSION=11.0.3 to systemd service (see B.5-GPU)
+FASTER_WHISPER_MODEL=base
+FASTER_WHISPER_DEVICE=cpu
+FASTER_WHISPER_COMPUTE=int8
 EOF
 
 chmod 600 ~/projects/sintaris-openclaw-local-deploy/.taris/bot.env
+echo "API token: $TARIS_API_TOKEN"
 ```
 
 > **`TARIS_API_TOKEN`**: This token authorises `skill-taris` (in sintaris-openclaw) to call
-> Taris `/api/*` endpoints. After generating it, also write it to:
+> Taris `/api/*` endpoints. Copy it to the skill's API keys file:
 > ```bash
 > echo "<token>" > ~/.openclaw/skills/skill-taris/api-keys.txt
 > chmod 600 ~/.openclaw/skills/skill-taris/api-keys.txt
 > ```
+
+> ⚠️ **LLM provider matters for performance.** See `doc/install-new-target.md §C.1` and
+> `errors/perf-sintaition-2026-03-31.md` for measured latency differences between
+> `openai` and `ollama` on GPU hardware.
 
 ---
 
@@ -592,13 +622,47 @@ bash ~/projects/sintaris-pl/src/setup/setup_voice_openclaw.sh
 This installs:
 - Vosk x86_64 model (`vosk-model-small-ru`) into `~/.taris/`
 - Piper binary + Russian TTS model (`ru_RU-irina-medium.onnx`)
-- Sets `VOICE_BACKEND=cpu` (use `cuda` for GPU acceleration)
+- faster-whisper Python package (CPU by default)
 
-For GPU-accelerated voice (NVIDIA):
+#### B.5-GPU — AMD GPU (ROCm) acceleration for STT
+
+If the machine has an AMD GPU with ROCm support (Radeon 680M/780M/890M, gfx1100+):
+
 ```bash
-# Set VOICE_BACKEND in bot.env
-echo "VOICE_BACKEND=cuda" >> ~/.taris/bot.env
+# 1. Verify ROCm is available (Ollama GPU install sets this up)
+ls /usr/local/lib/ollama/rocm/libamdhip64.so 2>/dev/null && echo "ROCm libs present"
+
+# 2. Add STT GPU settings to bot.env
+cat >> ~/.taris/bot.env << 'EOF'
+FASTER_WHISPER_DEVICE=cuda
+FASTER_WHISPER_COMPUTE=float16
+FASTER_WHISPER_MODEL=small
+EOF
 ```
+
+Add ROCm environment variables to **both** systemd service files
+(`~/.config/systemd/user/taris-telegram.service` and `taris-web.service`).
+Insert inside the `[Service]` block, **before** the `ExecStart=` line:
+
+```ini
+[Service]
+Environment="HSA_OVERRIDE_GFX_VERSION=11.0.3"
+Environment="LD_LIBRARY_PATH=/usr/local/lib/ollama/rocm"
+```
+
+Then reload and restart:
+```bash
+systemctl --user daemon-reload
+systemctl --user restart taris-telegram taris-web
+```
+
+> **Why `FASTER_WHISPER_DEVICE=cuda` for AMD?**  
+> `faster-whisper` uses the CUDA compatibility layer that comes with the Ollama ROCm installation.  
+> There is no `rocm` device name in faster-whisper — `cuda` routes through ROCm on AMD hardware.
+
+Expected STT latency improvement for a 2-second voice command:  
+- CPU (small model): ~600–900 ms  
+- AMD GPU (small model, ROCm): ~50–100 ms
 
 ---
 
@@ -702,3 +766,83 @@ infinite loop. Safe usage pattern:
 - `skill-taris` → relay general LLM chat to Taris ❌ (loop if `LLM_PROVIDER=openclaw`)
 
 See `doc/architecture/openclaw-integration.md` for the full loop-prevention guide.
+
+---
+
+## Part C — Performance Tuning (OpenClaw)
+
+> Reference: `errors/perf-sintaition-2026-03-31.md` — full root-cause analysis.
+
+### C.1 — LLM provider selection
+
+| Hardware | Recommended `LLM_PROVIDER` | Model | Typical latency |
+|---|---|---|---|
+| CPU only (i7-2640M or weaker) | `openai` | gpt-4o-mini | 1.5–4 s (network) |
+| AMD GPU (Radeon 680M/780M/890M) | `ollama` | `qwen3:14b` | ~1.2 s (local) |
+| CPU with fast SSD (≥ 8 GB RAM) | `ollama` | `qwen2:0.5b` | ~300 ms (local, tiny) |
+
+Always set `LLM_LOCAL_FALLBACK=1` when using `openai` as primary — it retries on Ollama if OpenAI times out.
+
+For `qwen3` models, `OLLAMA_THINK=false` is **required**. Without it, the model consumes all tokens for internal reasoning and returns an empty reply via the OpenAI-compat endpoint.
+
+### C.2 — STT device selection
+
+```ini
+# CPU-only machines:
+FASTER_WHISPER_DEVICE=cpu
+FASTER_WHISPER_COMPUTE=int8
+FASTER_WHISPER_MODEL=base       # or small if CPU is fast enough
+
+# AMD GPU (ROCm) — follow B.5-GPU steps first:
+FASTER_WHISPER_DEVICE=cuda
+FASTER_WHISPER_COMPUTE=float16
+FASTER_WHISPER_MODEL=small      # small model is fine; GPU makes it fast
+```
+
+### C.3 — Preventing event loop blocking in FastAPI endpoints
+
+All blocking operations (LLM calls, TTS subprocess, STT inference) must be wrapped in `asyncio.to_thread` inside async route handlers. Without this, the uvicorn event loop freezes for the duration of the call, causing other requests to time out.
+
+```python
+# ❌ BAD — blocks event loop:
+reply = ask_llm(prompt, timeout=60)
+
+# ✅ GOOD — runs in thread pool, event loop stays responsive:
+reply = await asyncio.to_thread(lambda: ask_llm(prompt, timeout=60))
+```
+
+The production conversation endpoints (`voice_chat_endpoint`, `chat_send`) already follow this pattern. When adding new API endpoints, always verify that heavy operations are wrapped.
+
+### C.4 — Benchmark and monitor performance
+
+```bash
+TOKEN=$(cat ~/.openclaw/skills/skill-taris/api-keys.txt)
+BASE=http://localhost:8080
+
+# Single benchmark run (LLM + TTS + STT timing)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"lang":"ru"}' "$BASE/api/benchmark" | python3 -m json.tool
+
+# Today's pipeline logs (all stage timings)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/logs?date=$(date +%Y-%m-%d)&last_n=20" | python3 -m json.tool
+
+# Aggregated stats
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/logs/stats?date=$(date +%Y-%m-%d)" | python3 -m json.tool
+```
+
+### C.5 — Verify GPU is being used
+
+```bash
+# Check Ollama uses AMD GPU (should show GPU layers, not CPU)
+curl -s http://localhost:11434/api/tags | python3 -m json.tool
+
+# Check faster-whisper device at runtime
+grep "FASTER_WHISPER" ~/.taris/bot.env
+
+# Watch GPU usage during a voice command
+watch -n1 'cat /sys/class/drm/card*/device/gpu_busy_percent 2>/dev/null'
+# or: radeontop -d -
+```
