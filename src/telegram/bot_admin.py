@@ -1083,7 +1083,7 @@ def _handle_admin_rag_menu(chat_id: int) -> None:
     kb.add(InlineKeyboardButton("📊 RAG Stats",                       callback_data="admin_rag_stats"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"), callback_data="admin_rag_toggle"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),   callback_data="admin_rag_settings"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin_menu"))
     try:
         bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
     except Exception:
