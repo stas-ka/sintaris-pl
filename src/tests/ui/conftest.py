@@ -41,28 +41,24 @@ def ensure_test_accounts():
         import bcrypt
 
         def _ensure(uname, upass, role):
-            """Ensure account exists with correct pw_hash, role, status."""
+            """Ensure test account exists with exact pw_hash, role, and status.
+
+            Always resets the password and role so tests are deterministic
+            regardless of what was previously in accounts.json.
+            """
             accs = _load_accounts()
             target = next((a for a in accs if a.get("username") == uname.lower()), None)
             if target is None:
                 create_account(uname, upass, role=role,
                                display_name=uname.capitalize(), status="active")
                 return
-            # Update in-place if needed
-            changed = False
-            if not target.get("pw_hash"):
-                target["pw_hash"] = bcrypt.hashpw(
-                    upass.encode(), bcrypt.gensalt(rounds=10)
-                ).decode()
-                changed = True
-            if role == "user" and target.get("role") in ("admin", "developer"):
-                target["role"] = "user"
-                changed = True
-            if target.get("status") != "active":
-                target["status"] = "active"
-                changed = True
-            if changed:
-                _save_accounts(accs)
+            # Always reset pw_hash to known test password — ensures tests work
+            new_hash = bcrypt.hashpw(upass.encode(), bcrypt.gensalt(rounds=10)).decode()
+            target["pw_hash"] = new_hash
+            # Always set exact role (allow both upgrades and downgrades)
+            target["role"]   = role
+            target["status"] = "active"
+            _save_accounts(accs)
 
         _ensure(ADMIN_USER, ADMIN_PASS, "admin")
         _ensure(NORMAL_USER, NORMAL_PASS, "user")
