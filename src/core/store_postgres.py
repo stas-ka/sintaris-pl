@@ -161,11 +161,14 @@ CREATE TABLE IF NOT EXISTS documents (
     title      TEXT        NOT NULL,
     file_path  TEXT        NOT NULL,
     doc_type   TEXT        NOT NULL,
+    is_shared  SMALLINT    DEFAULT 0,
+    doc_hash   TEXT,
     metadata   TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_documents_chat ON documents(chat_id);
+CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(chat_id, doc_hash);
 
 CREATE TABLE IF NOT EXISTS vec_embeddings (
     id         BIGSERIAL   PRIMARY KEY,
@@ -182,6 +185,18 @@ CREATE INDEX IF NOT EXISTS idx_vec_embedding
     WITH (m = 16, ef_construction = 64);
 CREATE INDEX IF NOT EXISTS idx_vec_fts
     ON vec_embeddings USING GIN (to_tsvector('simple', coalesce(chunk_text, '')));
+
+CREATE TABLE IF NOT EXISTS rag_log (
+    id             BIGSERIAL   PRIMARY KEY,
+    chat_id        BIGINT      NOT NULL,
+    query          TEXT        NOT NULL,
+    query_type     TEXT        NOT NULL DEFAULT 'contextual',
+    n_chunks       INTEGER     NOT NULL DEFAULT 0,
+    chars_injected INTEGER     NOT NULL DEFAULT 0,
+    latency_ms     INTEGER     NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rag_log_chat ON rag_log(chat_id, created_at DESC);
 """
 
 
@@ -223,16 +238,34 @@ class PostgresStore:
         log.info("[StorePostgres] connected  vec=%s", self._has_vec)
 
     def _init_schema(self, conn: Any) -> None:
-        # Execute statements one by one — psycopg requires separate execute calls
-        # for DDL that contains semicolons (avoids potential parsing issues)
+        # Execute each DDL statement independently so one failure doesn't
+        # poison subsequent statements (Postgres transactions abort on error).
         for stmt in _SCHEMA_SQL.split(";"):
             stmt = stmt.strip()
-            if stmt:
-                try:
-                    conn.execute(stmt)
-                except Exception as exc:
-                    # Tolerate "already exists" errors during parallel starts
-                    log.debug("[StorePostgres] DDL warning: %s", exc)
+            if not stmt:
+                continue
+            try:
+                # Use a savepoint so a failure only rolls back this one statement
+                conn.execute("SAVEPOINT _ddl")
+                conn.execute(stmt)
+                conn.execute("RELEASE SAVEPOINT _ddl")
+            except Exception as exc:
+                conn.execute("ROLLBACK TO SAVEPOINT _ddl")
+                log.debug("[StorePostgres] DDL skipped (%s): %.80s", type(exc).__name__, stmt)
+        # Migrations: add columns that may be missing in pre-existing tables
+        _migrations = [
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_hash TEXT",
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_shared SMALLINT DEFAULT 0",
+        ]
+        for mig in _migrations:
+            try:
+                conn.execute("SAVEPOINT _mig")
+                conn.execute(mig)
+                conn.execute("RELEASE SAVEPOINT _mig")
+                log.debug("[StorePostgres] Migration applied: %s", mig)
+            except Exception as exc:
+                conn.execute("ROLLBACK TO SAVEPOINT _mig")
+                log.debug("[StorePostgres] Migration skipped: %s", exc)
 
     # ── Users ─────────────────────────────────────────────────────────────────
 
@@ -758,6 +791,85 @@ class PostgresStore:
                 (doc_id,),
             )
             conn.commit()
+
+    def get_document_by_hash(self, chat_id: int, doc_hash: str) -> dict | None:
+        """Return document record matching hash for given user, or None."""
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM documents WHERE chat_id = %s AND doc_hash = %s",
+                (chat_id, doc_hash),
+            ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        if d.get("metadata"):
+            try:
+                d["metadata"] = json.loads(d["metadata"])
+            except (ValueError, TypeError):
+                pass
+        return d
+
+    def update_document_field(self, doc_id: str, **fields) -> None:
+        """Update arbitrary scalar fields on a document record."""
+        if not fields:
+            return
+        set_clause = ", ".join(f"{k} = %s" for k in fields)
+        values = list(fields.values()) + [doc_id]
+        with self._pool.connection() as conn:
+            conn.execute(
+                f"UPDATE documents SET {set_clause}, updated_at = NOW() WHERE doc_id = %s",
+                values,
+            )
+            conn.commit()
+
+    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
+                         latency_ms: int = 0, query_type: str = "contextual") -> None:
+        """Insert one RAG retrieval record into rag_log."""
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO rag_log(chat_id, query, query_type, n_chunks, chars_injected, latency_ms)"
+                " VALUES (%s, %s, %s, %s, %s, %s)",
+                (chat_id, query, query_type, n_chunks, chars, latency_ms),
+            )
+            conn.commit()
+
+    def list_rag_log(self, limit: int = 20) -> list[dict]:
+        """Return up to *limit* most recent RAG log rows, newest first."""
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, chat_id, query, query_type, n_chunks, chars_injected,"
+                " latency_ms, created_at "
+                "FROM rag_log ORDER BY created_at DESC LIMIT %s",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def rag_stats(self) -> dict:
+        """Return aggregate RAG stats for the admin monitoring page."""
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS total, AVG(latency_ms) AS avg_latency_ms,"
+                " AVG(n_chunks) AS avg_chunks, SUM(n_chunks) AS total_chunks,"
+                " SUM(chars_injected) AS total_chars"
+                " FROM rag_log"
+            ).fetchone()
+            top = conn.execute(
+                "SELECT query, COUNT(*) AS cnt FROM rag_log"
+                " GROUP BY query ORDER BY cnt DESC LIMIT 5"
+            ).fetchall()
+            types = conn.execute(
+                "SELECT query_type, COUNT(*) AS cnt FROM rag_log GROUP BY query_type"
+            ).fetchall()
+        r = dict(row) if row else {}
+        return {
+            "total": r.get("total") or 0,
+            "avg_latency_ms": round(float(r.get("avg_latency_ms") or 0), 1),
+            "avg_chunks": round(float(r.get("avg_chunks") or 0), 1),
+            "total_chunks": r.get("total_chunks") or 0,
+            "total_chars": r.get("total_chars") or 0,
+            "top_queries": [dict(t) for t in top],
+            "query_types": {t["query_type"]: t["cnt"] for t in types},
+        }
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
