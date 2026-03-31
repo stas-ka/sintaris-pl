@@ -103,7 +103,16 @@ def detect_rag_capability() -> RAGCapability:
         import psutil
         ram_gb = psutil.virtual_memory().total / (1024 ** 3)
     except Exception:
+        # psutil not installed — fall back to /proc/meminfo (Linux)
         ram_gb = 0.0
+        try:
+            with open("/proc/meminfo") as _f:
+                for _line in _f:
+                    if "MemTotal" in _line:
+                        ram_gb = int(_line.split()[1]) / (1024 * 1024)
+                        break
+        except Exception:
+            pass
 
     if ram_gb >= 8.0 and has_vectors:
         cap = RAGCapability.FULL
@@ -214,9 +223,9 @@ def retrieve_context(
             from core.bot_embeddings import EmbeddingService
             svc = EmbeddingService.get()
             if svc is not None:
-                vec = svc.embed([query])
+                vec = svc.embed(query)   # single string, not [query]
                 if vec:
-                    vector_results = store.search_similar(vec[0], chat_id, top_k * 2) or []
+                    vector_results = store.search_similar(vec, chat_id, top_k * 2) or []
         except Exception as exc:
             log.debug("[RAG] vector search failed (non-fatal): %s", exc)
 

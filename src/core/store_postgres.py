@@ -690,7 +690,7 @@ class PostgresStore:
             from pgvector.psycopg import register_vector
             register_vector(conn)
             rows = conn.execute(
-                "SELECT doc_id, chunk_text, "
+                "SELECT doc_id, chunk_idx, chunk_text, "
                 "  (embedding <=> %s::vector) AS distance "
                 "FROM vec_embeddings "
                 "WHERE chat_id = %s "

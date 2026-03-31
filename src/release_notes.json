@@ -1,5 +1,16 @@
 [
   {
+    "version": "2026.3.48",
+    "date": "2026-03-31",
+    "changes": [
+      "Fix: RAG hybrid mode broken — psutil missing caused FTS5_ONLY detection even on 7.6 GB machine (fix: /proc/meminfo fallback)",
+      "Fix: svc.embed([query]) wrong signature — passed list to str API, returning None (fix: svc.embed(query))",
+      "Fix: search_similar missing chunk_idx in SELECT — RRF fusion collapsed all doc chunks to single entry (fix: added chunk_idx to SELECT)",
+      "Result: Russian queries now retrieve 3 relevant chunks from English/German documents via cross-lingual vector search",
+      "Test: T80 regression test added (4 checks)"
+    ]
+  },
+  {
     "version": "2026.3.47",
     "date": "2026-03-31",
     "changes": [

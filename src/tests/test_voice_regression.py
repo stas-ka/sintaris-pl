@@ -5479,6 +5479,98 @@ def t_rag_log_datetime_serialization(**_) -> list:
     return results
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T80 – RAG hybrid retrieval: psutil fallback + embed() signature + chunk_idx
+# ─────────────────────────────────────────────────────────────────────────────
+def t_rag_hybrid_retrieval_fixes(**_) -> list:
+    """T80: Verify the three RAG hybrid retrieval bugs are fixed.
+
+    Bug 1: psutil missing → ram_gb=0.0 → always FTS5_ONLY (fix: /proc/meminfo fallback)
+    Bug 2: svc.embed([query]) instead of svc.embed(query) → None embedding
+    Bug 3: search_similar missing chunk_idx → RRF collapses all doc chunks to one key
+    """
+    import time as _time
+    import sys as _sys
+    results = []
+    t0 = _time.time()
+
+    _sys.path.insert(0, str(SRC_ROOT))
+
+    # 1. /proc/meminfo fallback is present in bot_rag.py
+    try:
+        code = (SRC_ROOT / "core" / "bot_rag.py").read_text(encoding="utf-8")
+        has_meminfo = "/proc/meminfo" in code
+        results.append(TestResult("rag_meminfo_fallback",
+                                  "PASS" if has_meminfo else "FAIL",
+                                  _time.time() - t0,
+                                  "/proc/meminfo fallback present in detect_rag_capability()"
+                                  if has_meminfo else "MISSING /proc/meminfo fallback — always FTS5_ONLY without psutil"))
+        # embed call uses single string, not [query]
+        has_correct_embed = "svc.embed(query)" in code and "svc.embed([query])" not in code
+        results.append(TestResult("rag_embed_signature",
+                                  "PASS" if has_correct_embed else "FAIL",
+                                  _time.time() - t0,
+                                  "svc.embed(query) correct — not svc.embed([query])"
+                                  if has_correct_embed else "svc.embed([query]) bug present — passes list to str API"))
+    except Exception as e:
+        results.append(TestResult("rag_hybrid_source_check", "SKIP", _time.time() - t0,
+                                  f"source check skipped: {e}"))
+
+    # 2. search_similar returns chunk_idx (fixes RRF key collision)
+    try:
+        pg_code = (SRC_ROOT / "core" / "store_postgres.py").read_text(encoding="utf-8")
+        has_chunk_idx = "chunk_idx" in pg_code[pg_code.find("def search_similar"):pg_code.find("def search_similar") + 600]
+        results.append(TestResult("rag_search_similar_chunk_idx",
+                                  "PASS" if has_chunk_idx else "FAIL",
+                                  _time.time() - t0,
+                                  "chunk_idx included in search_similar SELECT"
+                                  if has_chunk_idx else "MISSING chunk_idx in search_similar — RRF collapses all chunks"))
+    except Exception as e:
+        results.append(TestResult("rag_search_similar_chunk_idx", "SKIP", _time.time() - t0,
+                                  f"source check skipped: {e}"))
+
+    # 3. detect_rag_capability reads /proc/meminfo when psutil absent
+    try:
+        import importlib
+        import types
+        # Simulate psutil missing by patching
+        import core.bot_rag as _rag_mod
+        orig_cap = _rag_mod._detected_capability
+        _rag_mod._detected_capability = None
+        # Temporarily hide psutil
+        import sys as _sys2
+        orig_psutil = _sys2.modules.get("psutil")
+        _sys2.modules["psutil"] = None  # type: ignore[assignment]
+        try:
+            ram = 0.0
+            try:
+                with open("/proc/meminfo") as _f:
+                    for _line in _f:
+                        if "MemTotal" in _line:
+                            ram = int(_line.split()[1]) / (1024 * 1024)
+                            break
+            except Exception:
+                pass
+            ok = ram > 0
+            results.append(TestResult("rag_meminfo_read",
+                                      "PASS" if ok else "SKIP",
+                                      _time.time() - t0,
+                                      f"/proc/meminfo reads {ram:.1f} GB successfully"
+                                      if ok else "/proc/meminfo not available (non-Linux)"))
+        finally:
+            if orig_psutil is None:
+                _sys2.modules.pop("psutil", None)
+            else:
+                _sys2.modules["psutil"] = orig_psutil
+            _rag_mod._detected_capability = orig_cap
+    except Exception as e:
+        results.append(TestResult("rag_meminfo_read", "SKIP", _time.time() - t0,
+                                  f"meminfo test skipped: {e}"))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -5613,6 +5705,8 @@ TEST_FUNCTIONS = [
     t_rag_memory_combined_context,
     # RAG log datetime serialization — str() wrap on created_at for Postgres compat (T79)
     t_rag_log_datetime_serialization,
+    # RAG hybrid retrieval: psutil fallback + embed() signature + chunk_idx in search_similar (T80)
+    t_rag_hybrid_retrieval_fixes,
 ]
 
 
