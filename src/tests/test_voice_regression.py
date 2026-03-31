@@ -43,6 +43,7 @@ from typing import Optional
 
 TARIS_DIR   = Path(os.path.expanduser("~/.taris"))
 TESTS_DIR      = Path(__file__).parent.resolve()
+SRC_ROOT       = Path(__file__).parent.parent  # project src/ when local, ~/.taris when deployed
 # Package-aware paths (new package layout)
 _PKG_CORE     = TARIS_DIR / "core"
 _PKG_TELEGRAM = TARIS_DIR / "telegram"
@@ -1116,7 +1117,7 @@ def t_note_edit_append_replace(**_) -> list[TestResult]:
             screen_yaml_path = TARIS_DIR / "screens" / "note_edit.yaml"
             if not screen_yaml_path.exists():
                 # Fall back to source tree
-                screen_yaml_path = Path(__file__).parent.parent / "screens" / "note_edit.yaml"
+                screen_yaml_path = SRC_ROOT / "screens" / "note_edit.yaml"
             if screen_yaml_path.exists():
                 screen_yaml = screen_yaml_path.read_text(encoding="utf-8")
                 if "note_append" not in screen_yaml and "btn_note_append" not in screen_yaml:
@@ -2207,7 +2208,7 @@ def t_dual_stt_providers(**_) -> list[TestResult]:
         # 1. Constants in bot_config.py
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
-            cfg_path = Path(__file__).parent.parent / "core" / "bot_config.py"
+            cfg_path = SRC_ROOT / "core" / "bot_config.py"
         cfg_src = cfg_path.read_text()
         has_openai_model    = "STT_OPENAI_MODEL" in cfg_src
         has_stt_lang        = "STT_LANG" in cfg_src
@@ -2225,7 +2226,7 @@ def t_dual_stt_providers(**_) -> list[TestResult]:
         # 2. bot_web.py: dispatch table + provider functions + fallback routing
         web_path = TARIS_DIR / "bot_web.py"
         if not web_path.exists():
-            web_path = Path(__file__).parent.parent / "bot_web.py"
+            web_path = SRC_ROOT / "bot_web.py"
         web_src = web_path.read_text()
         has_dispatch      = "_STT_DISPATCH" in web_src
         has_vosk_func     = "def _stt_vosk_web" in web_src
@@ -2272,7 +2273,7 @@ def t_voice_debug_mode(**_) -> list[TestResult]:
         # 1. bot_config constants
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
-            cfg_path = Path(__file__).parent.parent / "core" / "bot_config.py"
+            cfg_path = SRC_ROOT / "core" / "bot_config.py"
         cfg_src = cfg_path.read_text()
         has_debug_mode = "VOICE_DEBUG_MODE" in cfg_src
         has_debug_dir  = "VOICE_DEBUG_DIR" in cfg_src
@@ -2317,7 +2318,7 @@ def t_voice_debug_mode(**_) -> list[TestResult]:
         # 3. bot_llm has _ask_with_fallback + LLM_FALLBACK_PROVIDER wired
         llm_path = TARIS_DIR / "core" / "bot_llm.py"
         if not llm_path.exists():
-            llm_path = Path(__file__).parent.parent / "core" / "bot_llm.py"
+            llm_path = SRC_ROOT / "core" / "bot_llm.py"
         llm_src = llm_path.read_text()
         has_fn   = "def _ask_with_fallback" in llm_src
         has_use  = "LLM_FALLBACK_PROVIDER" in llm_src
@@ -2356,7 +2357,7 @@ def t_stt_language_routing_fw(**_) -> list[TestResult]:
     try:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
-            voice_path = Path(__file__).parent.parent / "features" / "bot_voice.py"
+            voice_path = SRC_ROOT / "features" / "bot_voice.py"
         src = voice_path.read_text()
 
         has_lang_map  = 'lang_map = {"ru": "ru", "en": "en", "de": "de"}' in src or \
@@ -2469,7 +2470,7 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
     try:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
-            voice_path = Path(__file__).parent.parent / "features" / "bot_voice.py"
+            voice_path = SRC_ROOT / "features" / "bot_voice.py"
         src = voice_path.read_text()
 
         has_vosk_fallback_opt  = "vosk_fallback" in src
@@ -2502,7 +2503,7 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
     try:
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
-            cfg_path = Path(__file__).parent.parent / "core" / "bot_config.py"
+            cfg_path = SRC_ROOT / "core" / "bot_config.py"
         cfg_src = cfg_path.read_text()
         has_const   = "STT_FALLBACK_PROVIDER" in cfg_src
         has_default = "_DEFAULT_STT_FALLBACK" in cfg_src
@@ -2575,7 +2576,7 @@ def t_openai_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResul
     try:
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
-            cfg_path = Path(__file__).parent.parent / "core" / "bot_config.py"
+            cfg_path = SRC_ROOT / "core" / "bot_config.py"
         cfg_src = cfg_path.read_text()
         has_model   = "STT_OPENAI_MODEL" in cfg_src
         has_lang    = "STT_LANG" in cfg_src
@@ -2596,7 +2597,7 @@ def t_openai_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResul
     try:
         web_path = TARIS_DIR / "bot_web.py"
         if not web_path.exists():
-            web_path = Path(__file__).parent.parent / "bot_web.py"
+            web_path = SRC_ROOT / "bot_web.py"
         web_src = web_path.read_text()
         has_fn = "def _stt_openai_whisper_web" in web_src
         has_dispatch = "_STT_DISPATCH" in web_src and '"openai_whisper"' in web_src
@@ -2733,7 +2734,7 @@ def t_tts_multilang(gt: dict, verbose: bool = False, **_) -> list[TestResult]:
     try:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
-            voice_path = Path(__file__).parent.parent / "features" / "bot_voice.py"
+            voice_path = SRC_ROOT / "features" / "bot_voice.py"
         src = voice_path.read_text()
 
         has_de_routing = 'lang == "de"' in src and "PIPER_MODEL_DE" in src
@@ -2852,7 +2853,7 @@ def t_voice_llm_routing(**_) -> list[TestResult]:
     try:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
-            voice_path = Path(__file__).parent.parent / "features" / "bot_voice.py"
+            voice_path = SRC_ROOT / "features" / "bot_voice.py"
         src = voice_path.read_text()
 
         imports_ask_llm   = "from core.bot_llm import ask_llm" in src
@@ -2883,7 +2884,7 @@ def t_voice_llm_routing(**_) -> list[TestResult]:
     try:
         llm_path = TARIS_DIR / "core" / "bot_llm.py"
         if not llm_path.exists():
-            llm_path = Path(__file__).parent.parent / "core" / "bot_llm.py"
+            llm_path = SRC_ROOT / "core" / "bot_llm.py"
         llm_src = llm_path.read_text()
 
         has_ask_llm     = "def ask_llm(" in llm_src
@@ -3723,7 +3724,7 @@ def t_voice_chat_config_disclosure(**_):
     ts = time.time()
     try:
         import json as _json
-        prompts_path = Path(__file__).parent.parent / "prompts.json"
+        prompts_path = SRC_ROOT / "prompts.json"
         prompts = _json.loads(prompts_path.read_text())
         preamble = prompts.get("security_preamble", "")
         rule5_start = preamble.find("5.")
@@ -3763,7 +3764,7 @@ def t_note_delete_confirm(**_) -> list[TestResult]:
     results = []
     ts = time.time()
     try:
-        handlers_path = Path(__file__).parent.parent / "telegram" / "bot_handlers.py"
+        handlers_path = SRC_ROOT / "telegram" / "bot_handlers.py"
         src = handlers_path.read_text()
         # confirm dialog must be shown (not immediate delete)
         if "note_del_confirm:" not in src:
@@ -3777,7 +3778,7 @@ def t_note_delete_confirm(**_) -> list[TestResult]:
 
     ts = time.time()
     try:
-        menu_path = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        menu_path = SRC_ROOT / "telegram_menu_bot.py"
         src = menu_path.read_text()
         if "note_del_confirm:" not in src:
             results.append(TestResult("note_del_confirm_wired", "FAIL", time.time() - ts,
@@ -3796,7 +3797,7 @@ def t_note_rename_flow(**_) -> list[TestResult]:
     results = []
     ts = time.time()
     try:
-        menu_path = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        menu_path = SRC_ROOT / "telegram_menu_bot.py"
         src = menu_path.read_text()
         if "note_rename_title" not in src:
             results.append(TestResult("note_rename_mode", "FAIL", time.time() - ts,
@@ -3809,7 +3810,7 @@ def t_note_rename_flow(**_) -> list[TestResult]:
 
     ts = time.time()
     try:
-        handlers_path = Path(__file__).parent.parent / "telegram" / "bot_handlers.py"
+        handlers_path = SRC_ROOT / "telegram" / "bot_handlers.py"
         src = handlers_path.read_text()
         if "_start_note_rename" not in src:
             results.append(TestResult("note_rename_handler", "FAIL", time.time() - ts,
@@ -3828,7 +3829,7 @@ def t_note_zip_download(**_) -> list[TestResult]:
     results = []
     ts = time.time()
     try:
-        handlers_path = Path(__file__).parent.parent / "telegram" / "bot_handlers.py"
+        handlers_path = SRC_ROOT / "telegram" / "bot_handlers.py"
         src = handlers_path.read_text()
         checks = [
             ("_handle_note_download_zip", "_handle_note_download_zip function"),
@@ -3919,7 +3920,7 @@ def t_no_hardcoded_strings(**_) -> list[TestResult]:
     # Also verify the new keys are in all 3 languages
     ts = time.time()
     try:
-        strings = json.loads((Path(__file__).parent.parent / "strings.json")
+        strings = json.loads((SRC_ROOT / "strings.json")
                              .read_text(encoding="utf-8"))
         new_keys = ["voice_note_msg", "cal_event_saved_prefix"]
         missing = [(lang, k) for k in new_keys for lang in ("ru", "en", "de")
@@ -3951,7 +3952,7 @@ def t_ollama_history_native_messages(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     try:
-        src = open(Path(__file__).parent.parent / "core" / "bot_llm.py").read()
+        src = open(SRC_ROOT / "core" / "bot_llm.py").read()
 
         # Must have an explicit ollama branch in ask_llm_with_history
         has_ollama_branch = 'provider == "ollama"' in src and 'ask_llm_with_history' in src
@@ -4014,8 +4015,8 @@ def t_multiturn_system_message(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     try:
-        bot_access_src  = open(Path(__file__).parent.parent / "telegram" / "bot_access.py").read()
-        bot_handlers_src = open(Path(__file__).parent.parent / "telegram" / "bot_handlers.py").read()
+        bot_access_src  = open(SRC_ROOT / "telegram" / "bot_access.py").read()
+        bot_handlers_src = open(SRC_ROOT / "telegram" / "bot_handlers.py").read()
 
         has_build_system = "def _build_system_message(" in bot_access_src
         has_user_turn    = "def _user_turn_content(" in bot_access_src
@@ -4073,7 +4074,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 1. ask_llm_with_history imported in bot_voice.py
     try:
-        src = Path("src/features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text()
         ok = "ask_llm_with_history" in src
         results.append(TestResult(
             "voice_imports_ask_llm_with_history", "PASS" if ok else "FAIL",
@@ -4086,7 +4087,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 2. _build_system_message imported/used in bot_voice.py
     try:
-        src = Path("src/features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text()
         ok = "_build_system_message" in src
         results.append(TestResult(
             "voice_uses_build_system_message", "PASS" if ok else "FAIL",
@@ -4099,7 +4100,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 3. _voice_user_turn_content defined in bot_access.py
     try:
-        src = Path("src/telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
         ok = "def _voice_user_turn_content(" in src
         results.append(TestResult(
             "voice_user_turn_content_defined", "PASS" if ok else "FAIL",
@@ -4112,7 +4113,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 4. get_history_with_ids called in voice pipeline
     try:
-        src = Path("src/features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text()
         ok = "get_history_with_ids" in src
         results.append(TestResult(
             "voice_gets_history", "PASS" if ok else "FAIL",
@@ -4125,7 +4126,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 5. add_to_history called for both user and assistant turns
     try:
-        src = Path("src/features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text()
         count = src.count("add_to_history(chat_id,")
         ok = count >= 2
         results.append(TestResult(
@@ -4139,7 +4140,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 6. get_memory_context injected into voice system message
     try:
-        src = Path("src/features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text()
         ok = "get_memory_context" in src
         results.append(TestResult(
             "voice_injects_memory_context", "PASS" if ok else "FAIL",
@@ -4160,7 +4161,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 1. log_rag_activity must be called in _docs_rag_context
     try:
-        src = Path("src/telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
         called = "log_rag_activity" in src and "store.log_rag_activity" in src
         results.append(TestResult(
             "rag_log_activity_called", "PASS" if called else "FAIL",
@@ -4173,7 +4174,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 2. concurrent.futures timeout must be in _docs_rag_context
     try:
-        src = Path("src/telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
         has_timeout = "concurrent.futures" in src and "TimeoutError" in src
         results.append(TestResult(
             "rag_fts_timeout_enforced", "PASS" if has_timeout else "FAIL",
@@ -4186,7 +4187,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 3. llm_temperature must be in rag_settings defaults (source inspection)
     try:
-        src_rs = Path("src/core/rag_settings.py").read_text()
+        src_rs = (SRC_ROOT / "core/rag_settings.py").read_text()
         has_temp = "llm_temperature" in src_rs and "LOCAL_TEMPERATURE" in src_rs
         results.append(TestResult(
             "rag_llm_temperature_in_defaults", "PASS" if has_temp else "FAIL",
@@ -4199,7 +4200,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 4. _effective_temperature() must exist in bot_llm.py
     try:
-        src = Path("src/core/bot_llm.py").read_text()
+        src = (SRC_ROOT / "core/bot_llm.py").read_text()
         has_fn = "def _effective_temperature" in src and "_effective_temperature()" in src
         results.append(TestResult(
             "rag_effective_temperature_fn", "PASS" if has_fn else "FAIL",
@@ -4212,7 +4213,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 5. MAX_DOC_SIZE_MB must be in bot_config.py (source inspection)
     try:
-        src_cfg = Path("src/core/bot_config.py").read_text()
+        src_cfg = (SRC_ROOT / "core/bot_config.py").read_text()
         has_const = "MAX_DOC_SIZE_MB" in src_cfg
         results.append(TestResult(
             "rag_max_doc_size_constant", "PASS" if has_const else "FAIL",
@@ -4226,7 +4227,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
     # 6. docs_too_large i18n key must be present in all 3 languages
     try:
         import json
-        strings = json.loads(Path("src/strings.json").read_text())
+        strings = json.loads((SRC_ROOT / "strings.json").read_text())
         for lang in ("ru", "en", "de"):
             ok = "docs_too_large" in strings.get(lang, {})
             results.append(TestResult(
@@ -4258,7 +4259,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 1. db_log_llm_call has extended keyword params
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         checks = [
             ("model:", "model parameter in db_log_llm_call"),
             ("temperature:", "temperature parameter in db_log_llm_call"),
@@ -4281,7 +4282,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 2. db_get_llm_trace function exists
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         ok = "def db_get_llm_trace" in src
         results.append(TestResult(
             "llm_trace_get_fn",
@@ -4294,7 +4295,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 3. Voice pipeline calls db_log_llm_call after LLM call
     try:
-        src = Path("src/features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text()
         ok = "db_log_llm_call" in src and "ask_llm_with_history" in src
         results.append(TestResult(
             "llm_trace_voice_logs",
@@ -4307,7 +4308,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 4. _rag_debug_stats exists in bot_access.py
     try:
-        src = Path("src/telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
         ok = "def _rag_debug_stats" in src
         results.append(TestResult(
             "llm_trace_rag_stats_fn",
@@ -4320,7 +4321,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 5. admin_llm_trace callback wired in telegram_menu_bot.py
     try:
-        src = Path("src/telegram_menu_bot.py").read_text()
+        src = (SRC_ROOT / "telegram_menu_bot.py").read_text()
         ok = "admin_llm_trace" in src and "_handle_admin_llm_trace" in src
         results.append(TestResult(
             "llm_trace_callback_wired",
@@ -4334,7 +4335,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 6. _handle_admin_llm_trace in bot_admin.py
     try:
-        src = Path("src/telegram/bot_admin.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_admin.py").read_text()
         ok = "def _handle_admin_llm_trace" in src
         results.append(TestResult(
             "llm_trace_admin_handler",
@@ -4358,7 +4359,7 @@ def t_notes_db_content(**_) -> list:
 
     # 1. notes_index schema has content column
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         ok = "content     TEXT    DEFAULT ''" in src or "content TEXT DEFAULT ''" in src
         results.append(TestResult(
             "notes_index_content_column",
@@ -4371,7 +4372,7 @@ def t_notes_db_content(**_) -> list:
 
     # 2. _save_note_file stores content in DB
     try:
-        src = Path("src/telegram/bot_users.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_users.py").read_text()
         ok = "content" in src and "ON CONFLICT(slug, chat_id)" in src and "content = excluded.content" in src
         results.append(TestResult(
             "save_note_db_content",
@@ -4384,7 +4385,7 @@ def t_notes_db_content(**_) -> list:
 
     # 3. _load_note_text reads from DB first
     try:
-        src = Path("src/telegram/bot_users.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_users.py").read_text()
         ok = "SELECT content FROM notes_index" in src and "File fallback" in src
         results.append(TestResult(
             "load_note_db_first",
@@ -4406,7 +4407,7 @@ def t_calendar_db_primary(**_) -> list:
     t0 = _time.time()
 
     try:
-        src = Path("src/features/bot_calendar.py").read_text()
+        src = (SRC_ROOT / "features/bot_calendar.py").read_text()
         # Should call store.save_event and store.delete_event
         calls_save = "store.save_event" in src
         calls_del = "store.delete_event" in src
@@ -4448,7 +4449,7 @@ def t_doc_dedup_logic(**_) -> list:
 
     # 1. _pending_doc_replace dict exists
     try:
-        src = Path("src/features/bot_documents.py").read_text()
+        src = (SRC_ROOT / "features/bot_documents.py").read_text()
         ok = "_pending_doc_replace" in src
         results.append(TestResult(
             "doc_pending_replace_dict",
@@ -4461,7 +4462,7 @@ def t_doc_dedup_logic(**_) -> list:
 
     # 2. _handle_doc_replace and _handle_doc_keep_both functions exist
     try:
-        src = Path("src/features/bot_documents.py").read_text()
+        src = (SRC_ROOT / "features/bot_documents.py").read_text()
         ok = "def _handle_doc_replace" in src and "def _handle_doc_keep_both" in src
         results.append(TestResult(
             "doc_dedup_handlers",
@@ -4476,7 +4477,7 @@ def t_doc_dedup_logic(**_) -> list:
     # 3. docs_dup_found i18n key present in strings.json
     try:
         import json as _json
-        strings = _json.loads(Path("src/strings.json").read_text())
+        strings = _json.loads((SRC_ROOT / "strings.json").read_text())
         ok = all("docs_dup_found" in strings.get(lang, {}) for lang in ("ru", "en", "de"))
         results.append(TestResult(
             "doc_dedup_i18n",
@@ -4500,7 +4501,7 @@ def t_user_prefs_db(**_) -> list:
 
     # 1. user_prefs table in _SCHEMA_SQL
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         ok = "CREATE TABLE IF NOT EXISTS user_prefs" in src
         results.append(TestResult(
             "user_prefs_schema",
@@ -4513,7 +4514,7 @@ def t_user_prefs_db(**_) -> list:
 
     # 2. db_get_user_pref / db_set_user_pref helpers
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         ok = "def db_get_user_pref" in src and "def db_set_user_pref" in src
         results.append(TestResult(
             "user_prefs_helpers",
@@ -4527,7 +4528,7 @@ def t_user_prefs_db(**_) -> list:
 
     # 3. profile_toggle_memory callback wired in telegram_menu_bot.py
     try:
-        src = Path("src/telegram_menu_bot.py").read_text()
+        src = (SRC_ROOT / "telegram_menu_bot.py").read_text()
         ok = "profile_toggle_memory" in src
         results.append(TestResult(
             "profile_toggle_memory_wired",
@@ -4551,7 +4552,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 1. system_settings table in _SCHEMA_SQL
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         ok = "CREATE TABLE IF NOT EXISTS system_settings" in src
         results.append(TestResult(
             "system_settings_schema",
@@ -4564,7 +4565,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 2. db_get_system_setting / db_set_system_setting helpers
     try:
-        src = Path("src/core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text()
         ok = "def db_get_system_setting" in src and "def db_set_system_setting" in src
         results.append(TestResult(
             "system_settings_helpers",
@@ -4578,7 +4579,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 3. get_conv_history_max / get_conv_summary_threshold / get_conv_mid_max in bot_config
     try:
-        src = Path("src/core/bot_config.py").read_text()
+        src = (SRC_ROOT / "core/bot_config.py").read_text()
         ok = ("def get_conv_history_max" in src
               and "def get_conv_summary_threshold" in src
               and "def get_conv_mid_max" in src)
@@ -4594,7 +4595,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 4. admin_memory_menu callback wired
     try:
-        src = Path("src/telegram_menu_bot.py").read_text()
+        src = (SRC_ROOT / "telegram_menu_bot.py").read_text()
         ok = "admin_memory_menu" in src
         results.append(TestResult(
             "admin_memory_menu_wired",
