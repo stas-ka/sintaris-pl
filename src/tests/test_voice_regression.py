@@ -185,14 +185,19 @@ def _load_baseline() -> Optional[dict]:
 
 def t_model_files_present(gt: dict, **_) -> list[TestResult]:
     """T01 — all model/binary files referenced by the pipeline exist on disk."""
+    import os as _os
+    _variant = _os.environ.get("DEVICE_VARIANT", "taris")
     checks = {
-        "vosk_model":         VOSK_MODEL_PATH,
         "piper_bin":          _runtime_piper_bin(),
         "piper_onnx":         PIPER_MODEL,
         "piper_onnx_json":    PIPER_MODEL + ".json",
         "ffmpeg":             "/usr/bin/ffmpeg",
     }
+    # vosk_model required on taris/picoclaw but optional on openclaw (uses faster-whisper)
+    if _variant != "openclaw":
+        checks["vosk_model"] = VOSK_MODEL_PATH
     optional = {
+        "vosk_model_openclaw": VOSK_MODEL_PATH,  # openclaw may not have it
         "whisper_bin":        WHISPER_BIN,
         "whisper_model":      WHISPER_MODEL,
         "piper_low_onnx":     PIPER_MODEL_LOW,
