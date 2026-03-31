@@ -164,6 +164,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T53 | `note_zip_download` | `_handle_note_download_zip`, `zipfile.ZipFile`, and `io.BytesIO` present in `bot_handlers.py`. Verifies in-memory ZIP generation for bulk note download. | After editing note download handlers |
 | T54 | `rag_context_injection` | `_docs_rag_context()` is called in both `_with_lang()` and `_with_lang_voice()` in `bot_access.py`. Guards FTS5 RAG context being injected into LLM prompts. | After editing prompt builders in `bot_access.py` |
 | T55 | `no_hardcoded_strings` | Key user-visible strings use `_t()` not hardcoded literals: `cal_event_saved_prefix` in `bot_calendar.py`, `audio_interrupted` and `voice_note_msg` in `bot_voice.py`. New i18n keys present in ru/en/de. | After editing bot_calendar.py, bot_voice.py, or strings.json |
+| T73 | `doc_store_api_complete` | Both `store_sqlite.py` and `store_postgres.py` have all 5 required document methods (`save_document_meta`, `list_documents`, `delete_document`, `update_document_field`, `get_document_by_hash`) plus 3 RAG log methods (`log_rag_activity`, `list_rag_log`, `rag_stats`). Also does a live import check against the running store. Root-cause test for the PDF upload bug (Postgres was missing these methods). | After editing either store backend; after adding a new document method |
+| T74 | `doc_upload_pipeline` | `bot_documents.py` has the complete upload pipeline: `_handle_doc_upload` entry point → `get_document_by_hash` dedup check → `_process_doc_file` worker → `save_document_meta` → `update_document_field` for doc_hash; `_pending_doc_replace` state dict; `_handle_doc_replace` and `_handle_doc_keep_both` confirm handlers. | After editing `bot_documents.py` upload or dedup flow |
+| T75 | `doc_list_delete_flow` | All 7 list/delete/rename/share handlers present in `bot_documents.py`; 15 required i18n keys in ru/en/de; `delete_embeddings` called on delete (orphaned vectors cleanup). Also caught a bug where `delete_embeddings` was missing from the delete flow. | After editing `bot_documents.py` delete/rename/share handlers or `strings.json` docs keys |
 
 ### 2.6 When specific tests are mandatory
 
@@ -187,6 +190,8 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After changing `_voice_lang()` or `STT_LANG` handling | T41 (`--test voice_lang_stt_lang_priority`) |
 | After changing `_set_lang()` or language-defaulting logic in `bot_access.py` | T42 (`--test set_lang_default_not_hardcoded_en`) |
 | After changing voice→system-chat routing or `_is_admin` import in `bot_voice.py` | T43 (`--test voice_system_admin_guard`) |
+| After any change to `store_sqlite.py` or `store_postgres.py` document methods | T73 (`--test t_doc_store_api_complete`) |
+| After editing `bot_documents.py` upload, dedup, or delete/rename flow | T74, T75 (`--test t_doc_upload_pipeline --test t_doc_list_delete_flow`) |
 | After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
 | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |

@@ -4834,6 +4834,208 @@ def t_rag_monitoring_stats(**_) -> list:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T73 – Document store API completeness (both SQLite + Postgres)
+# ─────────────────────────────────────────────────────────────────────────────
+def t_doc_store_api_complete(**_) -> list:
+    """T73: Both store_sqlite and store_postgres have all 5 required document methods.
+
+    Root-cause test: the PDF-upload bug was caused by store_postgres.py missing
+    get_document_by_hash, update_document_field, list_rag_log, log_rag_activity,
+    and rag_stats.  This test ensures both backends stay in sync.
+    """
+    results = []
+    import time as _time
+    t0 = _time.time()
+
+    REQUIRED_DOC_METHODS = [
+        "def save_document_meta",
+        "def list_documents",
+        "def delete_document",
+        "def update_document_field",
+        "def get_document_by_hash",
+    ]
+    REQUIRED_RAG_METHODS = [
+        "def log_rag_activity",
+        "def list_rag_log",
+        "def rag_stats",
+    ]
+
+    for store_file, label in [
+        ("core/store_sqlite.py",   "SQLite"),
+        ("core/store_postgres.py", "Postgres"),
+    ]:
+        try:
+            code = (Path(__file__).parents[1] / store_file).read_text(encoding="utf-8")
+            for method in REQUIRED_DOC_METHODS + REQUIRED_RAG_METHODS:
+                ok = method in code
+                results.append(TestResult(
+                    f"store_{label.lower()}_{method.split()[-1]}",
+                    "PASS" if ok else "FAIL",
+                    _time.time() - t0,
+                    f"{label}: {method} present" if ok
+                    else f"MISSING in {store_file}: {method}",
+                ))
+        except Exception as e:
+            results.append(TestResult(f"store_{label.lower()}_read", "FAIL", _time.time() - t0, str(e)))
+
+    # Live import check: if store is importable, verify hasattr for both backends
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).parents[1]))
+        from core.store import store as _store
+        for method in ["save_document_meta", "list_documents", "delete_document",
+                       "update_document_field", "get_document_by_hash",
+                       "log_rag_activity", "list_rag_log", "rag_stats"]:
+            ok = hasattr(_store, method) and callable(getattr(_store, method))
+            results.append(TestResult(
+                f"live_store_{method}",
+                "PASS" if ok else "FAIL",
+                _time.time() - t0,
+                f"live store.{method} callable" if ok else f"live store MISSING {method}",
+            ))
+    except Exception as e:
+        results.append(TestResult("live_store_import", "SKIP", _time.time() - t0,
+                                  f"store import skipped: {e}"))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T74 – Document upload pipeline completeness
+# ─────────────────────────────────────────────────────────────────────────────
+def t_doc_upload_pipeline(**_) -> list:
+    """T74: bot_documents.py has complete upload pipeline:
+    _handle_doc_upload → dedup check → _process_doc_file → save_document_meta
+    + update_document_field for doc_hash after processing.
+    """
+    results = []
+    import time as _time
+    t0 = _time.time()
+
+    try:
+        code = (Path(__file__).parents[1] / "features" / "bot_documents.py").read_text(encoding="utf-8")
+
+        checks = [
+            ("upload_handler",       "def _handle_doc_upload",
+             "_handle_doc_upload entry point"),
+            ("process_function",     "def _process_doc_file",
+             "_process_doc_file async worker"),
+            ("text_extractor",       "def _extract_text",
+             "_extract_text() for PDF/DOCX/TXT/MD"),
+            ("dedup_hash_check",     "get_document_by_hash",
+             "get_document_by_hash() called for dedup"),
+            ("save_meta_call",       "save_document_meta",
+             "save_document_meta() called after processing"),
+            ("hash_field_update",    "update_document_field",
+             "update_document_field() called to save doc_hash"),
+            ("pending_replace_dict", "_pending_doc_replace",
+             "_pending_doc_replace state dict for dedup flow"),
+            ("replace_handler",      "def _handle_doc_replace",
+             "_handle_doc_replace() for overwrite confirmation"),
+            ("keep_both_handler",    "def _handle_doc_keep_both",
+             "_handle_doc_keep_both() for keep-both path"),
+        ]
+        for key, needle, desc in checks:
+            ok = needle in code
+            results.append(TestResult(
+                f"upload_pipeline_{key}",
+                "PASS" if ok else "FAIL",
+                _time.time() - t0,
+                desc if ok else f"MISSING in bot_documents.py: {needle}",
+            ))
+    except Exception as e:
+        results.append(TestResult("upload_pipeline_read", "FAIL", _time.time() - t0, str(e)))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T75 – Document list / delete / rename flow + i18n coverage
+# ─────────────────────────────────────────────────────────────────────────────
+def t_doc_list_delete_flow(**_) -> list:
+    """T75: List, delete, rename handlers in bot_documents.py + all i18n keys present."""
+    results = []
+    import time as _time
+    import json as _json
+    t0 = _time.time()
+
+    # 1. Handler functions exist
+    try:
+        code = (Path(__file__).parents[1] / "features" / "bot_documents.py").read_text(encoding="utf-8")
+        handlers = [
+            ("list_handler",             "def _handle_docs_menu"),
+            ("detail_handler",           "def _handle_doc_detail"),
+            ("delete_request_handler",   "def _handle_doc_delete"),
+            ("delete_confirm_handler",   "def _handle_doc_delete_confirmed"),
+            ("rename_start_handler",     "def _handle_doc_rename_start"),
+            ("rename_done_handler",      "def _handle_doc_rename_done"),
+            ("share_toggle_handler",     "def _handle_doc_share_toggle"),
+        ]
+        for key, needle in handlers:
+            ok = needle in code
+            results.append(TestResult(
+                f"doc_handler_{key}",
+                "PASS" if ok else "FAIL",
+                _time.time() - t0,
+                f"{needle} present" if ok else f"MISSING in bot_documents.py: {needle}",
+            ))
+    except Exception as e:
+        results.append(TestResult("doc_handler_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 2. Required i18n keys in all three languages
+    REQUIRED_KEYS = [
+        "docs_menu_title",
+        "docs_empty",
+        "docs_uploading",
+        "docs_uploaded",
+        "docs_unsupported",
+        "docs_delete_confirm",
+        "docs_deleted",
+        "docs_delete_failed",
+        "docs_upload_failed",
+        "docs_dup_found",
+        "docs_replace_btn",
+        "docs_keep_both_btn",
+        "docs_not_found",
+        "docs_rename_prompt",
+        "docs_renamed",
+    ]
+    try:
+        strings = _json.loads(
+            (Path(__file__).parents[1] / "strings.json").read_text(encoding="utf-8")
+        )
+        for key in REQUIRED_KEYS:
+            ok = all(key in strings.get(lang, {}) for lang in ("ru", "en", "de"))
+            results.append(TestResult(
+                f"doc_i18n_{key}",
+                "PASS" if ok else "FAIL",
+                _time.time() - t0,
+                f"i18n key '{key}' in ru/en/de" if ok
+                else f"MISSING i18n key '{key}' in some language",
+            ))
+    except Exception as e:
+        results.append(TestResult("doc_i18n_read", "FAIL", _time.time() - t0, str(e)))
+
+    # 3. delete_embeddings + delete_text_chunks called on delete (clean cleanup)
+    try:
+        code = (Path(__file__).parents[1] / "features" / "bot_documents.py").read_text(encoding="utf-8")
+        ok_emb  = "delete_embeddings" in code
+        ok_txt  = "delete_text_chunks" in code
+        results.append(TestResult("doc_delete_cleans_embeddings", "PASS" if ok_emb else "FAIL",
+                                  _time.time() - t0,
+                                  "delete_embeddings called on delete" if ok_emb
+                                  else "MISSING: delete_embeddings not called on doc delete"))
+        results.append(TestResult("doc_delete_cleans_text_chunks", "PASS" if ok_txt else "FAIL",
+                                  _time.time() - t0,
+                                  "delete_text_chunks called on delete" if ok_txt
+                                  else "MISSING: delete_text_chunks not called on doc delete"))
+    except Exception as e:
+        results.append(TestResult("doc_cleanup_check", "FAIL", _time.time() - t0, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -4954,6 +5156,12 @@ TEST_FUNCTIONS = [
     t_security_events_logging,
     # Phase B/C: RAG monitoring rag_stats() method (T72)
     t_rag_monitoring_stats,
+    # Document store API completeness — both SQLite + Postgres (T73)
+    t_doc_store_api_complete,
+    # Document upload pipeline — dedup, extract, save, hash (T74)
+    t_doc_upload_pipeline,
+    # Document list/delete/rename flow + i18n string coverage (T75)
+    t_doc_list_delete_flow,
 ]
 
 

@@ -352,6 +352,7 @@ def _handle_doc_replace(chat_id: int, old_doc_id: str) -> None:
         bot.send_message(chat_id, _t(chat_id, "docs_cancel_btn"))
         return
     try:
+        store.delete_embeddings(old_doc_id)
         store.delete_text_chunks(old_doc_id)
         store.delete_document(old_doc_id)
     except Exception as e:
@@ -389,6 +390,7 @@ def _handle_doc_delete(chat_id: int, doc_id: str) -> None:
 def _handle_doc_delete_confirmed(chat_id: int, doc_id: str) -> None:
     """Perform actual deletion of embeddings and document metadata."""
     try:
+        store.delete_embeddings(doc_id)
         store.delete_text_chunks(doc_id)
         store.delete_document(doc_id)
         kb = InlineKeyboardMarkup()
