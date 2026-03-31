@@ -22,7 +22,7 @@ import threading
 # ─── Core ────────────────────────────────────────────────────────────────────
 from core.bot_config import (
     BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
-    PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER,
+    PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER, DEVICE_VARIANT,
     log,
 )
 import core.bot_state as _st
@@ -272,15 +272,28 @@ def cmd_status(message):
     mode         = _st._user_mode.get(cid, "—")
     active_model = _get_active_model() or "default"
 
-    services = [
-        ("🤖 Telegram Bot",    "taris-telegram"),
-        ("🌐 AI Gateway",      "taris-gateway"),
-        ("🎤 Voice Assistant", "taris-voice"),
-    ]
+    # Service list and systemctl scope differ by variant
+    if DEVICE_VARIANT == "openclaw":
+        services = [
+            ("🤖 Telegram Bot",    "taris-telegram"),
+            ("🌐 Web UI",          "taris-web"),
+            ("🧠 Ollama LLM",      "ollama"),
+        ]
+        systemctl_scope = ["--user"]
+    else:
+        services = [
+            ("🤖 Telegram Bot",    "taris-telegram"),
+            ("🌐 AI Gateway",      "taris-gateway"),
+            ("🎤 Voice Assistant", "taris-voice"),
+        ]
+        systemctl_scope = []
+
     svc_lines = []
     for label, svc_name in services:
-        _, state = _run_subprocess(["systemctl", "is-active", svc_name], timeout=5)
-        state = state.strip()
+        _, state = _run_subprocess(
+            ["systemctl"] + systemctl_scope + ["is-active", svc_name], timeout=5
+        )
+        state = state.strip() or "unknown"
         icon  = "✅" if state == "active" else "❌"
         svc_lines.append(f"{icon} {label}: `{state}`")
 
