@@ -819,7 +819,7 @@ _run_smoke_tests() {
         python3 "${TARIS_HOME}/tests/test_voice_regression.py" \
         --test "$T" 2>&1 | grep -E 'PASS|FAIL|SKIP|WARN' | tail -2) || true
       echo "  $T: ${RESULT:-skipped}"
-      echo "$RESULT" | grep -q "FAIL" && FAIL_COUNT=$((FAIL_COUNT+1)) || true
+      echo "$RESULT" | grep -qE "^\S.*\s+FAIL\s" && FAIL_COUNT=$((FAIL_COUNT+1)) || true
     done
   else
     FAIL_COUNT=0
@@ -828,7 +828,7 @@ _run_smoke_tests() {
         python3 ${TARIS_HOME}/tests/test_voice_regression.py \
         --test $T 2>&1 | grep -E 'PASS|FAIL|SKIP|WARN' | tail -2" 2>/dev/null || echo "SKIP (runner error)")
       echo "  $T: ${RESULT:-skipped}"
-      echo "$RESULT" | grep -q "FAIL" && FAIL_COUNT=$((FAIL_COUNT+1)) || true
+      echo "$RESULT" | grep -qE "^\S.*\s+FAIL\s" && FAIL_COUNT=$((FAIL_COUNT+1)) || true
     done
   fi
 
