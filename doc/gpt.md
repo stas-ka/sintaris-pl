@@ -376,7 +376,7 @@ if db_get_user_pref(chat_id, "memory_enabled", "1") == "1":
 | Per-user memory on/off toggle | ✅ Working (v2026.3.31) |
 | Admin memory settings panel | ✅ Working (v2026.3.31) |
 | Clear all tiers via Profile | ✅ Working |
-| **Voice channel uses memory** | ❌ Not implemented (voice uses single-turn `ask_llm`) |
+| **Voice channel uses memory** | ✅ Done (v2026.3.30+5) — T91: ask_llm_with_history() |
 | Memory persistence across restart | ✅ DB-backed; `load_conversation_history()` at startup |
 
 ---
@@ -409,6 +409,7 @@ The `list_documents()` method also only returns `WHERE chat_id = ?`.
 | Admin "Make Shared" toggle | ✅ UI implemented | `_handle_admin_doc_toggle_shared()` |
 | Shared docs returned in other users' RAG | ❌ Bug | `doc_chunks.chat_id` = uploader; no cross-user query |
 | Admin doc list (all users' docs) | ✅ Implemented | `_handle_admin_doc_list()` |
+| **Sharing of documents between users incl. gusts and for all in UI** | ❌ Not implemented |
 
 ---
 
@@ -423,6 +424,8 @@ Name: Taris | Version: 2026.3.49
 LLM: ollama/qwen2:0.5b
 STT: faster_whisper/base
 TTS: piper/<model_name>
+FUCTIONS: list of implemented and avaialble functions in Taris for user 
+ADMIN FUCTIONS: list of implemented and avaialble admin functions in Taris for admin (iformation available only for admin in System chat)
 [END BOT CONFIG]
 ```
 
@@ -469,6 +472,7 @@ Every LLM call records into `llm_calls` table:
 | `history_chars` | total history chars |
 | `rag_chunks_count` | chunks retrieved |
 | `rag_context_chars` | RAG text injected |
+| `user_request` | First 300 chars of request |
 | `response_preview` | First 300 chars of response |
 | `context_snapshot` | JSON: last 5 history turns (role + 80-char preview) |
 | `response_ok` | 1=success, 0=error |
@@ -550,8 +554,8 @@ Every LLM call records into `llm_calls` table:
 | Per-user memory on/off | Memory | ✅ Done | v2026.3.31 | `user_prefs.memory_enabled` |
 | Admin memory settings | Memory | ✅ Done | v2026.3.31 | `system_settings` table |
 | Clear all memory tiers | Memory | ✅ Done | v2026.3.30+5 | Profile → 🗑 Clear memory |
-| **Voice channel uses memory** | Memory | ❌ Missing | — | Voice = single-turn `ask_llm` |
-| **Voice channel uses RAG** | Memory | ❌ Missing | — | Voice = single-turn `ask_llm` |
+| **Voice channel uses memory** | Memory | ✅ Done | v2026.3.30+5 | T91: ask_llm_with_history() used |
+| **Voice channel uses RAG** | Memory | ✅ Done | v2026.3.30+5 | T91: _with_lang_voice injects _docs_rag_context |
 | `[BOT CONFIG]` in system prompt | Self-knowledge | ✅ Done | v2026.3.30 | Name/version/LLM/STT/TTS |
 | Feature capabilities list | Self-knowledge | ❌ Not impl. | — | LLM uses training data |
 | LLM call tracing (`llm_calls`) | Monitoring | ✅ Done | v2026.3.32 | 27 rows |
@@ -560,8 +564,8 @@ Every LLM call records into `llm_calls` table:
 | Web UI `/api/pipeline_log` | Monitoring | ✅ Done | — | |
 | Multi-turn chat with history | Conversation | ✅ Done | v2026.3.30 | `ask_llm_with_history()` |
 | `role:system` in every LLM call | Conversation | ✅ Done | v2026.3.30+3 | `_build_system_message()` |
-| RAG in voice channel | Conversation | ❌ Missing | — | Voice uses `_with_lang_voice()` |
-| History in voice channel | Conversation | ❌ Missing | — | Voice uses `ask_llm()` |
+| RAG in voice channel | Conversation | ✅ Done | v2026.3.30+5 | T91: _with_lang_voice → _docs_rag_context |
+| History in voice channel | Conversation | ✅ Done | v2026.3.30+5 | T91: ask_llm_with_history + add_to_history |
 | Multi-modal RAG (images/tables) | RAG | ❌ Not impl. | — | §10 |
 
 ---
@@ -606,16 +610,11 @@ WHERE doc_chunks MATCH ?
 **Root cause:** The `log_rag_activity()` call only happens on successful retrieval with non-empty `assembled` text. With only 1 PDF and most conversations being greetings/short messages classified as `"simple"`, the retrieval almost always takes the `"skipped"` branch.  
 **Impact:** Stats panel is non-functional. Not a code bug — a UX/data problem.
 
-### Bug D: Voice channel has no memory, no history, no RAG
+### ~~Bug D: Voice channel has no memory, no history, no RAG~~ — **FIXED v2026.3.30+5**
 
-**Affected:** All voice interactions  
-**Symptom:** Voice LLM responses are always single-turn, context-free  
-**Root cause:** `bot_voice.py:_handle_voice_message()` calls `ask_llm(_with_lang_voice(...))` (single-turn), not `ask_llm_with_history()`. The `_with_lang_voice()` function injects RAG but NOT history.
-
-Actually: from the architecture doc, even `_with_lang_voice()` injects RAG context. But there's no history window.  
-Tests T59 checks that `ask_llm_with_history` is imported in `bot_voice.py` — if this test passes, the import exists but may not be used in the main call path.
-
-**Impact:** Users get disconnected, context-free responses in voice mode.
+> ✅ **Fixed** — T91 verified: `bot_voice.py:_handle_voice_message()` now calls `ask_llm_with_history()`,
+> `_with_lang_voice()` injects RAG via `_docs_rag_context()`, and both turns saved via `add_to_history()`.
+> Originally documented in DONE.md item 0.21.
 
 ---
 
@@ -690,3 +689,79 @@ Install PostgreSQL + pgvector → set `STORE_BACKEND=postgres` → run migration
 | Admin trace UI | `core/bot_db.py` | `_handle_admin_llm_trace()` line 1236 |
 | Pipeline analytics | `core/pipeline_logger.py` | `PipelineLog` class |
 | RAG settings runtime | `core/rag_settings.py` | `get()`, `set_value()` |
+
+---
+
+## 11. Change Log — RAG / Memory / Knowledge Topics
+
+> Consolidated from `TODO.md`, `DONE.md`, and live test results (2026-04-01).  
+> Status verified against source code and live DB on SintAItion (TariStation2).
+
+| # | Item | Source | Status | Verified |
+|---|------|--------|--------|---------|
+| 1 | FTS5-only RAG pipeline: doc upload → `_chunk_text()` (512-char) → `doc_chunks` → `search_fts()` → LLM injection | DONE.md §10 | ✅ DONE | T82: 42 chunks, 1 doc |
+| 2 | `vec_embeddings` table + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` adapter — schema ready | DONE.md §9.2d | ✅ DONE | T84: table exists, 0 rows |
+| 3 | **Vector embeddings generation: 0 rows in vec_embeddings** despite 42 FTS5 chunks | gpt.md §9 Bug A | 🐛 BUG | T84: FAIL — fastembed model not pre-downloaded, pipeline silent fail |
+| 4 | fastembed + sentence-transformers fallback: `EmbeddingService.get()`, `embed_batch()` | DONE.md §9 | ✅ DONE | T84: fastembed importable |
+| 5 | ONNX embedding model not cached in `~/.cache/fastembed` | gpt.md §9 Bug A | 🐛 BUG | T84: WARN — embeddings will download on first use |
+| 6 | `classify_query()` routing: simple / factual / contextual | DONE.md §9 | ✅ DONE | T89: all cases PASS |
+| 7 | `reciprocal_rank_fusion()` RRF with k=60 | DONE.md §9 | ✅ DONE | T89+T92: present in bot_rag.py |
+| 8 | `detect_rag_capability()`: FTS5_ONLY / HYBRID / FULL | DONE.md §9 | ✅ DONE | T89: = FULL on SintAItion |
+| 9 | `retrieve_context()` unified entry point (classify + FTS5 + vector + RRF) | gpt.md §8 | ✅ DONE | T92: all pipeline functions present |
+| 10 | `[KNOWLEDGE FROM USER DOCUMENTS]` injection block in bot_access.py | gpt.md §1 | ✅ DONE | T92: string present |
+| 11 | RAG on/off toggle in Admin Panel via `RAG_FLAG_FILE` | TODO.md §4.1 | ✅ DONE | — |
+| 12 | Configurable RAG top-K, chunk size, timeout, temperature from Admin Panel | TODO.md §4.1 | ✅ DONE | — |
+| 13 | FTS5 timeout enforced via `concurrent.futures` with `RAG_TIMEOUT` | TODO.md §4.1 | ✅ DONE | — |
+| 14 | RAG activity log in DB (`rag_log` table) + Admin Panel last 20 queries | TODO.md §4.1 | ⚠️ PARTIAL | gpt.md §9 Bug C: 0 rows (log_rag_activity barely triggered) |
+| 15 | **Shared documents: `is_shared` flag in schema + Admin toggle UI** | TODO.md §10 | ✅ DONE | T90: schema OK, toggle exists |
+| 16 | **Shared docs cross-user RAG search broken** | gpt.md §9 Bug B | 🐛 BUG | T90: WARN — search_fts filters by chat_id only |
+| 17 | Documents assigned to user or shared — `is_shared` flag, `store.update_document_field()` | TODO.md §10 | ✅ DONE | T90: is_shared column present |
+| 18 | Document deduplication on upload — SHA256 hash check | DONE.md §10 | ✅ DONE | — |
+| 19 | Documents used as knowledge in multimodal RAG (images, tables) | TODO.md §10 | ❌ NOT IMPL | FTS5 text-only currently |
+| 20 | Per-user RAG top-K override in `user_prefs` | TODO.md §4.1 | ✅ DONE | — |
+| 21 | Remote RAG MCP service: `MCP_REMOTE_URL`, circuit breaker, fallback | TODO.md §4.2 | ❌ NOT IMPL | §4.2 |
+| 22 | STM sliding window: `chat_history` table + in-memory dict | DONE.md §2.1 | ✅ DONE | T85: 54 rows in chat_history |
+| 23 | MTM async summarization: `_summarize_session_async()` at `CONV_SUMMARY_THRESHOLD` | DONE.md §2.1 | ✅ DONE | T85: mid=2 long=4 in conversation_summaries |
+| 24 | LTM compaction: mid summaries → single long paragraph when `CONV_MID_MAX` reached | DONE.md §2.1 | ✅ DONE | T85: 4 long-tier summaries |
+| 25 | Memory injection in system message via `get_memory_context()` | DONE.md §2.1 | ✅ DONE | T86: wired in bot_handlers.py |
+| 26 | `CONV_MID_MAX`, `CONV_SUMMARY_THRESHOLD`, `CONVERSATION_HISTORY_MAX` constants | gpt.md §4 | ✅ DONE | T86: all 3 present in bot_config.py |
+| 27 | Per-user memory on/off toggle: `user_prefs.memory_enabled` | DONE.md §2.1 | ✅ DONE | — |
+| 28 | Admin memory settings panel via `system_settings` table | TODO.md §10 | ✅ DONE | — |
+| 29 | Clear all memory tiers via Profile → 🗑 Clear Memory | DONE.md §2.1 | ✅ DONE | — |
+| 30 | **Voice channel history gap** — voice called bare `ask_llm()` | DONE.md §0.21 | ✅ DONE | T91: ask_llm_with_history() called, PASS |
+| 31 | **Voice channel RAG injection** via `_with_lang_voice()` | gpt.md §8 | ✅ DONE | T91: _docs_rag_context called in voice path |
+| 32 | Notes content stored in DB: `notes_index.content` column | DONE.md §9.2 | ✅ DONE | T88: content column present, 4 notes in DB |
+| 33 | **Notes content in DB column is empty** (stored in .md files only) | — | 🐛 BUG | T88: WARN — 0/4 notes have content in DB |
+| 34 | Notes reads from DB (`store.list_notes()`); file fallback preserved | DONE.md §9.2 | ✅ DONE | T88: notes_index table exists |
+| 35 | Notes as Knowledge Base toggle (include notes in RAG context) | gpt.md §8 | ❌ NOT IMPL | Planned §10 Priority 4 |
+| 36 | Calendar context injection into LLM system message | gpt.md §8 | ❌ NOT IMPL | Planned §10 Priority 5 |
+| 37 | Contacts lookup in conversation | gpt.md §8 | ❌ NOT IMPL | §4 future |
+| 38 | LLM call trace: `llm_calls` table with model/temperature/rag_chunks/context_snapshot | DONE.md §0.22 | ✅ DONE | T60: 27 rows, 12 checks pass |
+| 39 | Admin LLM Context Trace panel: `_handle_admin_llm_trace()` | DONE.md §0.22 | ✅ DONE | T60: function exists |
+| 40 | Pipeline JSONL logs: `pipeline_logger.py` → `~/.taris/logs/pipeline_YYYY-MM-DD.jsonl` | gpt.md §7.3 | ✅ DONE | T32 |
+| 41 | Web UI `/api/pipeline_log` endpoint | gpt.md §7 | ✅ DONE | — |
+| 42 | `rag_log` table + `log_rag_activity()` call + Admin RAG Stats panel | TODO.md §4.1 | ⚠️ PARTIAL | gpt.md §9 Bug C: 0 rows in rag_log |
+| 43 | pgvector HNSW index + full RAG pipeline on PostgreSQL (OpenClaw §25.6 Phase B) | TODO.md §25 | ❌ NOT IMPL | psycopg2 not installed |
+| 44 | `all-MiniLM-L6-v2` ONNX embeddings via ONNX Runtime (Pi 5 / Server) | TODO.md §4.1 | ⚠️ PARTIAL | T84: fastembed installed, 0 embeddings generated |
+| 45 | `install_embedding_model.sh` setup script + model verification | DONE.md §9 | ✅ DONE | script exists in src/setup/ |
+| 46 | Quality consistency check of chunks after upload | TODO.md §10 | ❌ NOT IMPL | no chunk quality score/validator |
+| 47 | Criteria for document comparison configurable in Admin panel | TODO.md §10 | ❌ NOT IMPL | — |
+| 48 | After upload: save parse/chunk/embed stats to DB; per-document stats in Admin | TODO.md §4.1 | ❌ NOT IMPL | meta stored, no UI |
+| 49 | FTS5 RAG search returns 'skipped' for short queries (< 12 chars) | T83 result | ⚠️ PARTIAL | T83: WARN — 'документ' query (8 chars) classified as simple |
+| 50 | Multi-backend storage: SQLite adapter (`store_sqlite.py`) | DONE.md §9.2 | ✅ DONE | — |
+| 51 | PostgreSQL + pgvector adapter (`store_postgres.py`) | DONE.md §9.2 | ✅ DONE | psycopg2 not installed |
+
+### §11 Summary
+
+| Status | Count |
+|--------|-------|
+| ✅ DONE | 30 |
+| ⚠️ PARTIAL | 5 |
+| ❌ NOT IMPL | 12 |
+| 🐛 BUG | 4 |
+
+**Priority fixes from test results:**
+1. **T84 FAIL**: Pre-download fastembed ONNX model: `python3 -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en')"` and add re-embed function for existing 42 chunks
+2. **T88 WARN**: Notes content not persisted to DB content column — `save_note()` writes to file but not DB `content` field
+3. **T90 WARN**: Shared docs not returned for other users in FTS5 — needs `OR doc_id IN (SELECT doc_id FROM documents WHERE is_shared=1)` in `search_fts()`
+4. **T83 WARN**: Short queries (< 12 chars) skip RAG — "документ" (8 chars) is below threshold; consider lowering to 6
