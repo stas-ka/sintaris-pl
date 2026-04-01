@@ -104,6 +104,17 @@ OPENCLAW_TIMEOUT = int(os.environ.get("OPENCLAW_TIMEOUT", "60"))
 # Required when DEVICE_VARIANT=openclaw so skill-taris can call /api/status and /api/chat.
 TARIS_API_TOKEN  = os.environ.get("TARIS_API_TOKEN", "")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP (Model Context Protocol) — Phase D RAG extension
+# MCP_SERVER_ENABLED: expose /mcp/search endpoint (Bearer-token protected)
+# MCP_REMOTE_URL: optional external MCP RAG server to query (empty = disabled)
+# MCP_TIMEOUT: HTTP timeout for remote MCP calls (seconds)
+# ─────────────────────────────────────────────────────────────────────────────
+MCP_SERVER_ENABLED = os.environ.get("MCP_SERVER_ENABLED", "1") == "1"
+MCP_REMOTE_URL     = os.environ.get("MCP_REMOTE_URL", "")        # e.g. https://rag.example.com
+MCP_TIMEOUT        = int(os.environ.get("MCP_TIMEOUT", "15"))
+MCP_REMOTE_TOP_K   = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
+
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           _th("active_model.txt"))
 LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides (system/chat)
@@ -227,7 +238,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.3.49"
+BOT_VERSION        = "2026.4.1"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

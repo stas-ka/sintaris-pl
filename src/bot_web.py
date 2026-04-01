@@ -65,6 +65,7 @@ from core.bot_config import (
     VOICE_DEBUG_MODE, VOICE_DEBUG_DIR,
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL,
     PIPER_BIN, PIPER_MODEL,
+    MCP_SERVER_ENABLED, MCP_REMOTE_URL, MCP_TIMEOUT,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
 from core.voice_debug import VoiceDebugSession, list_debug_sessions
@@ -2896,6 +2897,53 @@ async def api_chat(request: Request):
     pl = PipelineLog(user_id="api")
     reply = pl.timed_llm(lambda: ask_llm(message, timeout=t), input_text=message)
     return JSONResponse({"reply": reply})
+
+
+@app.post("/mcp/search")
+async def mcp_search(request: Request):
+    """MCP-compatible RAG search endpoint (Phase D).
+
+    Exposes local knowledge base as an MCP tool that can be called by
+    external AI agents and MCP clients.
+
+    Body (JSON): {"query": "...", "chat_id": <int>, "top_k": 3}
+    Response:    {"chunks": [{"doc_id": "...", "chunk_text": "...", "score": 0.9}, ...],
+                  "strategy": "fts5" | "hybrid" | "skipped",
+                  "count": <int>}
+    Auth:        Authorization: Bearer <TARIS_API_TOKEN>
+    """
+    if not MCP_SERVER_ENABLED:
+        raise HTTPException(503, detail="MCP server is disabled")
+    _verify_api_token(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(400, detail="'query' field is required")
+    chat_id = int(body.get("chat_id", 0))
+    top_k   = min(int(body.get("top_k", 3)), 10)
+
+    try:
+        from core.bot_rag import retrieve_context
+        chunks, _, strategy = retrieve_context(chat_id, query, top_k=top_k)
+        result_chunks = [
+            {
+                "doc_id":     c.get("doc_id", ""),
+                "chunk_text": (c.get("chunk_text") or c.get("content") or "")[:800],
+                "score":      float(c.get("score", 0.0)),
+            }
+            for c in chunks
+        ]
+        return JSONResponse({
+            "chunks":   result_chunks,
+            "strategy": strategy,
+            "count":    len(result_chunks),
+        })
+    except Exception as exc:
+        log.error("[MCP-server] /mcp/search error: %s", exc)
+        raise HTTPException(500, detail="RAG search failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

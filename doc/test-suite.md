@@ -172,6 +172,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T81 | `qwen35_ollama_available` | At least one `qwen3.5:*` model is pulled in Ollama on OpenClaw target (SKIP if `DEVICE_VARIANT != openclaw`). WARN if none found with pull hint. | After pulling or removing Qwen3.5 models on SintAItion/OpenClaw |
 | T82 | `ollama_latency_regression` | Ollama `/api/generate` round-trip ≤ 30s, tps > 2 with `think=false` for qwen3+ models (SKIP if `DEVICE_VARIANT != openclaw` or Ollama unreachable). | After upgrading Ollama, changing `OLLAMA_MODEL`, or changing GPU/VRAM config |
 | T83 | `ollama_quality_ru_calendar` | `OLLAMA_MODEL` extracts `{"title", "dt"}` JSON from a Russian calendar sentence with `think=false`; validates title non-empty + datetime format (SKIP if `DEVICE_VARIANT != openclaw` or Ollama unreachable). Catches thinking-model empty-response regression. | After changing `OLLAMA_MODEL`, Ollama version, or calendar intent prompt |
+| T84 | `upload_stats_metadata` | Phase C: `_chunk_text()` filters chunks shorter than `_MIN_CHUNK_CHARS`; `_store_text_chunks()` returns `(n_chunks, n_embedded)`; `_process_doc_file()` stores `quality_pct`, `n_embedded`, `n_skipped` in metadata; `_handle_doc_detail()` shows embed count and quality; `docs_doc_embeds`/`docs_doc_quality` strings present in all 3 languages. | After editing `bot_documents.py` chunking, embedding, or doc detail view |
+| T85 | `embeddings_import_fix` | `bot_embeddings.py` uses `from core.bot_config import` (not `from src.core.bot_config`) — production deploy fix. `EmbeddingService` importable. | After editing `bot_embeddings.py` or moving it between packages |
+| T86 | `mcp_phase_d_structure` | Phase D: `MCP_SERVER_ENABLED`/`MCP_REMOTE_URL`/`MCP_TIMEOUT`/`MCP_REMOTE_TOP_K` in `bot_config.py`; `/mcp/search` endpoint registered in `bot_web.py` with Bearer-token auth + `retrieve_context()` call; `bot_mcp_client.py` has `query_remote()`, `circuit_status()`, circuit-breaker constants, stdlib HTTP client; `bot_rag.py` merges remote MCP chunks into RRF with `+mcp` strategy tag. | After editing any MCP Phase D code: `bot_mcp_client.py`, `/mcp/search` endpoint, MCP config constants |
 
 ### 2.6 When specific tests are mandatory
 
@@ -201,6 +204,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After editing `bot_state.py`, `conversation_summaries` schema, or memory toggle | T77 (`--test t_memory_context_assembly`) |
 | After editing multi-turn context assembly: `_build_system_message`, `_user_turn_content`, history assembly, or `ask_llm_with_history` | T78 (`--test t_rag_memory_combined_context`) |
 | After pulling/removing Qwen3.5 models, upgrading Ollama, or changing `OLLAMA_MODEL` on OpenClaw | T81–T83 (`--test t_qwen35 --test t_ollama_latency --test t_ollama_quality_ru_calendar`) |
+| After editing `bot_documents.py` chunking, embedding, or doc detail view | T84 (`--test t_upload_stats_metadata`) |
+| After editing `bot_embeddings.py` or changing its import paths | T85 (`--test t_embeddings_import_fix`) |
+| After editing any MCP Phase D code (`bot_mcp_client.py`, `/mcp/search`, MCP constants) | T86 (`--test t_mcp_phase_d_structure`) |
 | After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
 | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |

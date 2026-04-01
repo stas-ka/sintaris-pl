@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from src.core.bot_config import EMBED_DIMENSION, EMBED_KEEP_RESIDENT, EMBED_MODEL
+from core.bot_config import EMBED_DIMENSION, EMBED_KEEP_RESIDENT, EMBED_MODEL
 
 log = logging.getLogger(__name__)
 

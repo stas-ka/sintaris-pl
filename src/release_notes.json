@@ -1,5 +1,18 @@
 [
   {
+    "version": "2026.4.1",
+    "date": "2026-04-01",
+    "changes": [
+      "Phase C: chunk quality filter — fragments shorter than 20 chars are skipped; quality_pct, n_skipped, n_embedded stored in document metadata",
+      "Phase C: doc detail view now shows embedding count and chunk quality percentage",
+      "Phase D: /mcp/search REST endpoint — exposes local RAG as MCP-compatible tool (Bearer-token auth)",
+      "Phase D: bot_mcp_client.py — remote MCP RAG client with circuit breaker (3 failures → 5 min cooldown), merged into RRF pipeline",
+      "Phase D: MCP_SERVER_ENABLED, MCP_REMOTE_URL, MCP_TIMEOUT, MCP_REMOTE_TOP_K config constants",
+      "Fix: bot_embeddings.py import corrected from src.core to core — vector embeddings now work in production deploy",
+      "Tests T84-T86: upload stats completeness, embeddings import fix, MCP Phase D structure"
+    ]
+  },
+  {
     "version": "2026.3.49",
     "date": "2026-03-31",
     "changes": [

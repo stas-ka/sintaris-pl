@@ -5769,6 +5769,184 @@ def t_ollama_quality_ru_calendar(**_) -> list[TestResult]:
     return results
 
 
+# ─── T84: upload stats stored in document metadata ────────────────────────────
+def t_upload_stats_metadata(**_) -> list[TestResult]:
+    """T84: Chunk quality filter and upload stats (n_skipped, quality_pct, n_embedded) in metadata."""
+    results = []
+    try:
+        src = Path(__file__).parent.parent / "features" / "bot_documents.py"
+        code = src.read_text()
+    except FileNotFoundError:
+        results.append(TestResult("upload_stats_source", "SKIP", 0, "bot_documents.py not found"))
+        return results
+
+    checks = [
+        ("MIN_CHUNK_CHARS", "_MIN_CHUNK_CHARS" in code, "minimum chunk length constant"),
+        ("chunk_quality_filter", "_MIN_CHUNK_CHARS" in code and "len(chunk.strip()) < _MIN_CHUNK_CHARS" in code,
+         "quality filter in _chunk_text()"),
+        ("skipped_counter", "skipped" in code and "n + skipped" in code,
+         "skipped chunks counter in _chunk_text"),
+        ("quality_pct_stored", '"quality_pct"' in code, "quality_pct stored in metadata"),
+        ("n_embedded_stored", '"n_embedded"' in code, "n_embedded stored in metadata"),
+        ("n_skipped_stored", '"n_skipped"' in code, "n_skipped stored in metadata"),
+        ("embed_count_return", "n_embedded" in code and "return len(chunks), n_embedded" in code,
+         "_store_text_chunks returns (n_chunks, n_embedded)"),
+        ("doc_detail_shows_embeds", "docs_doc_embeds" in code, "embed count shown in doc detail"),
+        ("doc_detail_shows_quality", "docs_doc_quality" in code, "quality shown in doc detail"),
+    ]
+    for name, cond, detail in checks:
+        results.append(TestResult(
+            f"upload_stats_{name}",
+            "PASS" if cond else "FAIL",
+            0.0,
+            detail,
+        ))
+
+    # Check strings.json has the new keys
+    try:
+        strings_path = Path(__file__).parent.parent / "strings.json"
+        import json as _j
+        strings = _j.loads(strings_path.read_text())
+        for lang in ("ru", "en", "de"):
+            for key in ("docs_doc_embeds", "docs_doc_quality"):
+                present = key in strings.get(lang, {})
+                results.append(TestResult(
+                    f"upload_stats_string_{key}_{lang}",
+                    "PASS" if present else "FAIL",
+                    0.0,
+                    f"{lang}: {key}",
+                ))
+    except Exception as exc:
+        results.append(TestResult("upload_stats_strings", "FAIL", 0, str(exc)))
+
+    return results
+
+
+# ─── T85: bot_embeddings.py import fix ────────────────────────────────────────
+def t_embeddings_import_fix(**_) -> list[TestResult]:
+    """T85: bot_embeddings.py must use 'from core.bot_config' not 'from src.core.bot_config'."""
+    results = []
+    try:
+        src = Path(__file__).parent.parent / "core" / "bot_embeddings.py"
+        code = src.read_text()
+    except FileNotFoundError:
+        results.append(TestResult("embeddings_import_source", "SKIP", 0, "bot_embeddings.py not found"))
+        return results
+
+    bad_import = "from src.core.bot_config import" in code
+    good_import = "from core.bot_config import" in code
+    results.append(TestResult(
+        "embeddings_no_src_import",
+        "FAIL" if bad_import else "PASS",
+        0.0,
+        "'from src.core.bot_config' found — breaks production deploy" if bad_import
+        else "import uses 'core.bot_config' (correct)",
+    ))
+    results.append(TestResult(
+        "embeddings_has_core_import",
+        "PASS" if good_import else "FAIL",
+        0.0,
+        "import 'core.bot_config' present" if good_import else "missing 'from core.bot_config'",
+    ))
+
+    # Verify EmbeddingService is importable locally
+    t0 = time.monotonic()
+    try:
+        import sys, importlib
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from core.bot_embeddings import EmbeddingService  # noqa: F401
+        results.append(TestResult("embeddings_importable", "PASS", time.monotonic() - t0,
+                                  "EmbeddingService imported ok"))
+    except Exception as exc:
+        results.append(TestResult("embeddings_importable", "FAIL", time.monotonic() - t0, str(exc)))
+
+    return results
+
+
+# ─── T86: Phase D MCP server + client structure ────────────────────────────────
+def t_mcp_phase_d_structure(**_) -> list[TestResult]:
+    """T86: Phase D MCP server endpoint registered in bot_web.py + client circuit breaker."""
+    results = []
+
+    # Check bot_config.py has MCP constants
+    try:
+        cfg_src = Path(__file__).parent.parent / "core" / "bot_config.py"
+        cfg = cfg_src.read_text()
+    except FileNotFoundError:
+        results.append(TestResult("mcp_config_source", "SKIP", 0, "bot_config.py not found"))
+        return results
+
+    for const in ("MCP_SERVER_ENABLED", "MCP_REMOTE_URL", "MCP_TIMEOUT", "MCP_REMOTE_TOP_K"):
+        results.append(TestResult(
+            f"mcp_config_{const}",
+            "PASS" if const in cfg else "FAIL",
+            0.0,
+            f"{const} in bot_config.py",
+        ))
+
+    # Check bot_web.py has /mcp/search endpoint
+    try:
+        web_src = Path(__file__).parent.parent / "bot_web.py"
+        web = web_src.read_text()
+        for check, detail in [
+            ('"/mcp/search"', "/mcp/search endpoint registered"),
+            ("MCP_SERVER_ENABLED", "MCP_SERVER_ENABLED used as guard"),
+            ("mcp_search", "mcp_search function defined"),
+            ("retrieve_context", "retrieve_context called from mcp_search"),
+        ]:
+            results.append(TestResult(
+                f"mcp_web_{check.strip('\"')}",
+                "PASS" if check in web else "FAIL",
+                0.0,
+                detail,
+            ))
+    except FileNotFoundError:
+        results.append(TestResult("mcp_web_source", "SKIP", 0, "bot_web.py not found"))
+
+    # Check bot_mcp_client.py exists with circuit breaker
+    try:
+        client_src = Path(__file__).parent.parent / "core" / "bot_mcp_client.py"
+        client = client_src.read_text()
+        for check, detail in [
+            ("query_remote", "query_remote() function present"),
+            ("circuit_status", "circuit_status() health check present"),
+            ("_CB_THRESHOLD", "circuit breaker threshold constant"),
+            ("_CB_RESET_SEC", "circuit breaker reset timer"),
+            ("_cb_record_failure", "failure recorder for circuit breaker"),
+            ("urllib.request", "stdlib HTTP client (no heavy deps)"),
+            ("MCP_REMOTE_URL", "MCP_REMOTE_URL used in client"),
+        ]:
+            results.append(TestResult(
+                f"mcp_client_{check}",
+                "PASS" if check in client else "FAIL",
+                0.0,
+                detail,
+            ))
+    except FileNotFoundError:
+        results.append(TestResult("mcp_client_source", "FAIL", 0,
+                                  "bot_mcp_client.py not found"))
+
+    # Check bot_rag.py integrates MCP client
+    try:
+        rag_src = Path(__file__).parent.parent / "core" / "bot_rag.py"
+        rag = rag_src.read_text()
+        for check, detail in [
+            ("bot_mcp_client", "mcp_client imported in bot_rag"),
+            ("query_remote", "query_remote() called in retrieve_context"),
+            ("+mcp", "strategy annotated with '+mcp' when remote used"),
+        ]:
+            results.append(TestResult(
+                f"mcp_rag_{check}",
+                "PASS" if check in rag else "FAIL",
+                0.0,
+                detail,
+            ))
+    except FileNotFoundError:
+        results.append(TestResult("mcp_rag_source", "SKIP", 0, "bot_rag.py not found"))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_model_files_present,
     t_piper_json_present,
@@ -5911,6 +6089,12 @@ TEST_FUNCTIONS = [
     t_ollama_latency_regression,
     # Ollama quality: Russian calendar intent → valid JSON (T83)
     t_ollama_quality_ru_calendar,
+    # Phase C: upload stats (quality_pct, n_embedded, n_skipped) in metadata (T84)
+    t_upload_stats_metadata,
+    # Phase B/C: bot_embeddings.py import fix — 'from core' not 'from src.core' (T85)
+    t_embeddings_import_fix,
+    # Phase D: MCP server /mcp/search + client circuit breaker + bot_rag integration (T86)
+    t_mcp_phase_d_structure,
 ]
 
 

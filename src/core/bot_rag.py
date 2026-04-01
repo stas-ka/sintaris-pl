@@ -237,6 +237,19 @@ def retrieve_context(
         chunks = fts5_results[:top_k]
         used_strategy = "fts5"
 
+    # 5. Optional: merge remote MCP chunks (Phase D)
+    try:
+        from core.bot_config import MCP_REMOTE_URL
+        if MCP_REMOTE_URL:
+            from core.bot_mcp_client import query_remote
+            remote_chunks = query_remote(query, chat_id, top_k)
+            if remote_chunks:
+                chunks = reciprocal_rank_fusion(chunks, remote_chunks)[:top_k]
+                used_strategy = used_strategy + "+mcp"
+                log.debug("[RAG] merged %d remote MCP chunks", len(remote_chunks))
+    except Exception as exc:
+        log.debug("[RAG] MCP merge skipped: %s", exc)
+
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     log.debug("[RAG] strategy=%s chunks=%d elapsed=%dms", used_strategy, len(chunks), elapsed_ms)
 

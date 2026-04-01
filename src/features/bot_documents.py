@@ -79,21 +79,39 @@ def _extract_text(file_path: Path, file_ext: str) -> str:
     return ""
 
 
-def _chunk_text(text: str, size: int = _CHUNK_SIZE, overlap: int = _CHUNK_OVERLAP) -> list:
-    """Split text into overlapping chunks."""
-    chunks, start = [], 0
+_MIN_CHUNK_CHARS = 20   # discard chunks shorter than this (navigation fragments, page numbers)
+
+
+def _chunk_text(text: str, size: int = _CHUNK_SIZE, overlap: int = _CHUNK_OVERLAP) -> tuple[list[str], int]:
+    """Split text into overlapping chunks.
+
+    Returns:
+        (kept_chunks, skipped_count) — chunks shorter than _MIN_CHUNK_CHARS are skipped.
+    """
+    chunks, start, skipped = [], 0, 0
     while start < len(text):
-        chunks.append(text[start:start + size])
+        chunk = text[start:start + size]
         start += size - overlap
-    return [c for c in chunks if c.strip()]
+        if not chunk.strip():
+            skipped += 1
+            continue
+        if len(chunk.strip()) < _MIN_CHUNK_CHARS:
+            skipped += 1
+            continue
+        chunks.append(chunk)
+    return chunks, skipped
 
 
-def _store_text_chunks(doc_id: str, chat_id: int, chunks: list) -> int:
-    """Store text chunks via FTS5; also generates vector embeddings when available."""
+def _store_text_chunks(doc_id: str, chat_id: int, chunks: list[str]) -> tuple[int, int]:
+    """Store text chunks via FTS5; also generates vector embeddings when available.
+
+    Returns:
+        (n_chunks, n_embedded) — n_embedded is 0 when vector search is unavailable.
+    """
     for idx, chunk in enumerate(chunks):
         store.upsert_chunk_text(doc_id, idx, chat_id, chunk)
 
-    # Vector embeddings — only when sqlite-vec is present and a model is configured.
+    n_embedded = 0
     if store.has_vector_search():
         try:
             from core.bot_embeddings import EmbeddingService  # lazy import — heavy deps
@@ -103,11 +121,12 @@ def _store_text_chunks(doc_id: str, chat_id: int, chunks: list) -> int:
                 if vecs:
                     for idx, vec in enumerate(vecs):
                         store.upsert_embedding(doc_id, idx, chat_id, vec)
-                    log.debug("[Docs] stored %d embeddings for doc %s", len(vecs), doc_id)
+                    n_embedded = len(vecs)
+                    log.debug("[Docs] stored %d embeddings for doc %s", n_embedded, doc_id)
         except Exception as exc:
             log.warning("[Docs] embedding failed for doc %s: %s", doc_id, exc)
 
-    return len(chunks)
+    return len(chunks), n_embedded
 
 
 def _handle_docs_menu(chat_id: int) -> None:
@@ -156,6 +175,14 @@ def _handle_doc_detail(chat_id: int, doc_id: str) -> None:
         _t(chat_id, "docs_doc_type").format(doc_type=d.get("doc_type", "?")),
         _t(chat_id, "docs_doc_chunks").format(chunks=meta.get("n_chunks", "?")),
         _t(chat_id, "docs_doc_size").format(size=meta.get("file_size_bytes", "?")),
+    ]
+    n_embedded = meta.get("n_embedded")
+    if n_embedded is not None:
+        lines.append(_t(chat_id, "docs_doc_embeds").format(embeds=n_embedded))
+    quality_pct = meta.get("quality_pct")
+    if quality_pct is not None:
+        lines.append(_t(chat_id, "docs_doc_quality").format(quality=quality_pct))
+    lines += [
         _t(chat_id, "docs_doc_shared").format(shared=shared),
         _t(chat_id, "docs_doc_created").format(created=d.get("created_at", "")[:16]),
     ]
@@ -240,12 +267,17 @@ def _process_doc_file(chat_id: int, file_path: Path, file_ext: str, orig_name: s
                 except Exception:
                     pass
             return
-        chunks = _chunk_text(text)
-        n = _store_text_chunks(doc_id, chat_id, chunks)
+        chunks, skipped = _chunk_text(text)
+        n, n_embedded = _store_text_chunks(doc_id, chat_id, chunks)
         parse_ms = int((time.monotonic() - t0) * 1000)
+        total_parsed = n + skipped
+        quality_pct = round(n / total_parsed * 100) if total_parsed else 100
         meta = {
             "char_count": len(text),
             "n_chunks": n,
+            "n_skipped": skipped,
+            "quality_pct": quality_pct,
+            "n_embedded": n_embedded,
             "file_size_bytes": file_size,
             "parse_time_ms": parse_ms,
         }
