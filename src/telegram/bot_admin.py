@@ -1079,11 +1079,12 @@ def _handle_admin_rag_menu(chat_id: int) -> None:
         _t(chat_id, "admin_rag_timeout").format(timeout=timeout),
     ])
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),   callback_data="admin_rag_log"))
-    kb.add(InlineKeyboardButton("📊 RAG Stats",                       callback_data="admin_rag_stats"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"), callback_data="admin_rag_toggle"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),   callback_data="admin_rag_settings"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin_menu"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),      callback_data="admin_rag_log"))
+    kb.add(InlineKeyboardButton("📊 RAG Stats",                          callback_data="admin_rag_stats"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"),    callback_data="admin_rag_toggle"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),      callback_data="admin_rag_settings"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_rag_user_pref"), callback_data="admin_rag_user_settings"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),                callback_data="admin_menu"))
     try:
         bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
     except Exception:
@@ -1230,6 +1231,53 @@ def _handle_admin_rag_stats(chat_id: int) -> None:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
     except Exception:
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_user_settings(chat_id: int) -> None:
+    """Show per-user RAG TopK/ChunkSize with inc/dec buttons (admin only)."""
+    from core.bot_db import db_get_user_pref
+    from core.rag_settings import get as _rget
+    top_k = db_get_user_pref(chat_id, "rag_top_k")  or _rget("rag_top_k")
+    chunk = db_get_user_pref(chat_id, "rag_chunk_size") or _rget("rag_chunk_size")
+    text  = _t(chat_id, "profile_rag_settings_title").format(top_k=top_k, chunk=chunk)
+    kb    = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton("▼ TopK",       callback_data="admin_rag_user_topk_dec"),
+        InlineKeyboardButton(f"TopK: {top_k}", callback_data="noop"),
+        InlineKeyboardButton("▲ TopK",       callback_data="admin_rag_user_topk_inc"),
+    )
+    kb.row(
+        InlineKeyboardButton("▼ Chunk",        callback_data="admin_rag_user_chunk_dec"),
+        InlineKeyboardButton(f"Chunk: {chunk}", callback_data="noop"),
+        InlineKeyboardButton("▲ Chunk",        callback_data="admin_rag_user_chunk_inc"),
+    )
+    kb.add(InlineKeyboardButton(_t(chat_id, "profile_rag_reset"),  callback_data="admin_rag_user_reset"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),           callback_data="admin_rag_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_user_adjust(chat_id: int, key: str, delta: int) -> None:
+    """Increment or decrement admin's per-user RAG preference."""
+    from core.bot_db import db_get_user_pref, db_set_user_pref
+    from core.rag_settings import get as _rget
+    pref   = "rag_top_k" if key == "topk" else "rag_chunk_size"
+    limits = (1, 20) if key == "topk" else (200, 4000)
+    cur    = int(db_get_user_pref(chat_id, pref) or _rget(pref))
+    new    = max(limits[0], min(limits[1], cur + delta))
+    db_set_user_pref(chat_id, pref, str(new))
+    _handle_admin_rag_user_settings(chat_id)
+
+
+def _handle_admin_rag_user_reset(chat_id: int) -> None:
+    """Reset admin's per-user RAG settings to system defaults."""
+    from core.bot_db import db_set_user_pref
+    db_set_user_pref(chat_id, "rag_top_k", "")
+    db_set_user_pref(chat_id, "rag_chunk_size", "")
+    bot.send_message(chat_id, _t(chat_id, "profile_rag_reset_ok"))
+    _handle_admin_rag_user_settings(chat_id)
 
 
 
