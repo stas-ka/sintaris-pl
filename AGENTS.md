@@ -45,9 +45,20 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ## Current Bot Version
 
-`BOT_VERSION = "2026.3.43"` — deployed 2026-03-28
+`BOT_VERSION = "2026.3.48"` — deployed 2026-03-31
 
-## Current Feature State (v2026.3.43)
+## Current LLM Config (SintAItion / TariStation1)
+
+- `OLLAMA_MODEL=qwen3.5:latest` (9B) — **100% quality RU/DE/EN/SL @ 13 t/s** (switched 2026-04-01)
+- `LLM_FALLBACK_PROVIDER=openai` (gpt-4o-mini)
+- Previous: qwen3:8b (92% quality, failed DE timezone reasoning)
+
+## Current STT Config (SintAItion)
+
+- `FASTER_WHISPER_MODEL=small` int8 — best all-round (RU=22%/DE=22%/EN=14% WER, RTF=0.34)
+- large-v3-turbo is better for DE(6%) but >real-time (RTF=1.3)
+
+## Current Feature State (v2026.3.48)
 
 ### Calendar
 - **Multi-Event Add:** LLM returns `{"events": [{title, dt}, ...]}`. 1 event → single confirm. N events → sequential "1 of N" with Save / Skip / Save All.
