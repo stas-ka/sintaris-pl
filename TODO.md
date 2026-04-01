@@ -63,12 +63,12 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 - [x] Timeout monitoring for RAG/LLM calls — FTS enforced via `concurrent.futures` with `RAG_TIMEOUT` constant; `MCP_TIMEOUT` per provider still open (v2026.3.30+4)
 - [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected; `log_rag_activity()` called after every FTS retrieval (v2026.3.30+4)
 
-### 4.2 Remote RAG Service (MCP) 🔲
+### 4.2 Remote RAG Service (MCP) ✅ Implemented (v2026.4.1)
 → Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
 
-- [ ] Expose `search_knowledge()` as local MCP tool server
-- [ ] Connect to external MCP RAG services via `MCP_REMOTE_URL` config in `bot.env`
-- [ ] Circuit breaker + timeout (default 10 s) with fallback to local knowledge base
+- [x] Expose `search_knowledge()` as local MCP tool server — `/mcp/search` endpoint in `bot_web.py` (Bearer-token auth) (v2026.4.1)
+- [x] Connect to external MCP RAG services via `MCP_REMOTE_URL` config in `bot.env` — `bot_mcp_client.py` (v2026.4.1)
+- [x] Circuit breaker + timeout (default 10 s) with fallback to local knowledge base — 3 failures → 5 min cooldown (v2026.4.1)
 - [ ] Credentials and endpoint URL configurable in Admin Panel
 ---
 
@@ -413,7 +413,7 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
   - [x] `PyMuPDF` for PDF + image extraction — try fitz first, [IMAGE: page N] placeholders, pdfminer fallback (v2026.3.32)
   - [x] Per-user `rag_settings` — rag_top_k/rag_chunk_size in user_prefs; Profile > ⚙️ RAG Settings (v2026.3.32)
   - [ ] Separate `doc_sharing` permission table — sharing is a flag on documents row
-- [ ] **Phase D — Remote RAG + MCP (4–6 d):** expose `search_knowledge()` as MCP tool; `MCP_REMOTE_URL` client; circuit breaker + fallback; see `concept/rag-memory-architecture.md §4.3`
+- [x] **Phase D — Remote RAG + MCP:** `/mcp/search` endpoint + `bot_mcp_client.py` circuit breaker + RRF merge (v2026.4.1)
 - [ ] **Phase E — Multimodal (future, GPU/Pi 5+ only):** CLIP embeddings for image search; `docling` for complex PDFs; vision API fallback
 
 ### 25.7 Migration from PicoClaw
