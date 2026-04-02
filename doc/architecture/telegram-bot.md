@@ -1,13 +1,13 @@
 # Taris — Telegram Bot Architecture
 
-**Version:** `2026.3.43`  
+**Version:** `2026.4.10`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
 
 ## 3. Telegram Menu Bot
 
-**Version:** `BOT_VERSION = "2026.3.43"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
+**Version:** `BOT_VERSION = "2026.4.10"` · **Entry point:** `telegram_menu_bot.py` · **Service:** `taris-telegram.service`
 
 The interactive Telegram bot is split into 14 Python modules. All logic is in `bot_*.py`; `telegram_menu_bot.py` only registers handlers and dispatches callbacks. Shared Screen DSL modules (`bot_ui.py`, `bot_actions.py`, `render_telegram.py`) are used by both this channel and the Web UI channel.
 
@@ -194,3 +194,26 @@ signal.signal(signal.SIGINT,  _on_stop)
 ```
 
 `taris-telegram.service` sets `TimeoutStopSec=25` so systemd waits up to 25 s for the polling loop to exit before sending SIGKILL. This prevents the 409 Conflict error on the next startup caused by an abrupt disconnect.
+
+### 4.6 TeleBot Threading Model
+
+| Setting | Value | Why |
+|---|---|---|
+| `num_threads` | **16** | Default (2) caused multi-second menu delays: one LLM call (≤60s) or voice STT (~3s) filled the 2-thread pool; menus queued behind them. 16 threads means menus always get an immediate worker. |
+| Long handlers | Dispatched to `daemon=True` threads | `_handle_chat_message`, `_handle_system_message`, `_handle_voice_message` dispatch immediately via `threading.Thread` — TeleBot worker freed in &lt;1ms |
+| Typing indicator | `send_chat_action('typing')` | Called before dispatching — gives instant visual feedback while LLM/STT runs in background |
+
+**`[PERF]` timing logs** in `callback_handler` (added v2026.4.10):
+- `[PERF] callback: Xms (data=...)` — every callback, DEBUG level
+- `[PERF] callback slow: Xms` — WARNING when total handler &gt;500ms
+- `[PERF] answer_callback_query slow: Xms` — WARNING when Telegram ACK &gt;300ms
+
+**Measured Telegram API latencies** (TariStation2 → Telegram servers):
+| API call | Typical latency |
+|---|---|
+| `send_message` | ~229ms |
+| `edit_message_text` | ~42ms |
+| `delete_message` | ~33ms |
+| `send_chat_action` | ~208ms |
+| `answer_callback_query` | ~100–200ms |
+
