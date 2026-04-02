@@ -238,7 +238,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.3"
+BOT_VERSION        = "2026.4.4"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
@@ -394,6 +394,25 @@ logging.basicConfig(
     handlers=_log_handlers,
 )
 log = logging.getLogger("taris-tgbot")
+
+
+def _make_file_logger(logger_name: str, filepath: str) -> "logging.Logger":
+    """Return a named logger that writes to *filepath* AND propagates to root (telegram_bot.log)."""
+    logger = logging.getLogger(logger_name)
+    try:
+        h = logging.FileHandler(filepath, encoding="utf-8")
+        h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logger.addHandler(h)
+    except OSError:
+        pass
+    logger.propagate = True  # also written to telegram_bot.log via root handler
+    return logger
+
+
+log_voice     = _make_file_logger("taris.voice",     _VOICE_LOG_FILE)
+log_security  = _make_file_logger("taris.security",  _SECURITY_LOG_FILE)
+log_datastore = _make_file_logger("taris.datastore", _DATASTORE_LOG_FILE)
+log_assistant = _make_file_logger("taris.assistant", _ASSISTANT_LOG_FILE)
 
 
 def get_conv_history_max() -> int:

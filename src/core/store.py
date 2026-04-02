@@ -15,7 +15,7 @@ Dependency chain: bot_config → bot_db → store_base → store
 
 import os
 
-from core.bot_config import log, TARIS_DIR
+from core.bot_config import log_datastore as log, TARIS_DIR
 from core.store_base import DataStore
 
 

@@ -50,7 +50,7 @@ from core.bot_config import (
     YANDEXGPT_MODEL_URI,
     YANDEXGPT_TEMPERATURE,
     LLM_PER_FUNC_FILE,
-    log,
+    log_assistant as log,
 )
 
 

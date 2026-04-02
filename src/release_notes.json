@@ -1,5 +1,14 @@
 [
   {
+    "version": "2026.4.4",
+    "date": "2026-04-02",
+    "changes": [
+      "Fix: HuggingFace contacted on every startup for model freshness checks — SentenceTransformer now uses local_files_only=True; fastembed uses persistent ~/.cache/fastembed instead of /tmp",
+      "Fix: security.log, voice.log, datastore.log, assistant.log were always empty — subsystem loggers now route to dedicated files (+ telegram_bot.log via propagation)",
+      "Refactor: bot_voice.py, bot_security.py, bot_auth.py use log_voice/log_security; bot_llm.py uses log_assistant; store/db modules use log_datastore"
+    ]
+  },
+  {
     "version": "2026.4.3",
     "date": "2026-04-02",
     "changes": [

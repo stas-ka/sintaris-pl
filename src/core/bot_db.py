@@ -11,7 +11,7 @@ import sqlite3
 import threading
 import os
 
-from core.bot_config import log, TARIS_DIR
+from core.bot_config import log_datastore as log, TARIS_DIR
 
 # ── Database file path ────────────────────────────────────────────────────────
 DB_PATH = os.path.join(TARIS_DIR, "taris.db")

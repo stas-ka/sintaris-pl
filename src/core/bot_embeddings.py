@@ -14,6 +14,7 @@ Controlled by bot_config constants:
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from core.bot_config import EMBED_DIMENSION, EMBED_KEEP_RESIDENT, EMBED_MODEL
@@ -104,9 +105,11 @@ class EmbeddingService:
     def _try_load(self) -> None:
         """Attempt to import and initialise the embedding library."""
         # Try fastembed first — ONNX Runtime based, no PyTorch, ARM-safe.
+        # Use a persistent cache dir so the model survives reboots (avoids re-download).
+        _fastembed_cache = os.path.expanduser("~/.cache/fastembed")
         try:
             from fastembed import TextEmbedding  # type: ignore[import]
-            self._model = TextEmbedding(model_name=self._model_name)
+            self._model = TextEmbedding(model_name=self._model_name, cache_dir=_fastembed_cache)
             self._backend = "fastembed"
             log.info("[Embeddings] fastembed loaded: %s", self._model_name)
             return
@@ -116,9 +119,14 @@ class EmbeddingService:
             log.warning("[Embeddings] fastembed init error (%s): %s", self._model_name, exc)
 
         # Fall back to sentence-transformers (PyTorch, heavier but ubiquitous on x86_64).
+        # Use local_files_only=True to skip HuggingFace freshness checks when model is cached.
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore[import]
-            self._model = SentenceTransformer(self._model_name)
+            try:
+                self._model = SentenceTransformer(self._model_name, local_files_only=True)
+            except (OSError, ValueError):
+                log.info("[Embeddings] local cache miss — downloading %s", self._model_name)
+                self._model = SentenceTransformer(self._model_name)
             self._backend = "sentence-transformers"
             log.info("[Embeddings] sentence-transformers loaded: %s", self._model_name)
             return

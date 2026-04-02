@@ -19,7 +19,7 @@ import os
 import uuid
 from typing import Any
 
-from core.bot_config import NOTES_DIR, log
+from core.bot_config import NOTES_DIR, log_datastore as log
 
 # ── Credential encryption (optional) ─────────────────────────────────────────
 _FERNET: Any = None

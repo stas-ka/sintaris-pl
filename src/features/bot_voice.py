@@ -30,7 +30,7 @@ from core.bot_config import (
     STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
     FASTER_WHISPER_THREADS, STT_LANG, DEVICE_VARIANT,
     LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
-    TARIS_DIR, _PENDING_TTS_FILE, log,
+    TARIS_DIR, _PENDING_TTS_FILE, log_voice as log,
 )
 from core.bot_instance import bot
 from telegram.bot_access import (

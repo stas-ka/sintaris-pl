@@ -19,7 +19,7 @@ from typing import Optional
 import bcrypt
 import jwt
 
-from core.bot_config import log, TARIS_DIR
+from core.bot_config import log_security as log, TARIS_DIR
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths

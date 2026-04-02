@@ -19,7 +19,7 @@ import sqlite3
 import uuid
 from typing import Any
 
-from core.bot_config import log, NOTES_DIR
+from core.bot_config import log_datastore as log, NOTES_DIR
 from core.bot_db import get_db, _local as _db_local  # shared thread-local
 from core.store_base import StoreCapabilityError
 
