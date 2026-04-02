@@ -238,7 +238,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.13"
+BOT_VERSION        = "2026.4.14"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
@@ -303,6 +303,9 @@ FASTER_WHISPER_DEVICE   = os.environ.get("FASTER_WHISPER_DEVICE", "cpu")
 FASTER_WHISPER_COMPUTE  = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
 # CPU threads for CTranslate2 — 0 = auto (uses all available). Set to 4-8 on multi-core systems.
 FASTER_WHISPER_THREADS  = int(os.environ.get("FASTER_WHISPER_THREADS", "0"))
+# Set FASTER_WHISPER_PRELOAD=0 to disable warm-up at startup (saves ~460 MB RAM on low-memory
+# machines). The model will be loaded lazily on the first voice message (~4 s cold-start).
+FASTER_WHISPER_PRELOAD  = os.environ.get("FASTER_WHISPER_PRELOAD", "1").strip() not in ("0", "false", "no")
 
 # Cloud STT via OpenAI Whisper API (STT_PROVIDER=openai_whisper)
 # Reuses OPENAI_API_KEY + OPENAI_BASE_URL from LLM config.

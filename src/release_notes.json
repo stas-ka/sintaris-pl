@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.14",
+    "date": "2026-04-02",
+    "title": "Menu freeze fix — memory pressure and log I/O",
+    "notes": "- Fix: FASTER_WHISPER_PRELOAD=0 added to TariStation2 bot.env — disables 460MB model preload at startup, freeing RAM and eliminating swap-induced callback stalls (menu was freezing 30-100s)\n- Fix: tail_log() rewrote to use subprocess tail instead of f.readlines() — avoids loading full 7.5MB log file into RAM on admin_logs_show\n- Add: FASTER_WHISPER_PRELOAD env var in bot_config.py (default 1, set 0 on low-memory machines)\n- Add: startup memory check via /proc/meminfo — logs WARNING if available RAM < 512MB or swap > 80%\n- Test: T94 FASTER_WHISPER_PRELOAD config, T95 tail_log no readlines, T96 startup memory check"
+  },
+  {
     "version": "2026.4.13",
     "date": "2026-04-02",
     "changes": [

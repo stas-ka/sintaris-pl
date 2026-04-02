@@ -6248,6 +6248,152 @@ def t_callback_query_answer_safe(**_) -> list[TestResult]:
     return results
 
 
+def t_fw_preload_config(**_) -> list[TestResult]:
+    """T94: FASTER_WHISPER_PRELOAD env var controls model preloading.
+
+    Root cause of menu freeze: FasterWhisper small model (~460MB) preloaded at
+    startup on OpenClaw, exhausting available RAM and causing kernel swap I/O
+    on every callback (30-100+ second stalls).  FASTER_WHISPER_PRELOAD=0 in
+    bot.env disables preloading so the model loads lazily on first voice message.
+    """
+    import re
+    results = []
+
+    # 1. bot_config.py exports FASTER_WHISPER_PRELOAD
+    cfg = Path(__file__).parent.parent / "core" / "bot_config.py"
+    if cfg.exists():
+        cfg_code = cfg.read_text()
+        has_const = "FASTER_WHISPER_PRELOAD" in cfg_code
+        results.append(TestResult(
+            "fw_preload_const_in_config",
+            "PASS" if has_const else "FAIL",
+            0.0,
+            "FASTER_WHISPER_PRELOAD constant defined in bot_config.py"
+        ))
+        uses_env = bool(re.search(
+            r'FASTER_WHISPER_PRELOAD\s*=\s*os\.environ\.get', cfg_code
+        ))
+        results.append(TestResult(
+            "fw_preload_reads_env",
+            "PASS" if uses_env else "FAIL",
+            0.0,
+            "FASTER_WHISPER_PRELOAD reads from os.environ.get()"
+        ))
+    else:
+        results.append(TestResult("fw_preload_const_in_config", "SKIP", 0.0,
+                                  "bot_config.py not found"))
+
+    # 2. telegram_menu_bot.py imports and checks FASTER_WHISPER_PRELOAD
+    menu = Path(__file__).parent.parent / "telegram_menu_bot.py"
+    if menu.exists():
+        menu_code = menu.read_text()
+        imports_it = "FASTER_WHISPER_PRELOAD" in menu_code
+        results.append(TestResult(
+            "fw_preload_used_in_menu_bot",
+            "PASS" if imports_it else "FAIL",
+            0.0,
+            "telegram_menu_bot.py uses FASTER_WHISPER_PRELOAD"
+        ))
+        guards_preload = bool(re.search(
+            r'FASTER_WHISPER_PRELOAD\s+and\s+\(', menu_code
+        ))
+        results.append(TestResult(
+            "fw_preload_guards_preload_call",
+            "PASS" if guards_preload else "FAIL",
+            0.0,
+            "FASTER_WHISPER_PRELOAD gates the _fw_preload() call"
+        ))
+    else:
+        results.append(TestResult("fw_preload_used_in_menu_bot", "SKIP", 0.0,
+                                  "telegram_menu_bot.py not found"))
+
+    return results
+
+
+def t_tail_log_no_readlines(**_) -> list[TestResult]:
+    """T95: tail_log() uses subprocess tail instead of f.readlines().
+
+    Root cause of admin_logs_show taking 45s: reading entire 7.5 MB log file
+    (106 K lines) via readlines() while the system was under swap pressure
+    caused massive I/O stalls.  Fixed by calling system ``tail -n N`` which
+    reads only the last N lines from the file's end.
+    """
+    import re
+    results = []
+
+    logger = Path(__file__).parent.parent / "core" / "bot_logger.py"
+    if not logger.exists():
+        return [TestResult("tail_log_no_readlines", "SKIP", 0.0,
+                           "bot_logger.py not found")]
+
+    code = logger.read_text()
+
+    # Must NOT use full readlines() as primary path
+    uses_readlines = bool(re.search(r'^\s+lines\s*=\s*f\.readlines\(\)', code, re.MULTILINE))
+    results.append(TestResult(
+        "tail_log_no_full_readlines",
+        "FAIL" if uses_readlines else "PASS",
+        0.0,
+        "tail_log does not do full f.readlines() (avoids loading multi-MB log into RAM)"
+    ))
+
+    # Must use subprocess tail or seek-based read
+    uses_subprocess_tail = bool(re.search(r'["\']tail["\']', code))
+    uses_seek = bool(re.search(r'f\.seek\(', code))
+    results.append(TestResult(
+        "tail_log_uses_tail_or_seek",
+        "PASS" if (uses_subprocess_tail or uses_seek) else "FAIL",
+        0.0,
+        f"tail_log uses subprocess tail={uses_subprocess_tail} or seek={uses_seek}"
+    ))
+
+    return results
+
+
+def t_startup_memory_check(**_) -> list[TestResult]:
+    """T96: telegram_menu_bot.py logs memory status at startup.
+
+    Low-memory warning helps operators quickly diagnose menu freeze caused by
+    swap exhaustion.  Must use /proc/meminfo (not psutil) so it works without
+    extra dependencies.
+    """
+    import re
+    results = []
+
+    menu = Path(__file__).parent.parent / "telegram_menu_bot.py"
+    if not menu.exists():
+        return [TestResult("startup_memory_check", "SKIP", 0.0,
+                           "telegram_menu_bot.py not found")]
+
+    code = menu.read_text()
+
+    has_meminfo = "/proc/meminfo" in code
+    results.append(TestResult(
+        "memory_check_uses_proc_meminfo",
+        "PASS" if has_meminfo else "FAIL",
+        0.0,
+        "startup memory check reads /proc/meminfo (no psutil dep)"
+    ))
+
+    has_swap_warn = bool(re.search(r'LOW MEMORY at startup', code))
+    results.append(TestResult(
+        "memory_check_warns_low_memory",
+        "PASS" if has_swap_warn else "FAIL",
+        0.0,
+        "LOW MEMORY warning emitted when available RAM < 512MB or swap > 80%"
+    ))
+
+    has_avail_log = bool(re.search(r'MemAvailable', code))
+    results.append(TestResult(
+        "memory_check_reads_mem_available",
+        "PASS" if has_avail_log else "FAIL",
+        0.0,
+        "reads MemAvailable key from /proc/meminfo"
+    ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -6409,6 +6555,12 @@ TEST_FUNCTIONS = [
     t_handlers_background_dispatch,
     # answer_callback_query wrapped in try/except: stale callbacks don't freeze polling (T93)
     t_callback_query_answer_safe,
+    # FASTER_WHISPER_PRELOAD env var disables 460MB preload on low-memory machines (T94)
+    t_fw_preload_config,
+    # tail_log uses subprocess tail, not f.readlines() — avoids loading full log into RAM (T95)
+    t_tail_log_no_readlines,
+    # Startup memory warning via /proc/meminfo (no psutil dep) (T96)
+    t_startup_memory_check,
 ]
 
 

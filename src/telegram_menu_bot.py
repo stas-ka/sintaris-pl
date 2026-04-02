@@ -24,6 +24,7 @@ import time as _time
 from core.bot_config import (
     BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
     PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER, DEVICE_VARIANT,
+    FASTER_WHISPER_PRELOAD,
     log,
 )
 import core.bot_state as _st
@@ -1403,11 +1404,14 @@ def main() -> None:
     # FasterWhisper preloading: disabled by default (CUDA libs inflate RSS to 1 GB+).
     # Re-enabled for the openclaw variant where the device is ROCm (AMD GPU), not CUDA,
     # so the RAM penalty is lower and cold-start latency (~4s) is unacceptable.
-    if DEVICE_VARIANT == "openclaw" and (
+    # Override with FASTER_WHISPER_PRELOAD=0 in bot.env on low-memory machines.
+    if DEVICE_VARIANT == "openclaw" and FASTER_WHISPER_PRELOAD and (
         STT_PROVIDER == "faster_whisper" or _st._voice_opts.get("faster_whisper_stt")
     ):
         log.info("[FasterWhisper] openclaw: preloading model in background thread")
         threading.Thread(target=_fw_preload, daemon=True).start()
+    elif DEVICE_VARIANT == "openclaw" and not FASTER_WHISPER_PRELOAD:
+        log.info("[FasterWhisper] preload disabled (FASTER_WHISPER_PRELOAD=0) — lazy load on first voice message")
 
     # ── Startup tasks ─────────────────────────────────────────────────────
     _st.load_conversation_history()
@@ -1417,6 +1421,29 @@ def main() -> None:
     attach_alerts_to_main_log()
     _cal_reschedule_all()
     threading.Thread(target=_cal_morning_briefing_loop, daemon=True).start()
+
+    # ── Low-memory warning (Linux /proc/meminfo — no psutil required) ────────
+    try:
+        _meminfo = {}
+        with open("/proc/meminfo") as _f:
+            for _line in _f:
+                _k, _, _v = _line.partition(":")
+                _meminfo[_k.strip()] = int(_v.split()[0])  # kB
+        _avail_mb  = _meminfo.get("MemAvailable", 0) // 1024
+        _swap_tot  = _meminfo.get("SwapTotal", 1)
+        _swap_used = _meminfo.get("SwapTotal", 0) - _meminfo.get("SwapFree", 0)
+        _swap_pct  = (_swap_used / _swap_tot * 100) if _swap_tot else 0
+        if _avail_mb < 512 or _swap_pct > 80:
+            log.warning(
+                "[Memory] LOW MEMORY at startup: available=%dMB  swap=%.0f%%"
+                " — menu callbacks may be slow due to swap I/O."
+                " Set FASTER_WHISPER_PRELOAD=0 in bot.env to free ~460 MB.",
+                _avail_mb, _swap_pct,
+            )
+        else:
+            log.info("[Memory] startup: available=%dMB  swap=%.0f%%", _avail_mb, _swap_pct)
+    except Exception:
+        pass  # non-Linux or /proc not available
 
     # Auto-load system KB docs (user guide + admin guide) in background
     def _ensure_system_docs() -> None:
