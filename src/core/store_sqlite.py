@@ -549,15 +549,19 @@ class SQLiteStore:
         db = self._db()
         # Ensure rowid map table exists (auto-migration for existing DBs)
         db.execute(_VEC_ROWID_MAP_SQL)
-        # Delete existing embedding via stored rowid (vec0 does not support DELETE WHERE on aux columns)
-        existing = db.execute(
+        # Look up old embedding rowid (may be None for first insert)
+        old = db.execute(
             "SELECT vec_rowid FROM vec_rowid_map WHERE doc_id = ? AND chunk_idx = ?",
             (doc_id, chunk_idx),
         ).fetchone()
-        if existing:
-            db.execute("DELETE FROM vec_embeddings WHERE rowid = ?", (existing[0],))
-            db.execute("DELETE FROM vec_rowid_map WHERE doc_id = ? AND chunk_idx = ?",
-                       (doc_id, chunk_idx))
+        old_rowid = old[0] if old else None
+        # vec0 DELETE only works inside an explicit transaction (BEGIN...COMMIT)
+        db.execute("BEGIN")
+        if old_rowid is not None:
+            try:
+                db.execute("DELETE FROM vec_embeddings WHERE rowid = ?", (old_rowid,))
+            except Exception:
+                pass
         cur = db.execute(
             "INSERT INTO vec_embeddings "
             "(doc_id, chunk_idx, chat_id, chunk_text, embedding) "
@@ -565,12 +569,15 @@ class SQLiteStore:
             (doc_id, chunk_idx, chat_id, chunk_text, vec_blob),
         )
         vec_rowid = cur.lastrowid
+        db.commit()
+        # Update rowid_map in a separate commit (regular table, no vec0 quirks)
         if vec_rowid:
             db.execute(
-                "INSERT OR REPLACE INTO vec_rowid_map (doc_id, chunk_idx, vec_rowid) VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO vec_rowid_map (doc_id, chunk_idx, vec_rowid)"
+                " VALUES (?, ?, ?)",
                 (doc_id, chunk_idx, vec_rowid),
             )
-        db.commit()
+            db.commit()
 
     def search_similar(self, embedding: list[float], chat_id: int,
                        top_k: int = 5) -> list[dict]:
@@ -614,15 +621,27 @@ class SQLiteStore:
         db = self._db()
         # Ensure rowid map exists
         db.execute(_VEC_ROWID_MAP_SQL)
-        # Look up rowids from the map table
-        rowids = db.execute(
+        # Collect rowids via rowid_map (fast) AND via aux-column scan (catches orphans).
+        # SELECT by aux column works on vec0; DELETE with WHERE aux does not.
+        # DELETE by rowid ONLY works inside an explicit transaction (BEGIN...COMMIT).
+        mapped_rowids = {row[0] for row in db.execute(
             "SELECT vec_rowid FROM vec_rowid_map WHERE doc_id = ?", (doc_id,)
-        ).fetchall()
-        for (rid,) in rowids:
-            try:
-                db.execute("DELETE FROM vec_embeddings WHERE rowid = ?", (rid,))
-            except Exception:
-                pass
+        ).fetchall()}
+        try:
+            scanned_rowids = {row[0] for row in db.execute(
+                "SELECT rowid FROM vec_embeddings WHERE doc_id = ?", (doc_id,)
+            ).fetchall()}
+        except Exception:
+            scanned_rowids = set()
+        all_rowids = mapped_rowids | scanned_rowids
+        if all_rowids:
+            db.execute("BEGIN")
+            for rid in all_rowids:
+                try:
+                    db.execute("DELETE FROM vec_embeddings WHERE rowid = ?", (rid,))
+                except Exception:
+                    pass
+            db.commit()
         db.execute("DELETE FROM vec_rowid_map WHERE doc_id = ?", (doc_id,))
         db.commit()
 

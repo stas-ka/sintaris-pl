@@ -6,6 +6,27 @@
 
 ---
 
+## Features — What Taris Can Do
+
+Taris is a personal AI assistant with the following capabilities:
+
+| Feature | Description |
+|---|---|
+| 🤖 **AI Chat** | Multi-turn conversation with LLM (Ollama/OpenAI). Supports Russian, German, English. |
+| 📄 **Knowledge Base (RAG)** | Upload PDF, DOCX, TXT documents; the bot uses them as context when answering questions. Hybrid FTS5 + vector search. |
+| 🗓 **Calendar** | Create, view, edit, delete events. Natural language input ("on Tuesday at 3pm"). Reminders. Console mode for conversational calendar management. |
+| 📧 **Mail Digest** | Summarise Gmail inbox with AI. Configure mail credentials via the bot. |
+| 📝 **Notes** | Create and manage personal Markdown notes. Voice dictation supported. |
+| 🎤 **Voice Assistant** | Send voice messages — the bot transcribes (Vosk/faster-whisper) and responds with TTS (Piper). Hotword detection for hands-free use. |
+| 👥 **Contacts** | Personal contact book. Search and manage contacts via the menu. |
+| 🔐 **Access Control** | Admin, user, developer, and guest roles. Admin approves new users. |
+| 🌐 **Web Interface** | Full web UI at `https://<host>:8080/` — chat, calendar, notes, documents, admin panel. |
+| 🔊 **Voice Settings** | Toggle VAD, Whisper STT, parallel TTS, model warm-up per user. |
+| 📊 **System Info** | CPU, memory, disk, uptime, service status. Admin can restart services. |
+| 🌍 **Multilingual** | Full Russian, English, and German interface. Language auto-detected or manually set. |
+
+---
+
 ## Variants
 
 Taris runs in two flavours depending on the hardware:
