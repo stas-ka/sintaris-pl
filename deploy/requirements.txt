@@ -1,6 +1,6 @@
 # Taris Bot — Python package dependencies
 # Install with: python3 -m pip install --break-system-packages -r requirements.txt
-# Last updated: 2026-03-29
+# Last updated: 2026-04-02
 #
 # Variants:
 #   PicoClaw  — Raspberry Pi; STT_PROVIDER=vosk (no faster-whisper)
@@ -53,6 +53,11 @@ cryptography           # TLS for psycopg connections
 # ── Screen DSL ───────────────────────────────────────────────────────────────
 pyyaml                 # YAML screen definitions (src/screens/)
 jsonschema             # optional — YAML/JSON screen file validation
+
+# ── LLM providers ────────────────────────────────────────────────────────────
+# Used when LLM_PROVIDER=openai (OpenAI API or OpenRouter-compatible API)
+openai                 # required for LLM_PROVIDER=openai (gpt-4o-mini etc.)
+                       # Ollama runs as a local service — no Python package needed
 
 # ── Documents / RAG ──────────────────────────────────────────────────────────
 sentence-transformers  # all-MiniLM-L6-v2 embeddings (~90 MB)

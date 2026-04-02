@@ -121,6 +121,7 @@ else
   pip3 install --break-system-packages --quiet \
     pyTelegramBotAPI faster-whisper scipy sounddevice webrtcvad \
     google-api-python-client google-auth-httplib2 google-auth-oauthlib \
+    openai \
     fastapi "uvicorn[standard]" jinja2 bcrypt PyJWT python-multipart requests \
     fastembed pyyaml jsonschema pdfminer.six python-docx sqlite-vec \
     "psycopg[binary]" psycopg-pool pgvector cryptography
