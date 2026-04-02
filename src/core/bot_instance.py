@@ -10,6 +10,7 @@ import time
 import logging
 import requests
 from requests.adapters import HTTPAdapter
+from requests.exceptions import ReadTimeout as _ReadTimeout, ConnectionError as _ConnError
 import telebot
 import telebot.apihelper
 from core.bot_config import BOT_TOKEN
@@ -47,6 +48,12 @@ class _409Handler(telebot.ExceptionHandler):
             time.sleep(1)   # retry quickly to win the next polling slot
             return True     # handled; telebot will retry
         self._count = 0     # reset on non-409 error
+        # ReadTimeout/ConnectionError from a handler: stale Telegram API connection.
+        # Return True to prevent the polling loop from applying exponential backoff.
+        # The user gets no response for that click — they can tap again immediately.
+        if isinstance(exc, (_ReadTimeout, _ConnError)):
+            log.warning("[Bot] API connection error in handler (stale connection?) — suppressing backoff: %s", exc)
+            return True
         return False        # not handled; telebot logs and retries normally
 
 
@@ -89,3 +96,8 @@ _api_session.mount("https://", _KeepAliveAdapter())
 _api_session.mount("http://",  _KeepAliveAdapter())
 telebot.apihelper.session = _api_session
 log.info("[Bot] TCP keepalive configured on Telegram API session (IDLE=30s INTVL=10s CNT=5)")
+
+# Reduce read timeout: default 30s causes stale-connection hangs to last 30s+ each.
+# 10s is still generous for normal API calls (send_message, etc.) while failing fast
+# on dead connections so the caller's try/except can recover quickly.
+telebot.apihelper.READ_TIMEOUT = 10

@@ -1,5 +1,13 @@
 [
   {
+    "version": "2026.4.13",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: ReadTimeout/ConnectionError from stale API connections now suppressed in exception handler — prevents exponential polling backoff when a send_message call times out on a dead connection",
+      "fix: API READ_TIMEOUT reduced 30s→10s — limits how long a stale connection hangs before failing"
+    ]
+  },
+  {
     "version": "2026.4.12",
     "date": "2026-04-02",
     "changes": [
