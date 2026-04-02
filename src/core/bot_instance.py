@@ -5,9 +5,13 @@ Created once; imported by every module that needs to call the Telegram API.
 Keeping the bot object here avoids circular imports between handler modules.
 """
 
+import socket
 import time
 import logging
+import requests
+from requests.adapters import HTTPAdapter
 import telebot
+import telebot.apihelper
 from core.bot_config import BOT_TOKEN
 
 log = logging.getLogger(__name__)
@@ -54,3 +58,34 @@ bot = telebot.TeleBot(
     # Default is 2 — one LLM call (up to 60s) blocks ALL other callbacks when pool exhausted.
     num_threads=16,
 )
+
+
+class _KeepAliveAdapter(HTTPAdapter):
+    """HTTP adapter with TCP keepalive probes.
+
+    Prevents home-router stateful-firewall state (IPv6 or NAT) from being
+    silently dropped on idle connections.  Without keepalive the next request
+    on a stale connection hangs ~48 s until the OS TCP timeout fires.
+
+    Parameters match Fritz!Box firewall defaults:
+      KEEPIDLE  30 s  — first probe after 30 s idle (well inside any 60 s timeout)
+      KEEPINTVL 10 s  — repeat probes every 10 s
+      KEEPCNT    5    — give up after 5 missed probes (50 s total)
+    """
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["socket_options"] = [
+            (socket.SOL_SOCKET,  socket.SO_KEEPALIVE,      1),
+            (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE,     30),
+            (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL,    10),
+            (socket.IPPROTO_TCP, socket.TCP_KEEPCNT,       5),
+        ]
+        super().init_poolmanager(*args, **kwargs)
+
+
+# Inject the keepalive session into telebot's HTTP layer.
+# telebot.apihelper.session is used by all API calls (shared across worker threads).
+_api_session = requests.Session()
+_api_session.mount("https://", _KeepAliveAdapter())
+_api_session.mount("http://",  _KeepAliveAdapter())
+telebot.apihelper.session = _api_session
+log.info("[Bot] TCP keepalive configured on Telegram API session (IDLE=30s INTVL=10s CNT=5)")

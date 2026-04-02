@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.4.12",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: TCP keepalive on Telegram API HTTP session — prevents Fritz!Box IPv6 stateful firewall from dropping idle connections (was: stale connections caused 48s+ menu response hangs)"
+    ]
+  },
+  {
     "version": "2026.4.11",
     "date": "2026-04-02",
     "changes": [
