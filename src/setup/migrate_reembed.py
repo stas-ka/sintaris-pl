@@ -52,28 +52,11 @@ def _migrate(dry_run: bool = False, chat_id_filter: int | None = None) -> None:
         log.error("Could not load EmbeddingService: %s", exc)
         sys.exit(1)
 
-    db = store._db()
 
-    # Find chunks that have no embedding yet
-    if chat_id_filter is not None:
-        rows = db.execute(
-            "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
-            " FROM doc_chunks dc"
-            " LEFT JOIN vec_embeddings ve"
-            "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
-            " WHERE dc.chat_id = ? AND ve.doc_id IS NULL"
-            " ORDER BY dc.doc_id, CAST(dc.chunk_idx AS INTEGER)",
-            (str(chat_id_filter),),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
-            " FROM doc_chunks dc"
-            " LEFT JOIN vec_embeddings ve"
-            "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
-            " WHERE ve.doc_id IS NULL"
-            " ORDER BY dc.doc_id, CAST(dc.chunk_idx AS INTEGER)",
-        ).fetchall()
+    # Use store API method (works for both SQLite + Postgres)
+    log.info("Loading chunks without embeddings…")
+    rows_raw = store.get_chunks_without_embeddings(chat_id_filter=chat_id_filter)
+    rows = [(r["doc_id"], r["chunk_idx"], r["chat_id"], r["chunk_text"]) for r in rows_raw]
 
     total = len(rows)
     log.info("Chunks needing embeddings: %d", total)
@@ -125,12 +108,12 @@ def _migrate(dry_run: bool = False, chat_id_filter: int | None = None) -> None:
     elapsed = time.monotonic() - t_start
     log.info("Done: %d embedded, %d errors in %.1fs", processed, errors, elapsed)
 
-    # Summary by chat_id
-    summary = db.execute(
-        "SELECT chat_id, COUNT(*) as cnt FROM vec_embeddings GROUP BY chat_id"
-    ).fetchall()
-    log.info("vec_embeddings totals by chat_id: %s",
-             {r[0]: r[1] for r in summary})
+    # Summary via store API (works for SQLite + Postgres)
+    try:
+        stats = store.rag_stats(chat_id=chat_id_filter or 0)
+        log.info("vec_embeddings total: %d", stats.get("total_vector", 0))
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

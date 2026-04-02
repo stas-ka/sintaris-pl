@@ -823,7 +823,8 @@ class PostgresStore:
             conn.commit()
 
     def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
-                         latency_ms: int = 0, query_type: str = "contextual") -> None:
+                         latency_ms: int = 0, query_type: str = "contextual",
+                         n_fts5: int = 0, n_vector: int = 0, n_mcp: int = 0) -> None:
         """Insert one RAG retrieval record into rag_log."""
         with self._pool.connection() as conn:
             conn.execute(
@@ -842,6 +843,30 @@ class PostgresStore:
                 "FROM rag_log ORDER BY created_at DESC LIMIT %s",
                 (limit,),
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_chunks_without_embeddings(self, chat_id_filter: int | None = None) -> list[dict]:
+        """Return doc_chunks rows that have no corresponding vec_embeddings entry."""
+        with self._pool.connection() as conn:
+            if chat_id_filter is not None:
+                rows = conn.execute(
+                    "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
+                    " FROM doc_chunks dc"
+                    " LEFT JOIN vec_embeddings ve"
+                    "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
+                    " WHERE dc.chat_id = %s AND ve.doc_id IS NULL"
+                    " ORDER BY dc.doc_id, dc.chunk_idx",
+                    (str(chat_id_filter),),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
+                    " FROM doc_chunks dc"
+                    " LEFT JOIN vec_embeddings ve"
+                    "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
+                    " WHERE ve.doc_id IS NULL"
+                    " ORDER BY dc.doc_id, dc.chunk_idx",
+                ).fetchall()
         return [dict(r) for r in rows]
 
     def rag_stats(self) -> dict:
