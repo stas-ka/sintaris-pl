@@ -4731,15 +4731,15 @@ def t_per_user_rag_settings(**_) -> list:
     except Exception as e:
         results.append(TestResult("rag_user_pref_access", "FAIL", time.time() - t0, str(e)))
     try:
-        src2 = Path(__file__).parents[1] / "telegram" / "bot_handlers.py"
+        src2 = Path(__file__).parents[1] / "telegram" / "bot_admin.py"
         code2 = src2.read_text(encoding="utf-8")
-        ok_rag_fn = "_handle_profile_rag_settings" in code2
-        ok_adjust  = "_handle_profile_rag_adjust" in code2
-        ok_reset   = "_handle_profile_rag_reset" in code2
-        for name, ok in [("profile_rag_settings", ok_rag_fn), ("profile_rag_adjust", ok_adjust),
-                         ("profile_rag_reset", ok_reset)]:
+        ok_rag_fn = "_handle_admin_rag_user_settings" in code2
+        ok_adjust  = "_handle_admin_rag_user_adjust" in code2
+        ok_reset   = "_handle_admin_rag_user_reset" in code2
+        for name, ok in [("admin_rag_user_settings", ok_rag_fn), ("admin_rag_user_adjust", ok_adjust),
+                         ("admin_rag_user_reset", ok_reset)]:
             results.append(TestResult(f"handler_{name}", "PASS" if ok else "FAIL",
-                                      time.time() - t0, "present" if ok else "MISSING"))
+                                      time.time() - t0, "present in bot_admin.py" if ok else "MISSING"))
     except Exception as e:
         results.append(TestResult("rag_handler_check", "FAIL", time.time() - t0, str(e)))
     return results
@@ -5996,7 +5996,7 @@ def t_embedding_pipeline_fix(**_) -> list[TestResult]:
         code = (SRC / "core/store_sqlite.py").read_text()
         results.append(TestResult(
             "vector_returns_chunk_idx",
-            "PASS" if "SELECT doc_id, chunk_idx, chunk_text, distance" in code else "FAIL", 0.0,
+            "PASS" if "SELECT doc_id, chunk_idx, chunk_text, rank" in code else "FAIL", 0.0,
             "search_similar SELECT includes chunk_idx + chunk_text",
         ))
     except FileNotFoundError:

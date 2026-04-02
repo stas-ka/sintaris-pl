@@ -170,6 +170,15 @@ def _bot_config_block() -> str:
         f"LLM: {LLM_PROVIDER}/{_llm_model}\n"
         f"STT: {STT_PROVIDER}/{_stt_model}\n"
         f"TTS: piper/{_piper}\n"
+        f"[BOT CAPABILITIES]\n"
+        f"- Document upload (PDF, TXT, DOCX, MD — up to 20 MB): send the file directly in chat\n"
+        f"- Documents are indexed and used as a knowledge base (RAG) during conversations\n"
+        f"- Calendar: add, view, edit and delete events via natural language or the menu\n"
+        f"- Notes: create, view, append to and delete personal notes\n"
+        f"- Voice: send a voice message and receive a spoken reply (STT → LLM → TTS)\n"
+        f"- Mail digest: summarise unread emails from a connected mailbox\n"
+        f"- Multi-language: Russian, English and German are supported\n"
+        f"[END BOT CAPABILITIES]\n"
         f"[END BOT CONFIG]\n\n"
     )
 
@@ -372,6 +381,36 @@ def _safe_edit(chat_id: int, msg_id: int, text: str, **kwargs) -> None:
     except Exception as e:
         if "message is not modified" not in str(e).lower():
             log.debug(f"_safe_edit: {e}")
+
+
+def _tg_send_with_retry(fn, *args, retries: int = 3, delay: float = 2.0, **kwargs):
+    """Call a Telegram API function with up to ``retries`` attempts on network errors.
+
+    Returns the result on success, or raises the last exception if all attempts fail.
+    Only retries on connection/timeout errors, not on Telegram API logic errors
+    (e.g. message too long, bad request).
+    """
+    import time as _time
+    _last_exc: Exception = RuntimeError("no attempts")
+    for attempt in range(retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            _last_exc = e
+            err_lower = str(e).lower()
+            # Retry on transient network/timeout errors only
+            if any(kw in err_lower for kw in (
+                "timeout", "connection", "network", "reset by peer",
+                "remotedisconnected", "read timed out", "socket", "eof",
+            )):
+                if attempt < retries - 1:
+                    log.warning("[TG] send attempt %d/%d failed: %s — retrying in %.0fs",
+                                attempt + 1, retries, e, delay)
+                    _time.sleep(delay * (attempt + 1))
+                continue
+            # Non-retriable error — raise immediately
+            raise
+    raise _last_exc
 
 
 def _run_subprocess(cmd: list[str], timeout: int = 60,

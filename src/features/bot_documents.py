@@ -170,8 +170,7 @@ def _handle_doc_detail(chat_id: int, doc_id: str) -> None:
             meta = {}
     shared = "✅" if d.get("is_shared") else "❌"
     lines = [
-        _t(chat_id, "docs_doc_detail"),
-        f"*{d['title']}*",
+        f"📄 *{d['title']}*",
         _t(chat_id, "docs_doc_type").format(doc_type=d.get("doc_type", "?")),
         _t(chat_id, "docs_doc_chunks").format(chunks=meta.get("n_chunks", "?")),
         _t(chat_id, "docs_doc_size").format(size=meta.get("file_size_bytes", "?")),

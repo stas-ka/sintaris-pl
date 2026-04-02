@@ -37,7 +37,7 @@ from telegram.bot_access import (
     _t, _lang, _safe_edit, _back_keyboard, _voice_back_keyboard,
     _escape_tts, _escape_md, _truncate, _with_lang_voice,
     _build_system_message, _voice_user_turn_content,
-    _is_guest, _is_admin,
+    _is_guest, _is_admin, _tg_send_with_retry,
 )
 from core.bot_llm import ask_llm, ask_llm_with_history
 from telegram.bot_users import (
@@ -1298,20 +1298,38 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             _tts_thread = threading.Thread(target=_bg_tts, daemon=True)
             _tts_thread.start()
 
+        _text_sent = False
         try:
-            bot.send_message(
+            _tg_send_with_retry(
+                bot.send_message,
                 chat_id,
                 f"🤖 *Taris:*\n{_escape_md(_truncate(response))}{_fmt_timing()}",
                 parse_mode="Markdown",
                 reply_markup=_voice_back_keyboard(chat_id),
             )
-        except Exception:
-            bot.send_message(
-                chat_id,
-                f"Taris:\n{_truncate(response)}{_fmt_timing()}",
-                parse_mode=None,
-                reply_markup=_voice_back_keyboard(chat_id),
-            )
+            _text_sent = True
+        except Exception as _md_err:
+            try:
+                _tg_send_with_retry(
+                    bot.send_message,
+                    chat_id,
+                    f"Taris:\n{_truncate(response)}{_fmt_timing()}",
+                    parse_mode=None,
+                    reply_markup=_voice_back_keyboard(chat_id),
+                )
+                _text_sent = True
+            except Exception as _net_err:
+                log.error("[Voice] failed to send LLM response after retries: %s", _net_err)
+                # Last resort: edit the transcript message so the user sees the response
+                try:
+                    _safe_edit(
+                        chat_id, msg.message_id,
+                        f"🤖 Taris:\n{_truncate(response, 900)}",
+                        reply_markup=_voice_back_keyboard(chat_id),
+                    )
+                    _text_sent = True
+                except Exception:
+                    pass
 
         if audio_on:
             tts_msg = None
