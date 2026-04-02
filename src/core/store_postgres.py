@@ -608,21 +608,24 @@ class PostgresStore:
     def save_document_meta(self, doc_id: str, chat_id: int,
                            title: str, file_path: str,
                            doc_type: str,
-                           metadata: dict | None = None) -> None:
+                           metadata: dict | None = None,
+                           doc_hash: str | None = None) -> None:
         with self._pool.connection() as conn:
             conn.execute(
                 """INSERT INTO documents
-                   (doc_id, chat_id, title, file_path, doc_type, metadata)
-                   VALUES (%s, %s, %s, %s, %s, %s)
+                   (doc_id, chat_id, title, file_path, doc_type, metadata, doc_hash)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (doc_id) DO UPDATE SET
                        title      = EXCLUDED.title,
                        file_path  = EXCLUDED.file_path,
                        doc_type   = EXCLUDED.doc_type,
                        metadata   = EXCLUDED.metadata,
+                       doc_hash   = EXCLUDED.doc_hash,
                        updated_at = NOW()""",
                 (
                     doc_id, chat_id, title, file_path, doc_type,
                     json.dumps(metadata) if metadata else None,
+                    doc_hash,
                 ),
             )
             conn.commit()

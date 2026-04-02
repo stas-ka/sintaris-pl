@@ -121,8 +121,8 @@ def _ingest(store, tag: str, title: str, text: str, force: bool) -> None:
         title=title,
         file_path=f"system:{tag}",
         doc_type="system",
-        metadata={"tag": tag, "doc_hash": doc_hash, "n_chunks": len(chunks),
-                  "system": True},
+        doc_hash=doc_hash,
+        metadata={"tag": tag, "n_chunks": len(chunks), "system": True},
     )
     # Mark shared immediately
     try:

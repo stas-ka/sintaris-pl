@@ -162,7 +162,8 @@ class DataStore(Protocol):
     def save_document_meta(self, doc_id: str, chat_id: int,
                            title: str, file_path: str,
                            doc_type: str,
-                           metadata: dict | None = None) -> None:
+                           metadata: dict | None = None,
+                           doc_hash: str | None = None) -> None:
         """Store document metadata (file content lives on disk)."""
         ...
 
@@ -238,8 +239,15 @@ class DataStore(Protocol):
         """Remove all FTS5 text chunks for a document. Silent if not found."""
         ...
 
+    def get_chunks_without_embeddings(self, chat_id_filter: int | None = None) -> list[dict]:
+        """Return chunks with no corresponding vector embedding.
+        Returns [{doc_id, chunk_idx, chat_id, chunk_text}].
+        """
+        ...
+
     def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
-                         latency_ms: int = 0, query_type: str = "contextual") -> None:
+                         latency_ms: int = 0, query_type: str = "contextual",
+                         n_fts5: int = 0, n_vector: int = 0, n_mcp: int = 0) -> None:
         """Record a RAG retrieval event for auditing / admin log viewer."""
         ...
 

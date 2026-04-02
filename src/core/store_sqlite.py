@@ -52,6 +52,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
 );
 """
 
+# Track vec0 rowids in a regular table so we can delete by rowid
+# (sqlite-vec vec0 does NOT support DELETE WHERE on auxiliary columns)
+_VEC_ROWID_MAP_SQL = """
+CREATE TABLE IF NOT EXISTS vec_rowid_map (
+    doc_id     TEXT    NOT NULL,
+    chunk_idx  INTEGER NOT NULL,
+    vec_rowid  INTEGER NOT NULL,
+    PRIMARY KEY (doc_id, chunk_idx)
+);
+"""
+
 # ── Valid voice-opt column names (whitelist prevents SQL injection) ───────────
 _VOICE_OPT_COLUMNS: frozenset[str] = frozenset({
     "silence_strip", "low_sample_rate", "warm_piper", "parallel_tts",
@@ -98,6 +109,7 @@ class SQLiteStore:
             try:
                 _sqlite_vec.load(conn)
                 conn.executescript(_VEC_TABLE_SQL)
+                conn.executescript(_VEC_ROWID_MAP_SQL)
                 conn.commit()
                 self._has_vec = True
                 log.info("[Store] sqlite-vec loaded — vector search enabled")
@@ -446,21 +458,24 @@ class SQLiteStore:
     def save_document_meta(self, doc_id: str, chat_id: int,
                            title: str, file_path: str,
                            doc_type: str,
-                           metadata: dict | None = None) -> None:
+                           metadata: dict | None = None,
+                           doc_hash: str | None = None) -> None:
         db = self._db()
         db.execute(
             """INSERT INTO documents
-               (doc_id, chat_id, title, file_path, doc_type, metadata)
-               VALUES (?, ?, ?, ?, ?, ?)
+               (doc_id, chat_id, title, file_path, doc_type, metadata, doc_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(doc_id) DO UPDATE SET
                    title      = excluded.title,
                    file_path  = excluded.file_path,
                    doc_type   = excluded.doc_type,
                    metadata   = excluded.metadata,
+                   doc_hash   = excluded.doc_hash,
                    updated_at = datetime('now')""",
             (
                 doc_id, chat_id, title, file_path, doc_type,
                 json.dumps(metadata) if metadata else None,
+                doc_hash,
             ),
         )
         db.commit()
@@ -532,17 +547,29 @@ class SQLiteStore:
         import struct
         vec_blob = struct.pack(f"{len(embedding)}f", *embedding)
         db = self._db()
-        # sqlite-vec virtual tables do not support ON CONFLICT — delete + insert
-        db.execute(
-            "DELETE FROM vec_embeddings WHERE doc_id = ? AND chunk_idx = ?",
+        # Ensure rowid map table exists (auto-migration for existing DBs)
+        db.execute(_VEC_ROWID_MAP_SQL)
+        # Delete existing embedding via stored rowid (vec0 does not support DELETE WHERE on aux columns)
+        existing = db.execute(
+            "SELECT vec_rowid FROM vec_rowid_map WHERE doc_id = ? AND chunk_idx = ?",
             (doc_id, chunk_idx),
-        )
-        db.execute(
+        ).fetchone()
+        if existing:
+            db.execute("DELETE FROM vec_embeddings WHERE rowid = ?", (existing[0],))
+            db.execute("DELETE FROM vec_rowid_map WHERE doc_id = ? AND chunk_idx = ?",
+                       (doc_id, chunk_idx))
+        cur = db.execute(
             "INSERT INTO vec_embeddings "
             "(doc_id, chunk_idx, chat_id, chunk_text, embedding) "
             "VALUES (?, ?, ?, ?, ?)",
             (doc_id, chunk_idx, chat_id, chunk_text, vec_blob),
         )
+        vec_rowid = cur.lastrowid
+        if vec_rowid:
+            db.execute(
+                "INSERT OR REPLACE INTO vec_rowid_map (doc_id, chunk_idx, vec_rowid) VALUES (?, ?, ?)",
+                (doc_id, chunk_idx, vec_rowid),
+            )
         db.commit()
 
     def search_similar(self, embedding: list[float], chat_id: int,
@@ -554,6 +581,8 @@ class SQLiteStore:
             )
         import struct
         vec_blob = struct.pack(f"{len(embedding)}f", *embedding)
+        # Fetch more than top_k to allow deduplication (duplicate rows can exist in vec0)
+        fetch_k = top_k * 3
         # Include own docs + shared docs
         shared_ids = self._get_shared_doc_ids()
         if shared_ids:
@@ -565,7 +594,7 @@ class SQLiteStore:
                 f"   AND embedding MATCH ?"
                 f" ORDER BY distance"
                 f" LIMIT ?",
-                [chat_id] + shared_ids + [vec_blob, top_k],
+                [chat_id] + shared_ids + [vec_blob, fetch_k],
             ).fetchall()
         else:
             rows = self._db().execute(
@@ -575,16 +604,37 @@ class SQLiteStore:
                      AND embedding MATCH ?
                    ORDER BY distance
                    LIMIT ?""",
-                (chat_id, vec_blob, top_k),
+                (chat_id, vec_blob, fetch_k),
             ).fetchall()
-        return [{"doc_id": r[0], "chunk_idx": int(r[1] or 0),
-                 "chunk_text": r[2], "distance": r[3]} for r in rows]
+        # Deduplicate by (doc_id, chunk_idx) — keep closest (first in distance order)
+        seen: set[tuple] = set()
+        result = []
+        for r in rows:
+            key = (r[0], int(r[1] or 0))
+            if key not in seen:
+                seen.add(key)
+                result.append({"doc_id": r[0], "chunk_idx": int(r[1] or 0),
+                                "chunk_text": r[2], "distance": r[3]})
+            if len(result) >= top_k:
+                break
+        return result
 
     def delete_embeddings(self, doc_id: str) -> None:
         if not self._has_vec:
             return
         db = self._db()
-        db.execute("DELETE FROM vec_embeddings WHERE doc_id = ?", (doc_id,))
+        # Ensure rowid map exists
+        db.execute(_VEC_ROWID_MAP_SQL)
+        # Look up rowids from the map table
+        rowids = db.execute(
+            "SELECT vec_rowid FROM vec_rowid_map WHERE doc_id = ?", (doc_id,)
+        ).fetchall()
+        for (rid,) in rowids:
+            try:
+                db.execute("DELETE FROM vec_embeddings WHERE rowid = ?", (rid,))
+            except Exception:
+                pass
+        db.execute("DELETE FROM vec_rowid_map WHERE doc_id = ?", (doc_id,))
         db.commit()
 
     # ── FTS5 text search ──────────────────────────────────────────────────────
@@ -669,6 +719,38 @@ class SQLiteStore:
         db = self._db()
         db.execute("DELETE FROM doc_chunks WHERE doc_id = ?", (str(doc_id),))
         db.commit()
+
+    def get_chunks_without_embeddings(self, chat_id_filter: int | None = None) -> list[dict]:
+        """Return doc_chunks rows that have no corresponding entry in vec_embeddings.
+
+        Used by migrate_reembed.py to find chunks that need vector generation.
+        Returns [{doc_id, chunk_idx, chat_id, chunk_text}].
+        """
+        if not self._has_vec:
+            return []
+        db = self._db()
+        if chat_id_filter is not None:
+            rows = db.execute(
+                "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
+                " FROM doc_chunks dc"
+                " LEFT JOIN vec_embeddings ve"
+                "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
+                " WHERE dc.chat_id = ? AND ve.doc_id IS NULL"
+                " ORDER BY dc.doc_id, CAST(dc.chunk_idx AS INTEGER)",
+                (str(chat_id_filter),),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
+                " FROM doc_chunks dc"
+                " LEFT JOIN vec_embeddings ve"
+                "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
+                " WHERE ve.doc_id IS NULL"
+                " ORDER BY dc.doc_id, CAST(dc.chunk_idx AS INTEGER)",
+            ).fetchall()
+        return [{"doc_id": r[0], "chunk_idx": int(r[1] or 0),
+                 "chat_id": int(r[2] or 0), "chunk_text": r[3]}
+                for r in rows]
 
     def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
                          latency_ms: int = 0, query_type: str = "contextual",
