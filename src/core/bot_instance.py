@@ -12,6 +12,11 @@ from core.bot_config import BOT_TOKEN
 
 log = logging.getLogger(__name__)
 
+# Suppress telebot's verbose ReadTimeout/network-error tracebacks.
+# On flaky connections (e.g. SintAItion) telebot logs ERROR-level tracebacks
+# every ~90s. Recovery is automatic (infinity_polling); the noise is not useful.
+logging.getLogger("TeleBot").setLevel(logging.CRITICAL)
+
 
 class _409Handler(telebot.ExceptionHandler):
     """Fast retry on Telegram 409 Conflict.
