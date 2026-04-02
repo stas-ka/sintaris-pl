@@ -393,6 +393,10 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=_log_handlers,
 )
+# Suppress telebot's verbose ReadTimeout/network-error tracebacks — they are
+# expected on flaky internet and handled by infinity_polling's reconnect loop.
+# CRITICAL only keeps truly unrecoverable errors visible.
+logging.getLogger("TeleBot").setLevel(logging.CRITICAL)
 log = logging.getLogger("taris-tgbot")
 
 
