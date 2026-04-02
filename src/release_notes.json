@@ -1,5 +1,15 @@
 [
   {
+    "version": "2026.4.9",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: PostgreSQL store now includes shared system documents (chat_id=0) in all RAG searches — user/admin guides were invisible to all users on PostgreSQL backends",
+      "fix: get_chunks_without_embeddings in PostgreSQL store now queries vec_embeddings table (removed broken doc_chunks reference)",
+      "fix: system documents (user guide, admin guide) re-indexed with full embeddings on TariStation2",
+      "feat: Ollama model updated to qwen3.5:0.8b on TariStation2 for better local LLM fallback quality"
+    ]
+  },
+  {
     "version": "2026.4.8",
     "date": "2026-04-02",
     "changes": [

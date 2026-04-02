@@ -633,7 +633,8 @@ class PostgresStore:
     def list_documents(self, chat_id: int) -> list[dict]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM documents WHERE chat_id = %s ORDER BY created_at DESC",
+                "SELECT * FROM documents WHERE chat_id = %s OR is_shared = 1"
+                " ORDER BY created_at DESC",
                 (chat_id,),
             ).fetchall()
         result = []
@@ -696,7 +697,8 @@ class PostgresStore:
                 "SELECT doc_id, chunk_idx, chunk_text, "
                 "  (embedding <=> %s::vector) AS distance "
                 "FROM vec_embeddings "
-                "WHERE chat_id = %s "
+                "WHERE (chat_id = %s OR doc_id IN ("
+                "  SELECT doc_id FROM documents WHERE is_shared = 1)) "
                 "ORDER BY embedding <=> %s::vector "
                 "LIMIT %s",
                 (embedding, chat_id, embedding, top_k),
@@ -745,15 +747,17 @@ class PostgresStore:
 
         # plainto_tsquery automatically handles OR/AND; 'simple' = no stemming
         fts_query = " ".join(meaningful)
+        # Include user's own docs AND shared system docs (is_shared=1)
+        shared_clause = "(chat_id = %s OR doc_id IN (SELECT doc_id FROM documents WHERE is_shared = 1))"
         try:
             with self._pool.connection() as conn:
                 rows = conn.execute(
-                    """
+                    f"""
                     SELECT doc_id, chunk_text,
                            ts_rank(to_tsvector('simple', coalesce(chunk_text,'')),
                                    plainto_tsquery('simple', %s)) AS rank
                     FROM vec_embeddings
-                    WHERE chat_id = %s
+                    WHERE {shared_clause}
                       AND chunk_text IS NOT NULL
                       AND to_tsvector('simple', coalesce(chunk_text,''))
                               @@ plainto_tsquery('simple', %s)
@@ -774,7 +778,7 @@ class PostgresStore:
                     f"""
                     SELECT doc_id, chunk_text, 0.01 AS rank
                     FROM vec_embeddings
-                    WHERE chat_id = %s AND chunk_text IS NOT NULL
+                    WHERE {shared_clause} AND chunk_text IS NOT NULL
                       AND ({conditions})
                     LIMIT %s
                     """,
@@ -849,26 +853,26 @@ class PostgresStore:
         return [dict(r) for r in rows]
 
     def get_chunks_without_embeddings(self, chat_id_filter: int | None = None) -> list[dict]:
-        """Return doc_chunks rows that have no corresponding vec_embeddings entry."""
+        """Return text chunks that have no vector embedding yet.
+
+        In Postgres, both text and vectors live in ``vec_embeddings``;
+        rows where ``embedding IS NULL`` are FTS-only chunks awaiting embedding.
+        """
         with self._pool.connection() as conn:
             if chat_id_filter is not None:
                 rows = conn.execute(
-                    "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
-                    " FROM doc_chunks dc"
-                    " LEFT JOIN vec_embeddings ve"
-                    "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
-                    " WHERE dc.chat_id = %s AND ve.doc_id IS NULL"
-                    " ORDER BY dc.doc_id, dc.chunk_idx",
-                    (str(chat_id_filter),),
+                    "SELECT doc_id, chunk_idx, chat_id, chunk_text"
+                    " FROM vec_embeddings"
+                    " WHERE chat_id = %s AND embedding IS NULL"
+                    " ORDER BY doc_id, chunk_idx",
+                    (chat_id_filter,),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT dc.doc_id, dc.chunk_idx, dc.chat_id, dc.chunk_text"
-                    " FROM doc_chunks dc"
-                    " LEFT JOIN vec_embeddings ve"
-                    "   ON ve.doc_id = dc.doc_id AND ve.chunk_idx = dc.chunk_idx"
-                    " WHERE ve.doc_id IS NULL"
-                    " ORDER BY dc.doc_id, dc.chunk_idx",
+                    "SELECT doc_id, chunk_idx, chat_id, chunk_text"
+                    " FROM vec_embeddings"
+                    " WHERE embedding IS NULL"
+                    " ORDER BY doc_id, chunk_idx",
                 ).fetchall()
         return [dict(r) for r in rows]
 
