@@ -1,6 +1,15 @@
 [
   {
-    "version": "2026.4.2",
+    "version": "2026.4.3",
+    "date": "2026-04-02",
+    "changes": [
+      "Fix: document detail card showed raw {title}/{chunks}/{doc_type} template strings before actual data",
+      "Fix: bot answered 'I cannot process file uploads' — added [BOT CAPABILITIES] block to system prompt so LLM knows all features",
+      "Fix: voice pipeline LLM response lost on unstable network — _tg_send_with_retry() retries 3x on connection/timeout errors; falls back to editing transcript message if all attempts fail",
+      "Fix: stale regression tests updated — profile_rag handlers moved to bot_admin.py; vector_returns_chunk_idx used wrong SQL keyword"
+    ]
+  },
+  {
     "date": "2026-04-02",
     "changes": [
       "Fix: _store_text_chunks() upsert_embedding missing chunk_text arg — vector embeddings were silently never stored",
