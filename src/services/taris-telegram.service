@@ -9,11 +9,11 @@ WorkingDirectory=/home/stas/.taris
 ExecStart=/usr/bin/python3 /home/stas/.taris/telegram_menu_bot.py
 Restart=on-failure
 RestartSec=10
-TimeoutStopSec=30
-# Restart if process uses more than 600 MB RSS (guards against CUDA/model memory leaks)
+TimeoutStopSec=60
+# Give Python time to free memory on shutdown before SIGKILL
+# 60s > long_polling_timeout(25s) + worker drain — prevents SIGKILL on normal restarts
 MemoryMax=600M
 MemoryHigh=500M
-# Give Python time to free memory on shutdown before SIGKILL
 KillMode=mixed
 KillSignal=SIGTERM
 Environment=PYTHONUNBUFFERED=1

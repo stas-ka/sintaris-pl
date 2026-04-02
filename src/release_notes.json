@@ -1,5 +1,13 @@
 [
   {
+    "version": "2026.4.11",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: answer_callback_query wrapped in try/except — stale callbacks (>60s) no longer crash the polling worker pool and trigger exponential backoff (was: each expired callback doubled poll interval up to 60s, making bot appear frozen)",
+      "fix: TimeoutStopSec increased 30s→60s — bot now stops gracefully without SIGKILL on restart (was: SIGKILL every restart due to 25s long-poll completing after 30s timeout)"
+    ]
+  },
+  {
     "version": "2026.4.10",
     "date": "2026-04-02",
     "changes": [

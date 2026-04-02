@@ -324,14 +324,25 @@ def callback_handler(call):
     _cb_t0 = _time.perf_counter()
     cid  = call.message.chat.id
     if not _is_allowed(cid):
-        bot.answer_callback_query(call.id, "⛔ Access denied")
+        try:
+            bot.answer_callback_query(call.id, "⛔ Access denied")
+        except Exception:
+            pass
         return
 
     _set_lang(cid, call.from_user)
     data = call.data
 
     _ack_t0 = _time.perf_counter()
-    bot.answer_callback_query(call.id)   # dismiss spinner
+    try:
+        bot.answer_callback_query(call.id)   # dismiss spinner
+    except Exception as _ack_err:
+        # Callback expired (>60s old) or already answered — log and continue.
+        # Do NOT propagate: unhandled ApiTelegramException in a worker triggers
+        # raise_exceptions() in the polling loop, which doubles the poll backoff
+        # (0.25s → 60s) and makes the bot appear frozen.
+        log.warning("[PERF] answer_callback_query failed (data=%s): %s", data, _ack_err)
+        return
     _ack_ms = (_time.perf_counter() - _ack_t0) * 1000
     if _ack_ms > 300:
         log.warning("[PERF] answer_callback_query slow: %.0fms (data=%s)", _ack_ms, data)
