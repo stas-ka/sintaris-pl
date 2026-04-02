@@ -11,7 +11,8 @@
       "Enhancement: RAG log now shows INFO-level per-query strategy breakdown (fts5/vector/mcp chunk counts)",
       "New: src/setup/load_system_docs.py — loads README + howto_bot.md + architecture/overview.md as shared system KB (auto-loaded at startup)",
       "New: src/setup/migrate_reembed.py — re-embeds all existing doc_chunks with no vectors (run once after deploy)",
-      "Tests T87-T90: embedding pipeline fix, shared-docs search, RAG trace fields, system docs structure"
+      "Tests T87-T90: embedding pipeline fix, shared-docs search, RAG trace fields, system docs structure",
+      "Fix: calendar LLM calls (_finish_cal_add, _handle_calendar_query, _handle_cal_console, _cal_handle_edit_input) made non-blocking — previously saturated pyTelebot 2-thread pool causing 'query is too old' crashes and menu timeouts"
     ]
   },
   {
