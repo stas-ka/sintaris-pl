@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.4.7",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: admin log view now shows newest lines first — most recent entry visible without scrolling"
+    ]
+  },
+  {
     "version": "2026.4.6",
     "date": "2026-04-02",
     "changes": [

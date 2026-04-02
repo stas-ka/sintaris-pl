@@ -691,19 +691,23 @@ def _handle_admin_logs_show(chat_id: int, category: str) -> None:
     if path is None:
         bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard(chat_id))
         return
-    lines = tail_log(path, n=50) or _t(chat_id, "admin_logs_empty")
+    raw = tail_log(path, n=50) or _t(chat_id, "admin_logs_empty")
     header = _t(chat_id, "admin_logs_header", n=50, cat=category)
+
+    # Display newest lines first so the most recent entry is visible without scrolling
+    raw_lines = raw.splitlines()
+    raw_lines.reverse()
 
     # Telegram limit is 4096 chars; reserve space for header + code fence
     _MAX = 3800
+    lines = "\n".join(raw_lines)
     code_block = f"```\n{lines}\n```"
     if len(header) + len(code_block) + 4 > _MAX:
-        # Trim lines from the top until it fits, preserving most-recent tail
-        raw_lines = lines.splitlines()
+        # Trim lines from the bottom (oldest) until it fits
         while raw_lines and len(header) + len("\n".join(raw_lines)) + 20 > _MAX:
-            raw_lines = raw_lines[1:]
+            raw_lines = raw_lines[:-1]
         lines = "\n".join(raw_lines)
-        code_block = f"```\n…(trimmed)\n{lines}\n```"
+        code_block = f"```\n{lines}\n…(older entries trimmed)\n```"
 
     text = f"{header}\n\n{code_block}"
     try:
