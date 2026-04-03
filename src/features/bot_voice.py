@@ -28,7 +28,7 @@ from core.bot_config import (
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
     WHISPER_BIN, WHISPER_MODEL, VOICE_BACKEND,
     STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
-    FASTER_WHISPER_THREADS, STT_LANG, DEVICE_VARIANT,
+    FASTER_WHISPER_THREADS, FASTER_WHISPER_SPEECH_PAD_MS, STT_LANG, DEVICE_VARIANT,
     LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
     TARIS_DIR, _PENDING_TTS_FILE, log_voice as log,
 )
@@ -501,7 +501,7 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
             language=fw_lang,
             beam_size=5,
             vad_filter=True,          # built-in VAD — suppresses silence/noise
-            vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=200),
+            vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=FASTER_WHISPER_SPEECH_PAD_MS),
             condition_on_previous_text=False,
             without_timestamps=True,  # skip timestamp computation (not used)
         )

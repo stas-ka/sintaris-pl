@@ -1,6 +1,11 @@
 [
   {
-    "version": "2026.4.23",
+    "version": "2026.4.24",
+    "date":    "2026-04-03",
+    "title":   "Fix STT speech_pad_ms regression on TariStation2 — make configurable",
+    "notes":   "- Root cause: speech_pad_ms=200 was hardcoded in bot_voice.py VAD parameters (up from faster-whisper default 30ms); added ~170ms extra delay after end-of-speech on TariStation2\n- Fix: FASTER_WHISPER_SPEECH_PAD_MS env var (default 30ms = original behavior); SintAItion sets FASTER_WHISPER_SPEECH_PAD_MS=200 in bot.env to keep trailing-word accuracy improvement\n- TariStation2: no bot.env change needed (default 30ms restored)"
+  },
+  {
     "date":    "2026-04-03",
     "title":   "Fix voice LLM silently using Ollama when chat per-function override is set",
     "notes":   "- Root cause: ask_llm_with_history() called without use_case= so defaulted to 'chat'; per_func['chat']='ollama' on SintAItion caused every voice call to use slow Ollama (12-15s) while log showed 'provider=openai' (misleading)\n- Fix: pass use_case='voice' to ask_llm_with_history in bot_voice.py so per_func['voice'] is checked (empty = falls back to LLM_PROVIDER=openai)\n- Fix: log now shows actual resolved provider (not LLM_PROVIDER constant) so mismatch is immediately visible"
