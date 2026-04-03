@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.4.16",
+    "date":    "2026-04-03",
+    "title":   "Multilingual STT: auto-detect language in faster-whisper",
+    "notes":   "- Add: STT now auto-detects spoken language when STT_LANG is unset (Russian, German, English, Slovenian + 90 other languages)\n- Add: 'sl' (Slovenian) added to faster-whisper lang_map\n- Fix: fallback for unknown lang codes changed from forced 'ru' to None (auto-detect)\n- Config: STT_LANG=ru commented out in bot.env on TariStation2 and in bot.env.example\n- No code change needed for SintAItion — set STT_LANG= (empty) in bot.env there to enable"
+  },
+
+  {
     "version": "2026.4.15",
     "date":    "2026-04-03",
     "title":   "Personal data context injection in LLM conversations",

@@ -488,9 +488,11 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
             target_len = int(len(audio_np) * 16000 / sample_rate)
             audio_np = _resample(audio_np, target_len).astype(_np.float32)
 
-        # Map language codes — faster-whisper uses ISO 639-1
-        lang_map = {"ru": "ru", "en": "en", "de": "de"}
-        fw_lang = lang_map.get(lang, "ru")
+        # Map language codes — faster-whisper uses ISO 639-1.
+        # None = auto-detect (used when STT_LANG is unset — supports all 90+ languages
+        # including Russian, German, English, Slovenian, etc.)
+        lang_map = {"ru": "ru", "en": "en", "de": "de", "sl": "sl"}
+        fw_lang = lang_map.get(lang) if lang else None  # None → auto-detect
 
         segments, info = model.transcribe(
             audio_np,
