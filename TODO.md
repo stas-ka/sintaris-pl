@@ -10,6 +10,10 @@
 - [x] System chat "Could not generate a command" — code rewritten in v2026.3.30: `_extract_bash_cmd()`, `_ask_llm_strict()`, role-aware RBAC guards. Old error message no longer exists.
 - [x] Delete personal context (memory) for User via Profile menu — `profile_clear_memory` button + handler wired in profile.yaml + telegram_menu_bot.py (v2026.3.30+)
 - [x] Static texts hardcoded in Python — `bot_calendar.py` `cal_event_saved_prefix`, `bot_voice.py` `audio_interrupted` + `voice_note_msg` moved to strings.json; T55 regression test added (v2026.3.30+1)
+- [x] SintAItion voice LLM silently using Ollama — `ask_llm_with_history()` defaulted to `use_case="chat"`; `per_func["chat"]="ollama"` caused voice calls to use Ollama (12–15s) while log showed `provider=openai`. Fix: `use_case="voice"` (v2026.4.23)
+- [x] `active_model.txt` with `openai/gpt-4.1-mini` prefix → HTTP 400 → silent Ollama fallback → 14s. Fix: `get_active_model()` strips `provider/` prefix (v2026.4.22)
+- [x] FasterWhisper thread cap silently capped at 8 regardless of env var — fix: cap only when auto-detecting (v2026.4.19)
+- [x] Embedding pre-warm missing — first RAG call after restart cost 2–3s; fix: `_prewarm_embeddings()` thread at startup (v2026.4.20)
 
 
 ### ⏳ Infrastructure / Hardware (cannot fix in code)
@@ -20,7 +24,7 @@
 - [] PI2 has no Whisper model (`ggml-base.bin`) — PI2 offline; install on next access
 - [] Vosk WER regression on short audio (`audio_2026-03-08_08-34-23.ogg`) — WER 0.70 vs threshold 0.35; Pi-only (TariStation2 uses faster-whisper); tune model or adjust threshold when Pi is online
 
-## 0.1 Update Documntation
+## 0.1 Update Documentation
 
 1. Create `doc/howto_admin.md` - a proper standalone admin guide covering:
    - Configuration for both TariStation2 and SintAItion
@@ -30,7 +34,7 @@
 3. Create `doc/performance-report-2026-04-02.md` - performance report
 
 4. Update `src/setup/load_system_docs.py` to use the new `howto_admin.md` instead of README + overview
-5. Update `doc/architecture/openclaw-integration.md` with current config info
+5. ✅ Update `doc/architecture/openclaw-integration.md` with current config info (v2026.4.23)
 6. Update uploaded user guide in Taris client
 
 ## 1. Access & Security

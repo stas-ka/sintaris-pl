@@ -1,6 +1,6 @@
 # Taris — OpenClaw Variant
 
-**Version:** `2026.3.28` · **Last updated:** March 2026  
+**Version:** `2026.4.23` · **Last updated:** April 2026  
 → Architecture index: [architecture.md](../architecture.md)  
 → System overview: [overview.md](overview.md)  
 → PicoClaw variant: [picoclaw.md](picoclaw.md)  
@@ -138,6 +138,15 @@ The OpenClaw variant uses a **hybrid STT approach**:
 | `faster_whisper` | base | ~8–12% | ~0.3–0.5 | 300MB | **Recommended OpenClaw** |
 | `faster_whisper` | small | ~5–8% | ~0.8–1.2 | 500MB | Good laptop |
 | `faster_whisper` | medium | ~3–5% | ~2.5–4.0 | 1.5GB | Fast CPU/GPU |
+
+**SintAItion benchmark** (Ryzen AI 9 HX 470, CPU int8, 12 threads, v2026.4.19):
+
+| Model | WER RU | WER DE | WER EN | RTF |
+|---|---|---|---|---|
+| `small` int8 | 22% | 22% | 14% | 0.34 |
+| `large-v3-turbo` int8 | 10% | 6% | 9% | 1.31 |
+
+`small` is the recommended model for SintAItion: best all-round quality below real-time threshold.
 
 **Default for `DEVICE_VARIANT=openclaw`:** `STT_PROVIDER=faster_whisper`, `FASTER_WHISPER_MODEL=base`
 

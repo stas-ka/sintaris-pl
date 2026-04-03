@@ -335,9 +335,9 @@ Imports: `bot_config` (incl. `TARIS_DIR`), `bot_state`, `bot_instance`, `bot_acc
 
 | Function | Purpose |
 |---|---|
-| `_vad_filter_pcm(raw_pcm, sample_rate)` | WebRTC VAD: strip non-speech frames (§5.3) |
+| `_vad_filter_pcm(raw_pcm, sample_rate)` | WebRTC VAD: strip non-speech frames; `speech_pad_ms=200` (v2026.4.19+) |
 | `_stt_whisper(raw_pcm, sample_rate)` | whisper.cpp STT + hallucination guard (sparse-output check); returns transcript or `None` |
-| `_stt_faster_whisper(raw_pcm, sample_rate)` | faster-whisper batch STT; model size set by `FASTER_WHISPER_MODEL` (default `small`); lazy-loaded singleton keyed by `(model, device, compute_type)` |
+| `_stt_faster_whisper(raw_pcm, sample_rate)` | faster-whisper batch STT; `without_timestamps=True`, threads capped to `2×cpu_count−1`; lazy-loaded singleton keyed by `(model, device, compute_type)` (v2026.4.19+) |
 | `_load_vosk_model_cached()` | Test helper: lazy Vosk model singleton (used by T11) |
 
 ### Session + pipeline
@@ -646,11 +646,13 @@ Imports: `bot_config` only. Shared by Telegram and Web channels.
 
 | Function | Purpose |
 |---|---|
-| `get_active_model() -> str` | Read active model name from `active_model.txt` |
+| `get_active_model() -> str` | Read active model name from `active_model.txt`; strips `provider/` prefix (e.g. `openai/gpt-4o-mini` → `gpt-4o-mini`) to prevent HTTP 400 |
 | `set_active_model(name)` | Write model name to `active_model.txt` |
 | `list_models() -> list[dict]` | Read `model_list` from `config.json` |
+| `get_per_func_provider(use_case) -> str` | Return admin-set provider override for use_case (`"chat"`, `"voice"`, `"system"`, `"calendar"`), or `""` to use `LLM_PROVIDER` |
+| `set_per_func_provider(use_case, provider)` | Write per-function override to `llm_per_func.json`; `""` clears override |
 | `_clean_output(raw) -> str` | Strip log lines, printf wrappers, ANSI from CLI output |
-| `_http_post_json(url, payload, timeout)` | Shared HTTP helper for REST-based providers (OpenAI, YandexGPT, Gemini, Anthropic, local) |
+| `_http_post_json(url, payload, timeout)` | Shared HTTP helper for REST-based providers; retries on HTTP 429; logs model name on 4xx errors (v2026.4.22+) |
 | `_ask_taris(prompt, timeout)` | OpenRouter via `taris agent` CLI subprocess (default; `LLM_PROVIDER=taris`) |
 | `_ask_openai(prompt, timeout)` | OpenAI / OpenAI-compatible REST API (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`) |
 | `_ask_yandexgpt(prompt, timeout)` | YandexGPT REST API (`YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI`) |
@@ -660,7 +662,7 @@ Imports: `bot_config` only. Shared by Telegram and Web channels.
 | `_ask_ollama(prompt, timeout)` | Ollama single-turn HTTP POST to `/api/generate` (`OLLAMA_URL`, `OLLAMA_MODEL`) |
 | `_DISPATCH` | `dict` mapping `LLM_PROVIDER` values → provider functions |
 | `ask_llm(prompt, timeout=60) -> str` | Single-turn entry point: routes via `_DISPATCH`; if primary fails and `LLM_LOCAL_FALLBACK=true`, retries via `_ask_local()` with `⚠️ [local fallback]` prefix |
-| `ask_llm_with_history(messages, provider, timeout) -> str` | Multi-turn entry point: sends `[role:system] + history + [role:user]` natively to provider; has explicit branches for openai, anthropic, ollama, yandexgpt, gemini, local, taris |
+| `ask_llm_with_history(messages, timeout, use_case) -> str` | Multi-turn entry point: checks `get_per_func_provider(use_case)` first, then `LLM_PROVIDER`; sends native multi-turn to openai/anthropic/ollama/yandexgpt/gemini/local; voice calls must pass `use_case="voice"` (v2026.4.23+) |
 | `_format_history_as_text(messages) -> str` | Fallback: collapses messages into plain text for providers without native multi-turn support |
 
 ---

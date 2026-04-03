@@ -1,6 +1,6 @@
 # Taris — LLM Provider Abstraction
 
-**Version:** `2026.3.30+3`  
+**Version:** `2026.4.23`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -160,7 +160,29 @@ sudo systemctl restart taris-telegram
 
 **Active model within `taris` provider** (no restart): Admin panel → 🤖 Switch LLM. This only affects the model selection within the taris/OpenRouter backend and writes to `active_model.txt`.
 
-### 19.8 Adding a New Provider
+> ⚠️ `active_model.txt` must contain a bare model name (e.g. `gpt-4o-mini`). Provider-prefixed names like `openai/gpt-4o-mini` cause HTTP 400 and silent fallback to Ollama. `get_active_model()` (v2026.4.22+) auto-strips the prefix.
+
+### 19.7a Per-Function Provider Overrides (v2026.3.32+)
+
+The admin panel can route individual use-cases to different providers **without changing `LLM_PROVIDER`**. Stored in `~/.taris/llm_per_func.json`.
+
+| Use-case key | Used by | Default |
+|---|---|---|
+| `chat` | Telegram text chat (`bot_handlers.py`) | ← `LLM_PROVIDER` |
+| `system` | Admin system chat | ← `LLM_PROVIDER` |
+| `voice` | Voice pipeline (`bot_voice.py`) | ← `LLM_PROVIDER` |
+| `calendar` | Calendar LLM classify | ← `LLM_PROVIDER` |
+
+**Key functions** (`src/core/bot_llm.py`):
+
+| Function | Purpose |
+|---|---|
+| `get_per_func_provider(use_case)` | Returns override or `""` (falls back to `LLM_PROVIDER`) |
+| `set_per_func_provider(use_case, provider)` | Admin panel writes; `""` clears override |
+
+> ⚠️ Voice calls pass `use_case="voice"` to `ask_llm_with_history()` (v2026.4.23+). Before this fix, the default `use_case="chat"` caused voice to use the chat override (e.g. Ollama) silently even when `LLM_PROVIDER=openai`.
+
+
 
 1. Add required env-var constants to `src/core/bot_config.py`
 2. Add `_ask_<provider>(prompt, timeout) -> str` function to `src/core/bot_llm.py`
@@ -227,3 +249,13 @@ Long conversation histories are summarized into a two-tier memory to stay within
 |---|---|---|
 | `CONV_SUMMARY_THRESHOLD` | `15` | Message count that triggers mid-tier summarization |
 | `CONV_MID_MAX` | `5` | Mid-tier count that triggers long-tier compaction |
+| `CONVERSATION_HISTORY_MAX` | `8` | Hard cap on live history turns sent to LLM per call (v2026.4.20+) |
+
+> ⚠️ Memory summaries accumulate over time and are injected verbatim into every system message. 12+ summaries = ~7–11 KB added to every prompt. Monitor with: `SELECT tier, length(summary) FROM conversation_summaries WHERE chat_id=? ORDER BY created_at`.
+
+### 20.4 Embedding Pre-Warm (v2026.4.20+)
+
+At startup `telegram_menu_bot.py` launches `_prewarm_embeddings()` in a background thread which calls `EmbeddingService().embed(["warmup"])`. Without this, the first RAG call on a fresh start incurs a 2–3s cold-start (fastembed ONNX model load).
+
+**Log indicator:** `[Embeddings] pre-warmed at startup: backend=fastembed`
+

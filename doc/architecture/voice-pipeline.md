@@ -1,6 +1,6 @@
 # Taris — Voice Pipeline Architecture
 
-**Version:** `2026.3.30+3`  
+**Version:** `2026.4.23`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -110,6 +110,8 @@ Telegram OGG Opus voice note
   └── [faster-whisper] OpenClaw variant (STT_PROVIDER=faster_whisper)
                FASTER_WHISPER_MODEL=small (default); model cache in HF_HOME
                batch decode after Vosk hotword trigger
+               threads=FASTER_WHISPER_THREADS (auto-detect, capped to 2×cpu_count−1)
+               without_timestamps=True, VAD speech_pad_ms=200 (v2026.4.19+)
       │
       ▼
  SECURITY_PREAMBLE + lang hint
@@ -241,6 +243,17 @@ These voice opts reduce peak RAM and latency on Pi 3:
 | `vad_prefilter=true` | WebRTC VAD removes non-speech frames (saves STT time) | Admin Voice Config |
 | `persistent_piper=false` | Don't keep Piper process warm (saves ~150 MB RAM, +0.5s startup) | Auto on Pi 3 if low RAM |
 | `tmpfs_model=false` | Don't load Piper model to tmpfs (Pi 3 has no spare RAM) | Admin Voice Config |
+
+### 6.4a FasterWhisper Performance Tuning (v2026.4.19+)
+
+| Setting | Effect | Default |
+|---|---|---|
+| `FASTER_WHISPER_THREADS` | CPU threads for inference; auto-detect capped to `2×cpu_count−1` | auto |
+| `without_timestamps=True` | Skip timestamp computation — saves ~15% CPU per call | enabled |
+| `speech_pad_ms=200` | VAD padding around speech (was 400ms); shorter = faster per-call | `200` |
+| `FASTER_WHISPER_DEVICE` | `cpu` / `cuda` / `rocm` — GPU offload if available | `cpu` |
+
+> Thread cap note: before v2026.4.19, `FASTER_WHISPER_THREADS` was silently capped at 8 regardless of the env var due to a missing condition. The fix ensures the env var is respected and auto-detect works correctly.
 
 ### 6.4 OpenClaw GPU Acceleration
 
