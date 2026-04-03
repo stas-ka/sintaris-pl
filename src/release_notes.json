@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.17",
+    "date":    "2026-04-03",
+    "title":   "SintAItion LLM and STT performance tuning",
+    "notes":   "- Perf: OLLAMA_NUM_CTX env var caps KV cache context window (default: model max 256K, now configurable)\n- Perf: num_ctx passed to Ollama /api/chat options in both single-turn and multi-turn calls\n- Perf: power profile set to performance on SintAItion (was balanced at 48% CPU clock)\n- Perf: OLLAMA_KV_CACHE_TYPE=q8_0 halves VRAM usage for KV cache\n- Perf: FASTER_WHISPER_THREADS=12 on SintAItion (up from 8, 24-core machine)\n- Config: OLLAMA_NUM_CTX added to bot_config.py with default 0 (use model default)"
+  },
+  {
     "version": "2026.4.16",
     "date":    "2026-04-03",
     "title":   "Multilingual STT: auto-detect language in faster-whisper",

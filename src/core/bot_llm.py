@@ -29,6 +29,7 @@ from core.bot_config import (
     LOCAL_MAX_TOKENS,
     LOCAL_TEMPERATURE,
     OLLAMA_MIN_TIMEOUT,
+    OLLAMA_NUM_CTX,
     OLLAMA_THINK,
     LLM_LOCAL_FALLBACK,
     LLM_FALLBACK_FLAG_FILE,
@@ -359,6 +360,7 @@ def _ask_ollama(prompt: str, timeout: int) -> str:
         "options": {
             "num_predict": LOCAL_MAX_TOKENS,
             "temperature": _effective_temperature(),
+            **({"num_ctx": OLLAMA_NUM_CTX} if OLLAMA_NUM_CTX > 0 else {}),
         },
     }
     result = _http_post_json(url, headers, body, timeout)
@@ -622,6 +624,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
                 "options": {
                     "num_predict": LOCAL_MAX_TOKENS,
                     "temperature": _effective_temperature(),
+                    **({"num_ctx": OLLAMA_NUM_CTX} if OLLAMA_NUM_CTX > 0 else {}),
                 },
             }
             result = _http_post_json(_url, _headers, _body, effective_timeout)

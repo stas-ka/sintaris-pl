@@ -184,6 +184,7 @@ LOCAL_MAX_TOKENS       = int(os.getenv("LOCAL_MAX_TOKENS", "512"))
 LOCAL_TEMPERATURE      = float(os.getenv("LOCAL_TEMPERATURE", "0.7"))
 OLLAMA_MIN_TIMEOUT     = int(os.getenv("OLLAMA_MIN_TIMEOUT", "90"))   # seconds; GPU is fast but first-token latency varies
 OLLAMA_THINK           = os.getenv("OLLAMA_THINK", "false").lower() not in ("0", "false", "no")  # qwen3: disable thinking by default
+OLLAMA_NUM_CTX         = int(os.getenv("OLLAMA_NUM_CTX", "0"))        # 0 = use model default; set e.g. 8192 to cap KV cache
 
 # Conversation memory (Feature 2.1)
 CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"))
@@ -238,7 +239,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.16"
+BOT_VERSION        = "2026.4.17"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
