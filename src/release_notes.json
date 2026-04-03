@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.21",
+    "date":    "2026-04-03",
+    "title":   "SintAItion: switch LLM primary to OpenAI (gpt-4o-mini), Ollama as fallback",
+    "notes":   "- SintAItion LLM_PROVIDER=openai (gpt-4o-mini) — was ollama (qwen3.5:9B)\n- LLM_FALLBACK_PROVIDER=ollama — local Ollama used when OpenAI unavailable\n- Result: LLM 14.3s -> 0.46s (31x faster); total voice pipeline expected ~3-4s vs 16.7s\n- Quality improved: gpt-4o-mini > qwen3.5:9B for multilingual responses\n- Ollama stays running for fallback and direct testing"
+  },
+  {
     "version": "2026.4.20",
     "date":    "2026-04-03",
     "title":   "Perf: embedding pre-warm + fastembed ONNX + history cap",
