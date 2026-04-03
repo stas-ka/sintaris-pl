@@ -39,7 +39,7 @@ from telegram.bot_access import (
     _build_system_message, _voice_user_turn_content,
     _is_guest, _is_admin, _tg_send_with_retry,
 )
-from core.bot_llm import ask_llm, ask_llm_with_history
+from core.bot_llm import ask_llm, ask_llm_with_history, get_per_func_provider
 from telegram.bot_users import (
     _slug, _list_notes_for, _load_note_text, _save_note_file,
 )
@@ -1252,8 +1252,10 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         add_to_history(chat_id, "user", _clean_text)
 
         _ts = time.time()
-        log.info(f"[Voice] LLM call start: provider={LLM_PROVIDER} text_len={len(text)} history={len(_history_msgs)}")
-        response = ask_llm_with_history(_messages, timeout=90)
+        # Resolve the actual provider so the log is accurate (per_func["voice"] → LLM_PROVIDER)
+        _voice_provider = get_per_func_provider("voice") or LLM_PROVIDER
+        log.info(f"[Voice] LLM call start: provider={_voice_provider} text_len={len(text)} history={len(_history_msgs)}")
+        response = ask_llm_with_history(_messages, timeout=90, use_case="voice")
         _timing["LLM"] = time.time() - _ts
         log.info(f"[Voice] LLM done: {_timing['LLM']:.1f}s resp_len={len(response or '')}")
 
