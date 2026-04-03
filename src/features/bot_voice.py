@@ -433,8 +433,10 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
         if cache_key not in _fw_model_cache:
             import os as _os
             _cpu_threads = FASTER_WHISPER_THREADS or _os.cpu_count() or 4
-            # Cap at 8 — beyond that CTranslate2 has diminishing returns + memory overhead
-            _cpu_threads = min(_cpu_threads, 8)
+            # Cap at 8 only when auto-detecting (diminishing returns beyond 8 for small model).
+            # When FASTER_WHISPER_THREADS is explicitly set, honour it as-is.
+            if not FASTER_WHISPER_THREADS:
+                _cpu_threads = min(_cpu_threads, 8)
             log.info(
                 f"[FasterWhisper] Loading model={FASTER_WHISPER_MODEL} "
                 f"device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE} "
@@ -499,8 +501,9 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
             language=fw_lang,
             beam_size=5,
             vad_filter=True,          # built-in VAD — suppresses silence/noise
-            vad_parameters=dict(min_silence_duration_ms=500),
+            vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=200),
             condition_on_previous_text=False,
+            without_timestamps=True,  # skip timestamp computation (not used)
         )
 
         text = " ".join(seg.text.strip() for seg in segments).strip()
@@ -514,6 +517,7 @@ def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> O
                 beam_size=5,
                 vad_filter=False,
                 condition_on_previous_text=False,
+                without_timestamps=True,
             )
             text = " ".join(seg.text.strip() for seg in segments).strip()
         if not text:
