@@ -31,7 +31,7 @@ from typing import Optional
 # Config
 # ---------------------------------------------------------------------------
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")  # 11434 = Ollama default port
 
 # Models to benchmark if no --model flag given
 # (only models actually present in ollama list are tested)
@@ -109,10 +109,10 @@ PROMPTS = {
     },
     "de_calendar": {
         "text": (
-            'Extrahiere die Ereignisdaten aus dem Text und gib JSON zurueck.\n'
+            'Extrahiere die Ereignisdaten aus dem Text und gib JSON zurück.\n'
             'Text: "Arzttermin am Donnerstag um 14:00 Uhr"\n'
             'Format: {"title": "<Titel>", "dt": "<YYYY-MM-DDTHH:MM>"}\n'
-            'Nur JSON, keine Erklaerung.'
+            'Nur JSON, keine Erklärung.'
         ),
         "lang": "de",
         "desc": "DE calendar -> JSON",
@@ -121,7 +121,7 @@ PROMPTS = {
     },
     "de_reasoning": {
         "text": (
-            "Wie spaet ist es in Berlin, wenn es in Moskau 15:00 Uhr ist? "
+            "Wie spät ist es in Berlin, wenn es in Moskau 15:00 Uhr ist? "
             "Antworte kurz: nur die Uhrzeit."
         ),
         "lang": "de",
@@ -162,7 +162,7 @@ PROMPTS = {
     },
     # ── Slovenian ─────────────────────────────────────────────────────────────
     "sl_factual": {
-        "text": "Koliko je vrednost Pi na 5 decimalnih mest? Samo stevilo, nic drugega.",
+        "text": "Koliko je vrednost Pi na 5 decimalnih mest? Samo število, nič drugega.",
         "lang": "sl",
         "desc": "SL factual (Pi)",
         "check": lambda r: "3.14159" in r.replace(",", "."),
@@ -171,7 +171,7 @@ PROMPTS = {
     "sl_calendar": {
         "text": (
             'Izvleci podatke o dogodku iz besedila in vrni JSON.\n'
-            'Besedilo: "Sestanek z zdravnikom v cetrtek ob 14:00"\n'
+            'Besedilo: "Sestanek z zdravnikom v četrtek ob 14:00"\n'
             'Format: {"title": "<naziv>", "dt": "<YYYY-MM-DDTHH:MM>"}\n'
             'Vrni samo JSON, brez razlage.'
         ),
@@ -182,8 +182,8 @@ PROMPTS = {
     },
     "sl_assistant": {
         "text": (
-            "Ti si glasovni pomocnik Taris. Uporabnik pravi: 'Nastavi opomnik jutri ob 9 zjutraj.'\n"
-            "Odgovori kratko in potrdi dejanje v slovenscini (1-2 stavka)."
+            "Ti si glasovni pomočnik Taris. Uporabnik pravi: 'Nastavi opomnik jutri ob 9 zjutraj.'\n"
+            "Odgovori kratko in potrdi dejanje v slovenščini (1-2 stavka)."
         ),
         "lang": "sl",
         "desc": "SL assistant reply",
@@ -269,7 +269,7 @@ def _run_prompt(model: str, prompt: str, options: dict) -> dict:
     Returns the full response dict from Ollama.
     """
     is_thinking_model = any(
-        tag in model.lower() for tag in ("qwen3", "qwen3.5", "deepseek-r", "gemma4")
+        model.lower().startswith(tag) for tag in ("qwen3", "deepseek-r", "gemma4")
     )
     payload = {
         "model": model,
@@ -538,7 +538,7 @@ def main():
         models = [m for m in CANDIDATE_MODELS if m in available]
         # Auto-discover any gemma4 or qwen3.5 models not in CANDIDATE_MODELS
         for m in available:
-            if ("gemma4" in m or "qwen3.5" in m) and m not in models:
+            if (m.startswith("gemma4") or m.startswith("qwen3.5")) and m not in models:
                 models.append(m)
 
     if not models:
