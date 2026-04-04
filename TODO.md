@@ -106,6 +106,22 @@ Emergency fallback via `llama.cpp`. Pi 3: Qwen2-0.5B (~1 tok/s); Pi 4/5: Phi-3-m
 - [x] Fallback responses prefixed with `⚠️ [local fallback]` label
 - [x] Service staged on Pi2; starts automatically once `llama-server` binary is installed
 - [x] Configurable, switchable via Admin Panel
+
+### 3.2 Gemma 4 Model Evaluation 🔄
+
+Evaluate Google Gemma 4 models as potential replacement/supplement for current Ollama LLMs.
+→ See: `doc/research-gemma4-benchmark.md` for full analysis
+
+- [x] Research Gemma 4 model family (E2B, E4B, 31B, 26B-A4B) — specs, architecture, audio capabilities
+- [x] Create benchmark script `src/tests/llm/benchmark_ollama_models.py` with Gemma 4 + Qwen candidates
+- [x] Hardware compatibility analysis (SintAItion: E2B/E4B fit, 31B too large; TS2: only E2B)
+- [x] Comparison with currently used models (qwen3.5:latest, qwen2:0.5b, gpt-4o-mini)
+- [x] STT feasibility analysis (E2B/E4B have audio, but not a Whisper replacement)
+- [ ] Pull gemma4:e2b + gemma4:e4b on SintAItion and run benchmark
+- [ ] Compare actual t/s and quality vs qwen3.5:latest baseline
+- [ ] Test gemma4:e2b on TariStation2 as qwen2:0.5b alternative
+- [ ] Decision: adopt Gemma 4 or keep current models
+
 ---
 
 ## 4. Content & Knowledge
