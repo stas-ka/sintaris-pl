@@ -1644,15 +1644,29 @@ def t_web_link_code_roundtrip(**_) -> list[TestResult]:
             t1 = _t.time()
             try:
                 cp_code = _bs.generate_web_link_code(CHAT_ID)
-                fresh = _bs._load_web_link_codes()
-                ok = cp_code in fresh and fresh[cp_code].get("chat_id") == CHAT_ID
-                results.append(TestResult(
-                    "web_link_code:cross_process",
-                    "PASS" if ok else "FAIL",
-                    _t.time() - t1,
-                    f"code in file={cp_code in fresh} "
-                    f"chat_id={fresh.get(cp_code, {}).get('chat_id')}",
-                ))
+                # DB-backed: verify via store.find_link_code
+                try:
+                    from core.store import store as _st
+                    row = _st.find_link_code(cp_code)
+                    ok = row is not None and row.get("chat_id") == CHAT_ID
+                    results.append(TestResult(
+                        "web_link_code:cross_process",
+                        "PASS" if ok else "FAIL",
+                        _t.time() - t1,
+                        f"code in DB={row is not None} "
+                        f"chat_id={row.get('chat_id') if row else None}",
+                    ))
+                except Exception:
+                    # Fallback: file-based verification
+                    fresh = _bs._load_web_link_codes()
+                    ok = cp_code in fresh and fresh[cp_code].get("chat_id") == CHAT_ID
+                    results.append(TestResult(
+                        "web_link_code:cross_process",
+                        "PASS" if ok else "FAIL",
+                        _t.time() - t1,
+                        f"code in file={cp_code in fresh} "
+                        f"chat_id={fresh.get(cp_code, {}).get('chat_id')}",
+                    ))
             except Exception as exc:
                 results.append(TestResult("web_link_code:cross_process", "FAIL",
                                           _t.time() - t1, str(exc)))
@@ -4375,28 +4389,28 @@ def t_notes_db_content(**_) -> list:
     except Exception as e:
         results.append(TestResult("notes_index_content_column", "FAIL", _time.time() - t0, str(e)))
 
-    # 2. _save_note_file stores content in DB
+    # 2. _save_note_file stores content via store.save_note
     try:
         src = (SRC_ROOT / "telegram/bot_users.py").read_text()
-        ok = "content" in src and "ON CONFLICT(slug, chat_id)" in src and "content = excluded.content" in src
+        ok = "save_note(" in src  # store.save_note or _st.save_note or alias
         results.append(TestResult(
             "save_note_db_content",
             "PASS" if ok else "FAIL",
             _time.time() - t0,
-            "_save_note_file writes content to DB" if ok else "MISSING: content upsert in _save_note_file",
+            "_save_note_file writes content via store.save_note()" if ok else "MISSING: content upsert in _save_note_file",
         ))
     except Exception as e:
         results.append(TestResult("save_note_db_content", "FAIL", _time.time() - t0, str(e)))
 
-    # 3. _load_note_text reads from DB first
+    # 3. _load_note_text reads from store (DB) first
     try:
         src = (SRC_ROOT / "telegram/bot_users.py").read_text()
-        ok = "SELECT content FROM notes_index" in src and "File fallback" in src
+        ok = "load_note(" in src  # store.load_note or _st.load_note or alias
         results.append(TestResult(
             "load_note_db_first",
             "PASS" if ok else "FAIL",
             _time.time() - t0,
-            "_load_note_text reads from DB first" if ok else "MISSING: DB-first read in _load_note_text",
+            "_load_note_text reads from store first" if ok else "MISSING: DB-first read in _load_note_text",
         ))
     except Exception as e:
         results.append(TestResult("load_note_db_first", "FAIL", _time.time() - t0, str(e)))
@@ -6801,6 +6815,74 @@ def t_mail_creds_store_primary(**_) -> list[TestResult]:
     return results
 
 
+def t_postgres_no_sqlite_fallbacks(**_) -> list[TestResult]:
+    """T106: On OpenClaw/Postgres, key functions must NOT have SQLite fallbacks.
+
+    Checks:
+    - bot_access.py _notes_context has no 'from core.bot_db import get_db' fallback
+    - bot_access.py _contacts_context has no 'from core.bot_db import get_db' fallback
+    - telegram_menu_bot.py init_db is guarded with _postgres_mode() check
+    - bot_db.py db_save_voice_opts delegates to store on Postgres
+    """
+    import os, re
+    results = []
+    src_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+
+    # 1. bot_access.py — _notes_context / _contacts_context must have no get_db fallback
+    access_path = os.path.join(src_root, "telegram/bot_access.py")
+    try:
+        src = open(access_path, encoding="utf-8").read()
+        for fn_name in ("_notes_context", "_contacts_context"):
+            start = src.find(f"def {fn_name}(")
+            end   = src.find("\ndef ", start + 1)
+            fn_src = src[start:end] if end != -1 else src[start:]
+            has_fallback = "from core.bot_db import get_db" in fn_src
+            results.append(TestResult(
+                f"T106_{fn_name}_no_sqlite_fallback",
+                "FAIL" if has_fallback else "PASS",
+                0.0,
+                "SQLite fallback still present — not removed" if has_fallback else "no SQLite fallback",
+            ))
+    except FileNotFoundError:
+        results.append(TestResult("T106_bot_access_exists", "FAIL", 0.0, "bot_access.py not found"))
+
+    # 2. telegram_menu_bot.py — init_db must be guarded with _postgres_mode()
+    menu_path = os.path.join(src_root, "telegram_menu_bot.py")
+    try:
+        src = open(menu_path, encoding="utf-8").read()
+        has_guard = bool(re.search(r"_postgres_mode\(\).*_init_db|not.*_postgres_mode.*init_db", src, re.S))
+        # Also accept simple guard pattern
+        if not has_guard:
+            has_guard = "if not _postgres_mode()" in src and "_init_db()" in src
+        results.append(TestResult(
+            "T106_init_db_postgres_guard",
+            "PASS" if has_guard else "FAIL",
+            0.0,
+            "init_db guarded with _postgres_mode()" if has_guard else "init_db NOT guarded — always creates SQLite",
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("T106_menu_bot_exists", "FAIL", 0.0, "telegram_menu_bot.py not found"))
+
+    # 3. bot_db.py — db_save_voice_opts must delegate to store
+    db_path = os.path.join(src_root, "core/bot_db.py")
+    try:
+        src = open(db_path, encoding="utf-8").read()
+        start = src.find("def db_save_voice_opts(")
+        end   = src.find("\ndef ", start + 1)
+        fn_src = src[start:end] if end != -1 else src[start:]
+        delegates = "set_voice_opt" in fn_src or "_get_store()" in fn_src
+        results.append(TestResult(
+            "T106_voice_opts_postgres_delegate",
+            "PASS" if delegates else "FAIL",
+            0.0,
+            "db_save_voice_opts delegates to store" if delegates else "db_save_voice_opts does NOT delegate to store",
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("T106_bot_db_exists", "FAIL", 0.0, "bot_db.py not found"))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -6986,6 +7068,8 @@ TEST_FUNCTIONS = [
     t_system_settings_json_file,
     # mail_creds _load_creds uses store as primary (T105)
     t_mail_creds_store_primary,
+    # Postgres-only: no SQLite fallbacks in key functions (T106)
+    t_postgres_no_sqlite_fallbacks,
 ]
 
 

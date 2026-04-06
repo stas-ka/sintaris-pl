@@ -87,14 +87,13 @@ def _cal_save(chat_id: int, events: list) -> None:
             store.save_event(chat_id, ev)
         # Remove DB events for this user that are not in the new list
         current_ids = {e.get("id") for e in events if e.get("id")}
-        from core.bot_db import get_db
-        db = get_db()
-        existing = db.execute(
-            "SELECT id FROM calendar_events WHERE chat_id=?", (chat_id,)
-        ).fetchall()
-        for row in existing:
-            if row[0] not in current_ids:
-                store.delete_event(chat_id, row[0])
+        try:
+            existing = store.load_events(chat_id)
+            for ev in existing:
+                if ev.get("id") and ev["id"] not in current_ids:
+                    store.delete_event(chat_id, ev["id"])
+        except Exception as _del_e:
+            log.warning("[Cal] delete orphaned events failed: %s", _del_e)
     except Exception as _e:
         log.warning("[Cal] store.save_event failed: %s", _e)
         # Fallback: JSON write for safety

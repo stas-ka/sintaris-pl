@@ -118,6 +118,14 @@ def generate_web_link_code(chat_id: int) -> str:
     code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=WEB_LINK_CODE_TTL_MINUTES)).isoformat()
     _st.delete_expired_link_codes()
+    # Revoke any previous code for this user
+    try:
+        with _st._pool.connection() as conn:
+            conn.execute("DELETE FROM web_link_codes WHERE chat_id = %s", (chat_id,))
+            conn.commit()
+    except Exception:
+        # SQLite / no-postgres fallback: best-effort
+        pass
     _st.save_link_code(code, chat_id, expires_at)
     return code
 

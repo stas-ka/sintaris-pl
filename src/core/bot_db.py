@@ -348,6 +348,14 @@ _VOICE_OPT_KEYS = [
 
 def db_save_voice_opts(opts: dict) -> None:
     """Persist all voice-opt flags to the global_voice_opts table."""
+    if _is_postgres():
+        try:
+            s = _get_store()
+            for key in _VOICE_OPT_KEYS:
+                s.set_voice_opt(key, bool(opts.get(key, False)), chat_id=None)
+            return
+        except Exception as exc:
+            log.warning("[VoiceOpts] store.set_voice_opt failed: %s", exc)
     conn = get_db()
     for key in _VOICE_OPT_KEYS:
         conn.execute(
@@ -360,6 +368,14 @@ def db_save_voice_opts(opts: dict) -> None:
 
 def db_get_voice_opts() -> dict:
     """Return all voice-opt flags from the global_voice_opts table."""
+    if _is_postgres():
+        try:
+            result = _get_store().get_voice_opts(chat_id=None)
+            for key in _VOICE_OPT_KEYS:
+                result.setdefault(key, False)
+            return result
+        except Exception as exc:
+            log.warning("[VoiceOpts] store.get_voice_opts failed: %s", exc)
     conn = get_db()
     rows = conn.execute("SELECT key, value FROM global_voice_opts").fetchall()
     result = {row[0]: bool(row[1]) for row in rows}

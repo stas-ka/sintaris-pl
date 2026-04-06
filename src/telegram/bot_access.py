@@ -218,22 +218,10 @@ def _calendar_context(chat_id: int) -> str:
 
 
 def _notes_context(chat_id: int) -> str:
-    """Return a [NOTES] block listing user's notes with content snippets, or empty string.
-
-    Tries configured store first, then falls back to SQLite for legacy data.
-    """
+    """Return a [NOTES] block listing user's notes with content snippets, or empty string."""
     try:
         from core.store import store
         notes = store.list_notes(chat_id)
-        if not notes:
-            # Fallback: SQLite has legacy data (created before PostgreSQL backend was configured)
-            from core.bot_db import get_db
-            rows = get_db().execute(
-                "SELECT slug, title, content FROM notes_index "
-                "WHERE chat_id=? ORDER BY updated_at DESC LIMIT 10",
-                (chat_id,),
-            ).fetchall()
-            notes = [dict(r) for r in rows]
         if not notes:
             return ""
         lines = ["[NOTES — personal notes]"]
@@ -259,22 +247,10 @@ def _notes_context(chat_id: int) -> str:
 
 
 def _contacts_context(chat_id: int) -> str:
-    """Return a compact [CONTACTS] block with user's contact list, or empty string.
-
-    Tries configured store first, then falls back to SQLite for legacy data.
-    """
+    """Return a compact [CONTACTS] block with user's contact list, or empty string."""
     try:
         from core.store import store
         contacts = store.list_contacts(chat_id)
-        if not contacts:
-            # Fallback: SQLite has legacy data
-            from core.bot_db import get_db
-            rows = get_db().execute(
-                "SELECT name, phone, email, notes FROM contacts "
-                "WHERE chat_id=? ORDER BY name COLLATE NOCASE",
-                (chat_id,),
-            ).fetchall()
-            contacts = [dict(r) for r in rows]
         if not contacts:
             return ""
         lines = ["[CONTACTS]"]

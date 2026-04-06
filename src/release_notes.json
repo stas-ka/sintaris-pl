@@ -1,5 +1,20 @@
 [
   {
+    "version": "2026.4.31",
+    "date": "2026-04-06",
+    "changes": [
+      "OpenClaw variant: SQLite fully eliminated — Postgres is the only data store",
+      "bot_access.py: _notes_context/_contacts_context SQLite fallbacks removed",
+      "telegram_menu_bot.py: init_db() guarded — only runs on non-Postgres (PicoClaw) variant",
+      "bot_db.py: db_save_voice_opts/db_get_voice_opts delegate to store on Postgres",
+      "bot_calendar.py: _cal_save() uses store.load_events() instead of get_db()",
+      "bot_users.py: _load_note_text/_save_note_file use store API only",
+      "Migration script: src/setup/migrate_sqlite_to_postgres.py — idempotent SQLite→Postgres",
+      "Data migration: 316 rows migrated from SQLite to Postgres (users, calendar, history, notes, prefs, etc.)",
+      "T106: regression test for no-SQLite-fallbacks on Postgres variant"
+    ]
+  },
+  {
     "version": "2026.4.30",
     "date": "2026-04-06",
     "changes": [

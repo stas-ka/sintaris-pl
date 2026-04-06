@@ -1375,8 +1375,12 @@ def document_handler(message):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    from core.bot_db import init_db as _init_db
-    _init_db()
+    from core.bot_db import _is_postgres as _postgres_mode
+    if not _postgres_mode():
+        from core.bot_db import init_db as _init_db
+        _init_db()
+    else:
+        log.info("[DB] Postgres mode — skipping SQLite init_db()")
     log.info("=" * 50)
     log.info("Pico Telegram Menu Bot starting")
     from core.bot_config import ADMIN_USERS, ALLOWED_USERS
