@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.27",
+    "date":    "2026-04-06",
+    "title":   "Fix: document detail card broken on Postgres (created_at datetime crash)",
+    "notes":   "- bot_documents.py: _handle_doc_detail() crashed silently when Postgres returned created_at as datetime.datetime — raw [:16] slice is not valid on datetime objects\n- Fix: detect datetime with hasattr(x, 'strftime') and format to string before slicing; fallback to str()[:16] for SQLite ISO strings\n- Also wrapped lines-build in try/except with proper error logging to prevent future silent failures\n- Regression test T100 (doc_detail_datetime_safe) added"
+  },
+  {
     "version": "2026.4.26",
     "date":    "2026-04-06",
     "title":   "Fix: empty note render crash + voice admin info Markdown injection",

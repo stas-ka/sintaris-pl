@@ -169,12 +169,20 @@ def _handle_doc_detail(chat_id: int, doc_id: str) -> None:
         except Exception:
             meta = {}
     shared = "✅" if d.get("is_shared") else "❌"
-    lines = [
-        f"📄 *{d['title']}*",
-        _t(chat_id, "docs_doc_type").format(doc_type=d.get("doc_type", "?")),
-        _t(chat_id, "docs_doc_chunks").format(chunks=meta.get("n_chunks", "?")),
-        _t(chat_id, "docs_doc_size").format(size=meta.get("file_size_bytes", "?")),
-    ]
+    # created_at may be a datetime object (Postgres) or ISO string (SQLite)
+    _ca = d.get("created_at", "")
+    created_str = _ca.strftime("%Y-%m-%d %H:%M") if hasattr(_ca, "strftime") else str(_ca)[:16]
+    try:
+        lines = [
+            f"📄 *{d['title']}*",
+            _t(chat_id, "docs_doc_type").format(doc_type=d.get("doc_type", "?")),
+            _t(chat_id, "docs_doc_chunks").format(chunks=meta.get("n_chunks", "?")),
+            _t(chat_id, "docs_doc_size").format(size=meta.get("file_size_bytes", "?")),
+        ]
+    except Exception as e:
+        log.error("[Docs] detail lines build failed: %s", e)
+        bot.send_message(chat_id, _t(chat_id, "docs_not_found"))
+        return
     n_embedded = meta.get("n_embedded")
     if n_embedded is not None:
         lines.append(_t(chat_id, "docs_doc_embeds").format(embeds=n_embedded))
@@ -183,7 +191,7 @@ def _handle_doc_detail(chat_id: int, doc_id: str) -> None:
         lines.append(_t(chat_id, "docs_doc_quality").format(quality=quality_pct))
     lines += [
         _t(chat_id, "docs_doc_shared").format(shared=shared),
-        _t(chat_id, "docs_doc_created").format(created=d.get("created_at", "")[:16]),
+        _t(chat_id, "docs_doc_created").format(created=created_str),
     ]
     text = "\n".join(lines)
     kb = InlineKeyboardMarkup(row_width=2)

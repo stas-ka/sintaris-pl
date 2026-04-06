@@ -6519,6 +6519,64 @@ def t_admin_info_markdown_safe(**_) -> list[TestResult]:
                                    "bot_voice.py not found"))
     return results
 
+def t_doc_detail_datetime_safe(**_) -> list[TestResult]:
+    """T100: _handle_doc_detail must not crash when created_at is a datetime object (Postgres).
+
+    Root cause: Postgres returns created_at as datetime.datetime, not a string.
+    d.get("created_at", "")[:16] raises TypeError.
+    Fix: use hasattr(x, 'strftime') guard before slicing.
+    """
+    import time
+    results: list[TestResult] = []
+    t0 = time.time()
+    try:
+        src_path = Path(__file__).parents[1] / "features" / "bot_documents.py"
+        text = src_path.read_text(encoding="utf-8")
+
+        # Must NOT contain the raw slice on created_at
+        if 'd.get("created_at", "")[:16]' in text or "created_at\", \"\")[:16]" in text:
+            results.append(TestResult(
+                "doc_detail_datetime_safe", "FAIL", round(time.time() - t0, 3),
+                "Raw [:16] slice on created_at still present — will crash with Postgres datetime"
+            ))
+            return results
+
+        # Must contain a strftime guard
+        if "strftime" not in text:
+            results.append(TestResult(
+                "doc_detail_datetime_safe", "FAIL", round(time.time() - t0, 3),
+                "No strftime guard found in bot_documents.py for datetime handling"
+            ))
+            return results
+
+        # Simulate the conversion logic directly
+        import datetime as dt_mod
+        test_cases = [
+            (dt_mod.datetime(2026, 4, 6, 10, 21, 15), "2026-04-06 10:21"),
+            ("2026-04-06T10:21:15.605903", "2026-04-06T10:"),
+            ("", ""),
+        ]
+        for val, expected_prefix in test_cases:
+            if hasattr(val, "strftime"):
+                result = val.strftime("%Y-%m-%d %H:%M")
+            else:
+                result = str(val)[:16]
+            if not result.startswith(expected_prefix):
+                results.append(TestResult(
+                    "doc_detail_datetime_safe", "FAIL", round(time.time() - t0, 3),
+                    f"Conversion of {val!r} gave {result!r}, expected prefix {expected_prefix!r}"
+                ))
+                return results
+
+        results.append(TestResult(
+            "doc_detail_datetime_safe", "PASS", round(time.time() - t0, 3),
+            "created_at datetime→string conversion safe for both Postgres and SQLite"
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("doc_detail_datetime_safe", "FAIL", 0.0,
+                                   "bot_documents.py not found"))
+    return results
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 TEST_FUNCTIONS = [
@@ -6694,6 +6752,8 @@ TEST_FUNCTIONS = [
     t_render_telegram_empty_block,
     # Voice admin info: model labels wrapped in backticks to avoid Markdown injection (T99)
     t_admin_info_markdown_safe,
+    # _handle_doc_detail: created_at from Postgres is datetime, not string — no raw [:16] slice (T100)
+    t_doc_detail_datetime_safe,
 ]
 
 
