@@ -528,7 +528,8 @@ def _format_history_as_text(messages: list) -> str:
     return "\n".join(parts)
 
 
-def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "chat") -> str:
+def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "chat",
+                          _no_history_fallback: bool = False) -> str:
     """Call the configured LLM with a full conversation history.
 
     ``messages`` is a list of ``{"role": "user"|"assistant", "content": str}``
@@ -682,15 +683,24 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
         except Exception as exc2:
             log.error(f"[LLM] local fallback also failed in history call: {exc2}")
 
-    # Last-resort: strip history, send only the final user turn
+    # Last-resort: strip history, send only the final user turn + system prompt
     try:
         last_user = next(
             (m["content"] for m in reversed(messages) if m.get("role") == "user"),
             None,
         )
-        if last_user:
+        if last_user and not _no_history_fallback:
             log.warning("[LLM] trying no-history fallback after history call failure")
-            return ask_llm(last_user, timeout=timeout)
+            # Preserve system prompt so system-chat use_case still returns a bash cmd
+            sys_msg = next((m for m in messages if m.get("role") == "system"), None)
+            fallback_messages = []
+            if sys_msg:
+                fallback_messages.append(sys_msg)
+            fallback_messages.append({"role": "user", "content": last_user})
+            return ask_llm_with_history(
+                fallback_messages, timeout=timeout, use_case=use_case,
+                _no_history_fallback=True,
+            )
     except Exception as exc3:
         log.error(f"[LLM] no-history fallback also failed: {exc3}")
 

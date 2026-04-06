@@ -956,7 +956,7 @@ class PostgresStore:
                 (chat_id, role, content, call_id),
             ).fetchone()
             conn.commit()
-        return row[0] if row else 0
+        return row["id"] if row else 0
 
     def log_llm_call(
         self, call_id: str, chat_id: int, provider: str,
@@ -1010,7 +1010,7 @@ class PostgresStore:
             row = conn.execute(
                 "SELECT msg_id FROM tts_pending WHERE chat_id = %s", (chat_id,)
             ).fetchone()
-        return row[0] if row else None
+        return row["msg_id"] if row else None
 
     def clear_tts_pending(self, chat_id: int) -> None:
         with self._pool.connection() as conn:
@@ -1033,9 +1033,7 @@ class PostgresStore:
                 "SELECT COUNT(*) FROM conversation_summaries WHERE chat_id=%s AND tier=%s",
                 (chat_id, tier),
             ).fetchone()
-        return row[0] if row else 0
-
-    def get_summaries_oldest(self, chat_id: int, tier: str = "mid") -> list[dict]:
+        return row["count"] if row else 0
         with self._pool.connection() as conn:
             rows = conn.execute(
                 "SELECT id, summary, tier, msg_count, created_at "
@@ -1074,7 +1072,7 @@ class PostgresStore:
                     "SELECT value FROM user_prefs WHERE chat_id=%s AND key=%s",
                     (chat_id, key),
                 ).fetchone()
-            return row[0] if row else default
+            return row["value"] if row else default
         except Exception:
             return default
 
@@ -1115,7 +1113,7 @@ class PostgresStore:
             rows = conn.execute(
                 "SELECT DISTINCT chat_id FROM chat_history"
             ).fetchall()
-        return [r[0] for r in rows]
+        return [r["chat_id"] for r in rows]
 
     def get_chunks_without_embeddings(self, chat_id_filter: int | None = None) -> list[dict]:
         """Return text chunks that have no vector embedding yet.

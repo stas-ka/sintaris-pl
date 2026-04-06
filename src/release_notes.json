@@ -1,5 +1,16 @@
 [
   {
+    "version": "2026.4.32",
+    "date": "2026-04-06",
+    "changes": [
+      "Fix: store_postgres.py used positional row[0] with dict_row pool — raised KeyError every call",
+      "Fix: chat history (append_history_tracked) now correctly stores to Postgres — row['id'] fix",
+      "Fix: LLM no-history fallback preserves system prompt — system chat now returns bash cmd even after LLM history call failure",
+      "Fix: bot_llm.py ask_llm_with_history no-history fallback uses ask_llm_with_history (not ask_llm) to preserve use_case",
+      "T107: regression test for Postgres dict_row named column access"
+    ]
+  },
+  {
     "version": "2026.4.31",
     "date": "2026-04-06",
     "changes": [

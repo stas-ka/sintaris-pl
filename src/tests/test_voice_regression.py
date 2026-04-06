@@ -6883,6 +6883,67 @@ def t_postgres_no_sqlite_fallbacks(**_) -> list[TestResult]:
     return results
 
 
+def t_postgres_dict_row_access(**_) -> list[TestResult]:
+    """T107: store_postgres uses dict_row → all row[col] access must use named keys not row[0].
+
+    Verifies:
+    - append_history_tracked returns row["id"] (not row[0])
+    - get_tts_pending_msg returns row["msg_id"] (not row[0])
+    - count_summaries returns row["count"] (not row[0])
+    - get_user_pref returns row["value"] (not row[0])
+    """
+    import os, re
+    results = []
+    src_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+    pg_path = os.path.join(src_root, "core/store_postgres.py")
+    try:
+        src = open(pg_path, encoding="utf-8").read()
+        # Must NOT have positional row[0] access
+        bad = list(re.finditer(r'\brow\[0\]', src))
+        results.append(TestResult(
+            "T107_no_positional_row_access",
+            "FAIL" if bad else "PASS",
+            0.0,
+            f"Found {len(bad)} instance(s) of row[0] — must use named keys with dict_row" if bad
+            else "no positional row[0] access (correct)",
+        ))
+        # Must have correct named access in append_history_tracked
+        has_id = 'row["id"]' in src
+        results.append(TestResult(
+            "T107_append_history_row_id",
+            "PASS" if has_id else "FAIL",
+            0.0,
+            'row["id"] found in store_postgres' if has_id else 'MISSING: row["id"] in append_history_tracked',
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("T107_pg_file_exists", "FAIL", 0.0, "store_postgres.py not found"))
+
+    # Live test: append_history_tracked must return a positive integer
+    try:
+        import os as _os
+        backend = _os.environ.get("STORE_BACKEND", "sqlite").lower()
+        if backend != "postgres":
+            results.append(TestResult("T107_live_append_history", "SKIP", 0.0, "not running on postgres"))
+        else:
+            from core.store import store
+            rid = store.append_history_tracked(0, "user", "__t107_probe__")
+            if isinstance(rid, int) and rid > 0:
+                results.append(TestResult("T107_live_append_history", "PASS", 0.0, f"returned id={rid}"))
+                # Clean up probe row
+                try:
+                    with store._pool.connection() as conn:
+                        conn.execute("DELETE FROM chat_history WHERE chat_id=0 AND content='__t107_probe__'")
+                        conn.commit()
+                except Exception:
+                    pass
+            else:
+                results.append(TestResult("T107_live_append_history", "FAIL", 0.0, f"returned {rid!r} (expected positive int)"))
+    except Exception as e:
+        results.append(TestResult("T107_live_append_history", "FAIL", 0.0, str(e)))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7070,6 +7131,8 @@ TEST_FUNCTIONS = [
     t_mail_creds_store_primary,
     # Postgres-only: no SQLite fallbacks in key functions (T106)
     t_postgres_no_sqlite_fallbacks,
+    # Postgres dict_row access — row["col"] not row[0] (T107)
+    t_postgres_dict_row_access,
 ]
 
 
