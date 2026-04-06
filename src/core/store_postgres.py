@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS voice_opts (
     piper_low_model      BOOLEAN DEFAULT FALSE,
     persistent_piper     BOOLEAN DEFAULT FALSE,
     voice_timing_debug   BOOLEAN DEFAULT FALSE,
-    vosk_fallback        BOOLEAN DEFAULT TRUE
+    vosk_fallback        BOOLEAN DEFAULT TRUE,
+    voice_male           BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS global_voice_opts (
@@ -257,6 +258,7 @@ class PostgresStore:
         _migrations = [
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_hash TEXT",
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_shared SMALLINT DEFAULT 0",
+            "ALTER TABLE voice_opts ADD COLUMN IF NOT EXISTS voice_male BOOLEAN DEFAULT FALSE",
         ]
         for mig in _migrations:
             try:
