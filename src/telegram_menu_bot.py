@@ -103,6 +103,7 @@ from telegram.bot_handlers import (
     _handle_profile_lang, _set_profile_lang, _handle_profile_my_data,
     _handle_profile_clear_memory, _handle_profile_clear_memory_confirmed,
     _handle_profile_toggle_memory,
+    _handle_profile_voice_gender,
     _pending_profile,
 )
 
@@ -421,6 +422,9 @@ def callback_handler(call):
     elif data == "profile_toggle_memory":
         if not _is_allowed(cid): return _deny(cid)
         _handle_profile_toggle_memory(cid)
+    elif data == "profile_voice_gender":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_voice_gender(cid)
     # ── Developer menu ─────────────────────────────────────────────────────
     elif data == "dev_menu":
         _handle_dev_menu(cid)

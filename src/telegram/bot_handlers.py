@@ -388,6 +388,8 @@ def _handle_profile(chat_id: int) -> None:
         "email_line": email_line,
         "memory_btn_label": _t(chat_id, "profile_memory_enabled_label"
                                if _memory_enabled(chat_id) else "profile_memory_disabled_label"),
+        "voice_gender_btn_label": _t(chat_id, "profile_voice_gender_male_label"
+                                     if _voice_gender_is_male(chat_id) else "profile_voice_gender_female_label"),
     })
 
 
@@ -398,6 +400,31 @@ def _memory_enabled(chat_id: int) -> bool:
         return db_get_user_pref(chat_id, "memory_enabled", "1") == "1"
     except Exception:
         return True
+
+
+def _voice_gender_is_male(chat_id: int) -> bool:
+    """Return True if the user has selected male TTS voice."""
+    try:
+        from core.store import store as _store
+        opts = _store.get_voice_opts(chat_id)
+        return bool(opts.get("voice_male", False))
+    except Exception:
+        return False
+
+
+def _handle_profile_voice_gender(chat_id: int) -> None:
+    """Toggle per-user TTS voice between male (dmitri) and female (irina)."""
+    try:
+        from core.store import store as _store
+        current = _voice_gender_is_male(chat_id)
+        new_val = not current
+        _store.set_voice_opt(chat_id, "voice_male", new_val)
+        label = _t(chat_id, "profile_voice_gender_male_set" if new_val else "profile_voice_gender_female_set")
+        bot.send_message(chat_id, label, parse_mode="Markdown", reply_markup=_back_keyboard())
+    except Exception as _e:
+        log.warning(f"[Profile] _handle_profile_voice_gender failed for {chat_id}: {_e}")
+        bot.send_message(chat_id, "❌ Could not update voice preference.", reply_markup=_back_keyboard())
+    _handle_profile(chat_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

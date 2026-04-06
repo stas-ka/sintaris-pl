@@ -97,7 +97,7 @@ _LLM_UI_LABEL = _LLM_UI_LABELS.get(LLM_PROVIDER, LLM_PROVIDER.replace("_", "-").
 
 _DEVICE_UI_LABELS = {
     "openclaw": "OpenClaw",
-    "picoclaw": "PicoClaw",
+    "picoclaw": "Taris",
     "taris":    "Taris",
 }
 _DEVICE_UI_LABEL = _DEVICE_UI_LABELS.get(DEVICE_VARIANT, DEVICE_VARIANT.title())
@@ -696,19 +696,25 @@ async def profile_page(request: Request, msg: str = "", error: str = ""):
     if not user:
         return RedirectResponse("/login", status_code=302)
     account = find_account_by_id(user["sub"]) or {}
-    # Try to load linked Telegram registration record
     tg_chat_id = account.get("telegram_chat_id")
     tg_reg = None
+    voice_male = False
     if tg_chat_id:
         try:
             from telegram.bot_users import _find_registration
             tg_reg = _find_registration(int(tg_chat_id))
         except Exception:
             pass
+        try:
+            from core.store import store as _store
+            voice_male = bool(_store.get_voice_opts(int(tg_chat_id)).get("voice_male", False))
+        except Exception:
+            pass
     return templates.TemplateResponse(request, "profile.html", _ctx(
         request, user, "profile",
         account=account,
         tg_reg=tg_reg,
+        voice_male=voice_male,
         msg=msg,
         error=error,
     ))
@@ -767,6 +773,34 @@ async def profile_link_telegram(request: Request, link_code: str = Form(...)):
     update_account(user["sub"], telegram_chat_id=tg_id)
     log.info(f"[Auth] Telegram {tg_id} linked to web account '{user['username']}'")
     return RedirectResponse("/profile?msg=telegram_linked", status_code=302)
+
+
+@app.post("/profile/voice-gender", response_class=HTMLResponse)
+async def profile_voice_gender(request: Request, voice_male: str = Form("off")):
+    """Toggle per-user TTS voice between male (dmitri) and female (irina)."""
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    chat_id = _profile_chat_id(user)
+    if not chat_id:
+        return RedirectResponse("/profile?error=Link+your+Telegram+account+to+set+voice+preference", status_code=302)
+    try:
+        from core.store import store as _store
+        new_val = voice_male.lower() in ("on", "1", "true", "male")
+        _store.set_voice_opt(int(chat_id), "voice_male", new_val)
+    except Exception as _e:
+        log.warning(f"[Web] profile/voice-gender failed for user={user['username']}: {_e}")
+        return RedirectResponse("/profile?error=Could+not+update+voice+preference", status_code=302)
+    return RedirectResponse("/profile?msg=voice_gender_saved", status_code=302)
+
+
+def _profile_chat_id(user: dict) -> int | None:
+    """Return the Telegram chat_id linked to the web user, or None."""
+    try:
+        account = find_account_by_id(user["sub"]) or {}
+        return account.get("telegram_chat_id") or None
+    except Exception:
+        return None
 
 
 @app.get("/settings", response_class=HTMLResponse)

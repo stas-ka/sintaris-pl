@@ -404,8 +404,8 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
         ("faster_whisper_stt", f"{_flag('faster_whisper_stt')}  faster-whisper STT  ·  CTranslate2 (recommended)"),
     ]
 
-    # PicoClaw/Pi-only opts — hidden on OpenClaw (packages not installed)
-    picoclaw_rows = [
+    # Taris/Pi-only opts — hidden on OpenClaw (packages not installed)
+    taris_rows = [
         ("tmpfs_model",       f"{_flag('tmpfs_model')}  Piper model in RAM (/dev/shm)  ·  −10s TTS load"),
         ("whisper_stt",       f"{_flag('whisper_stt')}  Whisper STT (whisper.cpp)  ·  +accuracy"),
         ("vosk_fallback",     f"{_flag('vosk_fallback')}  Vosk Fallback  ·  OFF = −180 MB RAM (Whisper-only)"),
@@ -413,11 +413,17 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
         ("persistent_piper",  f"{_flag('persistent_piper')}  Persistent Piper process  ·  ONNX hot"),
     ]
 
+    # Voice gender — available on all variants (per-user global default)
+    gender_rows = [
+        ("voice_male",        f"{_flag('voice_male')}  🎙 Male voice (dmitri)  ·  OFF = female (irina)"),
+    ]
+
     opts_rows = common_rows[:]
     if is_openclaw:
         opts_rows += openclaw_rows
     else:
-        opts_rows += picoclaw_rows
+        opts_rows += taris_rows
+    opts_rows += gender_rows
 
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))

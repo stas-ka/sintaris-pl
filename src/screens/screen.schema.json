@@ -45,7 +45,7 @@
         },
         "visible_variants": {
           "type": "array",
-          "items": { "type": "string", "enum": ["picoclaw", "openclaw"] },
+          "items": { "type": "string", "enum": ["taris", "picoclaw", "openclaw"] },
           "description": "Widget shown only if DEVICE_VARIANT matches one of these values"
         },
         "visible_if": {

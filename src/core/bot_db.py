@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS voice_opts (
     piper_low_model      INTEGER DEFAULT 0,
     persistent_piper     INTEGER DEFAULT 0,
     voice_timing_debug   INTEGER DEFAULT 0,
-    vosk_fallback        INTEGER DEFAULT 1
+    vosk_fallback        INTEGER DEFAULT 1,
+    voice_male           INTEGER DEFAULT 0
 );
 
 -- Global voice optimisation flags (system-wide, not per-user)
@@ -277,6 +278,11 @@ def init_db() -> None:
             conn.execute(_col_sql)
         except Exception:
             pass  # column already exists
+    # voice_male column (added in v2026.4.25)
+    try:
+        conn.execute("ALTER TABLE voice_opts ADD COLUMN voice_male INTEGER DEFAULT 0")
+    except Exception:
+        pass  # column already exists
     conn.commit()
     log.info(f"[DB] init OK : {DB_PATH}")
 
@@ -293,6 +299,7 @@ _VOICE_OPT_KEYS = [
     "silence_strip", "low_sample_rate", "warm_piper", "parallel_tts",
     "user_audio_toggle", "tmpfs_model", "vad_prefilter", "whisper_stt",
     "vosk_fallback", "piper_low_model", "persistent_piper", "voice_timing_debug",
+    "voice_male",
 ]
 
 

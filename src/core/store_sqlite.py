@@ -68,6 +68,7 @@ _VOICE_OPT_COLUMNS: frozenset[str] = frozenset({
     "silence_strip", "low_sample_rate", "warm_piper", "parallel_tts",
     "user_audio_toggle", "tmpfs_model", "vad_prefilter", "whisper_stt",
     "piper_low_model", "persistent_piper", "voice_timing_debug", "vosk_fallback",
+    "voice_male",
 })
 
 

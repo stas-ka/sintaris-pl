@@ -23,6 +23,7 @@ from typing import Optional
 import core.bot_state as _st
 from core.bot_config import (
     PIPER_BIN, PIPER_MODEL, PIPER_MODEL_TMPFS, PIPER_MODEL_LOW,
+    PIPER_MODEL_MALE, PIPER_MODEL_MALE_LOW,
     PIPER_MODEL_DE, PIPER_MODEL_DE_TMPFS,
     VOSK_MODEL_PATH, VOSK_MODEL_DE_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
@@ -144,11 +145,12 @@ def _get_vosk_model(lang: str = "ru"):
 # Piper — model selection and warmup
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _piper_model_path(lang: str = "ru") -> str:
+def _piper_model_path(lang: str = "ru", chat_id: int | None = None) -> str:
     """
     Return the effective Piper ONNX model path for the given language.
     Priority: tmpfs (RAM disk) → low model → medium (default).
-    German users always get the German model (no low/tmpfs variants yet).
+    German users always get the German model (no male/low/tmpfs variants yet).
+    Russian/English: honours per-user voice_male preference when chat_id is given.
     """
     if lang == "de":
         if _st._voice_opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_DE_TMPFS):
@@ -156,7 +158,25 @@ def _piper_model_path(lang: str = "ru") -> str:
         if os.path.exists(PIPER_MODEL_DE):
             return PIPER_MODEL_DE
         log.warning("[TTS] German Piper model not found, falling back to Russian model")
+
+    # Resolve per-user male preference
+    use_male = False
+    if chat_id:
+        try:
+            from core.store import store as _store
+            user_opts = _store.get_voice_opts(chat_id)
+            use_male = bool(user_opts.get("voice_male", False))
+        except Exception:
+            pass
+
     opts = _st._voice_opts
+    if use_male:
+        if opts.get("piper_low_model") and os.path.exists(PIPER_MODEL_MALE_LOW):
+            return PIPER_MODEL_MALE_LOW
+        if os.path.exists(PIPER_MODEL_MALE):
+            return PIPER_MODEL_MALE
+        log.warning("[TTS] Male Piper model not found (%s), falling back to female", PIPER_MODEL_MALE)
+
     if opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_TMPFS):
         return PIPER_MODEL_TMPFS
     if opts.get("piper_low_model") and os.path.exists(PIPER_MODEL_LOW):
@@ -588,10 +608,12 @@ def _split_for_tts(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru") -> Optional[bytes]:
+def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru",
+                chat_id: int | None = None) -> Optional[bytes]:
     """
     Synthesise text with Piper TTS, encode with ffmpeg as OGG Opus.
     Returns bytes for bot.send_voice(), or None on failure.
+    chat_id — when given, uses per-user voice_male preference for model selection.
 
     Two sequential subprocess.run() calls (not Popen pipe) to avoid
     the deadlock where parent holds piper.stdout open → ffmpeg blocks on stdin EOF.
@@ -617,7 +639,7 @@ def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru") -> Optional[byt
     try:
         # Step 1: Piper TTS → raw S16LE PCM at 22050 Hz
         piper_result = subprocess.run(
-            [PIPER_BIN, "--model", _piper_model_path(lang), "--output-raw"],
+            [PIPER_BIN, "--model", _piper_model_path(lang, chat_id=chat_id), "--output-raw"],
             input=tts_text.encode("utf-8"),
             capture_output=True,
             timeout=120,
@@ -694,7 +716,7 @@ def _handle_note_read_aloud(chat_id: int, slug: str) -> None:
             sent       = 0
 
             for i, chunk in enumerate(chunks):
-                ogg = _tts_to_ogg(chunk, _trim=False, lang=_voice_lang(chat_id))
+                ogg = _tts_to_ogg(chunk, _trim=False, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if not ogg:
                     log.warning(f"[NotesTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
                     continue
@@ -759,7 +781,7 @@ def _handle_digest_tts(chat_id: int) -> None:
             sent    = 0
 
             for i, chunk in enumerate(chunks):
-                ogg = _tts_to_ogg(chunk, _trim=False, lang=_voice_lang(chat_id))
+                ogg = _tts_to_ogg(chunk, _trim=False, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if not ogg:
                     log.warning(f"[DigestTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
                     continue
@@ -1141,7 +1163,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             audio_on = (not opts.get("user_audio_toggle")
                         or _st._user_audio.get(chat_id, True))
             if audio_on:
-                ogg = _tts_to_ogg(reply, lang=_voice_lang(chat_id))
+                ogg = _tts_to_ogg(reply, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if ogg:
                     bot.send_voice(chat_id, io.BytesIO(ogg))
             return
@@ -1173,7 +1195,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             if audio_on3:
                 tts3 = bot.send_message(chat_id, _t(chat_id, "gen_audio"),
                                         parse_mode="Markdown")
-                ogg3 = _tts_to_ogg(note_plain, lang=_voice_lang(chat_id))
+                ogg3 = _tts_to_ogg(note_plain, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if ogg3:
                     bot.send_voice(chat_id, io.BytesIO(ogg3),
                                    caption=_t(chat_id, "audio_caption"))
@@ -1302,7 +1324,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         _tts_thread = None
         if audio_on and opts.get("parallel_tts"):
             def _bg_tts():
-                _tts_result[0] = _tts_to_ogg(response, lang=_voice_lang(chat_id))
+                _tts_result[0] = _tts_to_ogg(response, lang=_voice_lang(chat_id), chat_id=chat_id)
             _tts_thread = threading.Thread(target=_bg_tts, daemon=True)
             _tts_thread.start()
 
@@ -1352,7 +1374,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                     _tts_thread.join(timeout=160)   # piper 120s + ffmpeg 30s + slack
                     ogg = _tts_result[0]
                 else:
-                    ogg = _tts_to_ogg(response, lang=_voice_lang(chat_id))
+                    ogg = _tts_to_ogg(response, lang=_voice_lang(chat_id), chat_id=chat_id)
                 _timing["TTS"] = time.time() - _ts
                 log.info(f"[Voice] TTS done: {_timing['TTS']:.1f}s ogg_kb={len(ogg or b'')//1024}")
 

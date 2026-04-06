@@ -47,10 +47,10 @@ from typing import Optional, IO
 import vosk
 
 # STT provider — set via STT_PROVIDER env var
-# vosk          → Vosk offline (default for Pi/picoclaw)
+# vosk          → Vosk offline (default for Pi/taris)
 # faster_whisper → faster-whisper CTranslate2 (default for openclaw/laptop)
 STT_PROVIDER = os.getenv("STT_PROVIDER",
-    "faster_whisper" if os.getenv("DEVICE_VARIANT", "picoclaw").lower() == "openclaw" else "vosk"
+    "faster_whisper" if os.getenv("DEVICE_VARIANT", "taris").lower() == "openclaw" else "vosk"
 ).lower()
 FASTER_WHISPER_MODEL   = os.getenv("FASTER_WHISPER_MODEL",   "base")
 FASTER_WHISPER_DEVICE  = os.getenv("FASTER_WHISPER_DEVICE",  "cpu")
@@ -578,7 +578,7 @@ def main() -> None:
     States: LISTENING → (hotword) → RECORDING → taris → SPEAKING → LISTENING
 
     STT routing (controlled by STT_PROVIDER env var):
-      - 'vosk'           → Vosk offline (default for picoclaw / Raspberry Pi)
+      - 'vosk'           → Vosk offline (default for taris / Raspberry Pi)
       - 'faster_whisper' → faster-whisper CTranslate2 (default for openclaw / laptop)
     """
     log.info("=" * 60)

@@ -28,6 +28,11 @@ widgets:
 
   - type: button_row
     buttons:
+      - label: "{voice_gender_btn_label}"
+        action: profile_voice_gender
+
+  - type: button_row
+    buttons:
       - label_key: profile_btn_clear_memory
         action: profile_clear_memory
 

@@ -88,14 +88,16 @@ TARIS_CONFIG     = os.environ.get("TARIS_CONFIG",
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Deployment variant — controls optional features per platform
-# DEVICE_VARIANT=picoclaw  → Raspberry Pi + PicoClaw robot (default)
+# DEVICE_VARIANT=taris     → Raspberry Pi (default; "picoclaw" accepted as alias)
 # DEVICE_VARIANT=openclaw  → Laptop/PC + OpenClaw AI gateway
 # ─────────────────────────────────────────────────────────────────────────────
-DEVICE_VARIANT   = os.environ.get("DEVICE_VARIANT", "picoclaw").lower()
+_dv_raw = os.environ.get("DEVICE_VARIANT", "taris").lower()
+# Accept legacy "picoclaw" value from existing Pi bot.env files as alias for "taris"
+DEVICE_VARIANT = "taris" if _dv_raw == "picoclaw" else _dv_raw
 
 # OpenClaw AI gateway — optional provider (Feature §4.2 remote integration)
 # Only active when DEVICE_VARIANT=openclaw or OPENCLAW_BIN is explicitly set.
-# Falls back to taris/picoclaw automatically when the binary is not found.
+# Falls back to taris binary automatically when the binary is not found.
 OPENCLAW_BIN     = os.environ.get("OPENCLAW_BIN",     os.path.expanduser("~/.local/bin/openclaw"))
 OPENCLAW_SESSION = os.environ.get("OPENCLAW_SESSION", "taris")
 OPENCLAW_TIMEOUT = int(os.environ.get("OPENCLAW_TIMEOUT", "60"))
@@ -240,7 +242,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.24"
+BOT_VERSION        = "2026.4.25"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
@@ -263,6 +265,10 @@ PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
                              "~/.taris/ru_RU-irina-medium.onnx")))
 PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
                          _th("ru_RU-irina-low.onnx"))
+PIPER_MODEL_MALE   = os.environ.get("PIPER_MODEL_MALE",
+                         _th("ru_RU-dmitri-medium.onnx"))
+PIPER_MODEL_MALE_LOW = os.environ.get("PIPER_MODEL_MALE_LOW",
+                         _th("ru_RU-dmitri-low.onnx"))
 PIPER_MODEL_DE     = os.environ.get("PIPER_MODEL_DE",
                          _th("de_DE-thorsten-medium.onnx"))
 PIPER_MODEL_DE_TMPFS = os.path.join("/dev/shm/piper",
@@ -283,8 +289,8 @@ VOICE_BACKEND      = os.environ.get("VOICE_BACKEND", "cpu").lower()
 # faster_whisper — faster-whisper (CTranslate2, better WER for laptop/PC)
 # openai_whisper — OpenAI Whisper API (best accuracy for ru/en/de/sl, requires OPENAI_API_KEY)
 # whisper_cpp   — whisper.cpp binary (hardware-accelerated, VOICE_BACKEND=cuda)
-# Auto-default: faster_whisper for openclaw, vosk for picoclaw
-_DEFAULT_STT = "faster_whisper" if os.environ.get("DEVICE_VARIANT", "picoclaw").lower() == "openclaw" else "vosk"
+# Auto-default: faster_whisper for openclaw, vosk for taris (Pi)
+_DEFAULT_STT = "faster_whisper" if os.environ.get("DEVICE_VARIANT", "taris").lower() == "openclaw" else "vosk"
 STT_PROVIDER            = os.environ.get("STT_PROVIDER", _DEFAULT_STT).lower()
 
 # STT fallback — analogous to LLM_LOCAL_FALLBACK.
@@ -362,6 +368,7 @@ _VOICE_OPTS_DEFAULTS: dict = {
     "piper_low_model":    False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
     "persistent_piper":   False,   # §5.3: keep warm Piper process alive (ONNX hot)
     "voice_timing_debug": False,   # show per-stage ⏱ timings in voice replies
+    "voice_male":         False,   # per-user: use male TTS voice (ru_RU-dmitri) instead of female (ru_RU-irina)
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

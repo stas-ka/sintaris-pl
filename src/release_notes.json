@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.25",
+    "date":    "2026-04-04",
+    "title":   "Rename PicoClaw to Taris; add configurable male TTS voice per user",
+    "notes":   "- Renamed all user-facing 'PicoClaw'/'picoclaw' references to 'Taris' (display, config defaults, admin panel, bot_ui.py, voice_assistant.py, screen.schema.json)\n- Added male TTS voice option: ru_RU-dmitri-medium.onnx (Dmitri) alongside existing female Irina\n- voice_male preference stored per-user in voice_opts DB table (new column)\n- Telegram Profile screen: voice gender toggle button\n- Web UI Profile page: voice gender radio selector card\n- Admin voice opts menu: global voice_male default toggle\n- _piper_model_path() selects model per user; falls back to female if male model absent\n- DB migration: ALTER TABLE voice_opts ADD COLUMN voice_male INTEGER DEFAULT 0 (idempotent)\n- Backward compat: DEVICE_VARIANT=picoclaw in existing Pi bot.env still accepted (normalized to 'taris')"
+  },
+  {
     "version": "2026.4.24",
     "date":    "2026-04-03",
     "title":   "Fix STT speech_pad_ms regression on TariStation2 — make configurable",

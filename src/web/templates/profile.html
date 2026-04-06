@@ -17,6 +17,10 @@
 <div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
   <span style="color:#4caf50">✅</span> Telegram account linked — you now have one unified account.
 </div>
+{% elif msg == 'voice_gender_saved' %}
+<div class="card mb-md" style="border-left:4px solid #4caf50; background:rgba(76,175,80,.12)">
+  <span style="color:#4caf50">✅</span> Voice preference saved.
+</div>
 {% endif %}
 
 {% if error %}
@@ -157,6 +161,45 @@
       </button>
     </div>
   </form>
+</div>
+
+<!-- ── Voice Gender preference ───────────────────────────── -->
+<p class="section-label mt-md">Voice Preference</p>
+<div class="card mb-md">
+  {% if account.get('telegram_chat_id') %}
+  <p style="color:var(--text-muted); font-size:13px; margin:0 0 14px">
+    Choose the TTS voice gender for voice replies in Telegram and the bot.
+  </p>
+  <form method="post" action="/profile/voice-gender">
+    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:14px">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--text-primary)">
+        <input type="radio" name="voice_male" value="off"
+               {% if not voice_male %}checked{% endif %}
+               style="accent-color:var(--accent)">
+        👩 Female — Irina
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--text-primary)">
+        <input type="radio" name="voice_male" value="on"
+               {% if voice_male %}checked{% endif %}
+               style="accent-color:var(--accent)">
+        👨 Male — Dmitri
+      </label>
+    </div>
+    <button type="submit"
+            style="padding:9px 20px; border-radius:8px; border:none;
+                   background:var(--accent); color:#fff; font-size:14px;
+                   font-weight:600; cursor:pointer">
+      🎙 Save Voice
+    </button>
+  </form>
+  <p style="color:var(--text-muted); font-size:11px; margin:12px 0 0">
+    Male voice requires <code>ru_RU-dmitri-medium.onnx</code> installed on the bot server.
+  </p>
+  {% else %}
+  <p style="color:var(--text-muted); font-size:13px; margin:0">
+    Link your Telegram account above to configure voice preferences.
+  </p>
+  {% endif %}
 </div>
 
 <!-- ── Password & security ───────────────────────────────── -->
