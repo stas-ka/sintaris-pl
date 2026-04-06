@@ -1,5 +1,14 @@
 [
   {
+    "version": "2026.4.34",
+    "date": "2026-04-06",
+    "changes": [
+      "fix: system chat no-command bug — ollama timeout now respects 45s limit (no OLLAMA_MIN_TIMEOUT override for system use_case)",
+      "fix: per-func LLM override fallback chain — when per-func provider fails and LLM_FALLBACK_PROVIDER matches it, global LLM_PROVIDER is now tried as final cloud fallback",
+      "test: T109 — two sub-tests for system chat ollama timeout guard and global default fallback"
+    ]
+  },
+  {
     "version": "2026.4.33",
     "date": "2026-04-06",
     "changes": [

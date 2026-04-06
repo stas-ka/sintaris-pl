@@ -7009,6 +7009,56 @@ def t_llm_history_named_fallback(**_) -> list[TestResult]:
     return results
 
 
+def t_llm_system_chat_fallback(*, gt, verbose=False):
+    """T109: system chat fallback bugs:
+    1. Ollama must NOT apply OLLAMA_MIN_TIMEOUT when use_case='system'.
+    2. When per-func override fails and LLM_FALLBACK_PROVIDER==provider, the global
+       LLM_PROVIDER (default) must still be tried as a final cloud fallback.
+    """
+    results = []
+    try:
+        llm_src = (SRC_ROOT / "core" / "bot_llm.py").read_text()
+
+        # T109a: ask_llm_with_history ollama block must check use_case != "system"
+        has_system_timeout_guard = (
+            'use_case == "system"' in llm_src or "use_case != \"system\"" in llm_src
+        ) and "effective_timeout" in llm_src
+        results.append(TestResult(
+            "T109_ollama_system_timeout_guard",
+            "PASS" if has_system_timeout_guard else "FAIL",
+            0.0,
+            "use_case=='system' timeout guard found in ask_llm_with_history" if has_system_timeout_guard
+            else "MISSING: ollama effective_timeout in history func must guard use_case=='system'",
+        ))
+
+        # T109b: global default fallback block must exist
+        has_default_fallback = (
+            "per_func and default_provider not in" in llm_src
+            or "per_func and default_provider" in llm_src
+        )
+        results.append(TestResult(
+            "T109_global_default_fallback",
+            "PASS" if has_default_fallback else "FAIL",
+            0.0,
+            "global default provider fallback block found" if has_default_fallback
+            else "MISSING: fallback to LLM_PROVIDER when per-func override fails and named_fb==provider",
+        ))
+
+        # T109c: the log message for the new fallback path is present
+        has_log = "falling back to default provider" in llm_src
+        results.append(TestResult(
+            "T109_default_fallback_log",
+            "PASS" if has_log else "FAIL",
+            0.0,
+            "default provider fallback log message found" if has_log
+            else "MISSING: log message for global default fallback in ask_llm_with_history",
+        ))
+
+    except FileNotFoundError:
+        results.append(TestResult("T109_llm_file_exists", "FAIL", 0.0, "bot_llm.py not found"))
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7200,6 +7250,8 @@ TEST_FUNCTIONS = [
     t_postgres_dict_row_access,
     # ask_llm_with_history named fallback (LLM_FALLBACK_PROVIDER) present (T108)
     t_llm_history_named_fallback,
+    # system chat: ollama timeout guard + global default fallback (T109)
+    t_llm_system_chat_fallback,
 ]
 
 

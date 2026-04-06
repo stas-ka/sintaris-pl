@@ -627,7 +627,8 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
 
         elif provider == "ollama":
             # Ollama supports native OpenAI-format multi-turn messages — send as-is.
-            effective_timeout = max(timeout, OLLAMA_MIN_TIMEOUT)
+            # system_chat uses a strict 45 s budget — do NOT apply OLLAMA_MIN_TIMEOUT floor.
+            effective_timeout = timeout if use_case == "system" else max(timeout, OLLAMA_MIN_TIMEOUT)
             _url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
             _headers = {"Content-Type": "application/json"}
             _body: dict = {
@@ -681,6 +682,23 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
                 return result
         except Exception as exc2:
             log.error(f"[LLM] named fallback '{named_fb}' also failed in history call: {exc2}")
+
+    # ── Global default fallback (when per-func override was used and failed) ──
+    # e.g. per_func["system"]="ollama" fails; LLM_FALLBACK_PROVIDER="ollama" (same → skipped);
+    # but LLM_PROVIDER="openai" — that cloud provider was never tried and should be used now.
+    default_provider = LLM_PROVIDER.lower()
+    if per_func and default_provider not in (provider, named_fb):
+        log.warning(f"[LLM] falling back to default provider '{default_provider}' after per-func '{provider}' failure")
+        try:
+            result = ask_llm_with_history(
+                messages, timeout, use_case=use_case, _no_history_fallback=True,
+                _force_provider=default_provider,
+            )
+            if result:
+                log.debug(f"[LLM] default provider fallback '{default_provider}' succeeded in history call")
+                return result
+        except Exception as exc2:
+            log.error(f"[LLM] default provider fallback '{default_provider}' also failed in history call: {exc2}")
 
     if (LLM_LOCAL_FALLBACK or os.path.exists(LLM_FALLBACK_FLAG_FILE)) and provider != "local":
         log.warning(
