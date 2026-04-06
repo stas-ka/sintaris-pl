@@ -183,6 +183,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T99 | `admin_info_markdown_safe` | `_send_admin_info()` in `bot_voice.py` wraps STT/LLM/TTS labels in backticks — prevents Markdown entity injection from model names with `_` (e.g. `ru_RU-dmitri-medium.onnx`). | After editing `_send_admin_info()` or `_tts_label()` / `_llm_label()` |
 | T100 | `doc_detail_datetime_safe` | `_handle_doc_detail()` in `bot_documents.py` converts `created_at` safely — Postgres returns `datetime.datetime`, SQLite returns ISO string. Raw `[:16]` slice on datetime raises `TypeError`. | After editing `_handle_doc_detail()` or `store_postgres.py` `list_documents()` |
 | T101 | `note_open_empty_file` | `_handle_note_open()` in `bot_handlers.py` uses `note_empty_body` placeholder when note file is 0 bytes — prevents `"\n"` widget text that Telegram rejects as empty. | After editing `_handle_note_open()` or empty-note content handling |
+| T102 | `store_postgres_notes_uuid_path` | `store_postgres.py` note methods use `_notes_storage_dir(chat_id)` for UUID path resolution — prevents notes being written/read from `str(chat_id)` dir when account is linked to a web UUID via `accounts.json`. | After editing `store_postgres.py` note methods or account-linking logic |
 
 ### 2.6 When specific tests are mandatory
 
@@ -223,6 +224,7 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After editing `_send_admin_info()`, `_tts_label()`, `_llm_label()` in `bot_voice.py` | T99 (`--test t_admin_info_markdown_safe`) |
 | After editing `_handle_doc_detail()` or `store_postgres.py` `list_documents()` | T100 (`--test t_doc_detail_datetime_safe`) |
 | After editing `_handle_note_open()` or empty-note handling | T101 (`--test t_note_open_empty_file`) |
+| After editing `store_postgres.py` note methods or `_notes_storage_dir` / account-linking | T102 (`--test t_store_postgres_notes_uuid_path`) |
 | After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
 | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |
