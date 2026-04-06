@@ -63,7 +63,8 @@ def _make_button(btn: Button) -> InlineKeyboardButton:
 
 
 def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
-                  reply_to_message_id: int | None = None) -> None:
+                  reply_to_message_id: int | None = None,
+                  screen_path: str = "") -> None:
     """
     Render a Screen to a Telegram chat.
 
@@ -191,7 +192,8 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
                 sent_at_least_one = True
 
         except Exception as exc:
-            log.error("[render_telegram] widget render error: %s", exc)
+            log.error("[render_telegram] widget render error in %s: %s",
+                      screen_path or screen.title or "?", exc)
 
     # --- If nothing was sent yet, emit the screen title + any remaining keyboard ---
     # Use screen.title as-is: it may already contain Markdown (e.g. "🔐 *Admin Panel*")

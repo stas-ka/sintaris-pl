@@ -6578,6 +6578,76 @@ def t_doc_detail_datetime_safe(**_) -> list[TestResult]:
     return results
 
 
+def t_note_open_empty_file(**_) -> list[TestResult]:
+    """T101: _handle_note_open must use note_empty_body placeholder when note file is 0-bytes.
+
+    Root cause: 0-byte .md files exist (created but never populated). _load_note_text returns ""
+    (not None) for empty files. _handle_note_open then passed _escape_md("") = "" as note_content,
+    making the YAML widget text become "\\n" (whitespace-only) → Telegram 400 "text must be non-empty".
+    Fix: use `text.strip() or _t(chat_id, "note_empty_body")` pattern — same as _handle_note_raw.
+    """
+    import time
+    results: list[TestResult] = []
+    t0 = time.time()
+    try:
+        src_path = Path(__file__).parents[1] / "telegram" / "bot_handlers.py"
+        text = src_path.read_text(encoding="utf-8")
+
+        # Must NOT pass _escape_md(text) directly without empty guard
+        # Specifically: the old pattern was _escape_md(text) with no strip check
+        if '"note_content": _escape_md(text),' in text or "'note_content': _escape_md(text)," in text:
+            results.append(TestResult(
+                "note_open_empty_file", "FAIL", round(time.time() - t0, 3),
+                "note_content still uses raw _escape_md(text) without empty guard in _handle_note_open"
+            ))
+            return results
+
+        # Must use note_empty_body when text is empty
+        if "note_empty_body" not in text:
+            results.append(TestResult(
+                "note_open_empty_file", "FAIL", round(time.time() - t0, 3),
+                "No note_empty_body guard found in bot_handlers.py"
+            ))
+            return results
+
+        # Simulate the fix logic
+        from unittest.mock import patch
+        import sys
+        sys.path.insert(0, str(Path(__file__).parents[1]))
+
+        def _mock_escape_md(s):
+            for ch in ("*", "_", "`", "["):
+                s = s.replace(ch, "\\" + ch)
+            return s
+
+        def _mock_t(chat_id, key, **kwargs):
+            stubs = {"note_empty_body": "📄 Note is empty.", "note_not_found": "Note not found."}
+            return stubs.get(key, key)
+
+        # Test cases: empty string → placeholder, non-empty → escape_md
+        for raw_text, expected_contains in [
+            ("", "Note is empty"),
+            ("Hello world", "Hello world"),
+            ("# Заметка\nТекст", "Заметка"),
+        ]:
+            note_content = _mock_escape_md(raw_text) if raw_text.strip() else _mock_t(0, "note_empty_body")
+            if expected_contains not in note_content:
+                results.append(TestResult(
+                    "note_open_empty_file", "FAIL", round(time.time() - t0, 3),
+                    f"For raw_text={raw_text!r}: got {note_content!r}, expected {expected_contains!r}"
+                ))
+                return results
+
+        results.append(TestResult(
+            "note_open_empty_file", "PASS", round(time.time() - t0, 3),
+            "Empty note files get note_empty_body placeholder, non-empty notes get _escape_md()"
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("note_open_empty_file", "FAIL", 0.0,
+                                   "bot_handlers.py not found"))
+    return results
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 TEST_FUNCTIONS = [
     t_piper_json_present,
@@ -6754,6 +6824,8 @@ TEST_FUNCTIONS = [
     t_admin_info_markdown_safe,
     # _handle_doc_detail: created_at from Postgres is datetime, not string — no raw [:16] slice (T100)
     t_doc_detail_datetime_safe,
+    # _handle_note_open: 0-byte note files get note_empty_body placeholder (T101)
+    t_note_open_empty_file,
 ]
 
 

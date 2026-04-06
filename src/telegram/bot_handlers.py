@@ -64,7 +64,7 @@ def _render(chat_id: int, path: str, variables: dict | None = None):
     ctx = _screen_ctx(chat_id)
     screen = load_screen(path, ctx, variables=variables,
                          t_func=lambda _l, key: _t(chat_id, key))
-    render_screen(screen, chat_id, bot)
+    render_screen(screen, chat_id, bot, screen_path=path)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -159,9 +159,11 @@ def _handle_note_open(chat_id: int, slug: str) -> None:
                          reply_markup=_notes_menu_keyboard(chat_id))
         return
     slug_id = _note_cb_id(slug)     # short hash safe for callback_data
+    # Use placeholder when note file exists but is empty (0-byte file)
+    note_content = _escape_md(text) if text.strip() else _t(chat_id, "note_empty_body")
     _render(chat_id, "screens/note_view.yaml", {
         "note_title": _escape_md(slug.replace('_', ' ')),
-        "note_content": _escape_md(text),
+        "note_content": note_content,
         "slug": slug_id,
     })
 

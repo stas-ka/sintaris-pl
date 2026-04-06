@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.28",
+    "date":    "2026-04-06",
+    "title":   "Fix: clicking notes crashes with 'text must be non-empty' for empty note files",
+    "notes":   "- bot_handlers.py: _handle_note_open() passed empty note_content when .md file is 0 bytes — widget text became '\\n' which Telegram rejects as empty. Fix: use note_empty_body placeholder when text.strip() is falsy (same pattern as _handle_note_raw)\n- render_telegram.py: added screen_path parameter to render_screen() for better error diagnostics in logs\n- Regression test T101 (note_open_empty_file) added"
+  },
+  {
     "version": "2026.4.27",
     "date":    "2026-04-06",
     "title":   "Fix: document detail card broken on Postgres (created_at datetime crash)",
