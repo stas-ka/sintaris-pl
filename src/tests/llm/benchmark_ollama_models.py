@@ -43,6 +43,14 @@ CANDIDATE_MODELS = [
     "qwen3.5:9b",        # new 9B explicit tag
     "qwen3:14b",         # large comparison
     "qwen3.5:14b",       # new large (if available)
+    # ── Google Gemma 4 models ─────────────────────────────────────────────────
+    "gemma4:e2b",         # Edge 2B — 5.1B total, 2.3B effective, text+image+audio
+    "gemma4:e4b",         # Edge 4B — 8B total, 4.5B effective, text+image+audio
+    "gemma4:latest",      # 31B dense — text+image (default tag)
+    "gemma4:26b-a4b",     # 26B MoE — 3.8B active/token, text+image
+    # ── Older Gemma models (comparison) ──────────────────────────────────────
+    "gemma3:4b",          # Gemma 3 4B (if available)
+    "gemma3:12b",         # Gemma 3 12B (if available)
 ]
 
 # ---------------------------------------------------------------------------
