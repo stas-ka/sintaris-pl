@@ -109,8 +109,9 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
             if isinstance(w, MarkdownBlock):
                 # Attach keyboard to last MarkdownBlock if no more text follows
                 is_last = (text_widgets[-1] is w)
+                msg_text = w.text if w.text.strip() else "\u200b"  # guard empty/whitespace
                 bot.send_message(
-                    chat_id, w.text,
+                    chat_id, msg_text,
                     parse_mode=screen.parse_mode,
                     reply_markup=(ikm if is_last else None),
                     **_common()

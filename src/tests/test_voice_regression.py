@@ -6423,6 +6423,104 @@ def t_personal_context_injection(**_) -> list[TestResult]:
     return results
 
 
+def t_render_telegram_empty_block(**_) -> list[TestResult]:
+    """T98: render_telegram guards empty/whitespace MarkdownBlock text (note_view bug fix)."""
+    import time
+    results = []
+
+    def _check(name: str, path: str, pattern: str, desc: str) -> None:
+        t0 = time.time()
+        try:
+            with open(path, encoding="utf-8") as f:
+                src = f.read()
+            found = pattern in src
+            results.append(TestResult(
+                name, "PASS" if found else "FAIL", round(time.time() - t0, 3),
+                desc if found else f"MISSING: {pattern!r} not found in {path}"
+            ))
+        except FileNotFoundError:
+            results.append(TestResult(name, "FAIL", 0.0, f"File not found: {path}"))
+
+    _check(
+        "render_empty_block_guard",
+        "src/ui/render_telegram.py",
+        r'w.text if w.text.strip() else "\u200b"',
+        "Empty MarkdownBlock text replaced with zero-width space"
+    )
+    _check(
+        "note_view_has_content_var",
+        "src/screens/note_view.yaml",
+        "{note_content}",
+        "note_view.yaml uses {note_content} substitution variable"
+    )
+    _check(
+        "note_open_escapes_content",
+        "src/telegram/bot_handlers.py",
+        '"note_content": _escape_md(text)',
+        "note_open handler escapes note content before rendering"
+    )
+    return results
+
+
+def t_admin_info_markdown_safe(**_) -> list[TestResult]:
+    """T99: Voice admin info wraps dynamic labels in backticks to avoid Markdown injection."""
+    import time
+    results = []
+
+    def _check(name: str, path: str, pattern: str, desc: str) -> None:
+        t0 = time.time()
+        try:
+            with open(path, encoding="utf-8") as f:
+                src = f.read()
+            found = pattern in src
+            results.append(TestResult(
+                name, "PASS" if found else "FAIL", round(time.time() - t0, 3),
+                desc if found else f"MISSING: {pattern!r} not found in {path}"
+            ))
+        except FileNotFoundError:
+            results.append(TestResult(name, "FAIL", 0.0, f"File not found: {path}"))
+
+    _check(
+        "admin_info_stt_backtick",
+        "src/features/bot_voice.py",
+        "`{_meta.get('stt', '?')}`",
+        "STT label in backticks — safe from _ Markdown injection"
+    )
+    _check(
+        "admin_info_llm_backtick",
+        "src/features/bot_voice.py",
+        "`{_llm_label()}`",
+        "LLM label in backticks — safe from _ Markdown injection (e.g. ollama/qwen3.5:latest)"
+    )
+    _check(
+        "admin_info_tts_backtick",
+        "src/features/bot_voice.py",
+        "`{_tts_label()}`",
+        "TTS label in backticks — safe from _ Markdown injection (e.g. ru_RU-dmitri-medium.onnx)"
+    )
+    # Verify no unescaped f-string with _tts_label() / _llm_label() outside backticks
+    import re
+    t0 = time.time()
+    try:
+        with open("src/features/bot_voice.py", encoding="utf-8") as f:
+            src = f.read()
+        # pattern: f"... {_tts_label()} ..." or f"... {_llm_label()} ..." without backtick wrapping
+        bad = re.search(r'f"[^`"]*\{_tts_label\(\)\}[^`"]*"', src)
+        if bad:
+            results.append(TestResult("admin_info_no_raw_tts_label", "FAIL",
+                                       round(time.time() - t0, 3),
+                                       f"Raw _tts_label() in f-string without backtick: {bad.group()!r}"))
+        else:
+            results.append(TestResult("admin_info_no_raw_tts_label", "PASS",
+                                       round(time.time() - t0, 3),
+                                       "No raw _tts_label() outside backtick in f-strings"))
+    except FileNotFoundError:
+        results.append(TestResult("admin_info_no_raw_tts_label", "FAIL", 0.0,
+                                   "bot_voice.py not found"))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -6592,6 +6690,10 @@ TEST_FUNCTIONS = [
     t_startup_memory_check,
     # Personal data context injection: calendar/notes/contacts in _build_system_message (T97)
     t_personal_context_injection,
+    # render_telegram: empty/whitespace MarkdownBlock replaced with zero-width space (T98)
+    t_render_telegram_empty_block,
+    # Voice admin info: model labels wrapped in backticks to avoid Markdown injection (T99)
+    t_admin_info_markdown_safe,
 ]
 
 

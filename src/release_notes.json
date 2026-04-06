@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.26",
+    "date":    "2026-04-06",
+    "title":   "Fix: empty note render crash + voice admin info Markdown injection",
+    "notes":   "- render_telegram.py: empty/whitespace MarkdownBlock text replaced with zero-width space to prevent Telegram 400 'text must be non-empty' error when viewing empty notes\n- bot_voice.py: wrap STT/LLM/TTS labels in backticks in _send_admin_info() to prevent Markdown entity injection from model names with underscores (e.g. ru_RU-dmitri-medium.onnx)\n- Regression tests T98 (render_telegram_empty_block) and T99 (admin_info_markdown_safe) added"
+  },
+  {
     "version": "2026.4.25",
     "date":    "2026-04-04",
     "title":   "Rename PicoClaw to Taris; add configurable male TTS voice per user",

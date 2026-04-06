@@ -179,6 +179,8 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T88 | `shared_docs_search` | `search_fts()` and `search_similar()` include `is_shared=1` docs from all users; `_get_shared_doc_ids()` helper present; `list_documents()` returns own + shared docs. | After editing `store_sqlite.py` search or document listing methods |
 | T89 | `rag_trace_fields` | `retrieve_context()` returns 4-tuple `(chunks, text, strategy, trace)`; trace has `n_fts5`/`n_vector`/`n_mcp`/`latency_ms`; `bot_access.py` unpacks 4-tuple + passes trace to `log_rag_activity()`; `rag_log` auto-migrated with `n_fts5`/`n_vector`/`n_mcp` columns. | After editing `bot_rag.py` retrieve_context(), `bot_access.py` RAG context path, or `store_sqlite.py` rag_log |
 | T90 | `system_docs_structure` | `src/setup/load_system_docs.py` exists with `_load_docs()`, `_ingest()`, `_chunk()`, system tags, `is_shared=1`; `src/setup/migrate_reembed.py` exists with `_migrate()`, LEFT JOIN logic, `--dry-run`; `telegram_menu_bot.py` starts `_ensure_system_docs` thread at startup. | After editing system docs loader, migration script, or startup logic |
+| T98 | `render_telegram_empty_block` | `render_telegram.py` replaces empty/whitespace `MarkdownBlock.text` with `"\u200b"` instead of sending empty string; `note_view.yaml` uses `{note_content}` variable; `bot_handlers.py` wraps text in `_escape_md()`. | After editing `render_telegram.py` MarkdownBlock handler, or `note_view.yaml` template |
+| T99 | `admin_info_markdown_safe` | `_send_admin_info()` in `bot_voice.py` wraps STT/LLM/TTS labels in backticks — prevents Markdown entity injection from model names with `_` (e.g. `ru_RU-dmitri-medium.onnx`). | After editing `_send_admin_info()` or `_tts_label()` / `_llm_label()` |
 
 ### 2.6 When specific tests are mandatory
 
@@ -215,6 +217,8 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After editing `store_sqlite.py` search or document listing | T88 (`--test t_shared_docs_search`) |
 | After editing `bot_rag.py` retrieve_context, `bot_access.py` RAG path, or `rag_log` schema | T89 (`--test t_rag_trace_fields`) |
 | After editing system docs loader, migration script, or startup sequence | T90 (`--test t_system_docs_structure`) |
+| After editing `render_telegram.py` MarkdownBlock, or any note screen YAML | T98 (`--test t_render_telegram_empty_block`) |
+| After editing `_send_admin_info()`, `_tts_label()`, `_llm_label()` in `bot_voice.py` | T99 (`--test t_admin_info_markdown_safe`) |
 | After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
 | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |

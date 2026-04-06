@@ -869,11 +869,11 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             import os as _os
             lines = ["⚙️ *Pipeline info*"]
             if "STT" in _timing:
-                lines.append(f"🎤 STT: {_meta.get('stt', '?')} — {_timing['STT']:.1f}s")
+                lines.append(f"🎤 STT: `{_meta.get('stt', '?')}` — {_timing['STT']:.1f}s")
             if "LLM" in _timing:
-                lines.append(f"🧠 LLM: {_llm_label()} — {_timing['LLM']:.1f}s")
+                lines.append(f"🧠 LLM: `{_llm_label()}` — {_timing['LLM']:.1f}s")
             if "TTS" in _timing:
-                lines.append(f"🔊 TTS: {_tts_label()} — {_timing['TTS']:.1f}s")
+                lines.append(f"🔊 TTS: `{_tts_label()}` — {_timing['TTS']:.1f}s")
             other_keys = [k for k in _timing if k not in ("STT", "LLM", "TTS")]
             if other_keys:
                 lines.append("⏱ " + " · ".join(f"{k} {_timing[k]:.1f}s" for k in other_keys))
