@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Documents — Taris{% endblock %}
+{% block page_title %}📄 Documents{% endblock %}
+
+{% block topbar_extra %}
+{% if rag_available and not no_telegram %}
+<label class="btn btn-accent btn-sm" style="cursor:pointer" title="Upload document (PDF, TXT, MD, DOCX)">
+  <span class="material-icons-round" style="font-size:16px">upload_file</span> Upload
+  <form id="doc-upload-form" method="post" action="/documents/upload" enctype="multipart/form-data" style="display:none">
+    <input type="file" name="file" accept=".pdf,.txt,.md,.docx"
+           onchange="document.getElementById('doc-upload-form').submit()">
+  </form>
+</label>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="docs-page" style="padding:1rem; max-width:800px; margin:0 auto">
+
+  {% if msg %}
+  <div class="alert alert-success" style="background:var(--pico-color-green-100);border:1px solid var(--pico-color-green-300);border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;color:var(--pico-color-green-700)">
+    ✅ {{ msg }}
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="alert alert-error" style="background:var(--pico-color-red-100);border:1px solid var(--pico-color-red-300);border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;color:var(--pico-color-red-700)">
+    ⚠️ {{ error }}
+  </div>
+  {% endif %}
+
+  {% if not rag_available %}
+  <div style="text-align:center; padding:3rem 1rem">
+    <span style="font-size:48px">⚠️</span>
+    <h3 style="margin-top:0.75rem">RAG Search Not Available</h3>
+    <p class="text-muted">Document storage requires the vector search backend to be enabled.<br>
+      Contact your administrator to enable RAG.</p>
+  </div>
+
+  {% elif no_telegram %}
+  <div style="text-align:center; padding:3rem 1rem">
+    <span style="font-size:48px">🔗</span>
+    <h3 style="margin-top:0.75rem">Telegram Account Not Linked</h3>
+    <p class="text-muted">Documents are stored per-user and require a linked Telegram account.<br>
+      Go to <a href="/profile">Profile</a> → Link to Web to connect your account.</p>
+  </div>
+
+  {% elif docs %}
+  <table style="width:100%; border-collapse:collapse">
+    <thead>
+      <tr style="border-bottom:2px solid var(--pico-muted-border-color); font-size:0.85rem; color:var(--pico-muted-color)">
+        <th style="text-align:left; padding:0.5rem 0.75rem">Document</th>
+        <th style="text-align:left; padding:0.5rem 0.75rem; white-space:nowrap">Type</th>
+        <th style="text-align:right; padding:0.5rem 0.75rem; white-space:nowrap">Chunks</th>
+        <th style="text-align:center; padding:0.5rem 0.75rem">Shared</th>
+        <th style="text-align:left; padding:0.5rem 0.75rem; white-space:nowrap">Added</th>
+        <th style="padding:0.5rem 0.75rem"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in docs %}
+    {% set meta = d.metadata if d.metadata is mapping else {} %}
+    <tr style="border-bottom:1px solid var(--pico-muted-border-color)" x-data="{ editing: false }">
+
+      <!-- Title (click to rename inline) -->
+      <td style="padding:0.6rem 0.75rem; max-width:240px; overflow:hidden">
+        <span x-show="!editing" @click="editing=true"
+              style="cursor:pointer; font-weight:500; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+              title="{{ d.title }}">{{ d.title }}</span>
+        <form x-show="editing" @click.away="editing=false"
+              method="post" action="/documents/{{ d.doc_id }}/rename"
+              style="display:flex; gap:0.4rem; align-items:center">
+          <input type="text" name="title" value="{{ d.title }}"
+                 style="margin:0; padding:0.25rem 0.5rem; font-size:0.9rem; flex:1"
+                 @keydown.escape="editing=false">
+          <button type="submit" class="btn btn-sm btn-accent" style="padding:0.25rem 0.5rem">
+            <span class="material-icons-round" style="font-size:14px">check</span>
+          </button>
+        </form>
+      </td>
+
+      <!-- Type -->
+      <td style="padding:0.6rem 0.75rem; font-size:0.85rem; color:var(--pico-muted-color)">
+        {{ d.doc_type | upper if d.doc_type else '?' }}
+      </td>
+
+      <!-- Chunks -->
+      <td style="padding:0.6rem 0.75rem; text-align:right; font-size:0.85rem; color:var(--pico-muted-color)">
+        {{ meta.n_chunks if meta and meta.n_chunks else '?' }}
+      </td>
+
+      <!-- Shared toggle -->
+      <td style="padding:0.6rem 0.75rem; text-align:center">
+        <form method="post" action="/documents/{{ d.doc_id }}/share" style="display:inline">
+          <button type="submit" class="btn btn-sm"
+                  style="padding:0.2rem 0.5rem; background:none; border:none; cursor:pointer"
+                  title="{{ 'Unshare (currently visible to all users)' if d.is_shared else 'Share with all users' }}">
+            {{ '🔗' if d.is_shared else '🔒' }}
+          </button>
+        </form>
+      </td>
+
+      <!-- Created date -->
+      <td style="padding:0.6rem 0.75rem; font-size:0.82rem; color:var(--pico-muted-color); white-space:nowrap">
+        {{ d.created_at[:10] if d.created_at else '—' }}
+      </td>
+
+      <!-- Delete -->
+      <td style="padding:0.6rem 0.75rem; text-align:right">
+        <form method="post" action="/documents/{{ d.doc_id }}/delete"
+              onsubmit="return confirm('Delete «{{ d.title }}»?')">
+          <button type="submit" class="btn btn-sm"
+                  style="padding:0.2rem 0.5rem; color:var(--pico-color-red-500); background:none; border:1px solid var(--pico-color-red-300); border-radius:4px">
+            <span class="material-icons-round" style="font-size:14px">delete</span>
+          </button>
+        </form>
+      </td>
+
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="text-muted" style="font-size:0.82rem; margin-top:1rem">
+    {{ docs | length }} document{{ 's' if docs | length != 1 else '' }} ·
+    Shared documents (🔗) are visible in RAG to all users.
+    Click a title to rename inline. Upload PDF, TXT, MD, or DOCX via the Upload button.
+  </p>
+
+  {% else %}
+  <!-- Empty state -->
+  <div style="text-align:center; padding:3rem 1rem">
+    <span style="font-size:48px">📂</span>
+    <h3 style="margin-top:0.75rem">No Documents Yet</h3>
+    <p class="text-muted">Upload PDF, TXT, Markdown, or DOCX files to add them to your knowledge base.<br>
+      Uploaded documents are searchable in AI chat via RAG.</p>
+    <label class="btn btn-accent" style="cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; margin-top:1rem">
+      <span class="material-icons-round" style="font-size:18px">upload_file</span> Upload Document
+      <form id="doc-upload-form2" method="post" action="/documents/upload" enctype="multipart/form-data" style="display:none">
+        <input type="file" name="file" accept=".pdf,.txt,.md,.docx"
+               onchange="document.getElementById('doc-upload-form2').submit()">
+      </form>
+    </label>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

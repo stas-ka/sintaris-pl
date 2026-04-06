@@ -1,6 +1,6 @@
 # Taris Bot — Architecture
 
-**Version:** `2026.3.28` · **Last updated:** March 2026
+**Version:** `2026.4.24` · **Last updated:** April 2026
 
 This document is an **index**. All architectural content lives in topic files under `doc/architecture/`.
 Do NOT read this file beyond the table below — load only the specific topic file you need.

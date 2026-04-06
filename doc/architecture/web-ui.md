@@ -1,6 +1,6 @@
 # Taris — Web UI & Screen DSL Architecture
 
-**Version:** `2026.4.1`  
+**Version:** `2026.4.24`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -49,30 +49,68 @@ The Web UI channel provides a browser-based interface with the same features as 
 | `POST` | `/login` | Verify creds, set JWT cookie | — |
 | `GET` | `/register` | Registration form | — |
 | `POST` | `/register` | Create pending account (optional `link_code` for Telegram-linked instant activation) | — |
-| `POST` | `/logout` | Clear cookie | ✅ |
-| `GET` | `/settings` | User settings page (language selector, change password) | ✅ |
-| `POST` | `/settings` | Save language or password change | ✅ |
+| `GET` | `/logout` | Clear cookie, redirect to login | ✅ |
+| `GET` | `/forgot-password` | Password reset request form | — |
+| `POST` | `/forgot-password` | Send reset email | — |
+| `GET` | `/reset-password/{token}` | Reset password form | — |
+| `POST` | `/reset-password/{token}` | Apply new password | — |
 | `GET` | `/` | Dashboard | ✅ |
-| `GET` | `/chat` | Chat page | ✅ |
-| `POST` | `/api/chat/send` | Send message to LLM, return HTML partial (HTMX) | ✅ |
-| `GET` | `/notes` | Notes list | ✅ |
-| `GET` | `/notes/{slug}` | View note | ✅ |
-| `POST` | `/notes` | Create note | ✅ |
-| `PUT` | `/notes/{slug}` | Update note | ✅ |
+| `GET` | `/profile` | Profile: name, username, Telegram link | ✅ |
+| `POST` | `/profile/name` | Update display name | ✅ |
+| `POST` | `/profile/change-username` | Change username | ✅ |
+| `POST` | `/profile/link-telegram` | Link Telegram account via link code | ✅ |
+| `GET` | `/settings` | Language + password settings | ✅ |
+| `POST` | `/settings/language` | Save language | ✅ |
+| `POST` | `/settings/password` | Change password | ✅ |
+| `GET` | `/chat` | LLM chat page | ✅ |
+| `POST` | `/chat/send` | Send message → LLM → HTML partial (HTMX) | ✅ |
+| `DELETE` | `/chat/clear` | Clear chat history | ✅ |
+| `GET` | `/notes` | Notes list + editor | ✅ |
+| `GET` | `/notes/list` | Notes list partial (HTMX) | ✅ |
+| `GET` | `/notes/{slug}` | Load note into editor | ✅ |
+| `POST` | `/notes/create` | Create note | ✅ |
+| `POST` | `/notes/{slug}/save` | Save note content | ✅ |
 | `DELETE` | `/notes/{slug}` | Delete note | ✅ |
-| `GET` | `/calendar` | Calendar view | ✅ |
-| `POST` | `/api/calendar/add` | Add event via NL | ✅ |
-| `DELETE` | `/api/calendar/{id}` | Delete event | ✅ |
-| `GET` | `/mail` | Mail digest page | ✅ |
-| `POST` | `/api/mail/refresh` | Trigger IMAP refresh | ✅ |
-| `GET` | `/voice` | Voice recording page | ✅ |
-| `POST` | `/api/voice/transcribe` | Upload OGG → STT → LLM → return text+TTS | ✅ |
-| `GET` | `/admin` | Admin dashboard | ✅ admin |
-| `POST` | `/api/admin/users/{id}/approve` | Approve user | ✅ admin |
-| `POST` | `/api/admin/llm/select` | Switch active LLM model | ✅ admin |
-| `POST` | `/api/admin/voice_opts` | Toggle voice optimisation flag | ✅ admin |
-| `GET` | `/screen/{screen_id}` | Dynamic Screen DSL renderer — serve YAML screen by ID | ✅ user auth |
-| `POST` | `/mcp/search` | MCP-compatible RAG search — exposes local KB as MCP tool; Bearer-token auth; returns RRF-ranked chunks (v2026.4.1) | ✅ Bearer |
+| `GET` | `/calendar` | Calendar month grid + upcoming events | ✅ |
+| `POST` | `/calendar/add` | Add event from form | ✅ |
+| `POST` | `/calendar/{ev_id}/delete` | Delete event | ✅ |
+| `POST` | `/calendar/parse-text` | NL text → event JSON (LLM) | ✅ |
+| `POST` | `/calendar/console` | NL intent → add/query/delete | ✅ |
+| `GET` | `/contacts` | Contacts list with search + pagination | ✅ |
+| `GET` | `/contacts/new` | New contact form | ✅ |
+| `POST` | `/contacts/new` | Create contact | ✅ |
+| `GET` | `/contacts/{cid}` | Contact detail / edit form | ✅ |
+| `POST` | `/contacts/{cid}` | Update contact | ✅ |
+| `POST` | `/contacts/{cid}/delete` | Delete contact | ✅ |
+| `GET` | `/documents` | Documents list (RAG knowledge base) | ✅ |
+| `POST` | `/documents/upload` | Upload PDF/TXT/MD/DOCX → chunk + embed | ✅ |
+| `POST` | `/documents/{doc_id}/rename` | Rename document | ✅ |
+| `POST` | `/documents/{doc_id}/share` | Toggle shared flag | ✅ |
+| `POST` | `/documents/{doc_id}/delete` | Delete document + chunks | ✅ |
+| `GET` | `/mail` | Mail digest + settings | ✅ |
+| `POST` | `/mail/settings` | Save IMAP credentials | ✅ |
+| `POST` | `/mail/settings/delete` | Delete mail credentials | ✅ |
+| `POST` | `/mail/refresh` | Trigger IMAP refresh | ✅ |
+| `GET` | `/mail/oauth/google/start` | Begin Google OAuth flow | ✅ |
+| `GET` | `/mail/oauth/google/callback` | Google OAuth callback | — |
+| `GET` | `/voice` | Voice: record, TTS, voice chat | ✅ |
+| `GET` | `/voice/last-transcript` | Latest STT transcript (HTMX poll) | ✅ |
+| `POST` | `/voice/tts` | Text → TTS audio (OGG) | ✅ |
+| `POST` | `/voice/transcribe` | Audio → STT text | ✅ |
+| `POST` | `/voice/chat` | Audio → STT → LLM → TTS | ✅ |
+| `POST` | `/voice/chat_text` | Text → LLM → TTS | ✅ |
+| `GET` | `/voice/debug/sessions` | Voice session debug list | ✅ admin |
+| `GET` | `/admin` | Admin: users, LLM, voice opts, release notes | ✅ admin |
+| `POST` | `/admin/llm/{model_name}` | Set active LLM model | ✅ admin |
+| `POST` | `/admin/voice-opt/{key}` | Toggle voice opt flag | ✅ admin |
+| `DELETE` | `/admin/user/{user_id}` | Delete user | ✅ admin |
+| `POST` | `/admin/user/{user_id}/approve` | Approve pending user | ✅ admin |
+| `POST` | `/admin/user/{user_id}/block` | Block user | ✅ admin |
+| `POST` | `/admin/user/{user_id}/reset-password` | Reset user password | ✅ admin |
+| `GET` | `/screen/{screen_id}` | Screen DSL renderer (YAML screen by ID) | ✅ |
+| `POST` | `/mcp/search` | MCP RAG search (Bearer token, RRF-ranked chunks) | Bearer |
+| `GET` | `/api/status` | Service health JSON | — |
+| `GET` | `/api/version` | Bot version JSON | — |
 
 ### 17.4 Telegram↔Web Account Linking
 
@@ -90,15 +128,23 @@ Users with an existing Telegram account can link it to a new web account in one 
 | `base.html` | Root layout: PWA meta tags, HTMX script, Alpine.js, Pico CSS, nav bar |
 | `login.html` | Login form with error display |
 | `register.html` | Self-registration form |
+| `forgot_password.html` | Password reset request form |
+| `reset_password.html` | Password reset form (token-based) |
 | `dashboard.html` | Main dashboard: quick links to all sections |
 | `chat.html` | Free-text LLM chat; message history HTMX-swapped |
-| `_chat_messages.html` | Chat messages partial (returned by `POST /api/chat/send`) |
-| `notes.html` | Notes list + inline create form |
-| `_note_editor.html` | HTMX note editor partial (loaded on note open/edit) |
-| `calendar.html` | Calendar event list + add form + NL query |
-| `mail.html` | Digest text + Refresh button (HTMX) |
+| `_chat_messages.html` | Chat messages partial (returned by `POST /chat/send`) |
+| `notes.html` | Notes list + inline editor |
+| `_note_list.html` | Notes list partial (HTMX refresh) |
+| `_note_editor.html` | HTMX note editor partial |
+| `calendar.html` | Calendar month grid + event list + NL add form |
+| `contacts.html` | Contacts list + create/edit form |
+| `docs.html` | Document list: upload, rename inline, share toggle, delete |
+| `mail.html` | Digest text + IMAP settings + Refresh button |
 | `voice.html` | Voice orb UI: record button, waveform, TTS playback |
-| `admin.html` | Admin: user list, approve/block, LLM switcher, voice opts |
+| `profile.html` | Profile: name, username, Telegram link |
+| `settings.html` | Language selector + change password |
+| `admin.html` | Admin: user list, approve/block, LLM switcher, voice opts, changelog |
+| `dynamic.html` | Screen DSL dynamic renderer (used by `/screen/{screen_id}`) |
 
 ### 17.6 PWA Support
 
@@ -106,12 +152,12 @@ Users with an existing Telegram account can link it to a new web account in one 
 
 | Field | Value |
 |---|---|
-| `name` | `"Pico Assistant"` |
+| `name` | `"Taris Bot"` |
 | `short_name` | `"Pico"` |
-| `theme_color` | `"#1e1e2e"` |
+| `theme_color` | `"#7c4dff"` |
 | `display` | `"standalone"` |
 | `start_url` | `"/"` |
-| `shortcuts` | Chat, Notes, Calendar, Voice |
+| `shortcuts` | Chat, Voice, Notes |
 
 ---
 

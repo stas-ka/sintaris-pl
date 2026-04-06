@@ -231,6 +231,8 @@ def _send_reset_email(to_addr: str, username: str, reset_url: str) -> bool:
 app = FastAPI(
     title="Taris Bot Web UI",
     root_path=os.environ.get("ROOT_PATH", ""),
+    docs_url=None,
+    redoc_url=None,
 )
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -1527,6 +1529,115 @@ async def contacts_delete(request: Request, cid: str):
     chat_id = (account or {}).get("telegram_chat_id") or 0
     _contact_delete(chat_id, cid)
     return RedirectResponse("/contacts", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Documents
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _docs_chat_id(user: dict) -> int:
+    """Return the telegram_chat_id for the logged-in web user, or 0 if not linked."""
+    account = find_account_by_id(user["sub"])
+    return int((account or {}).get("telegram_chat_id") or 0)
+
+
+@app.get("/documents", response_class=HTMLResponse)
+async def docs_page(request: Request, msg: str = "", error: str = ""):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    chat_id = _docs_chat_id(user)
+    docs: list[dict] = []
+    rag_available = False
+    try:
+        if _store:
+            rag_available = _store.has_document_search()
+            if rag_available:
+                docs = _store.list_documents(chat_id) if chat_id else []
+    except Exception as e:
+        log.warning("[Docs/Web] list_documents failed: %s", e)
+    return templates.TemplateResponse(
+        request, "docs.html",
+        _ctx(request, user, "docs",
+             docs=docs, rag_available=rag_available,
+             no_telegram=(chat_id == 0), msg=msg, error=error),
+    )
+
+
+@app.post("/documents/upload")
+async def docs_upload(request: Request, file: UploadFile = File(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    chat_id = _docs_chat_id(user)
+    if not chat_id:
+        return RedirectResponse("/documents?error=Link+your+Telegram+account+first", status_code=303)
+    if not _store or not _store.has_document_search():
+        return RedirectResponse("/documents?error=RAG+not+available", status_code=303)
+
+    orig_name = file.filename or "upload"
+    ext = Path(orig_name).suffix.lower()
+    from features.bot_documents import _SUPPORTED_EXTS, _process_doc_file
+    if ext not in _SUPPORTED_EXTS:
+        supported = ", ".join(sorted(_SUPPORTED_EXTS))
+        return RedirectResponse(f"/documents?error=Unsupported+file+type.+Supported:+{supported}", status_code=303)
+
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        return RedirectResponse("/documents?error=File+too+large+(max+20+MB)", status_code=303)
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = Path(tmp.name)
+    try:
+        _process_doc_file(chat_id, tmp_path, ext, orig_name)
+    except Exception as e:
+        log.error("[Docs/Web] upload failed: %s", e)
+        return RedirectResponse("/documents?error=Upload+failed", status_code=303)
+    return RedirectResponse(f"/documents?msg=Uploaded+{orig_name}", status_code=303)
+
+
+@app.post("/documents/{doc_id}/rename")
+async def docs_rename(request: Request, doc_id: str, title: str = Form(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if _store:
+        try:
+            _store.update_document_field(doc_id, title=title.strip())
+        except Exception as e:
+            log.warning("[Docs/Web] rename failed: %s", e)
+    return RedirectResponse("/documents", status_code=303)
+
+
+@app.post("/documents/{doc_id}/share")
+async def docs_toggle_share(request: Request, doc_id: str):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if _store:
+        try:
+            chat_id = _docs_chat_id(user)
+            docs = _store.list_documents(chat_id) if chat_id else []
+            d = next((x for x in docs if x["doc_id"] == doc_id), None)
+            if d:
+                _store.update_document_field(doc_id, is_shared=0 if d.get("is_shared") else 1)
+        except Exception as e:
+            log.warning("[Docs/Web] share toggle failed: %s", e)
+    return RedirectResponse("/documents", status_code=303)
+
+
+@app.post("/documents/{doc_id}/delete")
+async def docs_delete(request: Request, doc_id: str):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if _store:
+        try:
+            _store.delete_document(doc_id)
+        except Exception as e:
+            log.warning("[Docs/Web] delete failed: %s", e)
+    return RedirectResponse("/documents", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
