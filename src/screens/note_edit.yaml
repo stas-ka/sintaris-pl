@@ -1,0 +1,23 @@
+# Note edit choice — append, replace, or rename the note.
+# Variables: slug, title (pre-escaped note title)
+
+title_key: note_edit_choice
+parse_mode: Markdown
+
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: btn_note_append
+        action: "note_append:{slug}"
+      - label_key: btn_note_replace
+        action: "note_replace:{slug}"
+
+  - type: button_row
+    buttons:
+      - label_key: btn_note_rename
+        action: "note_rename:{slug}"
+
+  - type: button_row
+    buttons:
+      - label_key: btn_back_short
+        action: "note_open:{slug}"

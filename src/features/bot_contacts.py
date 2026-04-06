@@ -6,7 +6,6 @@ Dependencies: bot_config, bot_state, bot_instance, bot_access, bot_db
 
 import json
 import re
-from datetime import datetime
 
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -17,7 +16,7 @@ from telegram.bot_access import (
     _is_allowed, _is_guest, _deny, _t, _lang,
     _ask_taris, _safe_edit, _send_menu,
 )
-from core.bot_db import get_db
+from core.store import store as _store
 
 # ── State ─────────────────────────────────────────────────────────────────────
 # Multi-step add/edit state.  Keys are chat_id (int).
@@ -39,25 +38,16 @@ _CONTACT_EXTRACT_PROMPT = (
 def _contact_add(chat_id: int, name: str, phone: str = None, email: str = None,
                  address: str = None, notes: str = None) -> str:
     """Insert a new contact and return its id."""
-    db = get_db()
-    db.execute(
-        """INSERT INTO contacts (chat_id, name, phone, email, address, notes)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (chat_id, name.strip(), phone, email, address, notes)
-    )
-    db.commit()
-    cid = db.execute(
-        "SELECT id FROM contacts WHERE chat_id=? ORDER BY created_at DESC LIMIT 1",
-        (chat_id,)
-    ).fetchone()["id"]
-    return cid
+    contact = {"name": name.strip(), "phone": phone or "", "email": email or "",
+               "address": address or "", "notes": notes or ""}
+    return _store.save_contact(chat_id, contact)
 
 
 def _contact_get(chat_id: int, cid: str) -> dict | None:
-    row = get_db().execute(
-        "SELECT * FROM contacts WHERE id=? AND chat_id=?", (cid, chat_id)
-    ).fetchone()
-    return dict(row) if row else None
+    c = _store.get_contact(cid)
+    if c and c.get("chat_id") == chat_id:
+        return c
+    return None
 
 
 def _contact_update(chat_id: int, cid: str, **fields) -> bool:
@@ -65,46 +55,32 @@ def _contact_update(chat_id: int, cid: str, **fields) -> bool:
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
-    set_clause = ", ".join(f"{k}=?" for k in updates)
-    values = list(updates.values()) + [datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), cid, chat_id]
-    get_db().execute(
-        f"UPDATE contacts SET {set_clause}, updated_at=? WHERE id=? AND chat_id=?",
-        values
-    )
-    get_db().commit()
+    existing = _store.get_contact(cid)
+    if not existing or existing.get("chat_id") != chat_id:
+        return False
+    existing.update(updates)
+    _store.save_contact(chat_id, existing)
     return True
 
 
 def _contact_delete(chat_id: int, cid: str) -> bool:
-    db = get_db()
-    cur = db.execute("DELETE FROM contacts WHERE id=? AND chat_id=?", (cid, chat_id))
-    db.commit()
-    return cur.rowcount > 0
+    existing = _store.get_contact(cid)
+    if not existing or existing.get("chat_id") != chat_id:
+        return False
+    return _store.delete_contact(cid)
 
 
 def _contact_list(chat_id: int, offset: int = 0, limit: int = 8) -> list[dict]:
-    rows = get_db().execute(
-        "SELECT * FROM contacts WHERE chat_id=? ORDER BY name COLLATE NOCASE LIMIT ? OFFSET ?",
-        (chat_id, limit, offset)
-    ).fetchall()
-    return [dict(r) for r in rows]
+    all_contacts = _store.list_contacts(chat_id)
+    return all_contacts[offset:offset + limit]
 
 
 def _contact_count(chat_id: int) -> int:
-    return get_db().execute(
-        "SELECT COUNT(*) as n FROM contacts WHERE chat_id=?", (chat_id,)
-    ).fetchone()["n"]
+    return len(_store.list_contacts(chat_id))
 
 
 def _contact_search(chat_id: int, query: str) -> list[dict]:
-    q = f"%{query.strip()}%"
-    rows = get_db().execute(
-        """SELECT * FROM contacts
-           WHERE chat_id=? AND (name LIKE ? OR phone LIKE ? OR email LIKE ? OR notes LIKE ?)
-           ORDER BY name COLLATE NOCASE LIMIT 20""",
-        (chat_id, q, q, q, q)
-    ).fetchall()
-    return [dict(r) for r in rows]
+    return _store.search_contacts(chat_id, query)
 
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────

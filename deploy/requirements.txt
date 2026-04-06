@@ -1,22 +1,36 @@
 # Taris Bot — Python package dependencies
-# Install with: pip3 install --break-system-packages -r requirements.txt
-# Generated from OpenClawPI (pip3 freeze, project-relevant packages only)
-# Last updated: 2026-03-15
+# Install with: python3 -m pip install --break-system-packages -r requirements.txt
+# Last updated: 2026-04-02
+#
+# Variants:
+#   PicoClaw  — Raspberry Pi; STT_PROVIDER=vosk (no faster-whisper)
+#   OpenClaw  — Laptop/PC x86_64; STT_PROVIDER=faster_whisper (no vosk required)
+#
+# Install all:      pip install --break-system-packages -r requirements.txt
+# Install picoclaw: pip install --break-system-packages -r requirements.txt --ignore-requires  # skip openclaw section manually
+# Install openclaw: pip install --break-system-packages -r requirements.txt
 
-# Telegram bot
+# ── Telegram bot ─────────────────────────────────────────────────────────────
 pyTelegramBotAPI
 
-# Voice assistant — Speech-to-Text
-vosk
-sounddevice
-webrtcvad          # optional — VAD pre-filter; graceful fallback if absent
+# ── Voice — STT / TTS ────────────────────────────────────────────────────────
+# PicoClaw (Raspberry Pi) — Vosk offline STT
+vosk                   # offline Russian/German STT
+sounddevice            # audio capture via PortAudio
+webrtcvad              # optional — VAD pre-filter; graceful fallback if absent
 
-# Gmail digest — Google API
+# OpenClaw (x86_64 laptop/PC) — faster-whisper STT (better WER than Vosk)
+# Requires: PIPER_BIN and PIPER_MODEL set in bot.env (NOT hardcoded path)
+# On Debian Bookworm: install with --break-system-packages
+faster-whisper         # CTranslate2-based Whisper — STT_PROVIDER=faster_whisper
+scipy                  # audio resampling when sample_rate != 16000 (used by faster-whisper path)
+
+# ── Gmail digest — Google API ─────────────────────────────────────────────────
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 
-# Web UI (FastAPI)
+# ── Web UI (FastAPI) ──────────────────────────────────────────────────────────
 fastapi
 uvicorn[standard]
 jinja2
@@ -25,17 +39,28 @@ PyJWT
 python-multipart
 requests               # Google OAuth token refresh + HTTP calls (bot_web.py)
 
-# Embeddings — ONNX Runtime-based (ARM-safe; replaces sentence_transformers/torch which crashes on ARM)
-fastembed                # pulls in onnxruntime-cpu automatically; model: all-MiniLM-L6-v2 384-dim
+# ── Embeddings ────────────────────────────────────────────────────────────────
+# ONNX Runtime-based; ARM-safe (replaces sentence_transformers/torch which OOMs on Pi 3)
+fastembed              # pulls in onnxruntime-cpu automatically; model: all-MiniLM-L6-v2 384-dim
 
-# Storage — PostgreSQL + pgvector (optional; required for STORE_BACKEND=postgres)
+# ── Storage — PostgreSQL + pgvector ──────────────────────────────────────────
+# Optional: required only when STORE_BACKEND=postgres (OpenClaw default on TariStation2)
 psycopg[binary]
 psycopg-pool
 pgvector
+cryptography           # TLS for psycopg connections
 
-# Documents / RAG
-sentence-transformers  # all-MiniLM-L6-v2 embeddings
+# ── Screen DSL ───────────────────────────────────────────────────────────────
+pyyaml                 # YAML screen definitions (src/screens/)
+jsonschema             # optional — YAML/JSON screen file validation
+
+# ── LLM providers ────────────────────────────────────────────────────────────
+# Used when LLM_PROVIDER=openai (OpenAI API or OpenRouter-compatible API)
+openai                 # required for LLM_PROVIDER=openai (gpt-4o-mini etc.)
+                       # Ollama runs as a local service — no Python package needed
+
+# ── Documents / RAG ──────────────────────────────────────────────────────────
+sentence-transformers  # all-MiniLM-L6-v2 embeddings (~90 MB)
 pdfminer.six           # PDF text extraction
 python-docx            # .docx text extraction
 sqlite-vec             # SQLite vector search extension (RAG / KNN embeddings)
-cryptography           # optional dependency for psycopg TLS

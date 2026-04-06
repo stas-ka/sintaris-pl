@@ -74,7 +74,7 @@ The current bot has **~65 callback keys**, **19 keyboard builder functions**, **
 |---|---|---|
 | `_t(chat_id, key, **kwargs)` | `bot_access.py` | **100%** — pure i18n lookup, no Telegram dependency |
 | `_is_allowed()` / `_is_admin()` | `bot_access.py` | **100%** — pure access check |
-| `strings.json` (188 keys, 3 langs) | `src/strings.json` | **100%** — JSON, used by web directly |
+| `strings.json` (328 keys, 3 langs) | `src/strings.json` | **100%** — JSON, used by web directly |
 | `bot_users.py` (registration, notes I/O) | `bot_users.py` | **100%** — pure file I/O, no Telegram API |
 | `bot_calendar.py` (storage helpers) | `bot_calendar.py` | **80%** — storage is pure; LLM + TTS calls are reusable; keyboards are Telegram-specific |
 | `bot_mail_creds.py` (IMAP fetch) | `bot_mail_creds.py` | **60%** — IMAP logic reusable; UI flow Telegram-coupled |

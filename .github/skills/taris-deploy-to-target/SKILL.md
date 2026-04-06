@@ -26,7 +26,61 @@ argument-hint: 'Which files changed? (e.g. all, bot_admin.py, strings.json) and 
 
 ---
 
-## Procedure
+## 🚀 Quick Deploy via Script (Recommended)
+
+All deployment operations use the unified `taris_deploy.sh` script:
+
+```bash
+# Deploy to PI2 (engineering target) — ALWAYS first
+bash src/setup/taris_deploy.sh --action deploy --target pi2
+
+# Deploy to PI1 (production target) — only after PI2 verified + user confirmed
+bash src/setup/taris_deploy.sh --action deploy --target pi1
+
+# Patch specific files only (fast iteration)
+bash src/setup/taris_deploy.sh --action patch --target pi2 \
+  --files "core/bot_llm.py,telegram_menu_bot.py"
+
+# Backup only (before risky changes)
+bash src/setup/taris_deploy.sh --action backup --target pi2 --backup-type all
+
+# Run migration only (after schema change)
+bash src/setup/taris_deploy.sh --action migrate --target pi2
+
+# Verify service status + journal
+bash src/setup/taris_deploy.sh --action verify --target pi2
+
+# Restart services only
+bash src/setup/taris_deploy.sh --action restart --target pi2
+
+# Full install (first-time setup on a new Raspberry Pi)
+bash src/setup/taris_deploy.sh --action install --target pi2
+
+# Also upgrade picoclaw binary during deploy
+bash src/setup/taris_deploy.sh --action deploy --target pi2 --upgrade-binary
+
+# Options:
+#   --yes            Non-interactive (CI mode)
+#   --no-backup      Skip pre-deploy backup (rapid iteration only)
+#   --no-tests       Skip smoke tests
+#   --no-migrate     Skip migration step
+#   --force-restart  Restart even if no change detected
+#   --git-ref TAG    Checkout specific commit/tag before deploy
+#   --host HOSTNAME  Override Pi hostname
+```
+
+The script handles: connectivity check → backup → data check → deploy all packages → service files → migration → restart → journal verify → smoke tests → summary.
+
+> **Legacy wrapper** (backward compat, delegates to taris_deploy.sh):
+> - `bash src/setup/update_picoclaw.sh --target pi2`
+
+---
+
+## Manual Step-by-Step (for partial deploys / debugging)
+
+Use the steps below for fine-grained control (e.g. deploying only a single file). For full deploys, prefer the script above.
+
+---
 
 ### Step 0 — Pre-Deploy: Version Bump & Release Notes *(mandatory for user-facing changes)*
 
@@ -93,6 +147,36 @@ plink -pw "%TPWD%" -batch stas@%THOST% ^
 Expected to see: `bot.env`, `config.json`, `taris.db` (or `voice_opts.json`, `users.json`). **Do not proceed until the backup is confirmed on local disk.**
 
 > ✅ Keep the last 3 backup archives in `backup/snapshots/`; delete older ones after a successful deploy.
+
+---
+
+### Step 0.6 — Data Directory Migration Check *(mandatory)*
+
+> ⚠️ **DATA SHALL ALWAYS BE BACKED UP AND MIGRATED ON EVERY SOFTWARE CHANGE ON TARGETS.**
+>
+> Before proceeding: verify all persistent user-data directories exist at the correct path on the target.
+> If you are deploying after a service rename (e.g. `picoclaw` → `taris`) or a path change — **migrate ALL user data from the old path to the new path NOW**.
+
+Check all data directories on the target:
+
+```bat
+plink -pw "%TPWD%" -batch stas@%THOST% ^
+  "for d in calendar notes contacts mail_creds error_protocols; do echo \"=== $d ==="; ls -la ~/.taris/$d/ 2>/dev/null || echo MISSING; done && ls -la ~/.taris/taris.db ~/.taris/bot.env ~/.taris/voice_opts.json 2>/dev/null || echo SOME_FILES_MISSING"
+```
+
+**Data directory reference:**
+
+| Directory / File | Contents | Action if missing or empty |
+|---|---|---|
+| `~/.taris/calendar/` | Per-user calendar events (JSON per user) | `cp -n ~/.picoclaw/calendar/*.json ~/.taris/calendar/ 2>/dev/null` |
+| `~/.taris/notes/` | Per-user Markdown notes | `cp -rn ~/.picoclaw/notes/. ~/.taris/notes/` |
+| `~/.taris/contacts/` | Per-user contact book (JSON) | `cp -rn ~/.picoclaw/contacts/. ~/.taris/contacts/` |
+| `~/.taris/mail_creds/` | IMAP credentials + digest cache | `cp -rn ~/.picoclaw/mail_creds/. ~/.taris/mail_creds/` |
+| `~/.taris/taris.db` | SQLite data store | restore from Step 0.5 backup |
+| `~/.taris/bot.env` | Token + allowed users | restore from Step 0.5 backup or re-create manually |
+| `~/.taris/voice_opts.json` | Voice optimisation flags | restore from Step 0.5 backup |
+
+**Do not proceed if any directory that held user data before is now missing or empty.**
 
 ---
 

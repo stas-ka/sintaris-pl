@@ -81,14 +81,28 @@ def _cal_load(chat_id: int) -> list:
 
 
 def _cal_save(chat_id: int, events: list) -> None:
-    _cal_user_file(chat_id).write_text(
-        json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    """Save events to DB (primary). JSON file kept as legacy backup."""
     try:
         for ev in events:
             store.save_event(chat_id, ev)
+        # Remove DB events for this user that are not in the new list
+        current_ids = {e.get("id") for e in events if e.get("id")}
+        try:
+            existing = store.load_events(chat_id)
+            for ev in existing:
+                if ev.get("id") and ev["id"] not in current_ids:
+                    store.delete_event(chat_id, ev["id"])
+        except Exception as _del_e:
+            log.warning("[Cal] delete orphaned events failed: %s", _del_e)
     except Exception as _e:
         log.warning("[Cal] store.save_event failed: %s", _e)
+        # Fallback: JSON write for safety
+        try:
+            _cal_user_file(chat_id).write_text(
+                json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except Exception:
+            pass
 
 
 def _cal_add_event(chat_id: int, title: str, dt: datetime,
@@ -110,11 +124,7 @@ def _cal_delete_event(chat_id: int, ev_id: str) -> bool:
     events = _cal_load(chat_id)
     new_events = [e for e in events if e.get("id") != ev_id]
     if len(new_events) < len(events):
-        _cal_save(chat_id, new_events)
-        try:
-            store.delete_event(chat_id, ev_id)
-        except Exception as _e:
-            log.warning("[Cal] store.delete_event failed: %s", _e)
+        _cal_save(chat_id, new_events)  # DB-primary; _cal_save handles deletion
         return True
     return False
 
@@ -291,73 +301,65 @@ def _finish_cal_add(chat_id: int, text: str) -> None:
     now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
     prompt = fmt_prompt(PROMPTS["calendar"]["event_parse"], now_iso=now_iso, text=text)
 
-    thinking_msg = bot.send_message(
-        chat_id,
-        _t(chat_id, "cal_parsing"),
-    )
-    raw = ask_llm(prompt, timeout=60)
-    try:
-        bot.delete_message(chat_id, thinking_msg.message_id)
-    except Exception:
-        pass
+    thinking_msg = bot.send_message(chat_id, _t(chat_id, "cal_parsing"))
 
-    if not raw:
-        bot.send_message(
-            chat_id,
-            _t(chat_id, "cal_no_llm"),
-            reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)),
-        )
-        return
+    def _run():
+        raw = ask_llm(prompt, timeout=60)
+        try:
+            bot.delete_message(chat_id, thinking_msg.message_id)
+        except Exception:
+            pass
 
-    try:
-        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not json_match:
-            raise ValueError("No JSON block found in LLM response")
-        parsed = json.loads(json_match.group())
-        events_raw = parsed.get("events", [])
-        if not events_raw:
-            raise ValueError("LLM returned empty events list")
+        if not raw:
+            bot.send_message(
+                chat_id,
+                _t(chat_id, "cal_no_llm"),
+                reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)),
+            )
+            return
 
-        drafts = []
-        for item in events_raw:
-            title = str(item.get("title", "")).strip()
-            dt_str = str(item.get("dt", "")).strip()
-            if not title or not dt_str:
-                continue
-            # Normalize partial ISO "YYYY-MM-DDTHH" → "YYYY-MM-DDTHH:00"
-            if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}$', dt_str):
-                dt_str += ':00'
-            dt = datetime.fromisoformat(dt_str)
-            drafts.append({
-                "title":             title,
-                "dt_iso":            dt.strftime("%Y-%m-%dT%H:%M"),
-                "remind_before_min": 15,
-            })
+        try:
+            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+            if not json_match:
+                raise ValueError("No JSON block found in LLM response")
+            parsed = json.loads(json_match.group())
+            events_raw = parsed.get("events", [])
+            if not events_raw:
+                raise ValueError("LLM returned empty events list")
 
-        if not drafts:
-            raise ValueError("No valid events parsed")
+            drafts = []
+            for item in events_raw:
+                title = str(item.get("title", "")).strip()
+                dt_str = str(item.get("dt", "")).strip()
+                if not title or not dt_str:
+                    continue
+                # Normalize partial ISO "YYYY-MM-DDTHH" → "YYYY-MM-DDTHH:00"
+                if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}$', dt_str):
+                    dt_str += ':00'
+                dt = datetime.fromisoformat(dt_str)
+                drafts.append({
+                    "title":             title,
+                    "dt_iso":            dt.strftime("%Y-%m-%dT%H:%M"),
+                    "remind_before_min": 15,
+                })
 
-    except Exception as e:
-        log.warning(f"[Cal] LLM parse failed for chat {chat_id}: {e}  raw={raw[:200]!r}")
-        bot.send_message(chat_id, _t(chat_id, "cal_parse_fail"), parse_mode="Markdown",
-                         reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
-        return
+            if not drafts:
+                raise ValueError("No valid events parsed")
 
-    if len(drafts) == 1:
-        # Single event — use original confirm flow
-        _pending_cal[chat_id] = {
-            "step":              "confirm",
-            **drafts[0],
-        }
-        _show_cal_confirm(chat_id)
-    else:
-        # Multiple events — sequential confirmation
-        _pending_cal[chat_id] = {
-            "step":   "multi_confirm",
-            "events": drafts,
-            "idx":    0,
-        }
-        _show_cal_confirm_multi(chat_id)
+        except Exception as e:
+            log.warning(f"[Cal] LLM parse failed for chat {chat_id}: {e}  raw={raw[:200]!r}")
+            bot.send_message(chat_id, _t(chat_id, "cal_parse_fail"), parse_mode="Markdown",
+                             reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
+            return
+
+        if len(drafts) == 1:
+            _pending_cal[chat_id] = {"step": "confirm", **drafts[0]}
+            _show_cal_confirm(chat_id)
+        else:
+            _pending_cal[chat_id] = {"step": "multi_confirm", "events": drafts, "idx": 0}
+            _show_cal_confirm_multi(chat_id)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _show_cal_confirm(chat_id: int) -> None:
@@ -543,50 +545,50 @@ def _handle_calendar_query(chat_id: int, text: str) -> None:
     lang = _st._user_lang.get(chat_id, "ru")
     now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
     prompt = fmt_prompt(PROMPTS["calendar"]["date_range"], now_iso=now_iso, text=text)
-    thinking = bot.send_message(
-        chat_id,
-        _t(chat_id, "cal_searching"),
-    )
-    raw = ask_llm(prompt, timeout=60)
-    try:
-        bot.delete_message(chat_id, thinking.message_id)
-    except Exception:
-        pass
+    thinking = bot.send_message(chat_id, _t(chat_id, "cal_searching"))
 
-    try:
-        m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
-        if not m:
-            raise ValueError("No JSON")
-        data      = json.loads(m.group())
-        from_date = datetime.fromisoformat(data["from"]).date()
-        to_date   = datetime.fromisoformat(data["to"]).date()
-        label     = data.get("label", f"{from_date} – {to_date}")
-    except Exception:
-        from_date = datetime.now().date()
-        to_date   = from_date + timedelta(days=7)
-        label     = _t(chat_id, "cal_default_label")
+    def _run():
+        raw = ask_llm(prompt, timeout=60)
+        try:
+            bot.delete_message(chat_id, thinking.message_id)
+        except Exception:
+            pass
 
-    events = _cal_load(chat_id)
-    matched = sorted(
-        [e for e in events
-         if from_date <= datetime.fromisoformat(e["dt_iso"]).date() <= to_date],
-        key=lambda e: e["dt_iso"],
-    )
+        try:
+            m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
+            if not m:
+                raise ValueError("No JSON")
+            data      = json.loads(m.group())
+            from_date = datetime.fromisoformat(data["from"]).date()
+            to_date   = datetime.fromisoformat(data["to"]).date()
+            label     = data.get("label", f"{from_date} – {to_date}")
+        except Exception:
+            from_date = datetime.now().date()
+            to_date   = from_date + timedelta(days=7)
+            label     = _t(chat_id, "cal_default_label")
 
-    if not matched:
-        msg = (f"📅 *{_escape_md(label)}*\n\n"
-               + _t(chat_id, "cal_no_events"))
-    else:
-        lines = [f"📅 *{_escape_md(label)}* — {len(matched)} "
-                 + _t(chat_id, "cal_events_count"), ""]
-        for ev in matched:
-            dt    = datetime.fromisoformat(ev["dt_iso"])
-            cdown = _fmt_countdown(dt, lang)
-            lines.append(f"• *{_escape_md(ev['title'])}* — {dt.strftime('%d.%m %H:%M')} {cdown}")
-        msg = "\n".join(lines)
+        events = _cal_load(chat_id)
+        matched = sorted(
+            [e for e in events
+             if from_date <= datetime.fromisoformat(e["dt_iso"]).date() <= to_date],
+            key=lambda e: e["dt_iso"],
+        )
 
-    bot.send_message(chat_id, msg, parse_mode="Markdown",
-                     reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
+        if not matched:
+            msg = (f"📅 *{_escape_md(label)}*\n\n" + _t(chat_id, "cal_no_events"))
+        else:
+            lines = [f"📅 *{_escape_md(label)}* — {len(matched)} "
+                     + _t(chat_id, "cal_events_count"), ""]
+            for ev in matched:
+                dt    = datetime.fromisoformat(ev["dt_iso"])
+                cdown = _fmt_countdown(dt, lang)
+                lines.append(f"• *{_escape_md(ev['title'])}* — {dt.strftime('%d.%m %H:%M')} {cdown}")
+            msg = "\n".join(lines)
+
+        bot.send_message(chat_id, msg, parse_mode="Markdown",
+                         reply_markup=_calendar_keyboard(chat_id, _cal_load(chat_id)))
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -621,60 +623,60 @@ def _handle_cal_console(chat_id: int, text: str) -> None:
 
     prompt = fmt_prompt(PROMPTS["calendar"]["intent"], now_iso=now_iso, events_hint=events_hint, text=text)
 
-    thinking = bot.send_message(
-        chat_id,
-        _t(chat_id, "cal_analyzing"),
-    )
-    raw = ask_llm(prompt, timeout=60)
-    try:
-        bot.delete_message(chat_id, thinking.message_id)
-    except Exception:
-        pass
+    thinking = bot.send_message(chat_id, _t(chat_id, "cal_analyzing"))
 
-    intent = "add"
-    ev_id  = None
-    try:
-        m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
-        if m:
-            data   = json.loads(m.group())
-            intent = data.get("intent", "add")
-            ev_id  = data.get("ev_id") or None
-    except Exception as e:
-        log.debug(f"[Cal] console intent parse failed: {e}")
+    def _run():
+        raw = ask_llm(prompt, timeout=60)
+        try:
+            bot.delete_message(chat_id, thinking.message_id)
+        except Exception:
+            pass
 
-    if intent == "query":
-        _handle_calendar_query(chat_id, text)
-    elif intent == "delete":
-        if ev_id:
-            _handle_cal_delete_request(chat_id, ev_id)
-        else:
-            # No ev_id resolved — search by title similarity
-            ev = _cal_find_by_text(chat_id, text)
-            if ev:
-                _handle_cal_delete_request(chat_id, ev["id"])
+        intent = "add"
+        ev_id  = None
+        try:
+            m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
+            if m:
+                data   = json.loads(m.group())
+                intent = data.get("intent", "add")
+                ev_id  = data.get("ev_id") or None
+        except Exception as e:
+            log.debug(f"[Cal] console intent parse failed: {e}")
+
+        if intent == "query":
+            _handle_calendar_query(chat_id, text)
+        elif intent == "delete":
+            if ev_id:
+                _handle_cal_delete_request(chat_id, ev_id)
             else:
-                bot.send_message(
-                    chat_id,
-                    _t(chat_id, "cal_event_not_found"),
-                    reply_markup=_calendar_keyboard(chat_id, events),
-                )
-    elif intent == "edit":
-        if ev_id:
-            _handle_cal_event_detail(chat_id, ev_id)
-        else:
-            ev = _cal_find_by_text(chat_id, text)
-            if ev:
-                _handle_cal_event_detail(chat_id, ev["id"])
+                ev = _cal_find_by_text(chat_id, text)
+                if ev:
+                    _handle_cal_delete_request(chat_id, ev["id"])
+                else:
+                    bot.send_message(
+                        chat_id,
+                        _t(chat_id, "cal_event_not_found"),
+                        reply_markup=_calendar_keyboard(chat_id, events),
+                    )
+        elif intent == "edit":
+            if ev_id:
+                _handle_cal_event_detail(chat_id, ev_id)
             else:
-                bot.send_message(
-                    chat_id,
-                    _t(chat_id, "cal_event_not_found"),
-                    reply_markup=_calendar_keyboard(chat_id, events),
-                )
-    else:
-        # Default: treat as add
-        _st._user_mode[chat_id] = "calendar"
-        _finish_cal_add(chat_id, text)
+                ev = _cal_find_by_text(chat_id, text)
+                if ev:
+                    _handle_cal_event_detail(chat_id, ev["id"])
+                else:
+                    bot.send_message(
+                        chat_id,
+                        _t(chat_id, "cal_event_not_found"),
+                        reply_markup=_calendar_keyboard(chat_id, events),
+                    )
+        else:
+            # Default: treat as add
+            _st._user_mode[chat_id] = "calendar"
+            _finish_cal_add(chat_id, text)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _cal_find_by_text(chat_id: int, text: str) -> Optional[dict]:
@@ -703,7 +705,7 @@ def _cal_do_confirm_save(chat_id: int) -> None:
     dt_fmt = dt.strftime("%d.%m.%Y %H:%M")
 
     confirm = (
-        f"✅ *{'Записал' if lang == 'ru' else 'Saved'}:*\n"
+        f"✅ *{_t(chat_id, 'cal_event_saved_prefix')}*\n"
         f"📌 {_escape_md(title)}\n"
         f"📅 {dt_fmt}  {cdown}"
     )
@@ -762,6 +764,30 @@ def _cal_prompt_edit_field(chat_id: int, field: str,
     bot.send_message(chat_id, prompt, parse_mode="Markdown", reply_markup=kb)
 
 
+def _apply_cal_edit(chat_id: int, draft: dict, ev_id: str | None) -> None:
+    """Apply a completed calendar field edit — save to disk or return to confirm screen."""
+    if ev_id:
+        events = _cal_load(chat_id)
+        for ev in events:
+            if ev.get("id") == ev_id:
+                ev["title"]             = draft.get("title", ev["title"])
+                ev["dt_iso"]            = draft.get("dt_iso", ev["dt_iso"])
+                ev["remind_before_min"] = int(draft.get("remind_before_min", 15))
+                ev["reminded"]          = False
+                break
+        _cal_save(chat_id, events)
+        _pending_cal.pop(chat_id, None)
+        ev_updated = next((e for e in _cal_load(chat_id) if e.get("id") == ev_id), None)
+        if ev_updated:
+            _schedule_reminder(chat_id, ev_updated)
+            _handle_cal_event_detail(chat_id, ev_id)
+        else:
+            _handle_calendar_menu(chat_id)
+    else:
+        _pending_cal[chat_id] = draft
+        _show_cal_confirm(chat_id)
+
+
 def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
     """Process user's text input for editing a calendar event field."""
     lang  = _st._user_lang.get(chat_id, "ru")
@@ -783,32 +809,32 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
         draft["title"] = new_title
 
     elif field == "dt":
-        # Re-parse via LLM
+        # Re-parse via LLM — must be async to avoid blocking worker thread
         now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M")
         prompt = fmt_prompt(PROMPTS["calendar"]["edit_dt"], now_iso=now_iso, text=text)
-        thinking = bot.send_message(
-            chat_id,
-            _t(chat_id, "cal_parsing_date"),
-        )
-        raw = ask_llm(prompt, timeout=60)
-        try:
-            bot.delete_message(chat_id, thinking.message_id)
-        except Exception:
-            pass
-        try:
-            m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
-            parsed = json.loads(m.group()) if m else {}
-            new_dt = datetime.fromisoformat(parsed["dt"])
-            draft["dt_iso"] = new_dt.strftime("%Y-%m-%dT%H:%M")
-        except Exception as exc:
-            log.warning(f"[Cal] dt parse failed: {exc}  raw={raw!r}")
-            bot.send_message(
-                chat_id,
-                _t(chat_id, "cal_date_parse_fail"),
-                parse_mode="Markdown",
-            )
-            _cal_prompt_edit_field(chat_id, "dt", ev_id)
-            return
+        thinking = bot.send_message(chat_id, _t(chat_id, "cal_parsing_date"))
+        _draft_ref = draft  # capture for closure
+
+        def _run_dt():
+            raw = ask_llm(prompt, timeout=60)
+            try:
+                bot.delete_message(chat_id, thinking.message_id)
+            except Exception:
+                pass
+            try:
+                m = re.search(r'\{[^{}]+\}', raw or "", re.DOTALL)
+                parsed = json.loads(m.group()) if m else {}
+                new_dt = datetime.fromisoformat(parsed["dt"])
+                _draft_ref["dt_iso"] = new_dt.strftime("%Y-%m-%dT%H:%M")
+            except Exception as exc:
+                log.warning(f"[Cal] dt parse failed: {exc}  raw={raw!r}")
+                bot.send_message(chat_id, _t(chat_id, "cal_date_parse_fail"), parse_mode="Markdown")
+                _cal_prompt_edit_field(chat_id, "dt", ev_id)
+                return
+            _apply_cal_edit(chat_id, _draft_ref, ev_id)
+
+        threading.Thread(target=_run_dt, daemon=True).start()
+        return
 
     else:  # remind
         try:
@@ -817,39 +843,11 @@ def _cal_handle_edit_input(chat_id: int, text: str, field: str) -> None:
                 raise ValueError("out of range")
             draft["remind_before_min"] = minutes
         except Exception:
-            bot.send_message(
-                chat_id,
-                _t(chat_id, "cal_remind_invalid"),
-            )
+            bot.send_message(chat_id, _t(chat_id, "cal_remind_invalid"))
             _cal_prompt_edit_field(chat_id, "remind", ev_id)
             return
 
-    # After editing: apply to saved event or return to confirmation
-    if ev_id:
-        # Update persisted event
-        events = _cal_load(chat_id)
-        for ev in events:
-            if ev.get("id") == ev_id:
-                ev["title"]             = draft.get("title", ev["title"])
-                ev["dt_iso"]            = draft.get("dt_iso", ev["dt_iso"])
-                ev["remind_before_min"] = int(draft.get("remind_before_min", 15))
-                ev["reminded"]          = False
-                break
-        _cal_save(chat_id, events)
-        _pending_cal.pop(chat_id, None)
-        # Reschedule reminder
-        ev_updated = next((e for e in _cal_load(chat_id) if e.get("id") == ev_id), None)
-        if ev_updated:
-            _schedule_reminder(chat_id, ev_updated)
-        updated_ev = next((e for e in _cal_load(chat_id) if e.get("id") == ev_id), None)
-        if updated_ev:
-            _handle_cal_event_detail(chat_id, ev_id)
-        else:
-            _handle_calendar_menu(chat_id)
-    else:
-        # Back to confirmation screen
-        _pending_cal[chat_id] = draft
-        _show_cal_confirm(chat_id)
+    _apply_cal_edit(chat_id, draft, ev_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

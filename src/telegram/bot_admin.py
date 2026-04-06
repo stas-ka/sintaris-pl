@@ -8,6 +8,7 @@ Responsibilities:
   - Voice-optimization toggle menu
   - Release notes — load, format, version-change admin notification
   - LLM model switcher (taris models + OpenAI ChatGPT sub-menu)
+  - Unified user list: Telegram users + Web UI accounts
 """
 
 import re as _re
@@ -21,10 +22,19 @@ from core.bot_config import (
     TARIS_CONFIG, ACTIVE_MODEL_FILE,
     RELEASE_NOTES_FILE, LAST_NOTIFIED_FILE, BOT_VERSION,
     LLM_LOCAL_FALLBACK, LLAMA_CPP_URL, LLAMA_CPP_MODEL, LLM_FALLBACK_FLAG_FILE,
-    _VOICE_OPTS_DEFAULTS,
+    LLM_PROVIDER, LLM_FALLBACK_PROVIDER,
+    OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL,
+    OLLAMA_URL, OLLAMA_MODEL,
+    GEMINI_API_KEY, GEMINI_MODEL,
+    ANTHROPIC_API_KEY, ANTHROPIC_MODEL,
+    STT_PROVIDER, STT_FALLBACK_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
+    PIPER_BIN, PIPER_MODEL, STT_LANG,
+    _VOICE_OPTS_DEFAULTS, DEVICE_VARIANT,
     _LOG_FILE, _ASSISTANT_LOG_FILE, _SECURITY_LOG_FILE, _VOICE_LOG_FILE, _DATASTORE_LOG_FILE,
+    CONVERSATION_HISTORY_MAX, CONV_SUMMARY_THRESHOLD, CONV_MID_MAX,
     log,
 )
+from core.bot_llm import get_per_func_provider, set_per_func_provider
 from core.bot_logger import tail_log
 from core.bot_instance import bot
 from telegram.bot_access import (
@@ -63,7 +73,7 @@ def _save_dynamic_users() -> None:
 
 
 def _user_info_block(uid: int, reg) -> str:
-    """Compact Markdown block with all available identity info for a user."""
+    """Compact Markdown block with all available identity info for a Telegram user."""
     if not reg:
         return f"\U0001f464 `{uid}` _(no registration record)_"
     first   = _escape_md(reg.get("first_name", ""))
@@ -80,25 +90,46 @@ def _user_info_block(uid: int, reg) -> str:
     )
 
 
+def _web_account_block(account: dict, tg_ids_known: set) -> str:
+    """Compact Markdown block for a web UI account."""
+    uname    = _escape_md(account.get("username", ""))
+    display  = _escape_md(account.get("display_name", ""))
+    role     = account.get("role", "user")
+    tg_id    = account.get("telegram_chat_id")
+    created  = (account.get("created", "")[:10])
+    role_icon = "🔐" if role == "admin" else "👤"
+    tg_line   = f"`{tg_id}`" if tg_id else "_not linked_"
+    linked_note = " _(also in Telegram list above)_" if tg_id and int(tg_id) in tg_ids_known else ""
+    return (
+        f"{role_icon} *{uname}* ({display})\n"
+        f"  • Role: {role}  |  Created: {created}\n"
+        f"  • Telegram: {tg_line}{linked_note}"
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Admin keyboard
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _admin_keyboard() -> InlineKeyboardMarkup:
+def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     pending_count = len(_get_pending_registrations())
     pending_badge = f"  ({pending_count} new)" if pending_count else ""
     kb.add(
-        InlineKeyboardButton(f"👥  Pending Requests{pending_badge}",
+        InlineKeyboardButton(_t(chat_id, "admin_btn_pending", pending_badge=pending_badge),
                              callback_data="admin_pending_users"),
-        InlineKeyboardButton("➕  Add user",       callback_data="admin_add_user"),
-        InlineKeyboardButton("📋  List users",     callback_data="admin_list_users"),
-        InlineKeyboardButton("🗑   Remove user",    callback_data="admin_remove_user"),
-        InlineKeyboardButton("🤖  Switch LLM",     callback_data="admin_llm_menu"),
-        InlineKeyboardButton("⚡  Voice Opts",      callback_data="voice_opts_menu"),
-        InlineKeyboardButton("📝  Release Notes",   callback_data="admin_changelog"),
-        InlineKeyboardButton("�  Logs",            callback_data="admin_logs_menu"),
-        InlineKeyboardButton("�🔙  Menu",            callback_data="menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_add_user"),   callback_data="admin_add_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_list_users"), callback_data="admin_list_users"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_remove_user"), callback_data="admin_remove_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_switch_llm"), callback_data="admin_llm_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_config"), callback_data="admin_voice_config"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_release_notes"), callback_data="admin_changelog"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_logs"),       callback_data="admin_logs_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_system"),      callback_data="mode_system"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
     return kb
 
@@ -106,9 +137,9 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
 def _handle_admin_menu(chat_id: int) -> None:
     bot.send_message(
         chat_id,
-        "🔐 *Admin Panel*",
+        _t(chat_id, "admin_panel_title"),
         parse_mode="Markdown",
-        reply_markup=_admin_keyboard(),
+        reply_markup=_admin_keyboard(chat_id),
     )
 
 
@@ -117,47 +148,62 @@ def _handle_admin_menu(chat_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_admin_list_users(chat_id: int) -> None:
-    """Show all users grouped by role: Admins, Allowed, Approved, Blocked."""
+    """Show all users: Telegram users + Web UI accounts (unified view)."""
     sections = []
+
+    # Track all Telegram IDs that appear in any section (for cross-reference)
+    all_tg_ids: set = set(ADMIN_USERS) | set(ALLOWED_USERS) | set(_dynamic_users())
 
     # 🔐 Admins (static from config)
     if ADMIN_USERS:
         blocks = [_user_info_block(uid, _find_registration(uid)) for uid in sorted(ADMIN_USERS)]
-        sections.append("🔐 *Admins:*\n\n" + "\n\n".join(blocks))
+        sections.append("🔐 *Telegram Admins:*\n\n" + "\n\n".join(blocks))
 
     # ✅ Static allowed users (not admins)
     static_only = sorted(uid for uid in ALLOWED_USERS if uid not in ADMIN_USERS)
     if static_only:
         blocks = [_user_info_block(uid, _find_registration(uid)) for uid in static_only]
-        sections.append("✅ *Allowed:*\n\n" + "\n\n".join(blocks))
+        sections.append("✅ *Telegram Allowed:*\n\n" + "\n\n".join(blocks))
 
     # 👤 Dynamically approved users (not already in static lists)
     dyn_only = sorted(uid for uid in _dynamic_users()
                       if uid not in ALLOWED_USERS and uid not in ADMIN_USERS)
     if dyn_only:
         blocks = [_user_info_block(uid, _find_registration(uid)) for uid in dyn_only]
-        sections.append("👤 *Approved:*\n\n" + "\n\n".join(blocks))
+        sections.append("👤 *Telegram Approved:*\n\n" + "\n\n".join(blocks))
 
     # 🚫 Blocked users
     blocked = [r for r in _load_registrations() if r.get("status") == "blocked"]
     if blocked:
-        blk_blocks = []
-        for r in blocked:
-            uid = r.get("chat_id")
-            blk_blocks.append(_user_info_block(uid, r))
-        sections.append("🚫 *Blocked:*\n\n" + "\n\n".join(blk_blocks))
+        blk_blocks = [_user_info_block(r.get("chat_id"), r) for r in blocked]
+        sections.append("🚫 *Telegram Blocked:*\n\n" + "\n\n".join(blk_blocks))
+
+    # 🌐 Web UI accounts (from accounts.json)
+    try:
+        from security.bot_auth import list_accounts as _list_web_accounts
+        web_accounts = _list_web_accounts()
+        if web_accounts:
+            web_blocks = [_web_account_block(a, all_tg_ids) for a in
+                          sorted(web_accounts, key=lambda a: (a.get("role","user") != "admin", a.get("username","")))]
+            sections.append("🌐 *Web UI Accounts:*\n\n" + "\n\n".join(web_blocks))
+    except Exception as exc:
+        sections.append(f"🌐 *Web UI Accounts:* _(error loading: {exc})_")
 
     if not sections:
         bot.send_message(chat_id, _t(chat_id, "no_guests"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
         return
 
-    bot.send_message(
-        chat_id,
-        "\n\n" + "\n\n───────\n\n".join(sections),
-        parse_mode="Markdown",
-        reply_markup=_admin_keyboard(),
-    )
+    # Split into multiple messages if too long (Telegram 4096 char limit)
+    full_text = "\n\n" + "\n\n───────\n\n".join(sections)
+    if len(full_text) <= 4000:
+        bot.send_message(chat_id, full_text, parse_mode="Markdown",
+                         reply_markup=_admin_keyboard(chat_id))
+    else:
+        for i, section in enumerate(sections):
+            kb = _admin_keyboard(chat_id) if i == len(sections) - 1 else None
+            bot.send_message(chat_id, "\n\n" + section, parse_mode="Markdown",
+                             reply_markup=kb)
 
 
 def _start_admin_add_user(chat_id: int) -> None:
@@ -174,16 +220,16 @@ def _finish_admin_add_user(admin_id: int, text: str) -> None:
     dyn = _dynamic_users()
     if uid in dyn:
         bot.send_message(admin_id, _t(admin_id, "already_guest", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     elif uid in ALLOWED_USERS or uid in ADMIN_USERS:
         bot.send_message(admin_id, _t(admin_id, "already_full", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     else:
         dyn.add(uid)
         _save_dynamic_users()
         log.info(f"Admin {admin_id} added user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_added", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     _st._user_mode.pop(admin_id, None)
 
 
@@ -191,7 +237,7 @@ def _start_admin_remove_user(chat_id: int) -> None:
     dyn = _dynamic_users()
     if not dyn:
         bot.send_message(chat_id, _t(chat_id, "no_guests_del"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
         return
     _st._user_mode[chat_id] = "admin_remove_user"
     lst = "\n\n".join(_user_info_block(uid, _find_registration(uid)) for uid in sorted(dyn))
@@ -210,10 +256,10 @@ def _finish_admin_remove_user(admin_id: int, text: str) -> None:
         _save_dynamic_users()
         log.info(f"Admin {admin_id} removed guest user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_removed", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     else:
         bot.send_message(admin_id, _t(admin_id, "user_not_found", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     _st._user_mode.pop(admin_id, None)
 
 
@@ -226,7 +272,7 @@ def _handle_admin_pending_users(chat_id: int) -> None:
     pending = _get_pending_registrations()
     if not pending:
         bot.send_message(chat_id, _t(chat_id, "no_pending_regs"),
-                         reply_markup=_admin_keyboard())
+                         reply_markup=_admin_keyboard(chat_id))
         return
     for reg in pending:
         uid      = reg.get("chat_id")
@@ -264,11 +310,11 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     reg = _find_registration(target_id)
     if not reg:
         bot.send_message(admin_id, f"ℹ️ Registration for `{target_id}` not found.",
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
         return
     if reg.get("status") == "approved":
         bot.send_message(admin_id, f"ℹ️ User `{target_id}` is already approved.",
-                         parse_mode="Markdown", reply_markup=_admin_keyboard())
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
         return
     _set_reg_status(target_id, "approved")
     _dynamic_users().add(target_id)
@@ -276,7 +322,7 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     name_disp = f" \u2014 {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id}")
     bot.send_message(admin_id, f"✅ User `{target_id}`{name_disp} approved and added.",
-                     parse_mode="Markdown", reply_markup=_admin_keyboard())
+                     parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     try:
         bot.send_message(target_id, _t(target_id, "reg_approved"),
                          parse_mode="Markdown",
@@ -294,7 +340,7 @@ def _do_block_registration(admin_id: int, target_id: int) -> None:
     _save_dynamic_users()
     log.info(f"[Reg] Admin {admin_id} blocked user {target_id}")
     bot.send_message(admin_id, f"\U0001f6ab User `{target_id}`{name_disp} blocked.",
-                     parse_mode="Markdown", reply_markup=_admin_keyboard())
+                     parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
     try:
         bot.send_message(target_id, _t(target_id, "reg_declined"))
     except Exception as e:
@@ -335,25 +381,50 @@ def _notify_admins_new_registration(chat_id: int, username: str, name: str,
 def _handle_voice_opts_menu(chat_id: int) -> None:
     """Show voice optimization toggle panel for admins."""
     opts = _voice_opts()
+    is_openclaw = DEVICE_VARIANT == "openclaw"
 
     def _flag(key: str) -> str:
         return "✅" if opts.get(key) else "◻️"
 
     kb = InlineKeyboardMarkup(row_width=1)
-    opts_rows = [
+
+    # Common opts — available on all variants
+    common_rows = [
         ("silence_strip",     f"{_flag('silence_strip')}  Silence strip  ·  −6s STT"),
         ("low_sample_rate",   f"{_flag('low_sample_rate')}  8 kHz sample rate  ·  −7s STT"),
         ("warm_piper",        f"{_flag('warm_piper')}  Warm Piper cache  ·  −15s TTS"),
         ("parallel_tts",      f"{_flag('parallel_tts')}  Parallel TTS thread  ·  text-first UX"),
         ("user_audio_toggle", f"{_flag('user_audio_toggle')}  Per-user audio 🔊/🔇 toggle"),
-        ("tmpfs_model",       f"{_flag('tmpfs_model')}  Piper model in RAM (/dev/shm)  ·  −10s TTS load"),
         ("vad_prefilter",     f"{_flag('vad_prefilter')}  VAD pre-filter (webrtcvad)  ·  −3s STT"),
+        ("voice_timing_debug",f"{_flag('voice_timing_debug')}  Timing debug  ·  show ⏱ per stage in replies"),
+    ]
+
+    # OpenClaw-specific opts
+    openclaw_rows = [
+        ("faster_whisper_stt", f"{_flag('faster_whisper_stt')}  faster-whisper STT  ·  CTranslate2 (recommended)"),
+    ]
+
+    # Taris/Pi-only opts — hidden on OpenClaw (packages not installed)
+    taris_rows = [
+        ("tmpfs_model",       f"{_flag('tmpfs_model')}  Piper model in RAM (/dev/shm)  ·  −10s TTS load"),
         ("whisper_stt",       f"{_flag('whisper_stt')}  Whisper STT (whisper.cpp)  ·  +accuracy"),
         ("vosk_fallback",     f"{_flag('vosk_fallback')}  Vosk Fallback  ·  OFF = −180 MB RAM (Whisper-only)"),
         ("piper_low_model",   f"{_flag('piper_low_model')}  Piper low model  ·  −13s TTS"),
         ("persistent_piper",  f"{_flag('persistent_piper')}  Persistent Piper process  ·  ONNX hot"),
-        ("voice_timing_debug",f"{_flag('voice_timing_debug')}  Timing debug  ·  show ⏱ per stage in replies"),
     ]
+
+    # Voice gender — available on all variants (per-user global default)
+    gender_rows = [
+        ("voice_male",        f"{_flag('voice_male')}  🎙 Male voice (dmitri)  ·  OFF = female (irina)"),
+    ]
+
+    opts_rows = common_rows[:]
+    if is_openclaw:
+        opts_rows += openclaw_rows
+    else:
+        opts_rows += taris_rows
+    opts_rows += gender_rows
+
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))
     kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
@@ -361,10 +432,28 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
     active  = [k for k, v in opts.items() if v]
     status  = ("Active: " + ", ".join(active)) if active else "All OFF — stable defaults"
     status_esc = _escape_md(status)
+
+    # ── Current runtime config summary ──────────────────────────────────────
+    # STT line
+    fw_info = f" ({FASTER_WHISPER_MODEL}/{FASTER_WHISPER_DEVICE})" if "faster_whisper" in STT_PROVIDER else ""
+    stt_fallback = f" → {STT_FALLBACK_PROVIDER}" if STT_FALLBACK_PROVIDER else ""
+    stt_line = f"STT: {STT_PROVIDER}{fw_info}{stt_fallback}  ·  lang={STT_LANG}"
+
+    # TTS line
+    piper_ok = PIPER_BIN and Path(PIPER_BIN).exists()
+    model_name = Path(PIPER_MODEL).stem if PIPER_MODEL else "?"
+    tts_line = f"TTS: {'Piper' if piper_ok else 'Piper ⚠️ missing'} ({model_name})"
+
+    # Voice LLM line
+    voice_llm = get_per_func_provider("voice") or LLM_PROVIDER
+    voice_llm_line = f"LLM (voice): {voice_llm}"
+
+    config_block = "\n".join([stt_line, tts_line, voice_llm_line])
+
     text = (
-        "⚡ *Voice Pipeline Optimisations*\n\n"
-        "Default: all OFF (stable baseline). Toggle to test individually.\n"
-        "Settings persist across restarts.\n\n"
+        "⚡ *Voice Pipeline*\n\n"
+        f"```\n{config_block}\n```\n\n"
+        "*Optimisation toggles* (tap to switch):\n"
         f"_{status_esc}_"
     )
     try:
@@ -400,7 +489,95 @@ def _handle_voice_opt_toggle(chat_id: int, key: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Release Notes
+# Admin Voice Config (STT/TTS model info + STT switching)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_admin_voice_config(chat_id: int) -> None:
+    """Show current STT/TTS configuration and allow switching STT provider + FW model."""
+    opts = _voice_opts()
+    # Determine active STT
+    if opts.get("faster_whisper_stt"):
+        active_stt = "faster_whisper"
+    else:
+        active_stt = STT_PROVIDER  # from env / bot.env
+
+    # FW model from env (runtime override stored in voice_opts stt_model key)
+    fw_model = opts.get("fw_model_override") or FASTER_WHISPER_MODEL
+    fw_device = FASTER_WHISPER_DEVICE
+    fw_compute = FASTER_WHISPER_COMPUTE
+
+    # Piper model (basename)
+    piper_model_name = str(PIPER_MODEL).split("/")[-1] if PIPER_MODEL else "—"
+
+    text = (
+        "🎙️ *Voice Configuration*\n\n"
+        f"*STT Provider:* `{active_stt}`\n"
+        f"*Vosk (hotword):* {'enabled' if DEVICE_VARIANT == 'taris' or not opts.get('faster_whisper_stt') else 'hotword only'}\n"
+        f"*Faster-Whisper model:* `{fw_model}` ({fw_device}/{fw_compute})\n\n"
+        f"*TTS (Piper) model:* `{piper_model_name}`\n\n"
+        "_Switch STT provider (takes effect immediately):_"
+    )
+
+    kb = InlineKeyboardMarkup(row_width=1)
+
+    # STT switch buttons
+    vosk_active   = not opts.get("faster_whisper_stt")
+    fw_active     = bool(opts.get("faster_whisper_stt"))
+    kb.add(InlineKeyboardButton(
+        f"{'✅' if vosk_active else '◻️'} Vosk (default, offline)",
+        callback_data="admin_stt_set:vosk",
+    ))
+    if DEVICE_VARIANT == "openclaw":
+        kb.add(InlineKeyboardButton(
+            f"{'✅' if fw_active else '◻️'} Faster-Whisper",
+            callback_data="admin_stt_set:faster_whisper",
+        ))
+        # FW model selection
+        kb.add(InlineKeyboardButton("─ Faster-Whisper model ─", callback_data="noop"))
+        for model_name in ["tiny", "base", "small", "medium"]:
+            icon = "✅" if fw_model == model_name else "◻️"
+            kb.add(InlineKeyboardButton(f"{icon} {model_name}", callback_data=f"admin_fw_model:{model_name}"))
+
+    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception as e:
+        log.warning(f"[VoiceCfg] send failed: {e}")
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_stt_set(chat_id: int, provider: str) -> None:
+    """Switch STT provider at runtime via voice_opts."""
+    opts = _voice_opts()
+    if provider == "faster_whisper":
+        opts["faster_whisper_stt"] = True
+        msg = "✅ STT switched to *Faster-Whisper*."
+    else:
+        opts["faster_whisper_stt"] = False
+        msg = "✅ STT switched to *Vosk*."
+    _save_voice_opts()
+    log.info(f"[VoiceCfg] admin {chat_id} switched STT → {provider}")
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
+
+
+def _handle_admin_fw_model_set(chat_id: int, model_name: str) -> None:
+    """Store FW model override in voice_opts and confirm."""
+    opts = _voice_opts()
+    opts["fw_model_override"] = model_name
+    _save_voice_opts()
+    log.info(f"[VoiceCfg] admin {chat_id} set FW model → {model_name}")
+    msg = (
+        f"✅ Faster-Whisper model set to *{model_name}*.\n\n"
+        "_Note: restart voice service to apply model change (`systemctl --user restart taris-voice`)._"
+    )
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load_release_notes() -> list[dict]:
@@ -461,13 +638,13 @@ def _notify_admins_new_version() -> None:
     for admin_id in ADMIN_USERS:
         try:
             bot.send_message(admin_id, msg, parse_mode="Markdown",
-                             reply_markup=_admin_keyboard())
+                             reply_markup=_admin_keyboard(admin_id))
             log.info(f"[ReleaseNotes] notified admin {admin_id} (v{BOT_VERSION})")
         except Exception as e:
             log.warning(f"[ReleaseNotes] Markdown failed for admin {admin_id}: {e} — retrying plain")
             try:
                 bot.send_message(admin_id, _re.sub(r"[*_`]", "", msg),
-                                 reply_markup=_admin_keyboard())
+                                 reply_markup=_admin_keyboard(admin_id))
                 log.info(f"[ReleaseNotes] notified admin {admin_id} (v{BOT_VERSION}, plain)")
             except Exception as e2:
                 log.warning(f"[ReleaseNotes] notify admin {admin_id} failed: {e2}")
@@ -483,12 +660,12 @@ def _handle_admin_changelog(chat_id: int) -> None:
     text = f"📝 *Release Notes*  (current: v{BOT_VERSION})\n" + _get_changelog_text()
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown",
-                         reply_markup=_admin_keyboard())
+                         reply_markup=_admin_keyboard(chat_id))
     except Exception as e:
         log.warning(f"[Changelog] Markdown failed for {chat_id}: {e} — retrying plain")
         try:
             bot.send_message(chat_id, _re.sub(r"[*_`]", "", text),
-                             reply_markup=_admin_keyboard())
+                             reply_markup=_admin_keyboard(chat_id))
         except Exception as e2:
             log.error(f"[Changelog] send failed for {chat_id}: {e2}")
 
@@ -518,16 +695,33 @@ def _handle_admin_logs_menu(chat_id: int) -> None:
 def _handle_admin_logs_show(chat_id: int, category: str) -> None:
     path = next((p for k, _, p in _LOG_CATEGORIES if k == category), None)
     if path is None:
-        bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard())
+        bot.send_message(chat_id, "Unknown log category.", reply_markup=_admin_keyboard(chat_id))
         return
-    lines = tail_log(path, n=50)
+    raw = tail_log(path, n=50) or _t(chat_id, "admin_logs_empty")
     header = _t(chat_id, "admin_logs_header", n=50, cat=category)
-    text = f"{header}\n\n```\n{lines or _t(chat_id, 'admin_logs_empty')}\n```"
+
+    # Display newest lines first so the most recent entry is visible without scrolling
+    raw_lines = raw.splitlines()
+    raw_lines.reverse()
+
+    # Telegram limit is 4096 chars; reserve space for header + code fence
+    _MAX = 3800
+    lines = "\n".join(raw_lines)
+    code_block = f"```\n{lines}\n```"
+    if len(header) + len(code_block) + 4 > _MAX:
+        # Trim lines from the bottom (oldest) until it fits
+        while raw_lines and len(header) + len("\n".join(raw_lines)) + 20 > _MAX:
+            raw_lines = raw_lines[:-1]
+        lines = "\n".join(raw_lines)
+        code_block = f"```\n{lines}\n…(older entries trimmed)\n```"
+
+    text = f"{header}\n\n{code_block}"
     try:
-        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=_admin_keyboard())
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
     except Exception:
-        bot.send_message(chat_id, f"{header}\n\n{lines or _t(chat_id, 'admin_logs_empty')}",
-                         reply_markup=_admin_keyboard())
+        # Fallback: plain text, no code fence
+        plain = f"{header}\n\n{lines}"[:4000]
+        bot.send_message(chat_id, plain, reply_markup=_admin_keyboard(chat_id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -554,42 +748,68 @@ def _get_taris_models() -> list[dict]:
 
 
 def _handle_admin_llm_menu(chat_id: int) -> None:
-    """Show LLM selection keyboard with available models from taris config."""
-    models  = _get_taris_models()
-    current = _get_active_model()
+    """Rich LLM settings panel: current status + global provider switch + per-function overrides."""
+    global_p  = LLM_PROVIDER.lower()
+    fallback_p = LLM_FALLBACK_PROVIDER.lower() if LLM_FALLBACK_PROVIDER else "—"
+    _MODEL_LABELS = {
+        "openai":    f"openai ({OPENAI_MODEL})",
+        "ollama":    f"ollama ({OLLAMA_MODEL})",
+        "gemini":    f"gemini ({GEMINI_MODEL})",
+        "anthropic": f"anthropic ({ANTHROPIC_MODEL})",
+        "taris":     "taris",
+        "openclaw":  "openclaw",
+    }
+    global_label   = _MODEL_LABELS.get(global_p, global_p)
+    fallback_label = _MODEL_LABELS.get(fallback_p, fallback_p)
+    system_p = get_per_func_provider("system")
+    chat_p   = get_per_func_provider("chat")
+    system_label = _MODEL_LABELS.get(system_p, system_p) if system_p else f"(global: {global_p})"
+    chat_label   = _MODEL_LABELS.get(chat_p, chat_p) if chat_p else f"(global: {global_p})"
 
-    if not models:
-        bot.send_message(chat_id, "⚠️ Cannot read taris config.json.",
-                         reply_markup=_admin_keyboard())
-        return
-
-    kb = InlineKeyboardMarkup(row_width=1)
-    shared_openai_key = _get_shared_openai_key()
-    openai_prefix = "✔️" if shared_openai_key else "⚠️"
-    kb.add(InlineKeyboardButton(f"🔵 {openai_prefix} OpenAI ChatGPT ▶",
-                                callback_data="openai_llm_menu"))
-
-    for m in models:
-        name = m.get("model_name", "")
-        if not name:
-            continue
-        if "openai.com" in m.get("api_base", ""):
-            continue
-        has_key    = bool(m.get("api_key", "").strip())
-        is_current = (name == current) or (not current and name == "openrouter-auto")
-        prefix     = "✅" if is_current else ("✔️" if has_key else "⚠️")
-        kb.add(InlineKeyboardButton(f"{prefix}  {name}", callback_data=f"llm_select:{name}"))
-
-    kb.add(InlineKeyboardButton("↩️  Reset to default", callback_data="llm_select:"))
-    kb.add(InlineKeyboardButton("�  Local Fallback", callback_data="admin_llm_fallback_menu"))
-    kb.add(InlineKeyboardButton("�🔙  Admin", callback_data="admin_menu"))
-
-    current_label = current or "(config default: openrouter-auto)"
     text = (
-        f"🤖 *Switch LLM*\n\nActive: `{current_label}`\n\n"
-        f"✅ active   ✔️ key set   ⚠️ needs key\n\n"
-        f"Tap *OpenAI ChatGPT* to select GPT-4.1 / GPT-4o and set your API key."
+        "🤖 *LLM Settings*\n\n"
+        f"*Global provider:* `{global_label}`\n"
+        f"*Fallback:* `{fallback_label}`\n\n"
+        "*Per-function overrides:*\n"
+        f"  💬 System chat: `{system_label}`\n"
+        f"  🗨️ User chat:    `{chat_label}`\n\n"
+        "_Tap a provider to switch globally, or set per-function below._"
     )
+
+    _KEY_OK = {
+        "openai":    bool(OPENAI_API_KEY),
+        "ollama":    True,
+        "gemini":    bool(GEMINI_API_KEY),
+        "anthropic": bool(ANTHROPIC_API_KEY),
+        "taris":     True,
+        "openclaw":  DEVICE_VARIANT == "openclaw",
+    }
+    _PROVIDER_NAMES = ["openai", "ollama", "gemini", "anthropic"]
+    if DEVICE_VARIANT != "openclaw":
+        _PROVIDER_NAMES.append("taris")
+
+    kb = InlineKeyboardMarkup(row_width=2)
+    for p in _PROVIDER_NAMES:
+        icon   = "✅" if p == global_p else "◻️"
+        warn   = "" if _KEY_OK.get(p, False) else " ⚠️"
+        kb.add(InlineKeyboardButton(f"{icon} {p}{warn}", callback_data=f"admin_llm_set:global:{p}"))
+
+    kb.add(InlineKeyboardButton("─ Per-Function ─", callback_data="noop"))
+    kb.add(InlineKeyboardButton(
+        f"💬 System chat: {system_p or global_p} ▶",
+        callback_data="admin_llm_for:system",
+    ))
+    kb.add(InlineKeyboardButton(
+        f"🗨️ User chat: {chat_p or global_p} ▶",
+        callback_data="admin_llm_for:chat",
+    ))
+
+    kb.add(InlineKeyboardButton("🔵 OpenAI ChatGPT (key + models) ▶", callback_data="openai_llm_menu"))
+    kb.add(InlineKeyboardButton("🔁  Fallback config ▶", callback_data="admin_llm_fallback_menu"))
+    kb.add(InlineKeyboardButton("🔍  Context Trace ▶", callback_data="admin_llm_trace"))
+    kb.add(InlineKeyboardButton("🧠  Memory Settings ▶", callback_data="admin_memory_menu"))
+    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
     except Exception as e:
@@ -597,6 +817,68 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
 
 
+def _handle_admin_llm_per_func(chat_id: int, use_case: str) -> None:
+    """Show provider picker for a specific function (system/chat)."""
+    global_p  = LLM_PROVIDER.lower()
+    current_p = get_per_func_provider(use_case) or global_p
+    _KEY_OK = {
+        "openai":    bool(OPENAI_API_KEY),
+        "ollama":    True,
+        "gemini":    bool(GEMINI_API_KEY),
+        "anthropic": bool(ANTHROPIC_API_KEY),
+        "taris":     True,
+        "openclaw":  DEVICE_VARIANT == "openclaw",
+    }
+    labels = {"system": "System Chat", "chat": "User Chat"}
+    title = labels.get(use_case, use_case)
+    text = (
+        f"🤖 *LLM for {title}*\n\n"
+        f"Current: `{current_p}`\n"
+        f"Global default: `{global_p}`\n\n"
+        "_Select a provider or reset to use the global default._"
+    )
+    kb = InlineKeyboardMarkup(row_width=1)
+    providers = ["openai", "ollama", "gemini", "anthropic"]
+    if DEVICE_VARIANT != "openclaw":
+        providers.append("taris")
+    for p in providers:
+        icon = "✅" if p == current_p else "◻️"
+        warn = "" if _KEY_OK.get(p, True) else " ⚠️"
+        kb.add(InlineKeyboardButton(f"{icon} {p}{warn}", callback_data=f"admin_llm_set:{use_case}:{p}"))
+    kb.add(InlineKeyboardButton("↩️  Use global default", callback_data=f"admin_llm_set:{use_case}:"))
+    kb.add(InlineKeyboardButton("🔙  LLM Settings", callback_data="admin_llm_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception as e:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_llm_set(chat_id: int, use_case: str, provider: str) -> None:
+    """Apply LLM provider selection (global or per-function) and confirm."""
+    if use_case == "global":
+        set_per_func_provider("system", provider)
+        set_per_func_provider("chat", provider)
+        msg = (
+            f"✅ Global LLM switched to `{provider}`.\n\n"
+            f"System chat and user chat now use `{provider}`.\n"
+            f"_Note: to persist after restart, set `LLM_PROVIDER={provider}` in `~/.taris/bot.env`._"
+        )
+    elif provider:
+        set_per_func_provider(use_case, provider)
+        labels = {"system": "System Chat", "chat": "User Chat"}
+        func_name = labels.get(use_case, use_case)
+        msg = f"✅ {func_name} LLM set to `{provider}`."
+    else:
+        set_per_func_provider(use_case, "")
+        labels = {"system": "System Chat", "chat": "User Chat"}
+        func_name = labels.get(use_case, use_case)
+        msg = f"↩️ {func_name} LLM reset to global default (`{LLM_PROVIDER}`)."
+
+    log.info(f"[LLM] admin {chat_id} set {use_case} → '{provider or 'global'}'")
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+    except Exception as e:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
 def _handle_set_llm(chat_id: int, model_name: str) -> None:
     """Apply LLM model selection and confirm to user."""
     _set_active_model(model_name)
@@ -610,7 +892,7 @@ def _handle_set_llm(chat_id: int, model_name: str) -> None:
     else:
         msg = "↩️ LLM reset to config default (openrouter-auto)."
     try:
-        bot.send_message(chat_id, msg, reply_markup=_admin_keyboard())
+        bot.send_message(chat_id, msg, reply_markup=_admin_keyboard(chat_id))
     except Exception as e:
         log.warning(f"[LLM] set_llm send failed: {e}")
 
@@ -785,3 +1067,328 @@ def _handle_admin_llm_fallback_toggle(chat_id: int) -> None:
         log.warning(f"[LLM] fallback toggle send failed: {e}")
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
     _handle_admin_llm_fallback_menu(chat_id)
+
+
+# ── RAG Administration ─────────────────────────────────────────────────────
+
+def _handle_admin_rag_menu(chat_id: int) -> None:
+    """Show RAG status, top-K, chunk size, timeout and action buttons."""
+    import os
+    from core.bot_config import RAG_FLAG_FILE
+    from core.rag_settings import get as _rget
+    enabled = not os.path.exists(RAG_FLAG_FILE)
+    status  = _t(chat_id, "admin_rag_status_on" if enabled else "admin_rag_status_off")
+    topk    = _rget("rag_top_k")
+    chunk   = _rget("rag_chunk_size")
+    timeout = _rget("rag_timeout")
+    text = "\n".join([
+        _t(chat_id, "admin_rag_menu_title"),
+        status,
+        _t(chat_id, "admin_rag_topk").format(topk=topk),
+        _t(chat_id, "admin_rag_chunk_size").format(chunk=chunk),
+        _t(chat_id, "admin_rag_timeout").format(timeout=timeout),
+    ])
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),      callback_data="admin_rag_log"))
+    kb.add(InlineKeyboardButton("📊 RAG Stats",                          callback_data="admin_rag_stats"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"),    callback_data="admin_rag_toggle"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),      callback_data="admin_rag_settings"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_rag_user_pref"), callback_data="admin_rag_user_settings"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),                callback_data="admin_menu"))
+    try:
+        bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_toggle(chat_id: int) -> None:
+    """Toggle RAG on/off via flag file."""
+    import os
+    from core.bot_config import RAG_FLAG_FILE
+    if os.path.exists(RAG_FLAG_FILE):
+        os.remove(RAG_FLAG_FILE)
+        msg = _t(chat_id, "admin_rag_toggled_on")
+    else:
+        os.makedirs(os.path.dirname(RAG_FLAG_FILE), exist_ok=True)
+        open(RAG_FLAG_FILE, "w").close()  # noqa: WPS515
+        msg = _t(chat_id, "admin_rag_toggled_off")
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
+    _handle_admin_rag_menu(chat_id)
+
+
+def _handle_admin_rag_settings(chat_id: int) -> None:
+    """Show RAG parameter editor buttons."""
+    from core.rag_settings import get as _rget
+    topk    = _rget("rag_top_k")
+    chunk   = _rget("rag_chunk_size")
+    timeout = _rget("rag_timeout")
+    temp    = _rget("llm_temperature")
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(
+        _t(chat_id, "admin_rag_set_topk").format(topk=topk),
+        callback_data="admin_rag_set_topk"))
+    kb.add(InlineKeyboardButton(
+        _t(chat_id, "admin_rag_set_chunk").format(chunk=chunk),
+        callback_data="admin_rag_set_chunk"))
+    kb.add(InlineKeyboardButton(
+        _t(chat_id, "admin_rag_set_timeout").format(timeout=timeout),
+        callback_data="admin_rag_set_timeout"))
+    kb.add(InlineKeyboardButton(
+        _t(chat_id, "admin_rag_set_temp").format(temp=temp),
+        callback_data="admin_rag_set_temp"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_rag_menu"))
+    bot.send_message(chat_id, _t(chat_id, "admin_rag_settings"), reply_markup=kb)
+
+
+def _start_admin_rag_set(chat_id: int, param: str) -> None:
+    """Prompt admin to enter a new value for param (topk/chunk/timeout/temp)."""
+    key_map = {
+        "topk":    "admin_rag_enter_topk",
+        "chunk":   "admin_rag_enter_chunk",
+        "timeout": "admin_rag_enter_timeout",
+        "temp":    "admin_rag_enter_temp",
+    }
+    _st._user_mode[chat_id] = f"admin_rag_set_{param}"
+    bot.send_message(chat_id, _t(chat_id, key_map[param]),
+                     reply_markup=_back_keyboard(chat_id, "admin_rag_settings"))
+
+
+def _finish_admin_rag_set(chat_id: int, text: str) -> None:
+    """Validate and save the RAG parameter the admin was entering."""
+    mode = _st._user_mode.pop(chat_id, "")
+    from core.rag_settings import set_value as _rset
+    param = mode.replace("admin_rag_set_", "")
+    limits: dict = {
+        "topk": (1, 20), "chunk": (128, 2048), "timeout": (5, 120), "temp": (0.0, 2.0),
+    }
+    key_map = {
+        "topk": "rag_top_k", "chunk": "rag_chunk_size",
+        "timeout": "rag_timeout", "temp": "llm_temperature",
+    }
+    lo, hi = limits.get(param, (1, 9999))
+    try:
+        val: float | int = float(text.strip()) if param == "temp" else int(text.strip())
+        assert lo <= val <= hi
+    except (ValueError, AssertionError):
+        bot.send_message(chat_id, _t(chat_id, "admin_rag_setting_invalid"))
+        _handle_admin_rag_settings(chat_id)
+        return
+    _rset(key_map[param], val)
+    bot.send_message(chat_id, _t(chat_id, "admin_rag_setting_saved"))
+    _handle_admin_rag_settings(chat_id)
+
+
+def _handle_admin_rag_log(chat_id: int) -> None:
+    """Show the 20 most recent RAG activity log entries."""
+    from core.store import store as _store
+    try:
+        rows = _store.list_rag_log(limit=20)
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ RAG log unavailable: {e}")
+        return
+    if not rows:
+        text = _t(chat_id, "admin_rag_log_title") + "\n" + _t(chat_id, "admin_rag_log_empty")
+    else:
+        lines = [_t(chat_id, "admin_rag_log_title")]
+        for i, r in enumerate(rows, 1):
+            lines.append(
+                _t(chat_id, "admin_rag_log_row").format(
+                    i=i,
+                    query=str(r["query"])[:40],
+                    n_chunks=r["n_chunks"],
+                    chars=r["chars_injected"],
+                    ts=str(r["created_at"])[:16],
+                )
+            )
+        text = "\n".join(lines)
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text))
+
+
+def _handle_admin_rag_stats(chat_id: int) -> None:
+    """Show aggregate RAG monitoring stats: avg latency, top queries, query type breakdown."""
+    from core.store import store as _store
+    try:
+        stats = _store.rag_stats()
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ RAG stats unavailable: {e}")
+        return
+    lines = [
+        "📊 *RAG Monitoring*\n",
+        f"• Total retrievals: *{stats['total']}*",
+        f"• Avg latency: *{stats['avg_latency_ms']} ms*",
+        f"• Avg chunks/query: *{stats['avg_chunks']}*",
+        f"• Total chunks served: *{stats['total_chunks']}*",
+        f"• Total chars injected: *{stats['total_chars']}*",
+    ]
+    if stats.get("query_types"):
+        lines.append("\n*Query types:*")
+        for qt, cnt in stats["query_types"].items():
+            lines.append(f"  · {qt}: {cnt}")
+    if stats.get("top_queries"):
+        lines.append("\n*Top queries:*")
+        for i, q in enumerate(stats["top_queries"], 1):
+            lines.append(f"  {i}. {q['query'][:40]} ({q['cnt']}×)")
+    text = "\n".join(lines)
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔙 RAG", callback_data="admin_rag_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_user_settings(chat_id: int) -> None:
+    """Show per-user RAG TopK/ChunkSize with inc/dec buttons (admin only)."""
+    from core.bot_db import db_get_user_pref
+    from core.rag_settings import get as _rget
+    top_k = db_get_user_pref(chat_id, "rag_top_k")  or _rget("rag_top_k")
+    chunk = db_get_user_pref(chat_id, "rag_chunk_size") or _rget("rag_chunk_size")
+    text  = _t(chat_id, "profile_rag_settings_title").format(top_k=top_k, chunk=chunk)
+    kb    = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton("▼ TopK",       callback_data="admin_rag_user_topk_dec"),
+        InlineKeyboardButton(f"TopK: {top_k}", callback_data="noop"),
+        InlineKeyboardButton("▲ TopK",       callback_data="admin_rag_user_topk_inc"),
+    )
+    kb.row(
+        InlineKeyboardButton("▼ Chunk",        callback_data="admin_rag_user_chunk_dec"),
+        InlineKeyboardButton(f"Chunk: {chunk}", callback_data="noop"),
+        InlineKeyboardButton("▲ Chunk",        callback_data="admin_rag_user_chunk_inc"),
+    )
+    kb.add(InlineKeyboardButton(_t(chat_id, "profile_rag_reset"),  callback_data="admin_rag_user_reset"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),           callback_data="admin_rag_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_rag_user_adjust(chat_id: int, key: str, delta: int) -> None:
+    """Increment or decrement admin's per-user RAG preference."""
+    from core.bot_db import db_get_user_pref, db_set_user_pref
+    from core.rag_settings import get as _rget
+    pref   = "rag_top_k" if key == "topk" else "rag_chunk_size"
+    limits = (1, 20) if key == "topk" else (200, 4000)
+    cur    = int(db_get_user_pref(chat_id, pref) or _rget(pref))
+    new    = max(limits[0], min(limits[1], cur + delta))
+    db_set_user_pref(chat_id, pref, str(new))
+    _handle_admin_rag_user_settings(chat_id)
+
+
+def _handle_admin_rag_user_reset(chat_id: int) -> None:
+    """Reset admin's per-user RAG settings to system defaults."""
+    from core.bot_db import db_set_user_pref
+    db_set_user_pref(chat_id, "rag_top_k", "")
+    db_set_user_pref(chat_id, "rag_chunk_size", "")
+    bot.send_message(chat_id, _t(chat_id, "profile_rag_reset_ok"))
+    _handle_admin_rag_user_settings(chat_id)
+
+
+
+def _handle_admin_llm_trace(chat_id: int) -> None:
+    """Show a detailed context trace of recent LLM calls for this user.
+
+    Displays: provider/model, temperature, history count/chars, RAG chunks,
+    system message chars, and a preview of the last few history messages that
+    were injected into each call. Helps diagnose context contamination bugs
+    (e.g. the '1837 year' hallucination from Pushkin conversation history).
+    """
+    from core.bot_db import db_get_llm_trace
+    rows = db_get_llm_trace(chat_id, limit=5)
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔙  LLM Settings", callback_data="admin_llm_menu"))
+    if not rows:
+        text = _t(chat_id, "admin_llm_trace_title").format(n=0) + "\n" + _t(chat_id, "admin_llm_trace_empty")
+        try:
+            bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+        except Exception:
+            bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+        return
+
+    lines = [_t(chat_id, "admin_llm_trace_title").format(n=len(rows))]
+    for i, r in enumerate(rows, 1):
+        model_s = (r.get("model") or "?")[:20]
+        temp_s  = f"{r.get('temperature', 0.0):.2f}"
+        resp_preview = (r.get("response_preview") or "")[:60].replace("\n", " ")
+        lines.append(
+            _t(chat_id, "admin_llm_trace_call").format(
+                i=i,
+                ts=r["created_at"][:16],
+                provider=r.get("provider") or "?",
+                model=model_s,
+                temp=temp_s,
+                hist=r.get("history_count", 0),
+                hist_c=r.get("history_chars", 0),
+                sys_c=r.get("system_chars", 0),
+                rag_n=r.get("rag_chunks_count", 0),
+                rag_c=r.get("rag_context_chars", 0),
+                resp=resp_preview or "—",
+            )
+        )
+        # Show context snapshot (last N history messages at call time)
+        snapshot_json = r.get("context_snapshot") or ""
+        if snapshot_json:
+            try:
+                import json as _json
+                snaps = _json.loads(snapshot_json)
+                if snaps:
+                    lines.append(_t(chat_id, "admin_llm_trace_snapshot_title").format(i=i))
+                    for s in snaps:
+                        role    = s.get("role", "?")
+                        preview = (s.get("content") or "")[:60].replace("\n", " ")
+                        lines.append(_t(chat_id, "admin_llm_trace_snapshot_row").format(
+                            role=role, preview=preview
+                        ))
+            except Exception:
+                pass
+        lines.append("")  # blank separator
+
+    text = "\n".join(lines)
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_memory_menu(chat_id: int) -> None:
+    """Admin panel: memory configuration."""
+    from core.bot_db import db_get_system_setting
+    hist_max = db_get_system_setting("CONVERSATION_HISTORY_MAX", str(CONVERSATION_HISTORY_MAX))
+    summ_thr = db_get_system_setting("CONV_SUMMARY_THRESHOLD", str(CONV_SUMMARY_THRESHOLD))
+    mid_max  = db_get_system_setting("CONV_MID_MAX", str(CONV_MID_MAX))
+
+    text = (
+        f"🧠 *Memory Configuration*\n\n"
+        f"Short-term window: `{hist_max}` messages\n"
+        f"Summarize after: `{summ_thr}` messages\n"
+        f"Max mid-term summaries: `{mid_max}`\n\n"
+        f"_Each summarization compresses older messages into a summary._\n"
+        f"_When mid-term summaries reach max, they compact into long-term memory._"
+    )
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(f"📝 Short-term window: {hist_max}", callback_data="admin_mem_set_hist"))
+    kb.add(InlineKeyboardButton(f"📝 Summarize threshold: {summ_thr}", callback_data="admin_mem_set_summ"))
+    kb.add(InlineKeyboardButton(f"📝 Mid-term max: {mid_max}", callback_data="admin_mem_set_mid"))
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="admin_llm_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_mem_set_start(chat_id: int, setting_key: str) -> None:
+    """Prompt admin to enter a new value for a memory setting."""
+    labels = {
+        "hist": ("Short-term window (messages)", "CONVERSATION_HISTORY_MAX"),
+        "summ": ("Summarize threshold (messages)", "CONV_SUMMARY_THRESHOLD"),
+        "mid":  ("Mid-term max (summaries)", "CONV_MID_MAX"),
+    }
+    label, _db_key = labels[setting_key]
+    _st._user_mode[chat_id] = f"admin_mem_{setting_key}"
+    bot.send_message(chat_id, f"Enter new value for {label} (integer):")

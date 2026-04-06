@@ -27,9 +27,24 @@ def _load_env_file(path: str) -> None:
         pass
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TARIS_HOME — runtime data directory
+# Set TARIS_HOME in the OS environment (e.g. in a startup script) to redirect
+# the bot's data directory away from the default ~/.taris/.
+# This allows running multiple independent instances or a local dev deploy.
+# ─────────────────────────────────────────────────────────────────────────────
+TARIS_DIR = os.environ.get("TARIS_HOME") or os.path.expanduser("~/.taris")
+
+
+def _th(rel: str) -> str:
+    """Return absolute path inside TARIS_DIR."""
+    return os.path.join(TARIS_DIR, rel)
+
+
 # Load credentials: bot.env first, then .taris_env (bot.env takes priority via setdefault)
-_load_env_file(os.path.expanduser("~/.taris/bot.env"))
-_load_env_file(os.path.expanduser("~/.taris/.taris_env"))
+_load_env_file(_th("bot.env"))
+_load_env_file(_th(".taris_env"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,28 +79,76 @@ DEVELOPER_USERS: set[int] = _parse_developer_users()
 BOT_NAME = os.environ.get("BOT_NAME", "Taris")
 
 USERS_FILE          = os.environ.get("USERS_FILE",
-                          os.path.expanduser("~/.taris/users.json"))
+                          _th("users.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
-                          os.path.expanduser("~/.taris/registrations.json"))
+                          _th("registrations.json"))
 TARIS_BIN        = os.environ.get("TARIS_BIN", "/usr/bin/taris")
 TARIS_CONFIG     = os.environ.get("TARIS_CONFIG",
-                          os.path.expanduser("~/.taris/config.json"))
+                          _th("config.json"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Deployment variant — controls optional features per platform
+# DEVICE_VARIANT=taris     → Raspberry Pi (default; "picoclaw" accepted as alias)
+# DEVICE_VARIANT=openclaw  → Laptop/PC + OpenClaw AI gateway
+# ─────────────────────────────────────────────────────────────────────────────
+_dv_raw = os.environ.get("DEVICE_VARIANT", "taris").lower()
+# Accept legacy "picoclaw" value from existing Pi bot.env files as alias for "taris"
+DEVICE_VARIANT = "taris" if _dv_raw == "picoclaw" else _dv_raw
+
+# OpenClaw AI gateway — optional provider (Feature §4.2 remote integration)
+# Only active when DEVICE_VARIANT=openclaw or OPENCLAW_BIN is explicitly set.
+# Falls back to taris binary automatically when the binary is not found.
+OPENCLAW_BIN     = os.environ.get("OPENCLAW_BIN",     os.path.expanduser("~/.local/bin/openclaw"))
+OPENCLAW_SESSION = os.environ.get("OPENCLAW_SESSION", "taris")
+OPENCLAW_TIMEOUT = int(os.environ.get("OPENCLAW_TIMEOUT", "60"))
+
+# Internal API token — authenticates skill-taris (sintaris-openclaw) on /api/* routes
+# Required when DEVICE_VARIANT=openclaw so skill-taris can call /api/status and /api/chat.
+TARIS_API_TOKEN  = os.environ.get("TARIS_API_TOKEN", "")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP (Model Context Protocol) — Phase D RAG extension
+# MCP_SERVER_ENABLED: expose /mcp/search endpoint (Bearer-token protected)
+# MCP_REMOTE_URL: optional external MCP RAG server to query (empty = disabled)
+# MCP_TIMEOUT: HTTP timeout for remote MCP calls (seconds)
+# ─────────────────────────────────────────────────────────────────────────────
+MCP_SERVER_ENABLED = os.environ.get("MCP_SERVER_ENABLED", "1") == "1"
+MCP_REMOTE_URL     = os.environ.get("MCP_REMOTE_URL", "")        # e.g. https://rag.example.com
+MCP_TIMEOUT        = int(os.environ.get("MCP_TIMEOUT", "15"))
+MCP_REMOTE_TOP_K   = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
+
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
-                          os.path.expanduser("~/.taris/active_model.txt"))
+                          _th("active_model.txt"))
+LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides (system/chat)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LLM provider switching  (Feature 3.1 + 3.2)
-# Set LLM_PROVIDER in ~/.taris/bot.env to switch backends.
+# Set LLM_PROVIDER in TARIS_DIR/bot.env to switch backends.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local
+# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local | ollama
 LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "taris")
 
-# Local llama.cpp fallback — enable with LLM_LOCAL_FALLBACK=1 (Feature 3.2)
+# Named fallback provider — analogous to STT_FALLBACK_PROVIDER.
+# When the primary provider fails, LLM_FALLBACK_PROVIDER is tried before returning "".
+# Example: LLM_PROVIDER=ollama  + LLM_FALLBACK_PROVIDER=openai   (local → cloud)
+#          LLM_PROVIDER=openai  + LLM_FALLBACK_PROVIDER=ollama   (cloud → local)
+# Leave empty to disable named fallback (independent of LLM_LOCAL_FALLBACK below).
+LLM_FALLBACK_PROVIDER = os.environ.get("LLM_FALLBACK_PROVIDER", "")
+
+# Legacy local llama.cpp fallback — enable with LLM_LOCAL_FALLBACK=1 (Feature 3.2)
+# Only works when a llama.cpp / Ollama server is running on LLAMA_CPP_URL.
+# Prefer LLM_FALLBACK_PROVIDER for named-provider fallback.
 LLM_LOCAL_FALLBACK      = os.environ.get("LLM_LOCAL_FALLBACK", "0") == "1"
-LLM_FALLBACK_FLAG_FILE  = os.path.expanduser("~/.taris/llm_fallback_enabled")  # runtime toggle
+LLM_FALLBACK_FLAG_FILE  = _th("llm_fallback_enabled")  # runtime toggle
 LLAMA_CPP_URL           = os.environ.get("LLAMA_CPP_URL",   "http://127.0.0.1:8081")
 LLAMA_CPP_MODEL     = os.environ.get("LLAMA_CPP_MODEL", "")
+
+# Ollama local LLM — OpenAI-compatible on port 11434 (OpenClaw variant default)
+# Use LLM_PROVIDER=ollama or set LLM_LOCAL_FALLBACK=1 with LLAMA_CPP_URL pointing to Ollama.
+# Install: curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b
+OLLAMA_URL          = os.environ.get("OLLAMA_URL",  "http://127.0.0.1:11434")
+OLLAMA_MODEL        = os.environ.get("OLLAMA_MODEL", "qwen2:0.5b")
 
 # YandexGPT (Feature 3.1)
 YANDEXGPT_API_KEY   = os.environ.get("YANDEXGPT_API_KEY",   "")
@@ -105,72 +168,162 @@ OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
 OPENAI_MODEL        = os.environ.get("OPENAI_MODEL",    "gpt-4o-mini")
 OPENAI_BASE_URL     = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SMTP — outgoing mail for password reset notifications
+# ─────────────────────────────────────────────────────────────────────────────
+SMTP_HOST    = os.environ.get("SMTP_HOST",    "")
+SMTP_PORT    = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER    = os.environ.get("SMTP_USER",    "")
+SMTP_PASS    = os.environ.get("SMTP_PASS",    "")
+SMTP_FROM    = os.environ.get("SMTP_FROM",    SMTP_USER)
+ADMIN_EMAIL  = os.environ.get("ADMIN_EMAIL",  "")    # for admin notifications
+
 # LLM provider tuning parameters
 YANDEXGPT_TEMPERATURE  = float(os.getenv("YANDEXGPT_TEMPERATURE", "0.6"))
 YANDEXGPT_MAX_TOKENS   = os.getenv("YANDEXGPT_MAX_TOKENS", "2000")
 ANTHROPIC_MAX_TOKENS   = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
 LOCAL_MAX_TOKENS       = int(os.getenv("LOCAL_MAX_TOKENS", "512"))
 LOCAL_TEMPERATURE      = float(os.getenv("LOCAL_TEMPERATURE", "0.7"))
+OLLAMA_MIN_TIMEOUT     = int(os.getenv("OLLAMA_MIN_TIMEOUT", "90"))   # seconds; GPU is fast but first-token latency varies
+OLLAMA_THINK           = os.getenv("OLLAMA_THINK", "false").lower() not in ("0", "false", "no")  # qwen3: disable thinking by default
+OLLAMA_NUM_CTX         = int(os.getenv("OLLAMA_NUM_CTX", "0"))        # 0 = use model default; set e.g. 8192 to cap KV cache
+OLLAMA_KEEP_ALIVE      = os.getenv("OLLAMA_KEEP_ALIVE", "1h")         # passed in API body; keeps model hot in VRAM between calls
 
 # Conversation memory (Feature 2.1)
 CONVERSATION_HISTORY_MAX  = int(os.environ.get("CONVERSATION_HISTORY_MAX",  "15"))
 CONVERSATION_PERSIST      = os.environ.get("CONVERSATION_PERSIST", "0") == "1"
 CONVERSATION_HISTORY_FILE = os.environ.get(
     "CONVERSATION_HISTORY_FILE",
-    os.path.expanduser("~/.taris/conversation_history.json"),
+    _th("conversation_history.json"),
 )
+CONV_SUMMARY_THRESHOLD    = int(os.environ.get("CONV_SUMMARY_THRESHOLD", "15"))
+CONV_MID_MAX              = int(os.environ.get("CONV_MID_MAX", "5"))
 
 DIGEST_SCRIPT       = os.environ.get("DIGEST_SCRIPT",
-                          os.path.expanduser("~/.taris/gmail_digest.py"))
+                          _th("gmail_digest.py"))
 LAST_DIGEST_FILE    = os.environ.get("LAST_DIGEST_FILE",
-                          os.path.expanduser("~/.taris/last_digest.txt"))
+                          _th("last_digest.txt"))
 NOTES_DIR           = os.environ.get("NOTES_DIR",
-                          os.path.expanduser("~/.taris/notes"))
+                          _th("notes"))
 CALENDAR_DIR        = os.environ.get("CALENDAR_DIR",
-                          os.path.expanduser("~/.taris/calendar"))
+                          _th("calendar"))
 MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
-                          os.path.expanduser("~/.taris/mail_creds"))
+                          _th("mail_creds"))
 ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
-                          os.path.expanduser("~/.taris/error_protocols"))
+                          _th("error_protocols"))
 DOCS_DIR            = os.environ.get("DOCS_DIR",
-                          os.path.expanduser("~/.taris/docs"))
+                          _th("docs"))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Bot version — bump on every user-visible deployment
+# Embedding Service — vector embeddings for semantic document search
+# EMBED_MODEL: HuggingFace model name for fastembed / sentence-transformers.
+#   Leave empty ("") to disable embedding generation (FTS5-only mode).
+#   Default: "sentence-transformers/all-MiniLM-L6-v2" (384-dim, ~90 MB).
+# EMBED_KEEP_RESIDENT: keep the model loaded in RAM between requests.
+#   Set to "0" on memory-constrained devices (Pi 3 — 1 GB RAM).
+# EMBED_DIMENSION: must match the model output size.
+# ─────────────────────────────────────────────────────────────────────────────
+EMBED_MODEL          = os.environ.get("EMBED_MODEL",
+                           "sentence-transformers/all-MiniLM-L6-v2")
+EMBED_KEEP_RESIDENT  = os.environ.get("EMBED_KEEP_RESIDENT", "1") == "1"
+EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RAG (Retrieval-Augmented Generation) — FTS5 local knowledge base
+# ─────────────────────────────────────────────────────────────────────────────
+RAG_ENABLED    = os.environ.get("RAG_ENABLED",    "1") == "1"
+RAG_TOP_K      = int(os.environ.get("RAG_TOP_K",      "3"))
+RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
+MAX_DOC_SIZE_MB = int(os.environ.get("MAX_DOC_SIZE_MB", "20"))  # Telegram max = 20 MB
+RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
+RAG_SETTINGS_FILE = os.path.expanduser("~/.taris/rag_settings.json")
+# LLM / RAG call timeouts (seconds) — overridable at runtime via Admin Panel
+LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
+RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.9"
+BOT_VERSION        = "2026.4.36"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
 )
-LAST_NOTIFIED_FILE = os.path.expanduser("~/.taris/last_notified_version.txt")
+LAST_NOTIFIED_FILE = _th("last_notified_version.txt")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice pipeline constants
 # ─────────────────────────────────────────────────────────────────────────────
 
 VOSK_MODEL_PATH    = os.environ.get("VOSK_MODEL_PATH",
-                         os.path.expanduser("~/.taris/vosk-model-small-ru"))
+                         _th("vosk-model-small-ru"))
 VOSK_MODEL_DE_PATH = os.environ.get("VOSK_MODEL_DE_PATH",
-                         os.path.expanduser("~/.taris/vosk-model-small-de"))
+                         _th("vosk-model-small-de"))
 PIPER_BIN          = os.environ.get("PIPER_BIN",  "/usr/local/bin/piper")
 PIPER_MODEL        = os.environ.get("PIPER_MODEL",
-                         os.path.expanduser("~/.taris/ru_RU-irina-medium.onnx"))
+                         _th("ru_RU-irina-medium.onnx"))
 PIPER_MODEL_TMPFS  = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser(
                              "~/.taris/ru_RU-irina-medium.onnx")))
 PIPER_MODEL_LOW    = os.environ.get("PIPER_MODEL_LOW",
-                         os.path.expanduser("~/.taris/ru_RU-irina-low.onnx"))
+                         _th("ru_RU-irina-low.onnx"))
+PIPER_MODEL_MALE   = os.environ.get("PIPER_MODEL_MALE",
+                         _th("ru_RU-dmitri-medium.onnx"))
+PIPER_MODEL_MALE_LOW = os.environ.get("PIPER_MODEL_MALE_LOW",
+                         _th("ru_RU-dmitri-low.onnx"))
 PIPER_MODEL_DE     = os.environ.get("PIPER_MODEL_DE",
-                         os.path.expanduser("~/.taris/de_DE-thorsten-medium.onnx"))
+                         _th("de_DE-thorsten-medium.onnx"))
 PIPER_MODEL_DE_TMPFS = os.path.join("/dev/shm/piper",
                          os.path.basename(os.path.expanduser(
                              "~/.taris/de_DE-thorsten-medium.onnx")))
 WHISPER_BIN        = os.environ.get("WHISPER_BIN",  "/usr/local/bin/whisper-cpp")
 WHISPER_MODEL      = os.environ.get("WHISPER_MODEL",
-                         os.path.expanduser("~/.taris/ggml-base.bin"))
+                         _th("ggml-base.bin"))
 PIPEWIRE_RUNTIME   = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
+# Inference backend for hardware-accelerated STT (whisper-cpp).
+# cpu      — pure CPU (default, always works)
+# cuda     — NVIDIA GPU via CUDA-compiled whisper-cpp binary
+# openvino — Intel NPU/GPU via OpenVINO backend (future)
+VOICE_BACKEND      = os.environ.get("VOICE_BACKEND", "cpu").lower()
+
+# STT provider — selects the speech recognition engine.
+# vosk          — Vosk offline (lightweight, good for Pi 3/4)
+# faster_whisper — faster-whisper (CTranslate2, better WER for laptop/PC)
+# openai_whisper — OpenAI Whisper API (best accuracy for ru/en/de/sl, requires OPENAI_API_KEY)
+# whisper_cpp   — whisper.cpp binary (hardware-accelerated, VOICE_BACKEND=cuda)
+# Auto-default: faster_whisper for openclaw, vosk for taris (Pi)
+_DEFAULT_STT = "faster_whisper" if os.environ.get("DEVICE_VARIANT", "taris").lower() == "openclaw" else "vosk"
+STT_PROVIDER            = os.environ.get("STT_PROVIDER", _DEFAULT_STT).lower()
+
+# STT fallback — analogous to LLM_LOCAL_FALLBACK.
+# When the primary provider fails (network error, missing key, model not loaded),
+# STT_FALLBACK_PROVIDER is tried before returning empty.
+# Example: STT_PROVIDER=openai_whisper  + STT_FALLBACK_PROVIDER=faster_whisper
+#          STT_PROVIDER=faster_whisper  + STT_FALLBACK_PROVIDER=vosk
+# Leave empty to disable fallback (default: auto-detect sensible default).
+_DEFAULT_STT_FALLBACK = "vosk" if _DEFAULT_STT != "vosk" else ""
+STT_FALLBACK_PROVIDER   = os.environ.get("STT_FALLBACK_PROVIDER", _DEFAULT_STT_FALLBACK).lower()
+
+# faster-whisper model size: tiny, base, small, medium, large-v2, large-v3
+# Recommended for i7/i5 no-GPU: base (acceptable WER, ~0.3s RTF)
+# Recommended for modern laptop/desktop (12+ CPU cores): small (much better WER, ~0.7s RTF)
+# Recommended for AMD/Intel iGPU or x86_64 with 6+ CPU cores: small with cpu_threads=8
+FASTER_WHISPER_MODEL    = os.environ.get("FASTER_WHISPER_MODEL", "base")
+FASTER_WHISPER_DEVICE   = os.environ.get("FASTER_WHISPER_DEVICE", "cpu")
+FASTER_WHISPER_COMPUTE  = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
+# CPU threads for CTranslate2 — 0 = auto (uses all available). Set to 4-8 on multi-core systems.
+FASTER_WHISPER_THREADS  = int(os.environ.get("FASTER_WHISPER_THREADS", "0"))
+# Set FASTER_WHISPER_PRELOAD=0 to disable warm-up at startup (saves ~460 MB RAM on low-memory
+# machines). The model will be loaded lazily on the first voice message (~4 s cold-start).
+FASTER_WHISPER_PRELOAD  = os.environ.get("FASTER_WHISPER_PRELOAD", "1").strip() not in ("0", "false", "no")
+# VAD speech padding — milliseconds of audio added after end-of-speech detection.
+# Default 30 ms (faster-whisper default). Increase to 200 ms on fast hardware to catch
+# trailing words; keep low on machines with limited CPU to avoid perceptible delay.
+FASTER_WHISPER_SPEECH_PAD_MS = int(os.environ.get("FASTER_WHISPER_SPEECH_PAD_MS", "30"))
+
+# Cloud STT via OpenAI Whisper API (STT_PROVIDER=openai_whisper)
+# Reuses OPENAI_API_KEY + OPENAI_BASE_URL from LLM config.
+# Best accuracy for ru/en/de/sl; requires valid OPENAI_API_KEY.
+STT_OPENAI_MODEL        = os.environ.get("STT_OPENAI_MODEL", "whisper-1")
+STT_LANG                = os.environ.get("STT_LANG", "ru")  # primary language hint (ru/en/de/sl)
 
 VOICE_SAMPLE_RATE     = 16000
 VOICE_CHUNK_SIZE      = 4000       # 250 ms at 16 kHz
@@ -179,6 +332,12 @@ VOICE_MAX_DURATION    = 30.0       # hard session cap (seconds)
 TTS_MAX_CHARS         = 600        # ~75 words / ~25 s on Pi 3 — cap for real-time voice chat
 TTS_CHUNK_CHARS       = 1200       # ~150 words / ~55 s on Pi 3 — per-part cap for "Read aloud"
 VOICE_TIMING_DEBUG    = os.environ.get("VOICE_TIMING_DEBUG", "0").lower() in ("1", "true", "yes")
+
+# Voice pipeline debug — saves every stage (audio, PCM, STT, LLM, TTS) to VOICE_DEBUG_DIR.
+# Enable: VOICE_DEBUG_MODE=1 in bot.env.  All recordings land in VOICE_DEBUG_DIR.
+# Use collected fixtures later for regression tests (copy to src/tests/voice/).
+VOICE_DEBUG_MODE = os.environ.get("VOICE_DEBUG_MODE", "0").lower() in ("1", "true", "yes")
+VOICE_DEBUG_DIR  = os.environ.get("VOICE_DEBUG_DIR",  _th("debug/voice"))
 
 # Strings file
 _STRINGS_FILE = os.environ.get(
@@ -189,25 +348,27 @@ _STRINGS_FILE = os.environ.get(
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice optimization feature flags
 # All OFF by default — enable via Admin → ⚡ Voice Opts menu.
-# Settings persist in ~/.taris/voice_opts.json.
+# Settings persist in TARIS_DIR/voice_opts.json.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_VOICE_OPTS_FILE      = os.path.expanduser("~/.taris/voice_opts.json")
-_WEB_LINK_CODES_FILE  = os.path.expanduser("~/.taris/web_link_codes.json")
-_PENDING_TTS_FILE    = os.path.expanduser("~/.taris/pending_tts.json")
+_VOICE_OPTS_FILE      = _th("voice_opts.json")
+_WEB_LINK_CODES_FILE  = _th("web_link_codes.json")
+_PENDING_TTS_FILE    = _th("pending_tts.json")
 _VOICE_OPTS_DEFAULTS: dict = {
-    "silence_strip":     False,   # #1: strip leading/trailing silence (ffmpeg)
-    "low_sample_rate":   False,   # #3: 8 kHz instead of 16 kHz for Vosk STT
-    "warm_piper":        False,   # #4: pre-warm Piper ONNX model at startup
-    "parallel_tts":      False,   # #5: start TTS thread immediately after LLM
-    "user_audio_toggle": False,   # #9: show 🔊/🔇 per-voice-reply audio toggle
-    "tmpfs_model":       False,   # #10: copy Piper ONNX to /dev/shm (RAM disk)
-    "vad_prefilter":     False,   # §5.3: webrtcvad noise gate before Vosk STT
-    "whisper_stt":       False,   # §5.3: use whisper.cpp tiny instead of Vosk
-    "vosk_fallback":     True,    # §5.3: fall back to Vosk when Whisper returns nothing (set False to save ~180 MB RAM)
-    "piper_low_model":   False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
-    "persistent_piper":  False,   # §5.3: keep warm Piper process alive (ONNX hot)
-    "voice_timing_debug": False,  # show per-stage ⏱ timings in voice replies
+    "silence_strip":      False,   # #1: strip leading/trailing silence (ffmpeg)
+    "low_sample_rate":    False,   # #3: 8 kHz instead of 16 kHz for Vosk STT
+    "warm_piper":         False,   # #4: pre-warm Piper ONNX model at startup
+    "parallel_tts":       False,   # #5: start TTS thread immediately after LLM
+    "user_audio_toggle":  False,   # #9: show 🔊/🔇 per-voice-reply audio toggle
+    "tmpfs_model":        False,   # #10: copy Piper ONNX to /dev/shm (RAM disk)
+    "vad_prefilter":      False,   # §5.3: webrtcvad noise gate before STT
+    "faster_whisper_stt": STT_PROVIDER == "faster_whisper",  # faster-whisper (Python, CTranslate2) — OpenClaw default
+    "whisper_stt":        False,   # §5.3: use whisper.cpp binary instead of Vosk (Pi/whisper-cpp)
+    "vosk_fallback":      DEVICE_VARIANT != "openclaw",  # §5.3: fall back to Vosk when primary STT returns nothing (disabled on OpenClaw — Vosk not installed)
+    "piper_low_model":    False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
+    "persistent_piper":   False,   # §5.3: keep warm Piper process alive (ONNX hot)
+    "voice_timing_debug": False,   # show per-stage ⏱ timings in voice replies
+    "voice_male":         False,   # per-user: use male TTS voice (ru_RU-dmitri) instead of female (ru_RU-irina)
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -220,7 +381,7 @@ _WEB_ONLY = os.environ.get("WEB_ONLY", "0").lower() in ("1", "true", "yes")
 
 if not _WEB_ONLY:
     if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN not set. Add it to ~/.taris/bot.env")
+        raise RuntimeError(f"BOT_TOKEN not set. Add it to {TARIS_DIR}/bot.env")
     if not ALLOWED_USERS and not ADMIN_USERS:
         raise RuntimeError(
             "ALLOWED_USERS (or ALLOWED_USER / TELEGRAM_CHAT_ID) not set. "
@@ -231,11 +392,11 @@ if not _WEB_ONLY:
 # Logging — set up once here; all modules use getLogger("taris-tgbot")
 # ─────────────────────────────────────────────────────────────────────────────
 
-_LOG_FILE           = os.path.expanduser("~/.taris/telegram_bot.log")
-_ASSISTANT_LOG_FILE = os.path.expanduser("~/.taris/assistant.log")
-_SECURITY_LOG_FILE  = os.path.expanduser("~/.taris/security.log")
-_VOICE_LOG_FILE     = os.path.expanduser("~/.taris/voice.log")
-_DATASTORE_LOG_FILE = os.path.expanduser("~/.taris/datastore.log")
+_LOG_FILE           = _th("telegram_bot.log")
+_ASSISTANT_LOG_FILE = _th("assistant.log")
+_SECURITY_LOG_FILE  = _th("security.log")
+_VOICE_LOG_FILE     = _th("voice.log")
+_DATASTORE_LOG_FILE = _th("datastore.log")
 _log_handlers: list = [logging.StreamHandler()]
 try:
     os.makedirs(os.path.dirname(_LOG_FILE), exist_ok=True)
@@ -248,4 +409,63 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=_log_handlers,
 )
+# Suppress telebot's verbose ReadTimeout/network-error tracebacks — they are
+# expected on flaky internet and handled by infinity_polling's reconnect loop.
+# CRITICAL only keeps truly unrecoverable errors visible.
+logging.getLogger("TeleBot").setLevel(logging.CRITICAL)
 log = logging.getLogger("taris-tgbot")
+
+
+def _make_file_logger(logger_name: str, filepath: str) -> "logging.Logger":
+    """Return a named logger that writes to *filepath* AND propagates to root (telegram_bot.log)."""
+    logger = logging.getLogger(logger_name)
+    try:
+        h = logging.FileHandler(filepath, encoding="utf-8")
+        h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logger.addHandler(h)
+    except OSError:
+        pass
+    logger.propagate = True  # also written to telegram_bot.log via root handler
+    return logger
+
+
+log_voice     = _make_file_logger("taris.voice",     _VOICE_LOG_FILE)
+log_security  = _make_file_logger("taris.security",  _SECURITY_LOG_FILE)
+log_datastore = _make_file_logger("taris.datastore", _DATASTORE_LOG_FILE)
+log_assistant = _make_file_logger("taris.assistant", _ASSISTANT_LOG_FILE)
+
+
+def get_conv_history_max() -> int:
+    """Return CONVERSATION_HISTORY_MAX — from DB system_settings if set, else env/default."""
+    try:
+        from core.bot_db import db_get_system_setting
+        val = db_get_system_setting("CONVERSATION_HISTORY_MAX", "")
+        if val:
+            return int(val)
+    except Exception:
+        pass
+    return CONVERSATION_HISTORY_MAX
+
+
+def get_conv_summary_threshold() -> int:
+    """Return CONV_SUMMARY_THRESHOLD — from DB system_settings if set, else env/default."""
+    try:
+        from core.bot_db import db_get_system_setting
+        val = db_get_system_setting("CONV_SUMMARY_THRESHOLD", "")
+        if val:
+            return int(val)
+    except Exception:
+        pass
+    return CONV_SUMMARY_THRESHOLD
+
+
+def get_conv_mid_max() -> int:
+    """Return CONV_MID_MAX — from DB system_settings if set, else env/default."""
+    try:
+        from core.bot_db import db_get_system_setting
+        val = db_get_system_setting("CONV_MID_MAX", "")
+        if val:
+            return int(val)
+    except Exception:
+        pass
+    return CONV_MID_MAX

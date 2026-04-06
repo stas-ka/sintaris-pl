@@ -1,6 +1,11 @@
-# taris — Raspberry Pi Voice Assistant
+# taris — AI Voice Assistant (PicoClaw / OpenClaw)
 
-Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://github.com/sipeed/picoclaw) + OpenRouter. Listens for the wake word **"Пико"**, sends your Russian voice command to an LLM, and speaks the response back — entirely offline except the LLM API call.
+AI voice assistant with two deployment variants:
+
+- **PicoClaw variant** — Raspberry Pi 3/4/5 · offline Vosk STT + Piper TTS · `DEVICE_VARIANT=picoclaw`
+- **OpenClaw variant** — Laptop / AI PC · `openclaw` LLM gateway · REST API · `DEVICE_VARIANT=openclaw`
+
+On PicoClaw it listens for the wake word **"Пико"**, sends your Russian voice command to an LLM, and speaks the response back — entirely offline except the LLM API call. On OpenClaw it runs alongside the [sintaris-openclaw](https://github.com/stas-ka/sintaris-openclaw) AI gateway, exposing `skill-taris` via REST API and routing LLM calls through the OpenClaw gateway (GPT-5+/Codex).
 
 **Features:**
 
@@ -37,13 +42,20 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 - **Externally accessible** via VPS reverse proxy: `https://agents.sintaris.net/picoassist2/` (Pi2) and `https://agents.sintaris.net/picoassist/` (Pi1)
 
 ### Architecture & Operations
-- **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently
+- **Deployment variants** — `DEVICE_VARIANT=picoclaw` (Raspberry Pi, default) · `DEVICE_VARIANT=openclaw` (Laptop/AI PC + OpenClaw gateway); controlled via `bot.env`
+- **OpenClaw integration** — when `DEVICE_VARIANT=openclaw`: REST API (`/api/status`, `/api/chat`) active; `LLM_PROVIDER=openclaw` routes LLM calls via `openclaw agent` subprocess; `skill-taris` in sintaris-openclaw can query Taris notes, calendar, status — see `doc/architecture/openclaw-integration.md`
+- **Screen DSL** — write UI logic once in `bot_actions.py`, rendered by both Telegram and Web independently; YAML screen files in `src/screens/` with variant support; 64 unit tests; `GET /screen/{screen_id}` web endpoint (v2026.3.43)
+- **FTS5/RAG knowledge base** — upload documents via `bot_documents.py`; chunked (512-char) FTS5 full-text search; top-K context injected into LLM prompts; RAG on/off toggle in admin panel via `RAG_FLAG_FILE`; activity log in DB (v2026.3.29)
+- **RAG Intelligence Layer** — `bot_rag.py`: `classify_query()` heuristic routing (simple/factual/contextual), hardware-tier detection (FTS5_ONLY/HYBRID/FULL via psutil), Reciprocal Rank Fusion (RRF k=60) for hybrid search; PDF extraction via PyMuPDF+pdfminer fallback; per-user RAG settings (top-k, chunk size) in Profile; RAG monitoring dashboard in Admin Panel (v2026.3.32); chunk quality filter + embed stats in doc metadata (v2026.4.1); MCP server endpoint `/mcp/search` + remote MCP RAG client with circuit breaker (Phase D, v2026.4.1)
+- **Developer Menu** — `bot_dev.py`: 🛠 Dev button (developer role only); Dev Chat, Restart Bot, View Log, Last Error, File List, Security Log; `security_events` DB table with `log_security_event()` + `log_access_denied()` (v2026.3.32)
 - **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
-- **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`
-- **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `taris.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends
+- **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`; admin panel buttons fully localized (v2026.3.43)
+- **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `taris.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends (PostgreSQL + pgvector for OpenClaw)
 - **sqlite-vec vector search** — optional SQLite extension enabling KNN embedding search and local RAG; installed via `pip3 install sqlite-vec`; enabled automatically when present (see `src/setup/install_sqlite_vec.sh`)
+- **Embedding service** — `src/core/bot_embeddings.py` (`EmbeddingService`): fastembed-first with sentence-transformers fallback; `EMBED_MODEL` / `EMBED_DIMENSION` constants; wired into document upload pipeline
+- **TARIS_HOME** — configurable runtime data directory (env var); primary mechanism for local dev, multi-instance, and OpenClaw local deploy
 - **Backup & Recovery system** — full SD card image backup + Nextcloud WebDAV upload; fresh-install bootstrap and incremental update scripts
-- Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7)
+- Works on Raspberry Pi 3 B+ and newer (aarch64 / armv7) **and** on x86_64 laptops/AI PCs (OpenClaw variant)
 
 ---
 
@@ -52,6 +64,9 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 | Document | Description |
 |---|---|
 | [doc/architecture.md](doc/architecture.md) | Full pipeline diagram, all components, file layout, configuration reference |
+| [doc/architecture/openclaw-integration.md](doc/architecture/openclaw-integration.md) | **OpenClaw variant** — integration architecture, PicoClaw vs OpenClaw comparison, LLM fallback chain, loop prevention, API contract |
+| [doc/architecture/deployment.md](doc/architecture/deployment.md) | Deployment variants (PicoClaw / OpenClaw), file layout, `bot.env` config reference, backup system |
+| [doc/install-new-target.md](doc/install-new-target.md) | Step-by-step installation guide for new targets (Raspberry Pi and OpenClaw laptop) |
 | [doc/howto_bot.md](doc/howto_bot.md) | End-user guide — Telegram bot menus, Web UI access, roles, voice, admin panel |
 | [doc/web-ui/concept-web-interface.md](doc/web-ui/concept-web-interface.md) | Web UI architecture: Screen DSL, multi-channel rendering, FastAPI + HTMX |
 | [doc/web-ui/roadmap-web-ui.md](doc/web-ui/roadmap-web-ui.md) | Web UI implementation roadmap — phases P0–P4 + account linking (all ✅ done) |
@@ -69,6 +84,10 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 
 ## Hardware Requirements
 
+## Hardware Requirements
+
+### PicoClaw Variant (Raspberry Pi)
+
 | Component | Recommended | Notes |
 |---|---|---|
 | Board | Raspberry Pi 3 B+ or newer | Pi 4 / Pi 5 also work |
@@ -82,6 +101,32 @@ Local Russian voice assistant for Raspberry Pi, powered by [picoclaw](https://gi
 
 **USB audio note for Pi 3:**  
 Most standard USB microphones work fine. The Philips SPC 520/525NC USB webcam mic specifically fails due to a Pi 3 DWC_OTG isochronous transfer bug — there is no software fix. Any other USB mic (even a cheap USB dongle) will work.
+
+### OpenClaw Variant (Laptop / AI PC)
+
+| Component | Minimum | Recommended |
+|---|---|---|
+| CPU | x86_64, 4 cores | 8+ cores, modern Intel/AMD |
+| RAM | 8 GB | 16+ GB (for local LLM) |
+| Storage | 50 GB SSD | NVMe 256+ GB |
+| OS | Ubuntu 22.04 LTS / Debian 12 | Ubuntu 22.04 LTS |
+| GPU | — | NVIDIA (CUDA) for local LLM / NPU acceleration |
+
+Requires **[sintaris-openclaw](https://github.com/stas-ka/sintaris-openclaw)** (Node.js AI gateway) installed on the same machine. See `doc/architecture/openclaw-integration.md` for the full integration guide.
+
+---
+
+## Related Projects
+
+| Project | Role | Link |
+|---|---|---|
+| **sintaris-pl** | Taris AI voice assistant (this repo) | Python, FastAPI, Telegram bot |
+| **sintaris-openclaw** | OpenClaw AI gateway, skills, MCP server | Node.js, `@suppenclaw_bot`, REST skills |
+| **sintaris-openclaw-local-deploy** | Local dev launcher for Taris on laptop | Shell symlinks into `sintaris-pl/src/` |
+
+**Branch naming:**
+- `master` — stable; deployed to PI1 (`OpenClawPI`) only
+- `taris-openclaw` — active development; OpenClaw variant + all recent features; deployed to PI2 first
 
 ---
 

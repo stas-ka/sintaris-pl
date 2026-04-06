@@ -23,18 +23,24 @@ from typing import Optional
 import core.bot_state as _st
 from core.bot_config import (
     PIPER_BIN, PIPER_MODEL, PIPER_MODEL_TMPFS, PIPER_MODEL_LOW,
+    PIPER_MODEL_MALE, PIPER_MODEL_MALE_LOW,
     PIPER_MODEL_DE, PIPER_MODEL_DE_TMPFS,
     VOSK_MODEL_PATH, VOSK_MODEL_DE_PATH, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
     TTS_MAX_CHARS, TTS_CHUNK_CHARS, VOICE_TIMING_DEBUG,
-    WHISPER_BIN, WHISPER_MODEL,
-    _PENDING_TTS_FILE, log,
+    WHISPER_BIN, WHISPER_MODEL, VOICE_BACKEND,
+    STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
+    FASTER_WHISPER_THREADS, FASTER_WHISPER_SPEECH_PAD_MS, STT_LANG, DEVICE_VARIANT,
+    LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
+    TARIS_DIR, _PENDING_TTS_FILE, log_voice as log,
 )
 from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _lang, _safe_edit, _back_keyboard, _voice_back_keyboard,
-    _escape_tts, _escape_md, _truncate, _with_lang_voice, _ask_taris,
-    _is_guest,
+    _escape_tts, _escape_md, _truncate, _with_lang_voice,
+    _build_system_message, _voice_user_turn_content,
+    _is_guest, _is_admin, _tg_send_with_retry,
 )
+from core.bot_llm import ask_llm, ask_llm_with_history, get_per_func_provider
 from telegram.bot_users import (
     _slug, _list_notes_for, _load_note_text, _save_note_file,
 )
@@ -76,6 +82,16 @@ def _clear_pending_tts(chat_id: int) -> None:
         pass
 
 
+def _voice_lang(chat_id: int) -> str:
+    """Return the language to use for TTS/voice output.
+
+    Prioritises STT_LANG (configured voice language) over the Telegram UI language.
+    This ensures TTS speaks the same language the user *speaks*, not their Telegram
+    client language (e.g. user has Telegram set to 'en' but speaks Russian).
+    """
+    return STT_LANG if STT_LANG else _lang(chat_id)
+
+
 def _cleanup_orphaned_tts() -> None:
     """On startup, edit 'Generating audio…' messages left by a previous restart."""
     try:
@@ -88,9 +104,9 @@ def _cleanup_orphaned_tts() -> None:
     for chat_id_str, msg_id in list(data.items()):
         try:
             bot.edit_message_text(
-                "⚠️ Генерация аудио прервана (бот перезапущен)\n"
-                "⚠️ Audio generation interrupted (bot restarted)",
+                _t(int(chat_id_str), "audio_interrupted"),
                 int(chat_id_str), msg_id,
+                parse_mode="Markdown",
             )
             cleaned += 1
         except Exception:
@@ -129,11 +145,12 @@ def _get_vosk_model(lang: str = "ru"):
 # Piper — model selection and warmup
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _piper_model_path(lang: str = "ru") -> str:
+def _piper_model_path(lang: str = "ru", chat_id: int | None = None) -> str:
     """
     Return the effective Piper ONNX model path for the given language.
     Priority: tmpfs (RAM disk) → low model → medium (default).
-    German users always get the German model (no low/tmpfs variants yet).
+    German users always get the German model (no male/low/tmpfs variants yet).
+    Russian/English: honours per-user voice_male preference when chat_id is given.
     """
     if lang == "de":
         if _st._voice_opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_DE_TMPFS):
@@ -141,7 +158,25 @@ def _piper_model_path(lang: str = "ru") -> str:
         if os.path.exists(PIPER_MODEL_DE):
             return PIPER_MODEL_DE
         log.warning("[TTS] German Piper model not found, falling back to Russian model")
+
+    # Resolve per-user male preference
+    use_male = False
+    if chat_id:
+        try:
+            from core.store import store as _store
+            user_opts = _store.get_voice_opts(chat_id)
+            use_male = bool(user_opts.get("voice_male", False))
+        except Exception:
+            pass
+
     opts = _st._voice_opts
+    if use_male:
+        if opts.get("piper_low_model") and os.path.exists(PIPER_MODEL_MALE_LOW):
+            return PIPER_MODEL_MALE_LOW
+        if os.path.exists(PIPER_MODEL_MALE):
+            return PIPER_MODEL_MALE
+        log.warning("[TTS] Male Piper model not found (%s), falling back to female", PIPER_MODEL_MALE)
+
     if opts.get("tmpfs_model") and os.path.exists(PIPER_MODEL_TMPFS):
         return PIPER_MODEL_TMPFS
     if opts.get("piper_low_model") and os.path.exists(PIPER_MODEL_LOW):
@@ -297,13 +332,17 @@ def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
             wf.setframerate(sample_rate)
             wf.writeframes(raw_pcm)
 
+        _whisper_cmd = [WHISPER_BIN, "-m", WHISPER_MODEL, "-f", tmp_path,
+                        "-l", "ru", "--no-timestamps", "-otxt",
+                        "--threads", "4",            # use all Pi 3 cores
+                        "--suppress-blank",          # don't output blank/silence segments
+                        "--entropy-thold", "1.8",    # reject hallucinated output
+                        "--no-speech-thold", "0.6"]  # reject silence/noise segments
+        if VOICE_BACKEND == "cuda":
+            _whisper_cmd += ["--device", "cuda"]
+
         result = subprocess.run(
-            [WHISPER_BIN, "-m", WHISPER_MODEL, "-f", tmp_path,
-             "-l", "ru", "--no-timestamps", "-otxt",
-             "--threads", "4",            # use all Pi 3 cores
-             "--suppress-blank",          # don't output blank/silence segments
-             "--entropy-thold", "1.8",    # reject hallucinated output
-             "--no-speech-thold", "0.6"], # reject silence/noise segments
+            _whisper_cmd,
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=60,
@@ -354,8 +393,175 @@ def _stt_whisper(raw_pcm: bytes, sample_rate: int) -> Optional[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TTS — Piper → raw PCM → ffmpeg → OGG Opus
+# §OpenClaw — faster-whisper STT (Python, CTranslate2)
+# Recommended STT for OpenClaw (laptop/PC) variant.
+# Much better WER than Vosk small model; runs on CPU without GPU.
+# Install: pip install faster-whisper
+# Model auto-downloaded on first run to ~/.cache/huggingface/hub/
 # ─────────────────────────────────────────────────────────────────────────────
+
+_fw_model_cache: dict = {}   # {(model_size, device, compute): WhisperModel}
+
+
+def _fw_preload() -> None:
+    """Preload the faster-whisper model into memory at startup.
+
+    Called in a background thread from telegram_menu_bot.py when
+    STT_PROVIDER=faster_whisper or faster_whisper_stt voice opt is enabled.
+    Eliminates the ~0.3-1s cold-load on the first voice message.
+    """
+    try:
+        import numpy as _np
+        # 0.5s of silence @ 16kHz, S16LE — just enough to trigger model load
+        silence_pcm = _np.zeros(8000, dtype=_np.int16).tobytes()
+        _stt_faster_whisper(silence_pcm, 16000, "ru")
+        log.info("[FasterWhisper] model preloaded at startup — first voice call will be fast")
+    except Exception as exc:
+        log.debug(f"[FasterWhisper] startup preload skipped: {exc}")
+
+
+def _stt_faster_whisper(raw_pcm: bytes, sample_rate: int, lang: str = "ru") -> Optional[str]:
+    """Run faster-whisper on raw S16LE PCM.  Returns transcript or None.
+
+    Uses CTranslate2 backend — much faster than original Whisper on CPU.
+    Model is loaded once and cached for the process lifetime.
+
+    Args:
+        raw_pcm:     Raw 16-bit LE PCM audio bytes.
+        sample_rate: Audio sample rate in Hz.
+        lang:        Language code: 'ru', 'en', 'de'.
+
+    Config (bot.env):
+        FASTER_WHISPER_MODEL   — model size: tiny/base/small/medium/large-v3-turbo/turbo
+                                  or full HF path: mobiuslabsgmbh/faster-whisper-large-v3-turbo
+                                  (default: base)
+        FASTER_WHISPER_DEVICE  — cpu / cuda (default: cpu)
+        FASTER_WHISPER_COMPUTE — int8 / float16 / float32 (default: int8)
+    """
+    try:
+        from faster_whisper import WhisperModel  # type: ignore[import]
+    except ImportError:
+        log.debug("[FasterWhisper] faster-whisper not installed — install with: pip install faster-whisper")
+        return None
+
+    try:
+        import tempfile
+        import wave as _wave_mod
+        import numpy as _np
+
+        cache_key = (FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE, FASTER_WHISPER_THREADS)
+        if cache_key not in _fw_model_cache:
+            import os as _os
+            _cpu_threads = FASTER_WHISPER_THREADS or _os.cpu_count() or 4
+            # Cap at 8 only when auto-detecting (diminishing returns beyond 8 for small model).
+            # When FASTER_WHISPER_THREADS is explicitly set, honour it as-is.
+            if not FASTER_WHISPER_THREADS:
+                _cpu_threads = min(_cpu_threads, 8)
+            log.info(
+                f"[FasterWhisper] Loading model={FASTER_WHISPER_MODEL} "
+                f"device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE} "
+                f"threads={_cpu_threads}"
+            )
+            # Prefer local HuggingFace cache path to avoid any network/auth requests.
+            # Supports short names (base, small, turbo), long names (large-v3-turbo),
+            # and full HF org/repo paths (mobiuslabsgmbh/faster-whisper-large-v3-turbo).
+            #
+            # Short-name aliases used for cache-dir resolution only (not passed to WhisperModel):
+            _FW_MODEL_ALIASES: dict = {"turbo": "large-v3-turbo", "large": "large-v3"}
+            model_arg = FASTER_WHISPER_MODEL
+            _hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+
+            if "/" in FASTER_WHISPER_MODEL:
+                # Full HF path: "org/repo-name" → cache dir "models--org--repo-name"
+                _org, _repo = FASTER_WHISPER_MODEL.split("/", 1)
+                _model_dir = _hf_cache / f"models--{_org}--{_repo}"
+            else:
+                # Short/long name via Systran namespace; resolve alias for cache dir only
+                _resolved = _FW_MODEL_ALIASES.get(FASTER_WHISPER_MODEL, FASTER_WHISPER_MODEL)
+                _model_dir = _hf_cache / f"models--Systran--faster-whisper-{_resolved}"
+                # Fallback: mobiuslabsgmbh hosts the turbo variant and may be pre-cached
+                if not (_model_dir / "snapshots").is_dir() and "turbo" in _resolved:
+                    _model_dir = _hf_cache / f"models--mobiuslabsgmbh--faster-whisper-{_resolved}"
+
+            _snapshots = _model_dir / "snapshots"
+            if _snapshots.is_dir():
+                _snaps = sorted(_snapshots.iterdir())
+                if _snaps:
+                    model_arg = str(_snaps[-1])   # latest snapshot
+                    log.info(f"[FasterWhisper] using local cache: {model_arg}")
+            # If we resolved a local snapshot, set HF_HUB_OFFLINE to prevent
+            # network version check on every load (saves ~0.5-1s per process start).
+            if model_arg != FASTER_WHISPER_MODEL:
+                _os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            _fw_model_cache[cache_key] = WhisperModel(
+                model_arg,
+                device=FASTER_WHISPER_DEVICE,
+                compute_type=FASTER_WHISPER_COMPUTE,
+                cpu_threads=_cpu_threads,
+            )
+        model = _fw_model_cache[cache_key]
+
+        # Convert S16LE PCM bytes → float32 numpy array in [-1, 1]
+        audio_np = _np.frombuffer(raw_pcm, dtype=_np.int16).astype(_np.float32) / 32768.0
+
+        # Resample to 16kHz if needed (faster-whisper expects 16kHz)
+        if sample_rate != 16000:
+            from scipy.signal import resample as _resample  # type: ignore[import]
+            target_len = int(len(audio_np) * 16000 / sample_rate)
+            audio_np = _resample(audio_np, target_len).astype(_np.float32)
+
+        # Map language codes — faster-whisper uses ISO 639-1.
+        # None = auto-detect (used when STT_LANG is unset — supports all 90+ languages
+        # including Russian, German, English, Slovenian, etc.)
+        lang_map = {"ru": "ru", "en": "en", "de": "de", "sl": "sl"}
+        fw_lang = lang_map.get(lang) if lang else None  # None → auto-detect
+
+        segments, info = model.transcribe(
+            audio_np,
+            language=fw_lang,
+            beam_size=5,
+            vad_filter=True,          # built-in VAD — suppresses silence/noise
+            vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=FASTER_WHISPER_SPEECH_PAD_MS),
+            condition_on_previous_text=False,
+            without_timestamps=True,  # skip timestamp computation (not used)
+        )
+
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        if not text:
+            # Retry without VAD filter — short utterances ("да", "нет") can be
+            # incorrectly suppressed by the VAD on short Telegram voice messages
+            log.debug("[FasterWhisper] VAD pass returned empty — retrying without VAD")
+            segments, info = model.transcribe(
+                audio_np,
+                language=fw_lang,
+                beam_size=5,
+                vad_filter=False,
+                condition_on_previous_text=False,
+                without_timestamps=True,
+            )
+            text = " ".join(seg.text.strip() for seg in segments).strip()
+        if not text:
+            log.debug("[FasterWhisper] no speech detected")
+            return None
+
+        # Hallucination guard: reject known false-positive phrases Whisper emits on short/noisy audio
+        _HALLUCINATIONS = {
+            "and that's the whole thing", "thank you", "thanks for watching",
+            "thanks for watching!", "you", ".", "..", "...",
+        }
+        if text.lower().rstrip(".!? ") in _HALLUCINATIONS or len(text) < 3:
+            log.warning(f"[FasterWhisper] hallucination rejected: {text!r}")
+            return None
+
+        log.info(f"[FasterWhisper] transcript lang={info.language} prob={info.language_probability:.2f}: {text[:120]}")
+        return text
+
+    except Exception as exc:
+        log.warning(f"[FasterWhisper] error: {exc}")
+        return None
+
+
+
 
 def _split_for_tts(text: str, max_chars: int) -> list[str]:
     """
@@ -402,10 +608,12 @@ def _split_for_tts(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru") -> Optional[bytes]:
+def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru",
+                chat_id: int | None = None) -> Optional[bytes]:
     """
     Synthesise text with Piper TTS, encode with ffmpeg as OGG Opus.
     Returns bytes for bot.send_voice(), or None on failure.
+    chat_id — when given, uses per-user voice_male preference for model selection.
 
     Two sequential subprocess.run() calls (not Popen pipe) to avoid
     the deadlock where parent holds piper.stdout open → ffmpeg blocks on stdin EOF.
@@ -431,7 +639,7 @@ def _tts_to_ogg(text: str, _trim: bool = True, lang: str = "ru") -> Optional[byt
     try:
         # Step 1: Piper TTS → raw S16LE PCM at 22050 Hz
         piper_result = subprocess.run(
-            [PIPER_BIN, "--model", _piper_model_path(lang), "--output-raw"],
+            [PIPER_BIN, "--model", _piper_model_path(lang, chat_id=chat_id), "--output-raw"],
             input=tts_text.encode("utf-8"),
             capture_output=True,
             timeout=120,
@@ -508,7 +716,7 @@ def _handle_note_read_aloud(chat_id: int, slug: str) -> None:
             sent       = 0
 
             for i, chunk in enumerate(chunks):
-                ogg = _tts_to_ogg(chunk, _trim=False, lang=_lang(chat_id))
+                ogg = _tts_to_ogg(chunk, _trim=False, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if not ogg:
                     log.warning(f"[NotesTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
                     continue
@@ -573,7 +781,7 @@ def _handle_digest_tts(chat_id: int) -> None:
             sent    = 0
 
             for i, chunk in enumerate(chunks):
-                ogg = _tts_to_ogg(chunk, _trim=False, lang=_lang(chat_id))
+                ogg = _tts_to_ogg(chunk, _trim=False, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if not ogg:
                     log.warning(f"[DigestTTS] chunk {i + 1}/{total} TTS synthesis failed — skipping")
                     continue
@@ -635,11 +843,46 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
 
     def _run():
         _timing: dict[str, float] = {}
+        _meta:   dict[str, str]   = {}  # provider/model labels for admin info
 
         def _fmt_timing() -> str:
+            """Timing suffix for non-admin users (only when voice_timing_debug opt is on)."""
             if not (VOICE_TIMING_DEBUG or opts.get("voice_timing_debug")) or not _timing:
                 return ""
             return "\n\n⏱ " + " · ".join(f"{k} {v:.0f}s" for k, v in _timing.items())
+
+        def _llm_label() -> str:
+            if LLM_PROVIDER == "ollama":
+                return f"ollama/{OLLAMA_MODEL}"
+            if LLM_PROVIDER == "openai":
+                return f"openai/{OPENAI_MODEL}"
+            return LLM_PROVIDER
+
+        def _tts_label() -> str:
+            import os as _os
+            return f"piper/{_os.path.basename(PIPER_MODEL)}"
+
+        def _send_admin_info() -> None:
+            """Send detailed pipeline diagnostics to admin users."""
+            if not _is_admin(chat_id) or not _timing:
+                return
+            import os as _os
+            lines = ["⚙️ *Pipeline info*"]
+            if "STT" in _timing:
+                lines.append(f"🎤 STT: `{_meta.get('stt', '?')}` — {_timing['STT']:.1f}s")
+            if "LLM" in _timing:
+                lines.append(f"🧠 LLM: `{_llm_label()}` — {_timing['LLM']:.1f}s")
+            if "TTS" in _timing:
+                lines.append(f"🔊 TTS: `{_tts_label()}` — {_timing['TTS']:.1f}s")
+            other_keys = [k for k in _timing if k not in ("STT", "LLM", "TTS")]
+            if other_keys:
+                lines.append("⏱ " + " · ".join(f"{k} {_timing[k]:.1f}s" for k in other_keys))
+            total = sum(_timing.values())
+            lines.append(f"📊 Total: {total:.1f}s")
+            try:
+                bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown")
+            except Exception as _e:
+                log.debug(f"[Voice] admin info send failed: {_e}")
 
         opts = _st._voice_opts
 
@@ -696,27 +939,38 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             raw_pcm = _vad_filter_pcm(raw_pcm, _srate)
             _timing["VAD"] = time.time() - _ts
 
-        # ── STT: whisper.cpp (§5.3) or Vosk (default / fallback) ─────────────
+        # ── STT: faster-whisper (OpenClaw default) or whisper.cpp or Vosk ───────
         _ts = time.time()
         text = ""
+        fw_used = opts.get("faster_whisper_stt")
         whisper_used = opts.get("whisper_stt")
-        if whisper_used:
+        # STT language: explicit STT_LANG config beats UI language (Telegram client lang ≠ speech lang)
+        _stt_lang = STT_LANG if STT_LANG else _lang(chat_id)
+        log.info(f"[STT] provider={'fw' if fw_used else 'whisper' if whisper_used else 'vosk'} "
+                 f"lang={_stt_lang} (STT_LANG={STT_LANG!r} _lang={_lang(chat_id)!r})")
+
+        if fw_used:
+            text = _stt_faster_whisper(raw_pcm, _srate, _stt_lang) or ""
+            if text:
+                log.info(f"[FasterWhisper] transcript: {text[:120]}")
+            else:
+                log.warning("[FasterWhisper] no result — falling back to Vosk")
+        elif whisper_used:
             text = _stt_whisper(raw_pcm, _srate) or ""
             if text:
                 log.debug(f"[WhisperSTT] transcript: {text[:80]}")
             else:
                 log.warning("[WhisperSTT] no result — falling back to Vosk")
 
-        # Only load Vosk if: (a) Whisper not active, or (b) Whisper returned nothing.
-        # When whisper_stt=true, Vosk is skipped entirely if vosk_fallback opt is OFF
-        # — this saves ~180 MB RAM at the cost of no-reply on inaudible audio.
-        vosk_fallback_enabled = not whisper_used or opts.get("vosk_fallback", True)
+        # Vosk fallback — skip when primary STT succeeded, vosk_fallback=False, or on OpenClaw
+        primary_stt_used = fw_used or whisper_used
+        vosk_fallback_enabled = not primary_stt_used or opts.get("vosk_fallback", DEVICE_VARIANT != "openclaw")
         if not text and vosk_fallback_enabled:
             STT_CONF_THRESHOLD = 0.65
             try:
                 import vosk as _vosk_lib
                 import json as _json
-                model = _get_vosk_model(_lang(chat_id))
+                model = _get_vosk_model(_stt_lang)
                 rec = _vosk_lib.KaldiRecognizer(model, _srate)
                 rec.SetWords(True)
                 chunk = VOICE_CHUNK_SIZE * 2 * _srate // VOICE_SAMPLE_RATE
@@ -747,6 +1001,18 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                            reply_markup=_back_keyboard())
                 return
         _timing["STT"] = time.time() - _ts
+        # Track which STT provider was used for admin info
+        if fw_used and text:
+            _meta["stt"] = f"faster-whisper/{FASTER_WHISPER_MODEL} ({FASTER_WHISPER_DEVICE}·{FASTER_WHISPER_COMPUTE})"
+        elif fw_used:
+            _meta["stt"] = f"faster-whisper/{FASTER_WHISPER_MODEL}→vosk/{_stt_lang}"
+        elif whisper_used and text:
+            _meta["stt"] = f"whisper.cpp/{WHISPER_MODEL}"
+        elif whisper_used:
+            _meta["stt"] = f"whisper.cpp→vosk/{_stt_lang}"
+        else:
+            _meta["stt"] = f"vosk/{_stt_lang}"
+
 
         if not text:
             _safe_edit(chat_id, msg.message_id,
@@ -891,13 +1157,13 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             _save_note_file(chat_id, note_slug, note_content)
             reply = _t(chat_id, "note_voice_saved", title=note_title)
             _safe_edit(chat_id, msg.message_id,
-                       f"📝 *Заметка / Note:* _{_escape_md(text)}_\n\n{_escape_md(reply)}",
+                       _t(chat_id, "voice_note_msg", text=_escape_md(text), reply=_escape_md(reply)),
                        parse_mode="Markdown",
                        reply_markup=_voice_back_keyboard(chat_id))
             audio_on = (not opts.get("user_audio_toggle")
                         or _st._user_audio.get(chat_id, True))
             if audio_on:
-                ogg = _tts_to_ogg(reply, lang=_lang(chat_id))
+                ogg = _tts_to_ogg(reply, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if ogg:
                     bot.send_voice(chat_id, io.BytesIO(ogg))
             return
@@ -929,7 +1195,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
             if audio_on3:
                 tts3 = bot.send_message(chat_id, _t(chat_id, "gen_audio"),
                                         parse_mode="Markdown")
-                ogg3 = _tts_to_ogg(note_plain, lang=_lang(chat_id))
+                ogg3 = _tts_to_ogg(note_plain, lang=_voice_lang(chat_id), chat_id=chat_id)
                 if ogg3:
                     bot.send_voice(chat_id, io.BytesIO(ogg3),
                                    caption=_t(chat_id, "audio_caption"))
@@ -949,13 +1215,27 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
 
         # ── Save last transcript for web UI display ────────────────────────────
         try:
-            _last_t_path = Path(os.path.expanduser("~/.taris")) / "last_transcript.txt"
+            _last_t_path = Path(TARIS_DIR) / "last_transcript.txt"
             _last_t_path.write_text(
                 f"[telegram] {time.strftime('%Y-%m-%d %H:%M')}  {_clean_text}",
                 encoding="utf-8",
             )
         except Exception:
             pass
+
+        # ── System chat mode: route to system handler (admin-only, role-aware) ──
+        # Guard at routing level (mirrors text-mode handling in telegram_menu_bot.py)
+        if _cur_mode == "system":
+            if not _is_admin(chat_id):
+                _st._user_mode.pop(chat_id, None)
+                _safe_edit(chat_id, msg.message_id,
+                            _t(chat_id, "security_admin_only"),
+                            reply_markup=_back_keyboard())
+                log.warning(f"[Security] non-admin voice system-chat attempt chat_id={chat_id}")
+                return
+            from telegram.bot_handlers import _handle_system_message
+            _handle_system_message(chat_id, _clean_text)
+            return
 
         # Security L1: reject injection attempts before sending to LLM
         from security.bot_security import _check_injection
@@ -968,12 +1248,74 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                        reply_markup=_back_keyboard())
             return
 
+        # ── Build history-aware messages for LLM ─────────────────────────────
+        from core.bot_state import get_history_with_ids, add_to_history, get_memory_context
+
+        # System message: security preamble + bot config + memory note + lang instruction
+        _system_content = _build_system_message(chat_id, text)
+        try:
+            from core.bot_db import db_get_user_pref
+            if db_get_user_pref(chat_id, "memory_enabled", "1") == "1":
+                _mem_ctx = get_memory_context(chat_id)
+                if _mem_ctx:
+                    _system_content = _system_content + "\n\n" + _mem_ctx
+        except Exception as _mem_e:
+            log.debug("[Memory] voice context injection failed: %s", _mem_e)
+
+        # User turn: RAG context + optional STT hint + wrapped text
+        _current_content = _voice_user_turn_content(chat_id, text)
+
+        # Prior conversation turns
+        _history_entries = get_history_with_ids(chat_id)
+        _history_msgs = [{"role": m["role"], "content": m["content"]} for m in _history_entries]
+        _messages = [{"role": "system", "content": _system_content}] + _history_msgs + [{"role": "user", "content": _current_content}]
+
+        # Save clean user turn (without [?] markers) before calling LLM
+        add_to_history(chat_id, "user", _clean_text)
+
         _ts = time.time()
-        response = _ask_taris(_with_lang_voice(chat_id, text), timeout=90)
+        # Resolve the actual provider so the log is accurate (per_func["voice"] → LLM_PROVIDER)
+        _voice_provider = get_per_func_provider("voice") or LLM_PROVIDER
+        log.info(f"[Voice] LLM call start: provider={_voice_provider} text_len={len(text)} history={len(_history_msgs)}")
+        response = ask_llm_with_history(_messages, timeout=90, use_case="voice")
         _timing["LLM"] = time.time() - _ts
+        log.info(f"[Voice] LLM done: {_timing['LLM']:.1f}s resp_len={len(response or '')}")
 
         if not response:
             response = _t(chat_id, "no_answer")
+
+        # Save assistant turn to history
+        add_to_history(chat_id, "assistant", response)
+
+        # ── Log LLM call context trace ────────────────────────────────────────
+        try:
+            import uuid as _uuid, json as _json
+            from core.bot_db import db_log_llm_call
+            from core.bot_llm import _effective_temperature, get_active_model, OLLAMA_MODEL
+            from telegram.bot_access import _rag_debug_stats
+            _call_id = str(_uuid.uuid4())
+            _history_ids = [m["_db_id"] for m in _history_entries if m.get("_db_id")]
+            _rag_stats = _rag_debug_stats(chat_id, text)
+            _snapshot = _json.dumps([
+                {"role": m["role"], "content": m["content"][:80]}
+                for m in _history_msgs[-5:]
+            ])
+            db_log_llm_call(
+                _call_id, chat_id, LLM_PROVIDER,
+                _history_ids,
+                sum(len(m["content"]) for m in _messages),
+                bool(response),
+                model=get_active_model() or OLLAMA_MODEL,
+                temperature=_effective_temperature(),
+                system_chars=len(_system_content),
+                history_chars=sum(len(m["content"]) for m in _history_msgs),
+                rag_chunks_count=_rag_stats.get("chunks", 0),
+                rag_context_chars=_rag_stats.get("chars", 0),
+                response_preview=response[:300],
+                context_snapshot=_snapshot,
+            )
+        except Exception as _trace_e:
+            log.debug("[Voice] LLM call trace logging failed: %s", _trace_e)
 
         # ── Text answer ───────────────────────────────────────────────────────
         audio_on = (not opts.get("user_audio_toggle")
@@ -982,23 +1324,42 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         _tts_thread = None
         if audio_on and opts.get("parallel_tts"):
             def _bg_tts():
-                _tts_result[0] = _tts_to_ogg(response, lang=_lang(chat_id))
+                _tts_result[0] = _tts_to_ogg(response, lang=_voice_lang(chat_id), chat_id=chat_id)
             _tts_thread = threading.Thread(target=_bg_tts, daemon=True)
             _tts_thread.start()
 
+        _text_sent = False
         try:
-            bot.send_message(
+            _tg_send_with_retry(
+                bot.send_message,
                 chat_id,
                 f"🤖 *Taris:*\n{_escape_md(_truncate(response))}{_fmt_timing()}",
                 parse_mode="Markdown",
                 reply_markup=_voice_back_keyboard(chat_id),
             )
-        except Exception:
-            bot.send_message(
-                chat_id,
-                f"Taris:\n{_truncate(response)}{_fmt_timing()}",
-                reply_markup=_voice_back_keyboard(chat_id),
-            )
+            _text_sent = True
+        except Exception as _md_err:
+            try:
+                _tg_send_with_retry(
+                    bot.send_message,
+                    chat_id,
+                    f"Taris:\n{_truncate(response)}{_fmt_timing()}",
+                    parse_mode=None,
+                    reply_markup=_voice_back_keyboard(chat_id),
+                )
+                _text_sent = True
+            except Exception as _net_err:
+                log.error("[Voice] failed to send LLM response after retries: %s", _net_err)
+                # Last resort: edit the transcript message so the user sees the response
+                try:
+                    _safe_edit(
+                        chat_id, msg.message_id,
+                        f"🤖 Taris:\n{_truncate(response, 900)}",
+                        reply_markup=_voice_back_keyboard(chat_id),
+                    )
+                    _text_sent = True
+                except Exception:
+                    pass
 
         if audio_on:
             tts_msg = None
@@ -1007,16 +1368,21 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                                            parse_mode="Markdown")
                 _save_pending_tts(chat_id, tts_msg.message_id)
                 _ts = time.time()
+                resp_chars = len(response or "")
+                log.info(f"[Voice] TTS start: resp_chars={resp_chars}")
                 if _tts_thread is not None:
                     _tts_thread.join(timeout=160)   # piper 120s + ffmpeg 30s + slack
                     ogg = _tts_result[0]
                 else:
-                    ogg = _tts_to_ogg(response, lang=_lang(chat_id))
+                    ogg = _tts_to_ogg(response, lang=_voice_lang(chat_id), chat_id=chat_id)
                 _timing["TTS"] = time.time() - _ts
+                log.info(f"[Voice] TTS done: {_timing['TTS']:.1f}s ogg_kb={len(ogg or b'')//1024}")
 
                 if ogg:
                     caption = _t(chat_id, "audio_caption") + _fmt_timing()
-                    bot.send_voice(chat_id, io.BytesIO(ogg), caption=caption)
+                    _tg_send_with_retry(
+                        bot.send_voice, chat_id, io.BytesIO(ogg), caption=caption,
+                    )
                     bot.delete_message(chat_id, tts_msg.message_id)
                     tts_msg = None
                 else:
@@ -1034,5 +1400,10 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
                                    parse_mode="Markdown")
                     except Exception:
                         pass
+
+        _send_admin_info()
+        total = sum(_timing.values())
+        log.info(f"[Voice] pipeline done: total={total:.1f}s " +
+                 " ".join(f"{k}={v:.1f}s" for k, v in _timing.items()))
 
     threading.Thread(target=_run, daemon=True).start()

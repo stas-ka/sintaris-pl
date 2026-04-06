@@ -9,12 +9,19 @@ duplicated.
 Usage (on Pi, from ~/.taris/ directory):
     python3 setup/migrate_to_db.py            # apply migration
     python3 setup/migrate_to_db.py --dry-run  # print what would happen, no writes
+    python3 setup/migrate_to_db.py --skip-docs  # skip document re-indexing (fast mode)
 
 Usable on both PI1 and PI2 — reads/writes ~/.taris/taris.db.
 
 Skipped sources:
   contacts — already live in SQLite (bot_contacts.py uses get_db() directly).
   last_digest.txt — transient cache, not worth migrating.
+
+Documents:
+  Files in docs/<chat_id>/ are re-indexed when found on disk but absent from the
+  documents table (e.g., after a restore from backup).  Text extraction requires
+  optional packages (PyMuPDF, pdfminer, python-docx).  If unavailable, metadata
+  is still registered so the file appears in the UI.  Use --skip-docs to bypass.
 
 Password encryption:
   Mail credentials (app_password) are stored in plaintext in JSON.  If the
@@ -27,11 +34,13 @@ Password encryption:
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import sqlite3
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -44,9 +53,11 @@ if str(_SRC) not in sys.path:
 
 from core.bot_config import (
     CALENDAR_DIR,
+    DOCS_DIR,
     MAIL_CREDS_DIR,
     NOTES_DIR,
     REGISTRATIONS_FILE,
+    TARIS_DIR,
     USERS_FILE,
     _PENDING_TTS_FILE,
     _VOICE_OPTS_DEFAULTS,
@@ -63,7 +74,7 @@ log = logging.getLogger("migrate")
 # ---------------------------------------------------------------------------
 # DB path — matches store.py / bot_db.py defaults
 # ---------------------------------------------------------------------------
-_TARIS_DIR = Path(os.path.expanduser("~/.taris"))
+_TARIS_DIR = Path(TARIS_DIR)
 DB_PATH = Path(os.environ.get("STORE_DB_PATH", str(_TARIS_DIR / "taris.db")))
 ACCOUNTS_FILE = _TARIS_DIR / "accounts.json"
 
@@ -460,6 +471,147 @@ def _migrate_tts_pending(conn: sqlite3.Connection, dry_run: bool) -> int:
     return count
 
 
+def _migrate_documents_from_files(conn: sqlite3.Connection, dry_run: bool) -> int:
+    """Re-index document files from DOCS_DIR that are missing from the documents table.
+
+    Scenario: backup restored onto a fresh install — the docs/ directory exists
+    (from backup) but the documents table is empty.  This function scans
+    DOCS_DIR/<chat_id>/<file> and registers/re-chunks any file absent from the DB.
+
+    Text extraction uses the same logic as bot_documents.py; optional packages
+    (PyMuPDF, pdfminer, python-docx) are imported lazily.  If extraction fails,
+    metadata is still registered so the file is visible in the UI.
+    """
+    docs_root = Path(DOCS_DIR)
+    if not docs_root.exists():
+        log.info("[documents] docs/ directory not found — nothing to migrate")
+        return 0
+
+    _SUPPORTED = {".txt", ".md", ".pdf", ".docx"}
+    _CHUNK_SIZE = 1200
+    _CHUNK_OVERLAP = 200
+
+    def _extract_text_local(fp: Path) -> str:
+        ext = fp.suffix.lower()
+        if ext in (".txt", ".md"):
+            try:
+                return fp.read_text(encoding="utf-8", errors="replace")
+            except Exception as exc:
+                log.warning(f"    [docs] read failed for {fp.name}: {exc}")
+                return ""
+        if ext == ".pdf":
+            try:
+                import fitz  # type: ignore[import]
+                doc = fitz.open(str(fp))
+                parts = [page.get_text() for page in doc]
+                doc.close()
+                return "\n".join(parts).strip()
+            except ImportError:
+                pass
+            except Exception as exc:
+                log.warning(f"    [docs] PyMuPDF failed for {fp.name}: {exc}")
+            try:
+                from pdfminer.high_level import extract_text as pdf_extract  # type: ignore[import]
+                return pdf_extract(str(fp)) or ""
+            except Exception as exc:
+                log.warning(f"    [docs] pdfminer failed for {fp.name}: {exc}")
+                return ""
+        if ext == ".docx":
+            try:
+                from docx import Document  # type: ignore[import]
+                return "\n".join(p.text for p in Document(str(fp)).paragraphs)
+            except Exception as exc:
+                log.warning(f"    [docs] DOCX extract failed for {fp.name}: {exc}")
+                return ""
+        return ""
+
+    def _chunk_text_local(text: str) -> list[str]:
+        chunks, start = [], 0
+        while start < len(text):
+            chunks.append(text[start:start + _CHUNK_SIZE])
+            start += _CHUNK_SIZE - _CHUNK_OVERLAP
+        return [c for c in chunks if c.strip()]
+
+    count = 0
+    for user_dir in sorted(docs_root.iterdir()):
+        if not user_dir.is_dir():
+            continue
+        try:
+            chat_id = int(user_dir.name)
+        except ValueError:
+            log.warning(f"  [docs] skipping non-numeric dir: {user_dir.name}")
+            continue
+
+        for doc_file in sorted(user_dir.iterdir()):
+            if doc_file.suffix.lower() not in _SUPPORTED:
+                continue
+
+            file_path_str = str(doc_file)
+
+            # Check if already registered by file_path
+            if not dry_run:
+                row = conn.execute(
+                    "SELECT doc_id FROM documents WHERE file_path = ? OR (chat_id = ? AND title = ?)",
+                    (file_path_str, chat_id, doc_file.stem),
+                ).fetchone()
+                if row:
+                    log.info(f"  [docs] already in DB: {doc_file.name} (doc_id={row[0]})")
+                    continue
+
+            # Compute hash for duplicate detection
+            try:
+                file_bytes = doc_file.read_bytes()
+                doc_hash = hashlib.sha256(file_bytes).hexdigest()
+            except Exception as exc:
+                log.warning(f"  [docs] cannot read {doc_file.name}: {exc}")
+                continue
+
+            doc_id = str(uuid.uuid4())
+            title = doc_file.stem
+            doc_type = doc_file.suffix.lower().lstrip(".")
+
+            log.info(f"  [docs] chat_id={chat_id} file={doc_file.name} hash={doc_hash[:12]}…")
+
+            if dry_run:
+                count += 1
+                continue
+
+            # Register metadata
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO documents
+                    (doc_id, chat_id, title, file_path, doc_type, doc_hash, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (doc_id, chat_id, title, file_path_str, doc_type, doc_hash),
+            )
+
+            # Extract and chunk text
+            text = _extract_text_local(doc_file)
+            if text.strip():
+                chunks = _chunk_text_local(text)
+                for idx, chunk in enumerate(chunks):
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO doc_chunks (doc_id, chunk_idx, chat_id, chunk_text)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (doc_id, idx, chat_id, chunk),
+                    )
+                # Update metadata with chunk count
+                conn.execute(
+                    "UPDATE documents SET metadata = ? WHERE doc_id = ?",
+                    (json.dumps({"n_chunks": len(chunks), "migrated": True}), doc_id),
+                )
+                log.info(f"    → {len(chunks)} chunks indexed")
+            else:
+                log.warning(f"    → no text extracted (binary or unsupported content)")
+
+            count += 1
+
+    return count
+
+
 # ============================================================
 # Entry point
 # ============================================================
@@ -476,6 +628,10 @@ def main() -> int:
     parser.add_argument(
         "--db", default=str(DB_PATH),
         help=f"Path to taris.db (default: {DB_PATH})",
+    )
+    parser.add_argument(
+        "--skip-docs", action="store_true",
+        help="Skip document file re-indexing (faster for routine schema migrations)",
     )
     args = parser.parse_args()
 
@@ -512,6 +668,12 @@ def main() -> int:
 
         log.info("\n--- Pending TTS ---")
         results["tts_pending"] = _migrate_tts_pending(conn, args.dry_run)
+
+        if not args.skip_docs:
+            log.info("\n--- Document Files (re-index from docs/) ---")
+            results["documents"] = _migrate_documents_from_files(conn, args.dry_run)
+        else:
+            log.info("\n--- Document Files: SKIPPED (--skip-docs) ---")
 
         if not args.dry_run and conn:
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")

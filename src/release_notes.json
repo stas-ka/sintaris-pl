@@ -1,177 +1,887 @@
 [
   {
+    "version": "2026.4.36",
+    "date": "2026-04-06",
+    "changes": [
+      "feat: system chat host context now includes network interfaces, default gateway, and available speed/diagnostic tools",
+      "Net ifaces: active UP interfaces with default iface+gateway; Speed tools: speedtest-cli/iperf3/nload/etc if installed, otherwise /proc/net/dev + curl fallbacks"
+    ]
+  },
+  {
+    "version": "2026.4.35",
+    "date": "2026-04-06",
+    "changes": [
+      "feat: system chat now injects host OS/HW context into LLM system prompt",
+      "Host context includes: hostname, OS distro+version, kernel, arch, CPU model, RAM, disk, init system, package manager, temperature tools (lm-sensors/vcgencmd/thermal_zone), available admin tools",
+      "Commands now adapted to the actual host (e.g. 'sensors' for x86 temperature, correct pkg manager)"
+    ]
+  },
+  {
+    "version": "2026.4.34",
+    "date": "2026-04-06",
+    "changes": [
+      "fix: system chat no-command bug — ollama timeout now respects 45s limit (no OLLAMA_MIN_TIMEOUT override for system use_case)",
+      "fix: per-func LLM override fallback chain — when per-func provider fails and LLM_FALLBACK_PROVIDER matches it, global LLM_PROVIDER is now tried as final cloud fallback",
+      "test: T109 — two sub-tests for system chat ollama timeout guard and global default fallback"
+    ]
+  },
+  {
+    "version": "2026.4.33",
+    "date": "2026-04-06",
+    "changes": [
+      "fix: ask_llm_with_history now tries LLM_FALLBACK_PROVIDER (ollama) before legacy llama.cpp fallback — eliminates 'connection refused' error when primary LLM fails",
+      "fix: list_active_chat_ids uses row['chat_id'] (dict_row compat)",
+      "test: T108 regression test for named fallback in ask_llm_with_history"
+    ]
+  },
+  {
+    "version": "2026.4.32",
+    "date": "2026-04-06",
+    "changes": [
+      "Fix: store_postgres.py used positional row[0] with dict_row pool — raised KeyError every call",
+      "Fix: chat history (append_history_tracked) now correctly stores to Postgres — row['id'] fix",
+      "Fix: LLM no-history fallback preserves system prompt — system chat now returns bash cmd even after LLM history call failure",
+      "Fix: bot_llm.py ask_llm_with_history no-history fallback uses ask_llm_with_history (not ask_llm) to preserve use_case",
+      "T107: regression test for Postgres dict_row named column access"
+    ]
+  },
+  {
+    "version": "2026.4.31",
+    "date": "2026-04-06",
+    "changes": [
+      "OpenClaw variant: SQLite fully eliminated — Postgres is the only data store",
+      "bot_access.py: _notes_context/_contacts_context SQLite fallbacks removed",
+      "telegram_menu_bot.py: init_db() guarded — only runs on non-Postgres (PicoClaw) variant",
+      "bot_db.py: db_save_voice_opts/db_get_voice_opts delegate to store on Postgres",
+      "bot_calendar.py: _cal_save() uses store.load_events() instead of get_db()",
+      "bot_users.py: _load_note_text/_save_note_file use store API only",
+      "Migration script: src/setup/migrate_sqlite_to_postgres.py — idempotent SQLite→Postgres",
+      "Data migration: 316 rows migrated from SQLite to Postgres (users, calendar, history, notes, prefs, etc.)",
+      "T106: regression test for no-SQLite-fallbacks on Postgres variant"
+    ]
+  },
+  {
+    "version": "2026.4.30",
+    "date": "2026-04-06",
+    "changes": [
+      "All user data migrated to DB (Postgres on OpenClaw, SQLite on PicoClaw)",
+      "web_accounts, web_reset_tokens, web_link_codes tables in both backends",
+      "bot_auth.py: accounts and reset tokens now DB-backed; auto-migrates accounts.json on first run",
+      "bot_state.py: Telegram link codes now stored in DB (web_link_codes table)",
+      "bot_mail_creds.py: store.get_mail_creds() is now primary; file is migration fallback",
+      "bot_web.py: _load_mail_creds_for_user uses DB via store",
+      "T103-T105: regression tests for web_accounts store methods, system_settings JSON, mail_creds store primary"
+    ]
+  },
+  {
+    "date":    "2026-04-06",
+    "title":   "Fix: notes stored to wrong path on Postgres (str(chat_id) vs UUID dir); note content recovered",
+    "notes":   "- store_postgres.py: save_note/load_note/delete_note used os.path.join(NOTES_DIR, str(chat_id)) — ignoring UUID account linking. For users linked to a web account, notes were written/read from the wrong directory.\n- Fix: added _notes_storage_dir(chat_id) static method that reads accounts.json and resolves to the correct UUID path (mirrors _resolve_storage_id in bot_users.py).\n- Data recovery: orphaned notes from earlier sessions (u-a9d8b5df, u-f55429b7) migrated to the current user's UUID directory (u-21323d0f). Content and SQLite index restored.\n- Regression test T102 (store_postgres_notes_uuid_path) added"
+  },
+  {
+    "version": "2026.4.28",
+    "date":    "2026-04-06",
+    "title":   "Fix: clicking notes crashes with 'text must be non-empty' for empty note files",
+    "notes":   "- bot_handlers.py: _handle_note_open() passed empty note_content when .md file is 0 bytes — widget text became '\\n' which Telegram rejects as empty. Fix: use note_empty_body placeholder when text.strip() is falsy (same pattern as _handle_note_raw)\n- render_telegram.py: added screen_path parameter to render_screen() for better error diagnostics in logs\n- Regression test T101 (note_open_empty_file) added"
+  },
+  {
+    "version": "2026.4.27",
+    "date":    "2026-04-06",
+    "title":   "Fix: document detail card broken on Postgres (created_at datetime crash)",
+    "notes":   "- bot_documents.py: _handle_doc_detail() crashed silently when Postgres returned created_at as datetime.datetime — raw [:16] slice is not valid on datetime objects\n- Fix: detect datetime with hasattr(x, 'strftime') and format to string before slicing; fallback to str()[:16] for SQLite ISO strings\n- Also wrapped lines-build in try/except with proper error logging to prevent future silent failures\n- Regression test T100 (doc_detail_datetime_safe) added"
+  },
+  {
+    "version": "2026.4.26",
+    "date":    "2026-04-06",
+    "title":   "Fix: empty note render crash + voice admin info Markdown injection",
+    "notes":   "- render_telegram.py: empty/whitespace MarkdownBlock text replaced with zero-width space to prevent Telegram 400 'text must be non-empty' error when viewing empty notes\n- bot_voice.py: wrap STT/LLM/TTS labels in backticks in _send_admin_info() to prevent Markdown entity injection from model names with underscores (e.g. ru_RU-dmitri-medium.onnx)\n- Regression tests T98 (render_telegram_empty_block) and T99 (admin_info_markdown_safe) added"
+  },
+  {
+    "version": "2026.4.25",
+    "date":    "2026-04-04",
+    "title":   "Rename PicoClaw to Taris; add configurable male TTS voice per user",
+    "notes":   "- Renamed all user-facing 'PicoClaw'/'picoclaw' references to 'Taris' (display, config defaults, admin panel, bot_ui.py, voice_assistant.py, screen.schema.json)\n- Added male TTS voice option: ru_RU-dmitri-medium.onnx (Dmitri) alongside existing female Irina\n- voice_male preference stored per-user in voice_opts DB table (new column)\n- Telegram Profile screen: voice gender toggle button\n- Web UI Profile page: voice gender radio selector card\n- Admin voice opts menu: global voice_male default toggle\n- _piper_model_path() selects model per user; falls back to female if male model absent\n- DB migration: ALTER TABLE voice_opts ADD COLUMN voice_male INTEGER DEFAULT 0 (idempotent)\n- Backward compat: DEVICE_VARIANT=picoclaw in existing Pi bot.env still accepted (normalized to 'taris')"
+  },
+  {
+    "version": "2026.4.24",
+    "date":    "2026-04-03",
+    "title":   "Fix STT speech_pad_ms regression on TariStation2 — make configurable",
+    "notes":   "- Root cause: speech_pad_ms=200 was hardcoded in bot_voice.py VAD parameters (up from faster-whisper default 30ms); added ~170ms extra delay after end-of-speech on TariStation2\n- Fix: FASTER_WHISPER_SPEECH_PAD_MS env var (default 30ms = original behavior); SintAItion sets FASTER_WHISPER_SPEECH_PAD_MS=200 in bot.env to keep trailing-word accuracy improvement\n- TariStation2: no bot.env change needed (default 30ms restored)"
+  },
+  {
+    "date":    "2026-04-03",
+    "title":   "Fix voice LLM silently using Ollama when chat per-function override is set",
+    "notes":   "- Root cause: ask_llm_with_history() called without use_case= so defaulted to 'chat'; per_func['chat']='ollama' on SintAItion caused every voice call to use slow Ollama (12-15s) while log showed 'provider=openai' (misleading)\n- Fix: pass use_case='voice' to ask_llm_with_history in bot_voice.py so per_func['voice'] is checked (empty = falls back to LLM_PROVIDER=openai)\n- Fix: log now shows actual resolved provider (not LLM_PROVIDER constant) so mismatch is immediately visible"
+  },
+  {
+    "version": "2026.4.22",
+    "date":    "2026-04-03",
+    "title":   "Fix LLM silent fallback to Ollama caused by invalid model name in active_model.txt",
+    "notes":   "- Root cause: active_model.txt contained 'openai/gpt-4.1-mini' (invalid for OpenAI API) causing HTTP 400 and silent fallback to slow Ollama\n- Fix: reset active_model.txt to 'gpt-4o-mini' on SintAItion\n- get_active_model() now strips provider prefixes (e.g. 'openai/gpt-4o-mini' -> 'gpt-4o-mini') to prevent recurrence\n- Improved HTTP error logging: shows model name on 4xx errors so root cause is visible immediately"
+  },
+  {
+    "version": "2026.4.21",
+    "date":    "2026-04-03",
+    "title":   "SintAItion: switch LLM primary to OpenAI (gpt-4o-mini), Ollama as fallback",
+    "notes":   "- SintAItion LLM_PROVIDER=openai (gpt-4o-mini) — was ollama (qwen3.5:9B)\n- LLM_FALLBACK_PROVIDER=ollama — local Ollama used when OpenAI unavailable\n- Result: LLM 14.3s -> 0.46s (31x faster); total voice pipeline expected ~3-4s vs 16.7s\n- Quality improved: gpt-4o-mini > qwen3.5:9B for multilingual responses\n- Ollama stays running for fallback and direct testing"
+  },
+  {
+    "version": "2026.4.20",
+    "date":    "2026-04-03",
+    "title":   "Perf: embedding pre-warm + fastembed ONNX + history cap",
+    "notes":   "- Pre-warm EmbeddingService at startup (background thread) — eliminates 2s cold-start delay on first chat/RAG call\n- fastembed ONNX model downloaded on SintAItion — 5x faster embedding inference vs sentence-transformers\n- CONVERSATION_HISTORY_MAX=8 on SintAItion (was 15) — reduces Ollama prefill tokens, saving ~7s per LLM call\n- Analysis: voice LLM was 20.4s (history=15 + personal context > 3000 tokens); now expected ~12s"
+  },
+  {
+    "version": "2026.4.19",
+    "date":    "2026-04-03",
+    "title":   "STT optimizations: thread cap fix, timestamps off, VAD tuning",
+    "notes":   "- Fix: FASTER_WHISPER_THREADS explicit value no longer capped at 8 (only auto-detect is capped)\n- Perf: without_timestamps=True in transcribe() — skips unused timestamp computation\n- Perf: VAD speech_pad_ms=200 (was default 400ms) — less silence padding around speech\n- Result: STT 12+ threads now active on SintAItion (was silently using 8 despite =12 in bot.env)"
+  },
+  {
+    "version": "2026.4.18",
+    "date":    "2026-04-03",
+    "title":   "Full performance stack: streaming chat, keep_alive, token cap, system tuning",
+    "notes":   "- Perf: streaming LLM responses in Telegram chat (edits message every 1.5s, first text visible within 1-2s)\n- Perf: keep_alive passed in Ollama API body — model stays in VRAM 24h regardless of service setting\n- Perf: LOCAL_MAX_TOKENS=256 on SintAItion (was 512 default; cuts worst-case from 42s to 21s)\n- Perf: vm.swappiness=10 on SintAItion (reduces swap micro-stalls)\n- Perf: OLLAMA_NUM_PARALLEL=1 + OLLAMA_MAX_LOADED_MODELS=1 explicit in service\n- Perf: OLLAMA_KEEP_ALIVE=24h in service (overrides default 1h)\n- Add: ask_llm_stream() generator in bot_llm.py for incremental response delivery\n- Add: OLLAMA_KEEP_ALIVE config constant in bot_config.py"
+  },
+  {
+    "version": "2026.4.17",
+    "date":    "2026-04-03",
+    "title":   "SintAItion LLM and STT performance tuning",
+    "notes":   "- Perf: OLLAMA_NUM_CTX env var caps KV cache context window (default: model max 256K, now configurable)\n- Perf: num_ctx passed to Ollama /api/chat options in both single-turn and multi-turn calls\n- Perf: power profile set to performance on SintAItion (was balanced at 48% CPU clock)\n- Perf: OLLAMA_KV_CACHE_TYPE=q8_0 halves VRAM usage for KV cache\n- Perf: FASTER_WHISPER_THREADS=12 on SintAItion (up from 8, 24-core machine)\n- Config: OLLAMA_NUM_CTX added to bot_config.py with default 0 (use model default)"
+  },
+  {
+    "version": "2026.4.16",
+    "date":    "2026-04-03",
+    "title":   "Multilingual STT: auto-detect language in faster-whisper",
+    "notes":   "- Add: STT now auto-detects spoken language when STT_LANG is unset (Russian, German, English, Slovenian + 90 other languages)\n- Add: 'sl' (Slovenian) added to faster-whisper lang_map\n- Fix: fallback for unknown lang codes changed from forced 'ru' to None (auto-detect)\n- Config: STT_LANG=ru commented out in bot.env on TariStation2 and in bot.env.example\n- No code change needed for SintAItion — set STT_LANG= (empty) in bot.env there to enable"
+  },
+
+  {
+    "version": "2026.4.15",
+    "date":    "2026-04-03",
+    "title":   "Personal data context injection in LLM conversations",
+    "notes":   "- Fix: calendar events, notes, and contacts were stored in DB but never shown to the LLM during chat — bot was answering 'I have no access'\n- Add: _calendar_context() injects upcoming events (next 14 days) into every system message\n- Add: _notes_context() injects note titles and content snippets (up to 10 notes, 200 chars each)\n- Add: _contacts_context() injects full contact list (name, phone, email, notes) into every system message\n- All three blocks are appended to _build_system_message() before language instruction\n- Functions are safe: return empty string on any error or when user has no data\n- Test: T97 personal_context_injection — verifies all three functions defined and wired into _build_system_message"
+  },
+
+  {
+    "version": "2026.4.14",
+    "date": "2026-04-02",
+    "notes": "- Fix: FASTER_WHISPER_PRELOAD=0 added to TariStation2 bot.env — disables 460MB model preload at startup, freeing RAM and eliminating swap-induced callback stalls (menu was freezing 30-100s)\n- Fix: tail_log() rewrote to use subprocess tail instead of f.readlines() — avoids loading full 7.5MB log file into RAM on admin_logs_show\n- Add: FASTER_WHISPER_PRELOAD env var in bot_config.py (default 1, set 0 on low-memory machines)\n- Add: startup memory check via /proc/meminfo — logs WARNING if available RAM < 512MB or swap > 80%\n- Test: T94 FASTER_WHISPER_PRELOAD config, T95 tail_log no readlines, T96 startup memory check"
+  },
+  {
+    "version": "2026.4.13",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: ReadTimeout/ConnectionError from stale API connections now suppressed in exception handler — prevents exponential polling backoff when a send_message call times out on a dead connection",
+      "fix: API READ_TIMEOUT reduced 30s→10s — limits how long a stale connection hangs before failing"
+    ]
+  },
+  {
+    "version": "2026.4.12",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: TCP keepalive on Telegram API HTTP session — prevents Fritz!Box IPv6 stateful firewall from dropping idle connections (was: stale connections caused 48s+ menu response hangs)"
+    ]
+  },
+  {
+    "version": "2026.4.11",
+    "date": "2026-04-02",
+    "changes": [
+      "fix: answer_callback_query wrapped in try/except — stale callbacks (>60s) no longer crash the polling worker pool and trigger exponential backoff (was: each expired callback doubled poll interval up to 60s, making bot appear frozen)",
+      "fix: TimeoutStopSec increased 30s→60s — bot now stops gracefully without SIGKILL on restart (was: SIGKILL every restart due to 25s long-poll completing after 30s timeout)"
+    ]
+  },
+  {
+    "version": "2026.4.10",
+    "date": "2026-04-02",
+    "changes": [
+      "perf: increased TeleBot num_threads 2→16 — prevents menu callbacks queuing behind slow LLM/voice handlers (was: 1 LLM call blocks ALL menus for up to 60s)",
+      "perf: chat, system-chat and voice message handlers now dispatch to daemon threads — telebot worker thread freed immediately, menus always responsive",
+      "perf: added [PERF] timing logs in callback_handler — slow callbacks (>500ms) logged as WARNING, answer_callback_query delays (>300ms) flagged",
+      "perf: send_chat_action(typing) sent before dispatching LLM/voice work — user sees immediate feedback"
+    ]
+  },
+  {
     "version": "2026.4.9",
-    "date":    "2026-4-9",
-    "title":   "No-history emergency fallback + model switch to gemma-3-4b-it:free",
-    "notes":   "- ask_llm_with_history now falls back to ask_llm (no history) if all retries exhausted\n- Prevents silent empty response when rate-limited model fails after 3 attempts\n- active_model switched to google/gemma-3-4b-it:free"
+    "date": "2026-04-02",
+    "changes": [
+      "fix: PostgreSQL store now includes shared system documents (chat_id=0) in all RAG searches — user/admin guides were invisible to all users on PostgreSQL backends",
+      "fix: get_chunks_without_embeddings in PostgreSQL store now queries vec_embeddings table (removed broken doc_chunks reference)",
+      "fix: system documents (user guide, admin guide) re-indexed with full embeddings on TariStation2",
+      "feat: Ollama model updated to qwen3.5:0.8b on TariStation2 for better local LLM fallback quality"
+    ]
   },
   {
     "version": "2026.4.8",
-    "date":    "2026-4-8",
-    "title":   "LLM HTTP 429 retry backoff + model switch",
-    "notes":   "- _http_post_json now retries up to 2 times on HTTP 429 with 5s/10s backoff\n- Respects Retry-After header from OpenRouter\n- Default OpenRouter model switched to meta-llama/llama-3.2-3b-instruct:free for better free-tier availability"
+    "date": "2026-04-02",
+    "changes": [
+      "feat: system chat now has conversation memory — follow-up requests like 'add --user flag' refer back to previous commands",
+      "fix: system chat history is kept separate from user chat history (in-memory, not written to DB)",
+      "fix: system history clears on menu exit for a fresh start next session"
+    ]
   },
   {
     "version": "2026.4.7",
-    "date":    "2026-4-7",
-    "title":   "System Chat LLM error handling improvements",
-    "notes":   "- System Chat now shows specific error messages for 402/401/429/503/timeout/missing binary\n- Empty LLM response now shows actionable message instead of silent failure\n- Calendar console docstring update"
+    "date": "2026-04-02",
+    "changes": [
+      "fix: admin log view now shows newest lines first — most recent entry visible without scrolling"
+    ]
   },
   {
     "version": "2026.4.6",
-    "date":    "2026-4-6",
-    "title":   "Switch to free OpenRouter model; enhanced LLM error logging",
-    "notes":   "- OPENAI_MODEL changed to google/gemma-3-4b-it:free (working free OpenRouter model)\n- _ask_openai now catches HTTPError explicitly and logs HTTP status + response body (up to 300 chars)\n- Fixes 402 Payment Required on every LLM call caused by auto model picking paid models with no credits"
+    "date": "2026-04-02",
+    "changes": [
+      "fix: infinity_polling logger_level=DEBUG — suppress ReadTimeout spam in journal (SintAItion flaky network)",
+      "fix: outer while-True guard around infinity_polling for extra crash resilience",
+      "fix: timeout=25 (was 30) — recover from network drop 5s faster"
+    ]
   },
   {
     "version": "2026.4.5",
-    "date":    "2026-4-5",
-    "title":   "Fix raw HTTP 402 error leaked through taris rc=0 stdout path",
-    "notes":   "- Added _raise_if_http_error() helper in bot_llm.py\n- _ask_taris now detects HTTP error patterns in stdout even when taris exits rc=0\n- Also improves rc!=0 path: error text parsed for 402/429/401/503 patterns; full text included in RuntimeError message\n- System Chat and exception handler in bot_handlers.py correctly intercepts all these errors with user-friendly messages"
+    "date": "2026-04-02",
+    "changes": [
+      "fix: docs_menu_title says click-to-manage instead of click-to-delete",
+      "fix: bot self-knowledge — security preamble now explicitly instructs LLM to answer capability questions using [BOT CAPABILITIES] block",
+      "fix: voice send_voice wrapped with _tg_send_with_retry for unstable internet robustness",
+      "fix: _tg_send_with_retry upgraded to 5 retries with exponential back-off (3s/6s/12s/24s/30s)"
+    ]
   },
   {
     "version": "2026.4.4",
-    "date":    "2026-4-4",
-    "title":   "System Chat HTTP error handling + LLM fallback on 402/429/503",
-    "notes":   "- ask_llm_or_raise() now tries local llama.cpp fallback before raising (Feature 3.2)\n- System Chat shows user-friendly messages for HTTP 402/401/429/503 errors\n- Raw urllib.error.HTTPError strings no longer shown to users"
+    "date": "2026-04-02",
+    "changes": [
+      "Fix: HuggingFace contacted on every startup for model freshness checks — SentenceTransformer now uses local_files_only=True; fastembed uses persistent ~/.cache/fastembed instead of /tmp",
+      "Fix: security.log, voice.log, datastore.log, assistant.log were always empty — subsystem loggers now route to dedicated files (+ telegram_bot.log via propagation)",
+      "Refactor: bot_voice.py, bot_security.py, bot_auth.py use log_voice/log_security; bot_llm.py uses log_assistant; store/db modules use log_datastore"
+    ]
   },
   {
     "version": "2026.4.3",
-    "date":    "2026-4-3",
-    "title":   "System Chat error messages fix + T26 regression guard",
-    "notes":   "- Fixed _SPINNER_RE stripping ASCII hyphen from bash commands (ls -la, df -h, etc.)\n- Added ask_llm_or_raise() to bot_llm.py for strict LLM failure handling\n- System Chat now shows specific error: timeout / binary not found / LLM error text\n- Added T26 regression test t_system_chat_clean_output (3 sub-tests)"
+    "date": "2026-04-02",
+    "changes": [
+      "Fix: document detail card showed raw {title}/{chunks}/{doc_type} template strings before actual data",
+      "Fix: bot answered 'I cannot process file uploads' — added [BOT CAPABILITIES] block to system prompt so LLM knows all features",
+      "Fix: voice pipeline LLM response lost on unstable network — _tg_send_with_retry() retries 3x on connection/timeout errors; falls back to editing transcript message if all attempts fail",
+      "Fix: stale regression tests updated — profile_rag handlers moved to bot_admin.py; vector_returns_chunk_idx used wrong SQL keyword"
+    ]
   },
   {
-    "version": "2026.4.2",
-    "date":    "2026-4-2",
-    "title":   "Copilot optimization complete (§20)",
-    "notes":   "- All quick-win Copilot optimization proposals P-1..P-9 complete\n- P-1: safe-update applyTo narrowed to specific files only\n- P-6: bot-deploy and safe-update instructions shortened, point to skills\n- P-7: accounting task moved from INSTRUCTIONS.md to concept/\n- P-9: #file: anchor pattern added to copilot-skills-guide.md\n- Updated implementation tracker in concept/copilot_optimization.md\n- P-5 (bot_web.py split) explicitly deferred to standalone sprint"
+    "date": "2026-04-02",
+    "changes": [
+      "Fix: _store_text_chunks() upsert_embedding missing chunk_text arg — vector embeddings were silently never stored",
+      "Fix: search_fts() and search_similar() now return chunk_idx — RRF fusion was collapsing all chunks to idx=0",
+      "Fix: shared documents (is_shared=1) now included in FTS and vector search for all users",
+      "Enhancement: retrieve_context() returns 4-tuple with trace dict (n_fts5, n_vector, n_mcp, latency_ms)",
+      "Enhancement: rag_log table gains n_fts5/n_vector/n_mcp columns via auto-migration; log_rag_activity logs component counts",
+      "Enhancement: RAG log now shows INFO-level per-query strategy breakdown (fts5/vector/mcp chunk counts)",
+      "New: src/setup/load_system_docs.py — loads README + howto_bot.md + architecture/overview.md as shared system KB (auto-loaded at startup)",
+      "New: src/setup/migrate_reembed.py — re-embeds all existing doc_chunks with no vectors (run once after deploy)",
+      "Tests T87-T90: embedding pipeline fix, shared-docs search, RAG trace fields, system docs structure",
+      "Fix: calendar LLM calls (_finish_cal_add, _handle_calendar_query, _handle_cal_console, _cal_handle_edit_input) made non-blocking — previously saturated pyTelebot 2-thread pool causing 'query is too old' crashes and menu timeouts"
+    ]
   },
   {
-    "version": "2026.3.43",
-    "date":    "2026-4-2",
-    "title":   "Local LLM Fallback — Admin Panel toggle (§3.2 complete)",
-    "notes":   "- Admin Panel: 🤖 Switch LLM → 📡 Local Fallback shows ON/OFF status and toggle button\n- Toggle writes/removes ~/.taris/llm_fallback_enabled flag file — no restart needed\n- Fallback state survives bot restarts (LLM_LOCAL_FALLBACK env var OR flag file)\n- Displays configured llama.cpp URL and model in the menu"
+    "version": "2026.4.1",
+    "date": "2026-04-01",
+    "changes": [
+      "Phase C: chunk quality filter — fragments shorter than 20 chars are skipped; quality_pct, n_skipped, n_embedded stored in document metadata",
+      "Phase C: doc detail view now shows embedding count and chunk quality percentage",
+      "Phase D: /mcp/search REST endpoint — exposes local RAG as MCP-compatible tool (Bearer-token auth)",
+      "Phase D: bot_mcp_client.py — remote MCP RAG client with circuit breaker (3 failures → 5 min cooldown), merged into RRF pipeline",
+      "Phase D: MCP_SERVER_ENABLED, MCP_REMOTE_URL, MCP_TIMEOUT, MCP_REMOTE_TOP_K config constants",
+      "Fix: bot_embeddings.py import corrected from src.core to core — vector embeddings now work in production deploy",
+      "Tests T84-T86: upload stats completeness, embeddings import fix, MCP Phase D structure"
+    ]
   },
   {
-    "version": "2026.3.42",
-    "date":    "2026-4-1",
-    "title":   "Logging & Monitoring (§6.1)",
-    "notes":   "- Structured category loggers: assistant.log, security.log, voice.log, datastore.log\n- Admin panel: 📊 Logs button with live tail (last 50 lines) per category\n- Telegram alert handler: CRITICAL/ERROR events forwarded to admins automatically\n- Logrotate drop-in config for all 5 log files (daily, 7 days, compress, copytruncate)"
+    "version": "2026.3.49",
+    "date": "2026-03-31",
+    "changes": [
+      "Fix: api_benchmark blocks uvicorn event loop — LLM/TTS/STT calls now use asyncio.to_thread, eliminating HTTP 000 timeouts under load",
+      "Fix: FasterWhisper preload re-enabled for openclaw variant (DEVICE_VARIANT=openclaw) to eliminate 4s cold-start delay; CUDA RAM concern does not apply to ROCm setup"
+    ]
   },
   {
-    "version": "2026.3.41",
-    "date":    "2026-3-25",
-    "title":   "Fix System Chat LLM routing",
-    "notes":   "- Fixed: System Chat returned 'Could not generate a command' for any input — it was calling the taris CLI binary directly instead of routing through the configured LLM_PROVIDER (openai/OpenRouter)\n- System Chat now uses ask_llm() like all other LLM-powered features, so the active provider and model are respected"
+    "version": "2026.3.48",
+    "date": "2026-03-31",
+    "changes": [
+      "Fix: RAG hybrid mode broken — psutil missing caused FTS5_ONLY detection even on 7.6 GB machine (fix: /proc/meminfo fallback)",
+      "Fix: svc.embed([query]) wrong signature — passed list to str API, returning None (fix: svc.embed(query))",
+      "Fix: search_similar missing chunk_idx in SELECT — RRF fusion collapsed all doc chunks to single entry (fix: added chunk_idx to SELECT)",
+      "Result: Russian queries now retrieve 3 relevant chunks from English/German documents via cross-lingual vector search",
+      "Test: T80 regression test added (4 checks)"
+    ],
+    "title": "RAG hybrid retrieval — 3 root causes fixed",
+    "notes": "- Fixed: psutil missing → RAM detection fell back to 0 GB → HYBRID strategy never activated; now uses /proc/meminfo fallback\n- Fixed: embed() called with list arg instead of string → vector search returned empty results for all queries\n- Fixed: search_similar() SELECT missing chunk_idx column → RRF fusion collapsed all chunks to 1 result\n- After fixes: Russian queries correctly return 3 chunks via hybrid strategy against cross-lingual documents\n- Added T80 regression test (4 checks)"
   },
   {
-    "version": "2026.3.40",
-    "date":    "2026-3-24",
-    "title":   "Fix LLM model selection, update OpenAI catalog",
-    "notes":   "- Fixed: selecting an OpenAI/OpenRouter model via Admin LLM menu now actually takes effect (was always using OPENAI_MODEL env var)\n- Fixed: model selection checkmark (is_current) now correctly compares against full model ID (e.g. openai/gpt-4.1)\n- Fixed: callback_data now sends full OpenRouter model slug (openai/gpt-4.1) instead of short name\n- Updated OpenAI catalog: added gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o3, o4-mini; removed deprecated gpt-4.5-preview"
+    "version": "2026.3.47",
+    "date": "2026-03-31",
+    "changes": [
+      "Fix: RAG View Log crashed with no effect on Postgres targets (datetime[:16] TypeError)",
+      "Fix: str() wrap on created_at and query fields in _handle_admin_rag_log for SQLite+Postgres compat",
+      "Test: T79 regression test for RAG log datetime serialization"
+    ],
+    "title": "RAG View Log fix — Postgres datetime TypeError",
+    "notes": "- Fixed: _handle_admin_rag_log() crashed silently on Postgres because datetime.datetime objects are not subscriptable with [:16]\n- Fix: str() wrap on created_at and query fields (works for both Postgres datetime and SQLite string)\n- Added T79 regression test (3 checks)"
   },
   {
-    "version": "2026.3.39",
-    "date":    "2026-3-20",
-    "title":   "Fix LLM provider (OpenRouter direct), voice mode routing, import error",
-    "notes":   "- Fixed: LLM calls failed with taris rc=1 because taris-gateway service crash-loops (Error: no channels enabled) — switched to LLM_PROVIDER=openai pointing at OpenRouter's OpenAI-compatible endpoint\n- Fixed: voice messages during contact_add / contact_edit / contact_search modes were silently handed to LLM instead of the contact handler — STT transcript was discarded, contact was never saved\n- Fixed: voice messages during cal_edit_title / cal_edit_dt / cal_edit_remind modes were also ignored — calendar field edits via voice now work\n- Fixed: NameError ACTIVE_MODEL_FILE not defined in bot_admin.py — constant was used in _set_active_model() but missing from the import block"
+    "version": "2026.3.46",
+    "date": "2026-03-31",
+    "changes": [
+      "Fix: text message without active mode now routes to chat instead of showing main menu"
+    ],
+    "title": "Chat mode fix — second message showed main menu",
+    "notes": "- Fixed: after LLM answer, pressing Back cleared _user_mode; next text message triggered _send_menu() instead of LLM response\n- Fix: mode=None on text message now defaults to chat mode instead of showing the main menu"
   },
   {
-    "version": "2026.3.38",
-    "date":    "2026-3-19",
-    "title":   "Fix empty-note crashes; /status shows LLM provider",
-    "notes":   "- Fixed: opening, editing, appending, or replacing an empty note crashed with ApiTelegramException: Bad Request: message text is empty\n- Root cause: _handle_note_raw and _start_note_edit/append/replace used text/lines[0] without guarding for empty string\n- Fix: note display falls back to localized note_empty_body string; lines[0] access guarded with if lines else ''\n- /status command now shows LLM_PROVIDER prefix before active model name (e.g. taris > gpt-4o-mini)"
+    "version": "2026.3.45",
+    "date": "2026-03-31",
+    "changes": [
+      "Admin menu: RAG Knowledge Base and Voice Config buttons now always visible",
+      "RAG menu: Back button now works correctly (was unhandled callback)",
+      "Tests: T73-T78 RAG and memory integration regression tests added",
+      "Bug fix: delete_embeddings called on document delete and replace"
+    ],
+    "title": "Admin menu RAG settings visibility fix",
+    "notes": "- Fixed: RAG Settings and Dev menu buttons missing from admin_menu.yaml → not visible in Admin panel\n- Fixed: RAG back button used wrong callback_data ('admin' instead of 'admin_menu')\n- Fixed: SRC_ROOT portable path in regression tests for remote Pi targets\n- Admin menu now shows all sub-items correctly on first open"
   },
   {
-    "version": "2026.3.37",
-    "date":    "2026-3-19",
-    "title":   "Fix calendar: Russian time idioms and partial ISO dt",
-    "notes":   "- Fixed: Add Event returned 'Could not parse date' for Russian shorthand like 'Тренировка в 19'\n- Root cause 1: event_parse prompt had no rules for 'в X' (at X o'clock) or time-of-day words (утром/вечером)\n- Root cause 2: LLMs sometimes return partial ISO 'YYYY-MM-DDTHH' instead of 'YYYY-MM-DDTHH:MM' — fromisoformat() fails on Python <3.11\n- Fix 1: added prompt rules — 'в X' = X:00, утром=09:00, днём=13:00, вечером=19:00, в полдень=12:00\n- Fix 2: defensive dt_str normalization in _finish_cal_add() pads 'YYYY-MM-DDTHH' to 'YYYY-MM-DDTHH:00'"
-  },
-  {
-    "version": "2026.3.36",
-    "date":    "2026-3-19",
-    "title":   "Fix free chat: taris 402 error leaked as reply",
-    "notes":   "- Fixed: free chat showed raw taris error log (HTTP 402 / OpenRouter out of credits) as bot reply\n- Root cause 1: _ask_taris() in bot_llm.py logged warning on rc!=0 but still returned cleaned output instead of raising\n- Root cause 2: _LOG_PREFIX regex didn't match compact date format YYYYMMDD HH:MM:SS used by taris — log lines passed through cleanup unchanged\n- Fix: raise RuntimeError on non-zero taris exit code — ask_llm() catches it, returns empty — user sees user-friendly error message\n- Fix: extended _LOG_PREFIX regex to also match YYYYMMDD (no separator) date format"
-  },
-  {
-    "version": "2026.3.35",
-    "date":    "2026-3-19",
-    "title":   "Fix calendar LLM call — use ask_llm",
-    "notes":   "- Fixed: calendar NL input returned 'no LLM response' error\n- Root cause: bot_calendar.py used old _ask_taris (bot_access) with short timeouts (20-30s) and outdated output cleaner missing agent|json pipe format\n- Fix: migrated all 4 calendar LLM calls to ask_llm (bot_llm) with 60s timeout, proper error logging, and correct output cleaning"
-  },
-  {
-    "version": "2026.3.34",
-    "date":    "2026-03-18",
-    "title":   "Prompt templates centralised + LLM params configurable",
-    "notes":   "- All LLM prompts extracted to src/prompts.json\n- New core/bot_prompts.py loader with fmt_prompt() helper\n- LLM tuning params (temperature, max_tokens) configurable via env vars\n- bot_config.py: YANDEXGPT_TEMPERATURE, YANDEXGPT_MAX_TOKENS, ANTHROPIC_MAX_TOKENS, LOCAL_MAX_TOKENS, LOCAL_TEMPERATURE"
-  },
-  {
-    "version": "2026.3.33",
-    "date":    "2026-03-18",
-    "title":   "Fix Telegram-Web account link codes",
-    "notes":   "- Fixed HTTP 500 on /register when entering a Telegram link code\n- Root cause: link codes were stored per-process in memory; web service never saw codes generated by Telegram service\n- Fix: codes now persisted to ~/.taris/web_link_codes.json, shared between both services"
+    "version": "2026.3.44",
+    "date": "2026-03-31",
+    "changes": [
+      "Documents: fixed FTS search on PostgreSQL backend (plainto_tsquery + GIN index)",
+      "Admin logs: truncate long logs to fit Telegram 4096-char limit",
+      "Benchmark: concurrency lock guard prevents LLM timeout during benchmark runs"
+    ],
+    "title": "Multiple Postgres/OpenClaw bug fixes + UI tests",
+    "notes": "- Fixed: Documents page — FTS5 not available on Postgres; implemented Postgres FTS via plainto_tsquery + GIN index\n- Fixed: system_chat command hang — Ollama socket.timeout not converted to TimeoutExpired; removed OLLAMA_MIN_TIMEOUT floor for system use_case\n- Fixed: /status command showing wrong services on OpenClaw variant; now shows taris-web + ollama with --user scope\n- Fixed: /contacts endpoint 500 error (page param collision in _ctx())\n- Fixed: PDF upload failing on PostgresStore (missing get_document_by_hash, update_document_field, log_rag_activity, list_rag_log, rag_stats methods)\n- Added T73-T78 regression tests for document admin, RAG pipeline, and memory integration\n- Web UI: Settings and Contacts Playwright tests added (61 tests pass)"
   },
   {
     "version": "2026.3.32",
-    "date":    "2026-03-17",
-    "title":   "Multi-LLM Provider Support & Local Fallback",
-    "notes":   "- Feature 3.1: LLM_PROVIDER env-var switch (taris/openai/yandexgpt/gemini/anthropic/local) — set in ~/.taris/bot.env\n- Feature 3.2: Local llama.cpp offline fallback with LLM_LOCAL_FALLBACK=1 and taris-llm.service systemd unit\n- Fallback responses labelled with warning prefix"
+    "date": "2026-03-30",
+    "changes": [
+      "PyMuPDF PDF extraction with image placeholders; pdfminer fallback",
+      "RAG monitoring dashboard: rag_stats(), latency_ms+query_type in rag_log, Admin > RAG Stats",
+      "Per-user RAG settings in Profile: rag_top_k, rag_chunk_size (user_prefs table)",
+      "Developer Menu (bot_dev.py): Dev Chat, Restart, Log, Last Error, Files, Security Log",
+      "RAG: classify_query() adaptive routing + RRF fusion + hardware-tier detection (bot_rag.py)",
+      "Security logging: security_events table, log_security_event(), log_access_denied()",
+      "T66-T72 regression tests for Phase B/C and User Rights"
+    ],
+    "title": "RAG knowledge base, Dev menu, voice debug, LLM fallback",
+    "notes": "- RAG pipeline: document upload (PDF/TXT), chunking, embedding (MiniLM), FTS5+vector hybrid retrieval, admin RAG settings, query log\n- Dev menu: admin-only developer panel with LLM trace, system info, RAG stats, benchmark trigger\n- Voice debug mode: per-session audio capture (7 stages), downloadable debug bundles from Web UI\n- LLM named fallback: LLM_FALLBACK_PROVIDER env var; local Ollama fallback guard (LLM_LOCAL_FALLBACK)\n- Per-user memory toggle in profile; admin Memory Settings page\n- Notes/Calendar fully DB-primary (SQLite content column); document deduplication on upload\n- T61-T72 regression tests added; 330 tests total"
   },
   {
     "version": "2026.3.31",
-    "date":    "2026-03-17",
-    "title":   "Bug fixes 0.7 and 0.8",
-    "notes":   "- Bug 0.7: Contact add/edit cancel button was showing 'btn_cancel' instead of translated text — added missing btn_cancel i18n key to ru/en/de\n- Bug 0.8: Profile change password failed with 'could not change password' — fixed account['id'] key error (correct key is 'user_id')"
+    "date": "2026-03-30",
+    "title": "DB-primary storage, memory toggle, doc dedup",
+    "notes": "- Notes content stored in SQLite DB (content column in notes_index); file fallback preserved for backward compat. Calendar fully DB-primary, no more JSON dual-write.\n- Document deduplication: same-hash upload detected, user can replace old doc or keep both. doc_replace/doc_keep_both callbacks added.\n- Per-user memory toggle in profile (memory_enabled pref in user_prefs table). Admin > Memory Settings page to configure short/mid/long-term memory parameters (CONVERSATION_HISTORY_MAX, CONV_SUMMARY_THRESHOLD, CONV_MID_MAX) stored in system_settings table.\n- T61-T65 regression tests added."
+  },
+  {
+    "version": "2026.3.30+6",
+    "date": "2026-03-30",
+    "title": "LLM context trace debug tool",
+    "notes": "- Admin > LLM Settings > Context Trace: shows last 5 LLM calls with provider/model/temperature/history/RAG breakdown\n- Extended llm_calls DB table: logs model, temperature, system_chars, history_chars, rag_chunks, response_preview, context_snapshot per call\n- Voice pipeline now logs to llm_calls (was missing)\n- Root cause analysis of 1837 context contamination bug documented\n- _rag_debug_stats() helper for RAG context size stats\n- T60 regression test (12 checks) for LLM trace tool\n- T39 updated: voice must use ask_llm_with_history (not bare ask_llm)"
+  },
+  {
+    "version": "2026.3.30+5",
+    "date": "2026-03-30",
+    "title": "Voice pipeline conversation context memory fix",
+    "notes": "- Fix: voice messages now use full conversation history (ask_llm_with_history) — was stateless single-turn before\n- Voice LLM call now includes: system message (security + bot config + long-term memory), prior conversation turns, and current user turn with RAG context\n- Both user (clean STT text) and assistant turns saved to conversation history\n- Add _voice_user_turn_content() in bot_access.py to properly split STT hint from system context\n- T59 regression test: 6 checks covering history-aware voice pipeline"
+  },
+  {
+    "version": "2026.3.30+4",
+    "date": "2026-03-30",
+    "title": "RAG pipeline fixes and admin LLM temperature control",
+    "notes": "- Fix: store.log_rag_activity() was never called — RAG log was always empty; now called after every FTS retrieval\n- Fix: FTS search now enforced with rag_timeout via concurrent.futures (no more silent hangs)\n- Feature: LLM temperature configurable at runtime via Admin > RAG Settings (range 0.0-2.0)\n- Feature: _effective_temperature() in bot_llm.py reads runtime setting, falls back to LOCAL_TEMPERATURE\n- Feature: MAX_DOC_SIZE_MB=20 constant; upload rejects oversized files with user-visible error\n- Improvement: docs_restrictions_info now shows max file size (20 MB) in all 3 languages\n- Test: T58 regression test (8 checks) for all §4 RAG pipeline fixes\n- Docs: 3 Mermaid architecture diagrams added to doc/architecture/stacks.md"
+  },
+  {
+    "version": "2026.3.30+3",
+    "date": "2026-03-30",
+    "title": "Multi-turn context and system message fix",
+    "notes": "- Fix: Ollama ask_llm_with_history now sends native messages array (was falling to single-turn fallback)\n- Fix: role:system message now prepended to every multi-turn call (bot identity + memory note for LLM)\n- Fix: Security preamble and bot config no longer stuffed into last user message only\n- Add: _build_system_message() and _user_turn_content() helper functions in bot_access.py\n- Test: T56 regression test for ollama native history\n- Test: T57 regression test for system message architecture"
+  },
+  {
+    "version": "2026.3.30+2",
+    "date": "2026-03-30",
+    "title": "Tiered memory, document admin, RAG settings",
+    "notes": "- Tiered conversation memory: mid/long-term summaries via LLM\n- Document detail view: rename, share toggle, upload stats, hash dedup\n- RAG admin settings: configurable Top-K, chunk size, timeout\n- Profile: clear memory button clears all tiers\n- Docs menu: restrictions info + detail view for each document"
   },
   {
     "version": "2026.3.30+1",
-    "date":    "2026-03-16",
-    "title":   "Contact Book (Feature 4.0)",
-    "notes":   "- Add, view, edit and delete contacts via Telegram bot\n- Search contacts by name, phone or email\n- Web UI at /contacts with two-panel layout (search + list + form)\n- 38 new i18n strings (ru/en/de)"
+    "date": "2026-03-30",
+    "title": "Fix hardcoded strings + i18n cleanup",
+    "notes": "- Move cal_event_saved_prefix, voice_note_msg, audio_interrupted from hardcoded Python to strings.json\n- T55 regression test: no hardcoded user-visible strings in Python source\n- Update key count references (188 -> 328)"
   },
   {
     "version": "2026.3.30",
-    "date":    "2026-03-16",
-    "title":   "System Chat role guards (Bug 0.6)",
-    "notes":   "- Admin role limited to read-only commands (cat, ls, journalctl, systemctl status, etc.)\n- New Developer role (DEVELOPER_USERS env var) allows service control and file writes\n- Commands not on any allowlist are blocked before execution\n- Confirm gate always required for all system commands\n- _classify_cmd_class() added to bot_security; _is_developer() added to bot_access"
+    "date": "2026-03-30",
+    "title": "Notes enhancements, DB reads, Documents RAG context",
+    "notes": "- §22 Notes: delete confirmation dialog before deleting\n- §22 Notes: rename title (new Rename button in edit menu)\n- §22 Notes: download single note as .md or all notes as ZIP\n- §22 Notes: after edit/append show note immediately (no return to menu)\n- §9.1 Notes: list reads from DB index (store.list_notes) with file fallback\n- §9.1 Notes: save uses direct DB upsert (no double-write bug)\n- §10 RAG: user document chunks injected as [KNOWLEDGE] block in all chat prompts\n- §10 RAG: FTS5 search runs per-request when user has uploaded documents\n- update_from_git.sh: package subdir support (core/ telegram/ features/ etc.)\n- setup_voice_openclaw.sh: faster-whisper default model base to small"
+  },
+  {
+    "version": "2026.3.29+10",
+    "date": "2026-03-29",
+    "title": "FasterWhisper startup preload and HF offline mode",
+    "notes": "- FasterWhisper model now preloaded at bot startup in background thread (eliminates 0.3-1s cold-load on first voice message)\n- HF_HUB_OFFLINE=1 set automatically when local HuggingFace cache exists (prevents network check on every model load)\n- Voice benchmark diagnostics: identified restart-induced cache eviction as root cause of slow voice after deploy"
+  },
+  {
+    "version": "2026.3.29+9",
+    "date": "2026-03-29",
+    "title": "Ollama GPU acceleration (AMD Radeon 890M)",
+    "notes": "- Ollama now runs on AMD Radeon 890M GPU via ROCm on SintAItion (gfx1150, 41/41 layers offloaded)\n- _ask_ollama switched to native /api/chat endpoint with think:false (fixes empty responses with qwen3 models)\n- OLLAMA_MIN_TIMEOUT=90s prevents false timeouts during GPU model load\n- OLLAMA_THINK=false by default suppresses extended thinking tokens\n- qwen2:0.5b: 256ms on GPU (was 14s CPU); qwen3:14b: ~1.2s with think:false"
+  },
+  {
+    "version": "2026.3.29+7",
+    "date": "2026-03-29",
+    "title": "Fix All Notes hang — BUTTON_DATA_INVALID",
+    "notes": "- Replace raw Cyrillic slugs in note callback_data with 12-char SHA1 hash IDs\n- Cyrillic slugs can be 2 bytes/char and exceeded Telegram 64-byte callback_data limit\n- Hash→slug cache with filesystem fallback on bot restart\n- Fix _slug() byte-based truncation (was char-based, 60 chars = 120 bytes for Cyrillic)\n- Affected: All Notes list, note open/edit/delete/raw/append/replace actions"
+  },
+  {
+    "version": "2026.3.29+6",
+    "date": "2026-03-29",
+    "title": "System chat: echo answers, localized confirm, echo allowlist",
+    "notes": "- Knowledge questions answered directly (echo pattern) without Run/Cancel dialog\n- Localize confirm message: system_cmd_confirm key in ru/en/de\n- Add echo to security allowlist so knowledge answers are not blocked\n- system_prompt: POSIX rules + language + knowledge vs shell distinction"
+  },
+  {
+    "version": "2026.3.29+5",
+    "date": "2026-03-29",
+    "title": "Voice opts menu fix + system chat prompt fix",
+    "notes": "- Add faster_whisper_stt toggle to voice opts menu (OpenClaw)\n- Hide Pi-only opts (whisper.cpp, vosk_fallback, tmpfs) on OpenClaw\n- Fix LLM menu: no crash on missing config.json (OpenClaw)\n- Fix system chat prompt: respond in user language, POSIX syntax, knowledge vs shell"
+  },
+  {
+    "version": "2026.3.29+4",
+    "date": "2026-03-29",
+    "title": "Fix web TTS hardcoded Piper path",
+    "notes": "- Fix web UI TTS endpoint using hardcoded /usr/local/bin/piper instead of PIPER_BIN config\n- Affects all 4 TTS call sites in bot_web.py\n- Web TTS now works on TariStation2 and SintAItion"
+  },
+  {
+    "version": "2026.3.29+3",
+    "date": "2026-03-29",
+    "title": "Clean chat welcome + admin pipeline diagnostics",
+    "notes": "- Removed Vosk/Piper tech references from chat and voice welcome messages for all users\n- Admin users receive a separate pipeline info message after each voice request (STT provider/model, LLM provider/model, TTS model, per-step timings)\n- voice_enter simplified to show supported languages without implementation details"
+  },
+  {
+    "version": "2026.3.29+2",
+    "date": "2026-03-29",
+    "title": "System Chat moved to Admin menu",
+    "notes": "- System Chat removed from main menu (was visible to admins only)\n- System Chat now exclusively accessible via Admin Panel → System Chat\n- Cleaner main menu for all users"
+  },
+  {
+    "version": "2026.3.29+1",
+    "date": "2026-03-29",
+    "title": "Fix STT Vosk error on OpenClaw platform",
+    "notes": "- Disable Vosk fallback by default on OpenClaw (DEVICE_VARIANT=openclaw) — Vosk not installed\n- faster-whisper: retry without VAD filter when first pass returns empty (fixes short voice messages)\n- Import DEVICE_VARIANT in bot_voice.py for platform-aware fallback logic"
   },
   {
     "version": "2026.3.29",
-    "date":    "2026-03-15",
-    "title":   "Identity silo fix: unified Telegram+Web user identity",
-    "notes":   "- Fixed: Telegram and Web now share a single user identity\n- Web UUID and Telegram int chat_id unified under shared profile key\n- Calendar, Notes, and Profile data now visible across both channels\n- _resolve_storage_id() ensures consistent file-based storage resolution"
+    "date": "2026-03-29",
+    "title": "Mobile Web UI optimization",
+    "notes": "- Mobile bottom navigation bar (Home, Chat, Notes, Calendar, Voice)\n- Hamburger menu opens sidebar drawer on mobile\n- Touch targets minimum 44px, fonts optimized for mobile\n- Voice recording stop fixed on iOS Safari (MediaRecorder.onstop fallback)\n- Bottom nav safe-area support for notched devices"
+  },
+  {
+    "version": "2026.3.43",
+    "date": "2026-03-28",
+    "title": "Merge Taris-UI-POC features: Screen DSL + RAG + admin i18n fixes",
+    "changes": [
+      "cherry-pick 333f210: Admin menu i18n fix (all labels localized), System Chat moved to admin panel, chat.html send button fix",
+      "cherry-pick 606ec57+7a48543+3628079: Screen DSL Loader (screen_loader.py) with variant support, YAML screens for notes/profile/help/menus",
+      "cherry-pick a39a368: FTS5 RAG knowledge base + document upload/search/delete pipeline",
+      "RAG constants added: RAG_ENABLED, RAG_TOP_K, RAG_CHUNK_SIZE, RAG_FLAG_FILE",
+      "Keep all OpenClaw-specific fixes: variant support, DEVICE_VARIANT, password reset, voice debug, unified user list"
+    ]
+  },
+  {
+    "version": "2026.3.42",
+    "date": "2026-03-28",
+    "title": "Fix voice mode ignoring user role in system chat",
+    "changes": [
+      "bot_voice.py: voice pipeline now checks _cur_mode == 'system' and dispatches to _handle_system_message() (admin-only, role-aware), same as the text handler",
+      "Previously voice in system chat fell through to generic ask_llm() with the standard security preamble that refuses system commands — admin was effectively treated as a regular user in voice mode"
+    ]
+  },
+  {
+    "version": "2026.3.41",
+    "date": "2026-03-28",
+    "title": "Fix LLM quality + TTS language mismatch",
+    "changes": [
+      "bot.env: LLM_PROVIDER=openai (gpt-4o-mini) — qwen2:0.5b was too small and hallucinating",
+      "bot.env: LLM_FALLBACK_PROVIDER=ollama (local offline fallback when OpenAI unreachable)",
+      "bot.env: FASTER_WHISPER_MODEL=small (was 'base' — small is 4x larger, much better Russian accuracy)",
+      "bot_voice.py: _voice_lang() helper — TTS now uses STT_LANG (configured speech language) instead of Telegram client UI language, fixing English TTS on Russian voice sessions"
+    ]
+  },
+  {
+    "version": "2026.3.40",
+    "date": "2026-03-28",
+    "title": "Fix menu/keyboard silent loss due to Markdown parse failure",
+    "changes": [
+      "bot_instance.py: TeleBot default parse_mode changed from Markdown to None — prevents silent send failure when LLM/user content contains underscores or asterisks",
+      "bot_handlers.py: LLM chat response edit/send now use parse_mode=None; note body send uses parse_mode=None",
+      "bot_voice.py: voice fallback LLM response send uses parse_mode=None"
+    ]
+  },
+  {
+    "version": "2026.3.39",
+    "date": "2026-03-28",
+    "title": "Fix 409 polling conflict on restart; add STT INFO logging",
+    "changes": [
+      "bot_instance.py: 409 ExceptionHandler — sleeps 35 s when Telegram reports Conflict (old long-poll still alive after rapid restart)",
+      "bot_voice.py: promote STT log entries from DEBUG to INFO — provider, language, and transcript are now visible in journal"
+    ]
+  },
+  {
+    "version": "2026.3.38",
+    "date": "2026-03-28",
+    "title": "Fix STT language: use STT_LANG config, not Telegram client language",
+    "changes": [
+      "bot_voice.py: STT uses STT_LANG from bot_config (default ru) — Telegram client language_code no longer overrides STT",
+      "bot_voice.py: Vosk fallback also uses STT_LANG (was using _lang(chat_id) = en for EN-client users)",
+      "bot.env: added STT_LANG=ru",
+      "registrations.json: persisted lang=ru for admin user",
+      "Root cause: _set_lang() used Telegram language_code=en from client, causing RU audio to transcribe as EN"
+    ]
+  },
+  {
+    "version": "2026.3.37",
+    "date": "2026-03-28",
+    "title": "Fix voice LLM routing + Whisper hallucination guard",
+    "changes": [
+      "bot_voice.py: replace _ask_taris() with ask_llm() — voice now respects LLM_PROVIDER/fallback chain",
+      "bot_voice.py: add Whisper hallucination guard rejecting known false-positive phrases",
+      "Fixes: Telegram voice replies failing with 'picoclaw: No such file or directory'"
+    ]
+  },
+  {
+    "version": "2026.3.36",
+    "date": "2026-03-28",
+    "title": "Username change + Telegram-Web unified account linking",
+    "changes": [
+      "Profile page: Change Username form (validates uniqueness, re-issues JWT)",
+      "Profile page: Link Telegram section with 6-char code entry",
+      "POST /profile/change-username: validates format, checks uniqueness, re-signs JWT",
+      "POST /profile/link-telegram: consumes bot_state link code, merges accounts",
+      "/link command in Telegram bot (calls _handle_web_link, same as menu button)",
+      "Linking merges: if Telegram ID was on another web account, it is unlinked first",
+      "Profile info card: shows Telegram link status (linked/not linked)",
+      "Unified admin user list: Telegram users + Web UI accounts in one view",
+      "Fixed taris-telegram.service: removed User=stas (invalid in user-mode systemd)",
+      "bot_auth.py: change_username() function"
+    ]
+  },
+  {
+    "version": "2026.3.35",
+    "date": "2026-03-29",
+    "title": "LLM indicator in chat + self-service password reset",
+    "changes": [
+      "Chat window: LLM provider badge in topbar (e.g. 'Ollama · qwen2:0.5b')",
+      "Chat messages: LLM provider shown in bot bubble meta line",
+      "Forgot password page (/forgot-password): username + delivery method selection",
+      "Password reset via Telegram message, e-mail, or admin notification",
+      "Reset link valid 60 min; stored in ~/.taris/reset_tokens.json",
+      "New templates: forgot_password.html, reset_password.html",
+      "Login page: Forgot password? link added",
+      "bot_auth.py: generate_reset_token / validate_reset_token / consume_reset_token",
+      "bot_config.py: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL constants"
+    ]
+  },
+  {
+    "version": "2026.3.34",
+    "date": "2026-03-28",
+    "title": "Fix: web UI hang during voice/LLM — async event loop unblocked",
+    "changes": [
+      "Root cause: ask_llm() + subprocess.run() in async FastAPI endpoints blocked entire event loop",
+      "Fix: all blocking calls wrapped with asyncio.to_thread() in 7 endpoints:",
+      "  voice_chat_endpoint: ffmpeg decode, STT, LLM (90s), TTS piper+ffmpeg",
+      "  voice_transcribe_endpoint: ffmpeg decode, STT",
+      "  voice_tts_endpoint: piper + ffmpeg",
+      "  voice_chat_text_endpoint: ask_llm, piper + ffmpeg",
+      "  chat_send: ask_llm_with_history",
+      "  calendar_parse_text: _cal_parse_events_from_text (via to_thread)",
+      "  calendar_console_route: ask_llm intent classifier",
+      "Server now handles concurrent requests during voice/LLM processing"
+    ]
+  },
+  {
+    "version": "2026.3.33",
+    "date": "2026-03-28",
+    "title": "Ollama installed + LLM fallback chain active",
+    "changes": [
+      "Ollama 0.18.3 installed to ~/.local/bin/ollama, runs as systemd user service",
+      "qwen2:0.5b model downloaded to ~/.local/ollama-models",
+      "LLM_FALLBACK_PROVIDER=openai configured: Ollama primary, OpenAI gpt-4o-mini fallback",
+      "OPENAI_BASE_URL switched to api.openai.com (OpenAI direct key)",
+      "Full LLM chain verified: Ollama OK + OpenAI fallback OK"
+    ]
+  },
+  {
+    "version": "2026.3.32",
+    "date": "2026-03-28",
+    "title": "RAG knowledge base, Dev menu, voice debug, LLM fallback",
+    "changes": [
+      "core/voice_debug.py: VoiceDebugSession saves input audio, decoded WAV/PCM, stt.txt, llm_answer.txt, tts_input.txt, tts_output.ogg, pipeline.json per request when VOICE_DEBUG_MODE=1",
+      "VOICE_DEBUG_MODE / VOICE_DEBUG_DIR constants in bot_config.py",
+      "voice_chat_endpoint + voice_transcribe_endpoint: wired VoiceDebugSession; return debug_session_id in JSON",
+      "GET /voice/debug/sessions — list recent debug sessions (auth required)",
+      "GET /voice/debug/{session_id}/{filename} — download any debug file; path traversal blocked",
+      "voice.html: download button (📥) next to every TTS audio player; links to debug endpoint or blob URL",
+      "LLM_FALLBACK_PROVIDER constant (mirrors STT_FALLBACK_PROVIDER): named provider fallback chain",
+      "_ask_with_fallback(): primary -> named fallback -> legacy local llama.cpp fallback",
+      "ask_llm() + ask_llm_or_raise() refactored to use _ask_with_fallback()",
+      "T34 t_voice_debug_mode: 3/3 PASS"
+    ],
+    "notes": "- RAG pipeline: document upload (PDF/TXT), chunking, embedding (MiniLM), FTS5+vector hybrid retrieval, admin RAG settings, query log\n- Dev menu: admin-only developer panel with LLM trace, system info, RAG stats, benchmark trigger\n- Voice debug mode: per-session audio capture (7 stages), downloadable debug bundles from Web UI\n- LLM named fallback: LLM_FALLBACK_PROVIDER env var; local Ollama fallback guard (LLM_LOCAL_FALLBACK)\n- Per-user memory toggle in profile; admin Memory Settings page\n- Notes/Calendar fully DB-primary (SQLite content column); document deduplication on upload\n- T61-T72 regression tests added; 330 tests total"
+  },
+  {
+    "date": "2026-03-28",
+    "title": "Dual STT: OpenAI Whisper remote provider + STT/LLM diagnostics",
+    "changes": [
+      "STT_PROVIDER=openai_whisper: new provider using OpenAI Whisper API (best accuracy for ru/en/de/sl)",
+      "_stt_openai_whisper_web(): PCM→WAV in memory → POST /v1/audio/transcriptions; reuses OPENAI_API_KEY + OPENAI_BASE_URL",
+      "STT_OPENAI_MODEL (default whisper-1) and STT_LANG (default ru) constants in bot_config.py",
+      "_stt_web() updated: routes faster_whisper → openai_whisper → vosk fallback",
+      "_voice_pipeline_status(): openai_whisper shows API key status in voice status panel",
+      "Slovenian (sl) added to lang_map for all STT providers",
+      "_STT_UI_LABELS: openai_whisper -> 'OpenAI Whisper' in sidebar display",
+      "TODO.md: Ollama not installed documented; faster-whisper medium upgrade note; §19.5 Dual STT added"
+    ]
+  },
+  {
+    "date": "2026-03-28",
+    "title": "Web UI software stack info in sidebar",
+    "changes": [
+      "base.html: sidebar now shows active STT engine (e.g. Faster-Whisper) and LLM (e.g. Ollama · qwen2:0.5b) below version badge",
+      "base.html: no-cache meta tags to prevent browser caching stale pages",
+      "_ctx() always injects stt_label / llm_label / device_label — available on every page without per-route boilerplate",
+      "New GET /api/version endpoint (no auth) returning version, stt, llm, device labels + raw provider IDs",
+      "_LLM_UI_LABEL + _DEVICE_UI_LABEL module constants alongside _STT_UI_LABEL",
+      "OLLAMA_MODEL added to bot_config import in bot_web.py"
+    ]
+  },
+  {
+    "version": "2026.3.29",
+    "date": "2026-03-28",
+    "title": "Pipeline analytics logger (OpenClaw)",
+    "changes": [
+      "New core/pipeline_logger.py: JSONL per-stage analytics (decode/STT/LLM/TTS/RAG) with session_id grouping",
+      "bot_web.py: PipelineLog wired into /api/voice/transcribe and /api/voice/chat endpoints",
+      "bot_web.py: new /api/logs endpoint (read pipeline JSONL records)",
+      "bot_web.py: new /api/logs/stats endpoint (per-stage count/avg/p95/min/max)",
+      "bot_web.py: new /api/benchmark endpoint (LLM + TTS + STT silence probe)",
+      "T32: regression test for pipeline logger (import, write, read-back, stats, bot_web integration)",
+      "openclaw.instructions.md: expanded sync rule with full table and verify-before-restart script"
+    ]
   },
   {
     "version": "2026.3.28",
-    "date":    "2026-03-13",
-    "title":   "Unified Chat+Voice mode",
-    "notes":   "- Removed separate Voice Session button from main menu\n- Free Chat now handles both text and voice messages in one mode\n- Chat welcome message now shows voice availability (Russian only, Vosk + Piper TTS)\n- Simplified menu: fewer buttons, same functionality"
+    "date": "2026-04-14",
+    "title": "OpenClaw STT/LLM improvements (taris-openclaw branch)",
+    "notes": "- bot_config.py: STT_PROVIDER (vosk|faster_whisper), FASTER_WHISPER_MODEL/DEVICE/COMPUTE constants; OLLAMA_URL/OLLAMA_MODEL; faster_whisper_stt voice opt (default True for openclaw)\n- bot_llm.py: _ask_ollama() provider; LLM_PROVIDER=ollama dispatch; fixes OPENAI_API_KEY-not-set error\n- bot_voice.py: _stt_faster_whisper() CTranslate2 backend with VAD + language detection; STT routing updated\n- voice_assistant.py: record_and_recognize_faster_whisper(); main() routes by STT_PROVIDER\n- setup_llm_openclaw.sh: installs Ollama + pulls qwen2:0.5b model\n- setup_voice_openclaw.sh: step 6/6 installs faster-whisper + pre-downloads base model\n- src/tests/benchmark_stt.py: Vosk vs faster-whisper benchmark (WER, RTF, latency)\n- test_voice_regression.py: T27-T30 OpenClaw tests (faster-whisper, LLM, STT routing, ollama)\n- .github/prompts/taris-openclaw-setup.prompt.md: new skill for OpenClaw setup/troubleshoot\n- .github/instructions/openclaw.instructions.md: new instructions for OpenClaw source files\n- doc/arch/openclaw-integration.md: STT section, LLM troubleshooting, updated status table\n- TODO.md: §19.2b added, §25.5 extended"
+  },
+  {
+    "version": "2026.4.14",
+    "date": "2026-03-26",
+    "title": "§25.4 Embedding Service + §25.5 Voice Pipeline (OpenClaw variant)",
+    "notes": "- bot_embeddings.py: EmbeddingService with fastembed-first / sentence-transformers fallback, lazy load + keep-resident mode\n- bot_config.py: EMBED_MODEL, EMBED_KEEP_RESIDENT, EMBED_DIMENSION, VOICE_BACKEND constants\n- bot_documents.py: vector embeddings wired into _store_text_chunks() when store.has_vector_search()\n- bot_voice.py: VOICE_BACKEND imported; --device cuda passed to whisper-cpp when VOICE_BACKEND=cuda\n- src/setup/install_embedding_model.sh: pre-download embedding model (fastembed or sentence-transformers)\n- src/setup/setup_voice_openclaw.sh: x86_64 voice setup (Vosk + Piper) for OpenClaw variant\n- src/setup/bot.env.example: EMBED_MODEL, EMBED_KEEP_RESIDENT, EMBED_DIMENSION, VOICE_BACKEND documented\n- TODO.md: §25.4 and §25.5 marked as implemented"
+  },
+  {
+    "version": "2026.4.13",
+    "date": "2026-03-22",
+    "title": "§4.1 Local RAG Knowledge Base — FTS5-only (TODO 4.1)",
+    "notes": "- FTS5 local knowledge base: zero new dependencies, Pi 3 B+ compatible\n- rag_log table + index in bot_db.py schema\n- store_base.py: log_rag_activity + list_rag_log Protocol stubs\n- store_sqlite.py: full FTS5 search + rag_log persistence\n- bot_handlers.py: RAG context injection guarded by RAG_ENABLED + flag file\n- bot_admin.py: Admin RAG sub-menu — status, toggle on/off, view query log\n- telegram_menu_bot.py: admin_rag_menu / admin_rag_toggle / admin_rag_log callbacks\n- strings.json: 12 RAG admin keys across ru/en/de"
+  },
+  {
+    "version": "2026.4.12",
+    "date": "2026-03-22",
+    "title": "Screen DSL Phase 4+5: Feature Screens + Schema Validation (TODO 21.4-21.5)",
+    "notes": "- 7 new YAML screens: notes_menu, note_view, note_raw, note_edit, profile, profile_lang, profile_my_data\n- bot_handlers.py migrated to DSL render via _render() + _screen_ctx() helpers\n- screen.schema.json: JSON Schema draft-07 for all 10 widget types\n- screen_loader.py: visible_if bug fix (now evaluates against variables dict)\n- New section 19.12 in dev-patterns.md: Hybrid Pattern for Multi-Step Flows\n- Multi-step YAML proposal: doc/todo/21.6-multistep-yaml-proposal.md"
+  },
+  {
+    "version": "2026.4.11",
+    "date": "2026-4-11",
+    "title": "Screen DSL Loader - Phase 3: Main & Admin Menus (TODO 21.3)",
+    "notes": "- Main menu converted to screens/main_menu.yaml with RBAC visible_roles\n- Admin menu converted to screens/admin_menu.yaml with {pending_badge} variable substitution\n- 11 new i18n keys added to strings.json (ru/en/de)\n- Telegram callbacks menu and admin_menu wired to DSL load_screen() + render_screen()"
+  },
+  {
+    "version": "2026.4.10",
+    "date": "2026-4-10",
+    "title": "Screen DSL Loader - Phase 1 + Phase 2 (TODO 21)",
+    "notes": "- New screen_loader.py: declarative Screen DSL loader (YAML/JSON)\n- 10 widget builders: button, button_row, card, text_input, toggle, audio_player, markdown, spinner, confirm, redirect\n- i18n key resolution via t_func(lang, key)\n- Role-based widget visibility (visible_roles filter)\n- Variable substitution in text and actions\n- Screen caching, reload_screens(), load_all_screens()\n- help.yaml: first declarative screen (role-aware help text)\n- Telegram: help callback renders via screen_loader + render_screen\n- Telegram: Admin panel 'Reload Screens' button\n- Web UI: GET /screen/{screen_id} dynamic route + dynamic.html template\n- 53 unit tests (51 pass, 2 skip without PyYAML)\n- P-5 (bot_web.py split) superseded by this approach"
+  },
+  {
+    "version": "2026.4.9",
+    "date": "2026-4-9",
+    "title": "No-history emergency fallback + model switch to gemma-3-4b-it:free",
+    "notes": "- ask_llm_with_history now falls back to ask_llm (no history) if all retries exhausted\n- Prevents silent empty response when rate-limited model fails after 3 attempts\n- active_model switched to google/gemma-3-4b-it:free"
+  },
+  {
+    "version": "2026.4.8",
+    "date": "2026-4-8",
+    "title": "LLM HTTP 429 retry backoff + model switch",
+    "notes": "- _http_post_json now retries up to 2 times on HTTP 429 with 5s/10s backoff\n- Respects Retry-After header from OpenRouter\n- Default OpenRouter model switched to meta-llama/llama-3.2-3b-instruct:free for better free-tier availability"
+  },
+  {
+    "version": "2026.4.7",
+    "date": "2026-4-7",
+    "title": "System Chat LLM error handling improvements",
+    "notes": "- System Chat now shows specific error messages for 402/401/429/503/timeout/missing binary\n- Empty LLM response now shows actionable message instead of silent failure\n- Calendar console docstring update"
+  },
+  {
+    "version": "2026.4.6",
+    "date": "2026-4-6",
+    "title": "Switch to free OpenRouter model; enhanced LLM error logging",
+    "notes": "- OPENAI_MODEL changed to google/gemma-3-4b-it:free (working free OpenRouter model)\n- _ask_openai now catches HTTPError explicitly and logs HTTP status + response body (up to 300 chars)\n- Fixes 402 Payment Required on every LLM call caused by auto model picking paid models with no credits"
+  },
+  {
+    "version": "2026.4.5",
+    "date": "2026-4-5",
+    "title": "Fix raw HTTP 402 error leaked through taris rc=0 stdout path",
+    "notes": "- Added _raise_if_http_error() helper in bot_llm.py\n- _ask_taris now detects HTTP error patterns in stdout even when taris exits rc=0\n- Also improves rc!=0 path: error text parsed for 402/429/401/503 patterns; full text included in RuntimeError message\n- System Chat and exception handler in bot_handlers.py correctly intercepts all these errors with user-friendly messages"
+  },
+  {
+    "version": "2026.4.4",
+    "date": "2026-4-4",
+    "title": "System Chat HTTP error handling + LLM fallback on 402/429/503",
+    "notes": "- ask_llm_or_raise() now tries local llama.cpp fallback before raising (Feature 3.2)\n- System Chat shows user-friendly messages for HTTP 402/401/429/503 errors\n- Raw urllib.error.HTTPError strings no longer shown to users"
+  },
+  {
+    "version": "2026.4.3",
+    "date": "2026-4-3",
+    "title": "System Chat error messages fix + T26 regression guard",
+    "notes": "- Fixed _SPINNER_RE stripping ASCII hyphen from bash commands (ls -la, df -h, etc.)\n- Added ask_llm_or_raise() to bot_llm.py for strict LLM failure handling\n- System Chat now shows specific error: timeout / binary not found / LLM error text\n- Added T26 regression test t_system_chat_clean_output (3 sub-tests)"
+  },
+  {
+    "version": "2026.4.2",
+    "date": "2026-4-2",
+    "title": "Copilot optimization complete (§20)",
+    "notes": "- All quick-win Copilot optimization proposals P-1..P-9 complete\n- P-1: safe-update applyTo narrowed to specific files only\n- P-6: bot-deploy and safe-update instructions shortened, point to skills\n- P-7: accounting task moved from INSTRUCTIONS.md to concept/\n- P-9: #file: anchor pattern added to copilot-skills-guide.md\n- Updated implementation tracker in concept/copilot_optimization.md\n- P-5 (bot_web.py split) explicitly deferred to standalone sprint"
+  },
+  {
+    "version": "2026.3.43",
+    "date": "2026-4-2",
+    "title": "Local LLM Fallback — Admin Panel toggle (§3.2 complete)",
+    "notes": "- Admin Panel: 🤖 Switch LLM → 📡 Local Fallback shows ON/OFF status and toggle button\n- Toggle writes/removes ~/.taris/llm_fallback_enabled flag file — no restart needed\n- Fallback state survives bot restarts (LLM_LOCAL_FALLBACK env var OR flag file)\n- Displays configured llama.cpp URL and model in the menu"
+  },
+  {
+    "version": "2026.3.42",
+    "date": "2026-4-1",
+    "title": "Logging & Monitoring (§6.1)",
+    "notes": "- Structured category loggers: assistant.log, security.log, voice.log, datastore.log\n- Admin panel: 📊 Logs button with live tail (last 50 lines) per category\n- Telegram alert handler: CRITICAL/ERROR events forwarded to admins automatically\n- Logrotate drop-in config for all 5 log files (daily, 7 days, compress, copytruncate)"
+  },
+  {
+    "version": "2026.3.41",
+    "date": "2026-3-25",
+    "title": "Fix System Chat LLM routing",
+    "notes": "- Fixed: System Chat returned 'Could not generate a command' for any input — it was calling the taris CLI binary directly instead of routing through the configured LLM_PROVIDER (openai/OpenRouter)\n- System Chat now uses ask_llm() like all other LLM-powered features, so the active provider and model are respected"
+  },
+  {
+    "version": "2026.3.40",
+    "date": "2026-3-24",
+    "title": "Fix LLM model selection, update OpenAI catalog",
+    "notes": "- Fixed: selecting an OpenAI/OpenRouter model via Admin LLM menu now actually takes effect (was always using OPENAI_MODEL env var)\n- Fixed: model selection checkmark (is_current) now correctly compares against full model ID (e.g. openai/gpt-4.1)\n- Fixed: callback_data now sends full OpenRouter model slug (openai/gpt-4.1) instead of short name\n- Updated OpenAI catalog: added gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o3, o4-mini; removed deprecated gpt-4.5-preview"
+  },
+  {
+    "version": "2026.3.39",
+    "date": "2026-3-20",
+    "title": "Fix LLM provider (OpenRouter direct), voice mode routing, import error",
+    "notes": "- Fixed: LLM calls failed with taris rc=1 because taris-gateway service crash-loops (Error: no channels enabled) — switched to LLM_PROVIDER=openai pointing at OpenRouter's OpenAI-compatible endpoint\n- Fixed: voice messages during contact_add / contact_edit / contact_search modes were silently handed to LLM instead of the contact handler — STT transcript was discarded, contact was never saved\n- Fixed: voice messages during cal_edit_title / cal_edit_dt / cal_edit_remind modes were also ignored — calendar field edits via voice now work\n- Fixed: NameError ACTIVE_MODEL_FILE not defined in bot_admin.py — constant was used in _set_active_model() but missing from the import block"
+  },
+  {
+    "version": "2026.3.38",
+    "date": "2026-3-19",
+    "title": "Fix empty-note crashes; /status shows LLM provider",
+    "notes": "- Fixed: opening, editing, appending, or replacing an empty note crashed with ApiTelegramException: Bad Request: message text is empty\n- Root cause: _handle_note_raw and _start_note_edit/append/replace used text/lines[0] without guarding for empty string\n- Fix: note display falls back to localized note_empty_body string; lines[0] access guarded with if lines else ''\n- /status command now shows LLM_PROVIDER prefix before active model name (e.g. taris > gpt-4o-mini)"
+  },
+  {
+    "version": "2026.3.37",
+    "date": "2026-3-19",
+    "title": "Fix calendar: Russian time idioms and partial ISO dt",
+    "notes": "- Fixed: Add Event returned 'Could not parse date' for Russian shorthand like 'Тренировка в 19'\n- Root cause 1: event_parse prompt had no rules for 'в X' (at X o'clock) or time-of-day words (утром/вечером)\n- Root cause 2: LLMs sometimes return partial ISO 'YYYY-MM-DDTHH' instead of 'YYYY-MM-DDTHH:MM' — fromisoformat() fails on Python <3.11\n- Fix 1: added prompt rules — 'в X' = X:00, утром=09:00, днём=13:00, вечером=19:00, в полдень=12:00\n- Fix 2: defensive dt_str normalization in _finish_cal_add() pads 'YYYY-MM-DDTHH' to 'YYYY-MM-DDTHH:00'"
+  },
+  {
+    "version": "2026.3.36",
+    "date": "2026-3-19",
+    "title": "Fix free chat: taris 402 error leaked as reply",
+    "notes": "- Fixed: free chat showed raw taris error log (HTTP 402 / OpenRouter out of credits) as bot reply\n- Root cause 1: _ask_taris() in bot_llm.py logged warning on rc!=0 but still returned cleaned output instead of raising\n- Root cause 2: _LOG_PREFIX regex didn't match compact date format YYYYMMDD HH:MM:SS used by taris — log lines passed through cleanup unchanged\n- Fix: raise RuntimeError on non-zero taris exit code — ask_llm() catches it, returns empty — user sees user-friendly error message\n- Fix: extended _LOG_PREFIX regex to also match YYYYMMDD (no separator) date format"
+  },
+  {
+    "version": "2026.3.35",
+    "date": "2026-3-19",
+    "title": "Fix calendar LLM call — use ask_llm",
+    "notes": "- Fixed: calendar NL input returned 'no LLM response' error\n- Root cause: bot_calendar.py used old _ask_taris (bot_access) with short timeouts (20-30s) and outdated output cleaner missing agent|json pipe format\n- Fix: migrated all 4 calendar LLM calls to ask_llm (bot_llm) with 60s timeout, proper error logging, and correct output cleaning"
+  },
+  {
+    "version": "2026.3.34",
+    "date": "2026-03-18",
+    "title": "Prompt templates centralised + LLM params configurable",
+    "notes": "- All LLM prompts extracted to src/prompts.json\n- New core/bot_prompts.py loader with fmt_prompt() helper\n- LLM tuning params (temperature, max_tokens) configurable via env vars\n- bot_config.py: YANDEXGPT_TEMPERATURE, YANDEXGPT_MAX_TOKENS, ANTHROPIC_MAX_TOKENS, LOCAL_MAX_TOKENS, LOCAL_TEMPERATURE"
+  },
+  {
+    "version": "2026.3.33",
+    "date": "2026-03-18",
+    "title": "Fix Telegram-Web account link codes",
+    "notes": "- Fixed HTTP 500 on /register when entering a Telegram link code\n- Root cause: link codes were stored per-process in memory; web service never saw codes generated by Telegram service\n- Fix: codes now persisted to ~/.taris/web_link_codes.json, shared between both services"
+  },
+  {
+    "version": "2026.3.32",
+    "date": "2026-03-17",
+    "title": "RAG knowledge base, Dev menu, voice debug, LLM fallback",
+    "notes": "- RAG pipeline: document upload (PDF/TXT), chunking, embedding (MiniLM), FTS5+vector hybrid retrieval, admin RAG settings, query log\n- Dev menu: admin-only developer panel with LLM trace, system info, RAG stats, benchmark trigger\n- Voice debug mode: per-session audio capture (7 stages), downloadable debug bundles from Web UI\n- LLM named fallback: LLM_FALLBACK_PROVIDER env var; local Ollama fallback guard (LLM_LOCAL_FALLBACK)\n- Per-user memory toggle in profile; admin Memory Settings page\n- Notes/Calendar fully DB-primary (SQLite content column); document deduplication on upload\n- T61-T72 regression tests added; 330 tests total"
+  },
+  {
+    "version": "2026.3.31",
+    "date": "2026-03-17",
+    "title": "Bug fixes 0.7 and 0.8",
+    "notes": "- Bug 0.7: Contact add/edit cancel button was showing 'btn_cancel' instead of translated text — added missing btn_cancel i18n key to ru/en/de\n- Bug 0.8: Profile change password failed with 'could not change password' — fixed account['id'] key error (correct key is 'user_id')"
+  },
+  {
+    "version": "2026.3.30+1",
+    "date": "2026-03-16",
+    "title": "Contact Book (Feature 4.0)",
+    "notes": "- Add, view, edit and delete contacts via Telegram bot\n- Search contacts by name, phone or email\n- Web UI at /contacts with two-panel layout (search + list + form)\n- 38 new i18n strings (ru/en/de)"
+  },
+  {
+    "version": "2026.3.30",
+    "date": "2026-03-16",
+    "title": "System Chat role guards (Bug 0.6)",
+    "notes": "- Admin role limited to read-only commands (cat, ls, journalctl, systemctl status, etc.)\n- New Developer role (DEVELOPER_USERS env var) allows service control and file writes\n- Commands not on any allowlist are blocked before execution\n- Confirm gate always required for all system commands\n- _classify_cmd_class() added to bot_security; _is_developer() added to bot_access"
+  },
+  {
+    "version": "2026.3.29",
+    "date": "2026-03-15",
+    "title": "Identity silo fix: unified Telegram+Web user identity",
+    "notes": "- Fixed: Telegram and Web now share a single user identity\n- Web UUID and Telegram int chat_id unified under shared profile key\n- Calendar, Notes, and Profile data now visible across both channels\n- _resolve_storage_id() ensures consistent file-based storage resolution"
+  },
+  {
+    "version": "2026.3.28",
+    "date": "2026-03-13",
+    "title": "Unified Chat+Voice mode",
+    "notes": "- Removed separate Voice Session button from main menu\n- Free Chat now handles both text and voice messages in one mode\n- Chat welcome message now shows voice availability (Russian only, Vosk + Piper TTS)\n- Simplified menu: fewer buttons, same functionality"
   },
   {
     "version": "2026.3.27",
-    "date":    "2026-03-13",
-    "title":   "Calendar console voice fix",
-    "notes":   "- Fixed: voice messages in calendar console mode were routed to general LLM instead of calendar handler\n- Voice commands like 'add meeting at 9' now correctly add events via calendar console\n- Bug 0.5: security preamble no longer blocks calendar add-event intent"
+    "date": "2026-03-13",
+    "title": "Calendar console voice fix",
+    "notes": "- Fixed: voice messages in calendar console mode were routed to general LLM instead of calendar handler\n- Voice commands like 'add meeting at 9' now correctly add events via calendar console\n- Bug 0.5: security preamble no longer blocks calendar add-event intent"
   },
   {
     "version": "2026.3.26",
-    "date":    "2026-03-11",
-    "title":   "Multilingual support: Russian, English, German (DE)",
-    "notes":   "- German (de) language support added for all bot functions\n- Language auto-detected from Telegram user language_code\n- German TTS: Piper de_DE-thorsten-medium.onnx\n- German STT: Vosk vosk-model-small-de\n- All 115 UI strings translated to German\n- Calendar, voice, notes, mail — all support German"
+    "date": "2026-03-11",
+    "title": "Multilingual support: Russian, English, German (DE)",
+    "notes": "- German (de) language support added for all bot functions\n- Language auto-detected from Telegram user language_code\n- German TTS: Piper de_DE-thorsten-medium.onnx\n- German STT: Vosk vosk-model-small-de\n- All 115 UI strings translated to German\n- Calendar, voice, notes, mail — all support German"
   },
   {
     "version": "2026.3.25",
-    "date":    "2026-03-10",
-    "title":   "Calendar: multi-event, NL query, delete confirmation, console mode",
-    "notes":   "- Multi-event parsing: one message can add multiple events — each confirmed individually with Save / Skip / Save All\n- NL query: ask \"что у меня завтра?\", \"события на следующей неделе\" — filtered results shown instantly\n- Delete confirmation: calendar events now require confirmation before deletion\n- Calendar console mode: free-form text commands (add/query/edit/delete) routed by LLM intent classification\n- All calendar mutations require explicit user confirmation"
+    "date": "2026-03-10",
+    "title": "Calendar: multi-event, NL query, delete confirmation, console mode",
+    "notes": "- Multi-event parsing: one message can add multiple events — each confirmed individually with Save / Skip / Save All\n- NL query: ask \"что у меня завтра?\", \"события на следующей неделе\" — filtered results shown instantly\n- Delete confirmation: calendar events now require confirmation before deletion\n- Calendar console mode: free-form text commands (add/query/edit/delete) routed by LLM intent classification\n- All calendar mutations require explicit user confirmation"
   },
   {
     "version": "2026.3.24",
-    "date":    "2026-03-08",
-    "title":   "System chat emoji fix + TTS chunk delivery fix + timing debug opt",
-    "notes":   "- Fixed critical regex typo in system chat: emoji filter was also stripping letter F from all bash commands\n- Hardened _extract_bash_cmd: bracket-wrapped emoji, prose sentence rejection, ASCII first-word check\n- Defense-in-depth: command is re-sanitized immediately before bash -c execution\n- System prompt now explicitly forbids emojis and decorative characters in LLM responses\n- Fixed TTS multi-chunk labeling: chunk label now uses actual sent counter, not raw index - failed chunks no longer produce misleading (2/2) with missing (1/2)\n- Added voice_timing_debug toggle to Voice Opts admin menu (previously only via VOICE_TIMING_DEBUG env var)"
+    "date": "2026-03-08",
+    "title": "System chat emoji fix + TTS chunk delivery fix + timing debug opt",
+    "notes": "- Fixed critical regex typo in system chat: emoji filter was also stripping letter F from all bash commands\n- Hardened _extract_bash_cmd: bracket-wrapped emoji, prose sentence rejection, ASCII first-word check\n- Defense-in-depth: command is re-sanitized immediately before bash -c execution\n- System prompt now explicitly forbids emojis and decorative characters in LLM responses\n- Fixed TTS multi-chunk labeling: chunk label now uses actual sent counter, not raw index - failed chunks no longer produce misleading (2/2) with missing (1/2)\n- Added voice_timing_debug toggle to Voice Opts admin menu (previously only via VOICE_TIMING_DEBUG env var)"
   },
   {
     "version": "2026.3.23",

@@ -1,0 +1,37 @@
+# Note view — displays a single note with action buttons.
+# Variables: slug, note_title (pre-escaped), note_content (pre-escaped)
+
+title: "📄 *{note_title}*"
+parse_mode: Markdown
+
+widgets:
+  - type: markdown
+    text: "\n{note_content}"
+
+  - type: button_row
+    buttons:
+      - label_key: btn_edit
+        action: "note_edit:{slug}"
+      - label_key: btn_delete
+        action: "note_delete:{slug}"
+
+  - type: button_row
+    buttons:
+      - label_key: btn_raw_text
+        action: "note_raw:{slug}"
+      - label_key: btn_read_aloud
+        action: "note_tts:{slug}"
+
+  - type: button_row
+    buttons:
+      - label_key: btn_download_note
+        action: "note_download:{slug}"
+      - label_key: btn_send_email
+        action: "note_email:{slug}"
+
+  - type: button_row
+    buttons:
+      - label_key: btn_all_notes
+        action: note_list
+      - label_key: btn_back
+        action: menu

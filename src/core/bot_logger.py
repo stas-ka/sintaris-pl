@@ -149,15 +149,38 @@ def attach_alerts_to_main_log() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def tail_log(path: str, n: int = 50) -> str:
-    """Return the last *n* lines of *path*, or an error message."""
+    """Return the last *n* lines of *path*, or an error message.
+
+    Uses the system ``tail`` command to avoid loading multi-MB log files into
+    RAM — critical on memory-constrained machines where a full readlines() on a
+    7 MB log file can stall the process for tens of seconds due to swap I/O.
+    Falls back to a pure-Python seek-based reader if ``tail`` is unavailable.
+    """
+    import subprocess as _sp
     try:
         if not os.path.isfile(path):
             return f"(log file not found: {path})"
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-        chunk = "".join(lines[-n:])
+        result = _sp.run(
+            ["tail", "-n", str(n), path],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=5,
+        )
+        chunk = result.stdout
         if not chunk.strip():
             return "(log is empty)"
         return chunk
+    except (FileNotFoundError, _sp.TimeoutExpired):
+        # Fallback: seek to near-end, read a bounded window (max 64 KB)
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                f.seek(max(0, size - 65536))
+                raw = f.read().decode("utf-8", errors="replace")
+            lines = raw.splitlines()[-n:]
+            chunk = "\n".join(lines)
+            return chunk if chunk.strip() else "(log is empty)"
+        except OSError as exc:
+            return f"(error reading log: {exc})"
     except OSError as exc:
         return f"(error reading log: {exc})"

@@ -4,6 +4,7 @@
 
 {% block topbar_extra %}
 <div class="flex items-center gap-sm">
+  <span class="llm-badge" title="LLM provider">🤖 {{ llm_label }}</span>
   <select id="model-select" class="select-sm" style="max-width:190px"
           onchange="fetch('/chat/model',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'model='+encodeURIComponent(this.value)})">
     {% for m in models %}
@@ -27,6 +28,9 @@
 .chat-container   { display:flex; flex-direction:column; height:calc(100vh - 92px); }
 .chat-thread      { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:12px 0 4px; }
 .chat-meta        { font-size:11px; color:var(--text-dim); margin-bottom:2px; }
+.llm-badge        { display:inline-flex; align-items:center; gap:3px; padding:2px 8px;
+                    border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap;
+                    background:var(--bg-card); color:var(--accent); border:1px solid var(--border); }
 
 /* Processing pipeline bar */
 .proc-bar         { padding:8px 12px; border-top:1px solid var(--border); background:var(--bg-primary); }
@@ -49,7 +53,9 @@
 
 /* Input wrapper */
 .input-wrapper    { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin-top:4px; padding:10px 12px 8px; }
-.text-row         { display:flex; gap:6px; align-items:flex-end; }
+.text-row         { display:flex; gap:6px; align-items:flex-end; margin:0; }
+.text-row button  { flex:0 0 auto; width:36px; height:36px; min-width:36px; padding:0; /* override Pico form-button block sizing */ }
+#chat-input       { flex:1 1 auto; min-width:0; }
 .voice-row        { display:none; flex-direction:column; gap:6px; }
 .waveform         { height:32px; display:flex; align-items:flex-end; gap:2px; flex:1; overflow:hidden; }
 .vc-status-row    { display:flex; align-items:center; gap:8px; }
@@ -78,7 +84,7 @@
           <div style="font-weight:700;color:#a78bfa;margin-bottom:5px">🎤 Voice Assistant — Голосовой ассистент</div>
           <div>Write a message or tap the <strong>🎤</strong> button, record your question and send it.</div>
           <div style="margin-top:6px;font-weight:600;color:#c4b5fd">🔊 Supported languages:</div>
-          <div style="margin-top:3px">🇷🇺 <strong style="color:#e2e8f0">Russian</strong> — speech recognition (Vosk) + voice reply (Piper TTS)</div>
+          <div style="margin-top:3px">🇷🇺 <strong style="color:#e2e8f0">Russian</strong> — speech recognition ({{ stt_label }}) + voice reply (Piper TTS)</div>
           <div style="margin-top:6px;color:var(--text-dim);font-size:11px">I will recognise your speech and reply with text&nbsp;+&nbsp;voice.&nbsp; Please wait after recording.</div>
         </div>
       </div>
@@ -137,7 +143,7 @@
         <span class="material-icons-round" id="mic-icon" style="font-size:20px">mic</span>
       </button>
       <button id="send-btn" type="submit" class="btn btn-accent btn-icon" title="Send message">
-        <span class="material-icons-round" id="send-icon">send</span>
+        <span class="material-icons-round" id="send-icon" style="font-size:20px">send</span>
       </button>
     </form>
 
@@ -147,7 +153,7 @@
       <div style="background:rgba(124,77,255,0.10);border:1px solid rgba(124,77,255,0.28);border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.65">
         <div style="font-weight:700;color:#a78bfa;margin-bottom:3px">🎤 Голосовой ассистент · Voice Assistant</div>
         <div>Запишите вопрос на <strong>🇷🇺 русском языке</strong> — I'll transcribe and reply with <strong>text&nbsp;+&nbsp;🔊 voice</strong>.</div>
-        <div style="color:var(--text-dim);font-size:11px;margin-top:3px">🔊 Supported: <strong style="color:#c4b5fd">Russian only</strong>&nbsp;&nbsp;·&nbsp;&nbsp;STT: Vosk&nbsp;&nbsp;·&nbsp;&nbsp;TTS: Piper ONNX</div>
+        <div style="color:var(--text-dim);font-size:11px;margin-top:3px">🔊 Supported: <strong style="color:#c4b5fd">Russian only</strong>&nbsp;&nbsp;·&nbsp;&nbsp;STT: {{ stt_label }}&nbsp;&nbsp;·&nbsp;&nbsp;TTS: Piper ONNX</div>
       </div>
       <div class="vc-status-row">
         <div id="waveform" class="waveform"></div>
@@ -389,7 +395,7 @@ function _showProcBar(show) {
   document.getElementById('proc-bar').style.display = show ? '' : 'none';
 }
 const _STAGE_LABELS = {
-  stt: '🎤 Transcribing speech (Vosk STT)…',
+  stt: '🎤 Transcribing speech ({{ stt_label }} STT)…',
   llm: '🤖 Taris thinking (LLM)…',
   tts: '🔊 Generating audio reply (Piper TTS)…'
 };

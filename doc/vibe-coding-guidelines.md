@@ -66,7 +66,7 @@ Everything else belongs in a scoped instruction file, prompt file, or domain doc
 
 | Anti-pattern | Better pattern |
 |---|---|
-| `doc/architecture.md` 55 KB monolith — read it all | `doc/arch/<topic>.md` 3–8 KB each — read only the matching topic |
+| `doc/architecture.md` 55 KB monolith — read it all | `doc/architecture/<topic>.md` 3–8 KB each — read only the matching topic |
 | `doc/bot-code-map.md` — "ALWAYS read first" | `doc/bot-code-map.md` — "Search this for function names; read only the matching section" |
 | `doc/dev-patterns.md` — "Before every feature" | `doc/dev-patterns.md` — "Read only the section matching your task type" |
 
@@ -75,7 +75,7 @@ Everything else belongs in a scoped instruction file, prompt file, or domain doc
 | File type | Target size | Max size |
 |---|---|---|
 | Always-read index (`quick-ref.md`) | 3 KB | 5 KB |
-| Domain topic doc (`doc/arch/*.md`) | 4–8 KB | 12 KB |
+| Domain topic doc (`doc/architecture/*.md`) | 4–8 KB | 12 KB |
 | Instruction file (`.github/instructions/*.md`) | 1–2 KB | 3 KB |
 | Prompt / skill file (`.github/prompts/*.md`) | 1–3 KB | 5 KB |
 | Source module (`src/**/*.py`) | < 40 KB | 60 KB |
@@ -141,7 +141,7 @@ This pins a 3 KB context instead of letting Copilot load multiple larger files.
 
 ```
 # Good — read only the voice section
-#file:doc/arch/voice-pipeline.md
+#file:doc/architecture/voice-pipeline.md
 
 # Bad — loads 55 KB
 #file:doc/architecture.md
@@ -192,7 +192,7 @@ This log is the primary dataset for measuring whether optimizations actually imp
 ```
 doc/
   quick-ref.md              ← single always-read index (~3 KB)
-  architecture.md           ← index-only (links to doc/arch/*)
+  architecture.md           ← index-only (links to doc/architecture/*)
   bot-code-map.md           ← search index, not a reading doc
   dev-patterns.md           ← patterns grouped by task type
   test-suite.md             ← test reference
@@ -231,7 +231,7 @@ concept/
 
 | Artifact | Convention | Example |
 |---|---|---|
-| Domain docs | `doc/arch/<domain>.md` | `doc/arch/voice-pipeline.md` |
+| Domain docs | `doc/architecture/<domain>.md` | `doc/architecture/voice-pipeline.md` |
 | Feature specs | `doc/todo/<topic>.md` | `doc/todo/5-voice-pipeline.md` |
 | Skills | `taris-<action>.prompt.md` | `taris-deploy-to-target.prompt.md` |
 | Instructions | `<domain>.instructions.md` | `bot-coding.instructions.md` |
@@ -260,7 +260,7 @@ Before creating any new doc, instruction file, or skill, answer:
 | Each `*.instructions.md` | 300–600 | > 1 000 |
 | Each `*.prompt.md` (skill) | 400–800 | > 1 500 |
 | `doc/quick-ref.md` | 600–800 | > 1 500 |
-| Each `doc/arch/*.md` | 800–2 000 | > 3 000 |
+| Each `doc/architecture/*.md` | 800–2 000 | > 3 000 |
 | Each source module | 3 000–10 000 | > 15 000 |
 
 **Total baseline per request (instructions only):** target < 2 000 tokens.  

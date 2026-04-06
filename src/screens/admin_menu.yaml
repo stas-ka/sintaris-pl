@@ -1,0 +1,76 @@
+# Admin panel menu — all buttons admin-only
+# {pending_badge} variable injected at load time with pending registration count
+title_key: admin_panel_title
+parse_mode: Markdown
+
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_pending
+        action: admin_pending_users
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_add_user
+        action: admin_add_user
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_list_users
+        action: admin_list_users
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_remove_user
+        action: admin_remove_user
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_switch_llm
+        action: admin_llm_menu
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_voice_opts
+        action: voice_opts_menu
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_voice_config
+        action: admin_voice_config
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_rag
+        action: admin_rag_menu
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_release_notes
+        action: admin_changelog
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_logs
+        action: admin_logs_menu
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_system
+        action: mode_system
+
+  - type: button_row
+    buttons:
+      - label_key: admin_btn_reload_screens
+        action: reload_screens
+
+  - type: button_row
+    visible_variants: [openclaw]
+    buttons:
+      - label_key: admin_btn_openclaw
+        action: admin_openclaw_menu
+
+  - type: button_row
+    buttons:
+      - label_key: btn_back_short
+        action: menu

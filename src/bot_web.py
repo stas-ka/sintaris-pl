@@ -20,9 +20,11 @@ import re
 import requests as _requests_lib
 import socket
 import stat as _stat_mod
+import asyncio
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 
 try:
@@ -52,28 +54,89 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core.bot_config import (
-    BOT_VERSION, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
-    ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, log,
+    BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
+    ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, TARIS_API_TOKEN, LLM_PROVIDER,
+    DEVICE_VARIANT, TARIS_DIR, log,
+    STT_PROVIDER, STT_FALLBACK_PROVIDER,
+    FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
+    STT_OPENAI_MODEL, STT_LANG,
+    OPENAI_API_KEY, OPENAI_BASE_URL,
+    OLLAMA_MODEL,
+    VOICE_DEBUG_MODE, VOICE_DEBUG_DIR,
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL,
+    PIPER_BIN, PIPER_MODEL,
+    MCP_SERVER_ENABLED, MCP_REMOTE_URL, MCP_TIMEOUT,
 )
+from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
+from core.voice_debug import VoiceDebugSession, list_debug_sessions
+
+# ── UI labels for software stack (computed once at startup) ───────────────────
+_STT_UI_LABELS = {
+    "faster_whisper":  "Faster-Whisper",
+    "openai_whisper":  "OpenAI Whisper",
+    "vosk":            "Vosk",
+    "whisper":         "Whisper",
+}
+_primary_stt_label  = _STT_UI_LABELS.get(STT_PROVIDER, STT_PROVIDER.replace("_", "-").title())
+_fallback_stt_label = (
+    _STT_UI_LABELS.get(STT_FALLBACK_PROVIDER, STT_FALLBACK_PROVIDER.replace("_", "-").title())
+    if STT_FALLBACK_PROVIDER else ""
+)
+# Show "Primary → Fallback" when a fallback is configured, otherwise just primary.
+_STT_UI_LABEL = (
+    f"{_primary_stt_label} → {_fallback_stt_label}" if _fallback_stt_label else _primary_stt_label
+)
+
+_LLM_UI_LABELS = {
+    "ollama":    f"Ollama · {OLLAMA_MODEL}",
+    "openai":    "OpenAI",
+    "openclaw":  "OpenClaw",
+    "taris":     "Taris LLM",
+}
+_LLM_UI_LABEL = _LLM_UI_LABELS.get(LLM_PROVIDER, LLM_PROVIDER.replace("_", "-").title())
+
+_DEVICE_UI_LABELS = {
+    "openclaw": "OpenClaw",
+    "picoclaw": "Taris",
+    "taris":    "Taris",
+}
+_DEVICE_UI_LABEL = _DEVICE_UI_LABELS.get(DEVICE_VARIANT, DEVICE_VARIANT.title())
 from security.bot_auth import (
     find_account_by_username, create_account, verify_password,
     create_token, verify_token, list_accounts, ensure_admin_account,
     COOKIE_NAME, find_account_by_id, update_account, change_password,
     find_account_by_chat_id,
+    generate_reset_token, validate_reset_token, consume_reset_token,
+    change_username,
 )
 from core.bot_llm import ask_llm, ask_llm_with_history, get_active_model, list_models, set_active_model
 from core.bot_prompts import PROMPTS, fmt_prompt
+from ui.bot_ui import UserContext
+from ui.screen_loader import load_screen
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
-_TARIS_DIR = os.path.expanduser("~/.taris")
-_CALENDAR_DIR = os.path.join(_TARIS_DIR, "calendar")
+_TARIS_DIR = TARIS_DIR
+_CALENDAR_DIR = os.path.join(TARIS_DIR, "calendar")
 
 BASE = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE / "web" / "templates"
 STATIC_DIR = BASE / "web" / "static"
+
+# ── Web i18n helper (for Screen DSL) ──────────────────────────────────────
+_WEB_STRINGS: dict = {}
+try:
+    with open(BASE / "strings.json", encoding="utf-8") as _f:
+        _WEB_STRINGS = json.load(_f)
+except Exception:
+    log.warning("[Web] Could not load strings.json for Screen DSL i18n")
+
+def _web_t(lang: str, key: str) -> str:
+    """Translate a string key for the web UI (Screen DSL)."""
+    text = _WEB_STRINGS.get(lang, _WEB_STRINGS.get("en", {})).get(key, key)
+    return text.replace("{bot_name}", BOT_NAME) if "{bot_name}" in text else text
 
 # ── Google OAuth2 (Gmail) ──────────────────────────────────────────────────
 _GMAIL_OAUTH_SCOPES = ["https://mail.google.com/"]
@@ -115,12 +178,75 @@ def _get_google_creds_obj(creds_data: dict) -> Optional[object]:
     return gc
 
 # ─────────────────────────────────────────────────────────────────────────────
-# App setup
+# Notification helpers  (password reset, admin alerts)
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Taris Bot Web UI")
+def _get_bot_token() -> str:
+    """Return BOT_TOKEN from env (safe even when WEB_ONLY=1)."""
+    import os as _os
+    return _os.environ.get("BOT_TOKEN", "")
+
+
+def _send_telegram_message(chat_id: int, text: str) -> bool:
+    """Send a Telegram message to a specific chat_id.  Returns True on success."""
+    token = _get_bot_token()
+    if not token or not chat_id:
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        resp = _requests_lib.post(url, json={"chat_id": chat_id, "text": text}, timeout=10)
+        return resp.status_code == 200
+    except Exception as exc:
+        log.warning(f"[Web] Telegram notify failed: {exc}")
+        return False
+
+
+def _send_reset_email(to_addr: str, username: str, reset_url: str) -> bool:
+    """Send a password reset e-mail.  Requires SMTP_HOST/USER/PASS to be configured."""
+    if not SMTP_HOST or not SMTP_USER:
+        return False
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        body = (
+            f"Hello {username},\n\n"
+            f"A password reset was requested for your taris account.\n\n"
+            f"Click the link below to set a new password (valid for 60 minutes):\n"
+            f"{reset_url}\n\n"
+            f"If you did not request this, please ignore this e-mail.\n"
+        )
+        msg            = MIMEText(body)
+        msg["Subject"] = f"[Taris] Password reset for {username}"
+        msg["From"]    = SMTP_FROM or SMTP_USER
+        msg["To"]      = to_addr
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.sendmail(msg["From"], [to_addr], msg.as_string())
+        return True
+    except Exception as exc:
+        log.warning(f"[Web] Reset e-mail failed → {to_addr}: {exc}")
+        return False
+
+app = FastAPI(
+    title="Taris Bot Web UI",
+    root_path=os.environ.get("ROOT_PATH", ""),
+    docs_url=None,
+    redoc_url=None,
+)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+@app.middleware("http")
+async def _no_cache_html(request: Request, call_next):
+    """Prevent browser caching of HTML pages so template changes are always visible."""
+    response = await call_next(request)
+    ct = response.headers.get("content-type", "")
+    if "text/html" in ct:
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,14 +273,18 @@ def _require_auth(request: Request) -> dict:
 
 
 def _ctx(request: Request, user: dict, page: str, **extra) -> dict:
-    """Build common template context."""
-    return {
+    """Build common template context — always includes software stack labels."""
+    ctx = {
         "request": request,
         "active_page": page,
         "user": user,
         "bot_version": BOT_VERSION,
-        **extra,
+        "stt_label":   _STT_UI_LABEL,
+        "llm_label":   _LLM_UI_LABEL,
+        "device_label": _DEVICE_UI_LABEL,
     }
+    ctx.update(extra)   # caller kwargs override defaults
+    return ctx
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -302,7 +432,7 @@ _VOICE_OPT_META = [
     ("warm_piper",       "Warm Piper Cache",  "Pre-load ONNX pages at startup",         "-10 s first call"),
     ("vad_prefilter",    "VAD Pre-filter",    "WebRTC VAD strips silence before STT",   "-3 s STT"),
     ("piper_low_model",  "Piper Low Model",   "Use low-quality voice (faster)",         "-13 s TTS"),
-    ("whisper_stt",      "Whisper STT",       "Use whisper.cpp instead of Vosk",        "Better WER"),
+    ("whisper_stt",      "Whisper STT",       "Use whisper.cpp binary (Pi only)",       "Better WER"),
     ("silence_strip",    "Silence Strip",     "ffmpeg silenceremove on incoming OGG",   "-1 s decode"),
 ]
 
@@ -325,7 +455,7 @@ async def login_page(request: Request):
     user = _get_current_user(request)
     if user:
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse("login.html", {
+    return templates.TemplateResponse(request, "login.html", {
         "request": request, "error": None, "hostname": _HOSTNAME, "username": None,
     })
 
@@ -334,19 +464,19 @@ async def login_page(request: Request):
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
     account = find_account_by_username(username)
     if not account or not verify_password(account, password):
-        return templates.TemplateResponse("login.html", {
+        return templates.TemplateResponse(request, "login.html", {
             "request": request, "error": "Invalid username or password",
             "hostname": _HOSTNAME, "username": username,
         })
     status = account.get("status", "active")
     if status == "pending":
-        return templates.TemplateResponse("login.html", {
+        return templates.TemplateResponse(request, "login.html", {
             "request": request,
             "error": "Account pending admin approval. Please wait.",
             "hostname": _HOSTNAME, "username": username,
         })
     if status == "blocked":
-        return templates.TemplateResponse("login.html", {
+        return templates.TemplateResponse(request, "login.html", {
             "request": request, "error": "Account blocked. Contact admin.",
             "hostname": _HOSTNAME, "username": username,
         })
@@ -361,7 +491,7 @@ async def login_submit(request: Request, username: str = Form(...), password: st
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
-    return templates.TemplateResponse("register.html", {
+    return templates.TemplateResponse(request, "register.html", {
         "request": request, "error": None, "hostname": _HOSTNAME,
     })
 
@@ -375,13 +505,13 @@ async def register_submit(
     link_code: str = Form(""),
 ):
     if len(username) < 3 or len(password) < 4:
-        return templates.TemplateResponse("register.html", {
+        return templates.TemplateResponse(request, "register.html", {
             "request": request,
             "error": "Username must be >= 3 chars, password >= 4 chars",
             "hostname": _HOSTNAME,
         })
     if find_account_by_username(username):
-        return templates.TemplateResponse("register.html", {
+        return templates.TemplateResponse(request, "register.html", {
             "request": request, "error": "Username already taken", "hostname": _HOSTNAME,
         })
 
@@ -393,13 +523,13 @@ async def register_submit(
         from core.bot_config import ADMIN_USERS
         validated_cid = _st_web.validate_web_link_code(link_code.strip())
         if not validated_cid:
-            return templates.TemplateResponse("register.html", {
+            return templates.TemplateResponse(request, "register.html", {
                 "request": request,
                 "error": "Link code is invalid or expired. Get a new code from the Telegram bot.",
                 "hostname": _HOSTNAME,
             })
         if find_account_by_chat_id(validated_cid):
-            return templates.TemplateResponse("register.html", {
+            return templates.TemplateResponse(request, "register.html", {
                 "request": request,
                 "error": "This Telegram account is already linked to a web account.",
                 "hostname": _HOSTNAME,
@@ -422,7 +552,7 @@ async def register_submit(
                              telegram_chat_id=telegram_chat_id,
                              status=new_status)
     if new_status == "pending":
-        return templates.TemplateResponse("register.html", {
+        return templates.TemplateResponse(request, "register.html", {
             "request": request,
             "info": "Registration submitted. An admin will review your account.",
             "hostname": _HOSTNAME,
@@ -441,8 +571,117 @@ async def logout():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Settings (language + password)
+# Forgot password / self-service reset
 # ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request, msg: str = "", error: str = ""):
+    return templates.TemplateResponse(request, "forgot_password.html",
+                                      {"request": request, "msg": msg, "error": error})
+
+
+@app.post("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_submit(request: Request):
+    form     = await request.form()
+    username = str(form.get("username", "")).strip().lower()
+    method   = str(form.get("method", "")).strip()    # "telegram" | "email" | "admin"
+
+    account = find_account_by_username(username)
+    if not account:
+        # Avoid username enumeration: always show the same page
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "request": request,
+            "msg": ("If an account with that username exists, a reset notification has been sent."),
+        })
+
+    token     = await asyncio.to_thread(lambda: generate_reset_token(username))
+    base_url  = str(request.base_url).rstrip("/")
+    reset_url = f"{base_url}/reset-password/{token}"
+    sent_ok   = False
+
+    if method == "telegram":
+        tg_id = account.get("telegram_chat_id")
+        if tg_id:
+            msg_text = (
+                f"🔑 Password reset requested for your taris account '{username}'.\n\n"
+                f"Click the link to set a new password (valid 60 min):\n{reset_url}\n\n"
+                f"If you did not request this, ignore this message."
+            )
+            sent_ok = await asyncio.to_thread(lambda: _send_telegram_message(int(tg_id), msg_text))
+
+    elif method == "email":
+        email = account.get("email", "")
+        if email:
+            sent_ok = await asyncio.to_thread(
+                lambda: _send_reset_email(email, username, reset_url)
+            )
+
+    elif method == "admin":
+        # Notify all admin users via Telegram
+        from core.bot_config import ADMIN_USERS
+        msg_text = (
+            f"🔑 Password reset requested by user '{username}'.\n"
+            f"Reset link (60 min): {reset_url}"
+        )
+        for admin_id in ADMIN_USERS:
+            await asyncio.to_thread(lambda: _send_telegram_message(int(admin_id), msg_text))
+        # Also e-mail admin if configured
+        if ADMIN_EMAIL:
+            await asyncio.to_thread(
+                lambda: _send_reset_email(ADMIN_EMAIL, f"admin (for user {username})", reset_url)
+            )
+        sent_ok = True
+
+    if sent_ok:
+        return RedirectResponse("/forgot-password?msg=Notification+sent.+Check+your+channel.",
+                                status_code=302)
+    return templates.TemplateResponse(request, "forgot_password.html", {
+        "request": request,
+        "error": "Could not send notification. Contact the administrator.",
+    })
+
+
+@app.get("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_page(request: Request, token: str, error: str = ""):
+    username = await asyncio.to_thread(lambda: validate_reset_token(token))
+    if not username:
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "request": request,
+            "error": "Reset link is invalid or has expired. Please request a new one.",
+        })
+    return templates.TemplateResponse(request, "reset_password.html",
+                                      {"request": request, "token": token,
+                                       "username": username, "error": error})
+
+
+@app.post("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_submit(request: Request, token: str):
+    form     = await request.form()
+    new_pw   = str(form.get("password", "")).strip()
+    confirm  = str(form.get("confirm", "")).strip()
+
+    if not new_pw or len(new_pw) < 6:
+        return templates.TemplateResponse(request, "reset_password.html", {
+            "request": request, "token": token,
+            "username": "", "error": "Password must be at least 6 characters.",
+        })
+    if new_pw != confirm:
+        return templates.TemplateResponse(request, "reset_password.html", {
+            "request": request, "token": token,
+            "username": "", "error": "Passwords do not match.",
+        })
+
+    username = await asyncio.to_thread(lambda: consume_reset_token(token))
+    if not username:
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "request": request,
+            "error": "Reset link is invalid or has expired. Please request a new one.",
+        })
+
+    await asyncio.to_thread(lambda: change_password(username, new_pw))
+    log.info(f"[Auth] Password reset via token for user '{username}'")
+    return RedirectResponse("/login?msg=Password+reset+successful.+Please+log+in.",
+                            status_code=302)
 
 _SUPPORTED_LANGS = {"en": "🇬🇧 English", "ru": "🇷🇺 Русский", "de": "🇩🇪 Deutsch"}
 
@@ -457,19 +696,25 @@ async def profile_page(request: Request, msg: str = "", error: str = ""):
     if not user:
         return RedirectResponse("/login", status_code=302)
     account = find_account_by_id(user["sub"]) or {}
-    # Try to load linked Telegram registration record
     tg_chat_id = account.get("telegram_chat_id")
     tg_reg = None
+    voice_male = False
     if tg_chat_id:
         try:
             from telegram.bot_users import _find_registration
             tg_reg = _find_registration(int(tg_chat_id))
         except Exception:
             pass
-    return templates.TemplateResponse("profile.html", _ctx(
+        try:
+            from core.store import store as _store
+            voice_male = bool(_store.get_voice_opts(int(tg_chat_id)).get("voice_male", False))
+        except Exception:
+            pass
+    return templates.TemplateResponse(request, "profile.html", _ctx(
         request, user, "profile",
         account=account,
         tg_reg=tg_reg,
+        voice_male=voice_male,
         msg=msg,
         error=error,
     ))
@@ -487,6 +732,77 @@ async def profile_update_name(request: Request, display_name: str = Form(...)):
     return RedirectResponse("/profile?msg=name_saved", status_code=302)
 
 
+@app.post("/profile/change-username", response_class=HTMLResponse)
+async def profile_change_username(request: Request, new_username: str = Form(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    new_username = new_username.strip().lower()
+    if len(new_username) < 3:
+        return RedirectResponse("/profile?error=Username+must+be+at+least+3+characters", status_code=302)
+    if not new_username.replace("_", "").replace("-", "").isalnum():
+        return RedirectResponse("/profile?error=Username+may+only+contain+letters%2C+digits%2C+hyphens+and+underscores", status_code=302)
+    result = await asyncio.to_thread(lambda: change_username(user["sub"], new_username))
+    if result == "taken":
+        return RedirectResponse("/profile?error=Username+is+already+taken", status_code=302)
+    if result != "ok":
+        return RedirectResponse("/profile?error=Could+not+change+username", status_code=302)
+    # Re-issue JWT with new username
+    account = find_account_by_id(user["sub"]) or {}
+    new_token = create_token(user["sub"], new_username, account.get("role", "user"))
+    resp = RedirectResponse("/profile?msg=username_saved", status_code=302)
+    resp.set_cookie(COOKIE_NAME, new_token, httponly=True, samesite="lax", max_age=86400 * 7)
+    return resp
+
+
+@app.post("/profile/link-telegram", response_class=HTMLResponse)
+async def profile_link_telegram(request: Request, link_code: str = Form(...)):
+    """User enters the 6-char code from Telegram bot to link accounts."""
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    import core.bot_state as _st_web
+    tg_id = await asyncio.to_thread(lambda: _st_web.validate_web_link_code(link_code.strip()))
+    if tg_id is None:
+        return RedirectResponse("/profile?error=Invalid+or+expired+link+code.+Generate+a+new+one+in+Telegram+with+/link", status_code=302)
+    # If another account already claims this Telegram ID, unlink it first (merge)
+    existing = find_account_by_chat_id(tg_id)
+    if existing and existing.get("user_id") != user["sub"]:
+        update_account(existing["user_id"], telegram_chat_id=None)
+        log.info(f"[Auth] Unlinked Telegram {tg_id} from '{existing.get('username')}' (merging to '{user['username']}')")
+    update_account(user["sub"], telegram_chat_id=tg_id)
+    log.info(f"[Auth] Telegram {tg_id} linked to web account '{user['username']}'")
+    return RedirectResponse("/profile?msg=telegram_linked", status_code=302)
+
+
+@app.post("/profile/voice-gender", response_class=HTMLResponse)
+async def profile_voice_gender(request: Request, voice_male: str = Form("off")):
+    """Toggle per-user TTS voice between male (dmitri) and female (irina)."""
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    chat_id = _profile_chat_id(user)
+    if not chat_id:
+        return RedirectResponse("/profile?error=Link+your+Telegram+account+to+set+voice+preference", status_code=302)
+    try:
+        from core.store import store as _store
+        new_val = voice_male.lower() in ("on", "1", "true", "male")
+        _store.set_voice_opt("voice_male", new_val, chat_id=int(chat_id))
+    except Exception as _e:
+        log.warning(f"[Web] profile/voice-gender failed for user={user['username']}: {_e}")
+        return RedirectResponse("/profile?error=Could+not+update+voice+preference", status_code=302)
+    return RedirectResponse("/profile?msg=voice_gender_saved", status_code=302)
+
+
+def _profile_chat_id(user: dict) -> int | None:
+    """Return the Telegram chat_id linked to the web user, or None."""
+    try:
+        account = find_account_by_id(user["sub"]) or {}
+        return account.get("telegram_chat_id") or None
+    except Exception:
+        return None
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, msg: str = "", error: str = ""):
     user = _get_current_user(request)
@@ -494,7 +810,7 @@ async def settings_page(request: Request, msg: str = "", error: str = ""):
         return RedirectResponse("/login", status_code=302)
     account = find_account_by_id(user["sub"]) or {}
     current_lang = account.get("language", "en")
-    return templates.TemplateResponse("settings.html", _ctx(
+    return templates.TemplateResponse(request, "settings.html", _ctx(
         request, user, "settings",
         current_lang=current_lang,
         supported_langs=_SUPPORTED_LANGS,
@@ -526,7 +842,7 @@ async def settings_change_password(
         return RedirectResponse("/login", status_code=302)
     account = find_account_by_id(user["sub"])
     current_lang = (account or {}).get("language", "en")
-    ctx_error = lambda msg: templates.TemplateResponse("settings.html", _ctx(
+    ctx_error = lambda msg: templates.TemplateResponse(request, "settings.html", _ctx(
         request, user, "settings",
         current_lang=current_lang,
         supported_langs=_SUPPORTED_LANGS,
@@ -582,7 +898,7 @@ async def dashboard(request: Request):
         for n in notes[:3]
     ]
 
-    return templates.TemplateResponse("dashboard.html", _ctx(
+    return templates.TemplateResponse(request, "dashboard.html", _ctx(
         request, user, "dashboard",
         quick_actions=quick_actions,
         todays_events=today_events,
@@ -607,7 +923,7 @@ async def chat_page(request: Request):
     if not models_list:
         models_list = ["default"]
 
-    return templates.TemplateResponse("chat.html", _ctx(
+    return templates.TemplateResponse(request, "chat.html", _ctx(
         request, user, "chat",
         models=models_list,
         messages=messages,
@@ -631,17 +947,18 @@ async def chat_send(request: Request, message: str = Form(...)):
         {"role": "user" if e["role"] == "user" else "assistant", "content": e["text"]}
         for e in history
     ]
-    reply = ask_llm_with_history(llm_messages, timeout=60)
+    reply = await asyncio.to_thread(lambda: ask_llm_with_history(llm_messages, timeout=60))
     if not reply:
         reply = "No response from LLM."
     history.append({"role": "bot", "text": reply, "time": now_str})
 
-    return templates.TemplateResponse("_chat_messages.html", {
-        "request": request,
-        "user_text": message,
-        "user_time": now_str,
-        "bot_text": reply,
-        "bot_time": now_str,
+    return templates.TemplateResponse(request, "_chat_messages.html", {
+        "request":    request,
+        "user_text":  message,
+        "user_time":  now_str,
+        "bot_text":   reply,
+        "bot_time":   now_str,
+        "llm_label":  _LLM_UI_LABEL,
     })
 
 
@@ -675,7 +992,7 @@ async def notes_page(request: Request):
         title = active_note["title"]
         content = active_note["content"]
 
-    return templates.TemplateResponse("notes.html", _ctx(
+    return templates.TemplateResponse(request, "notes.html", _ctx(
         request, user, "notes",
         notes=notes,
         active_note=active_note,
@@ -697,7 +1014,7 @@ async def note_detail(request: Request, slug: str):
         raise HTTPException(404)
 
     title = slug.replace("_", " ").title()
-    return templates.TemplateResponse("_note_editor.html", {
+    return templates.TemplateResponse(request, "_note_editor.html", {
         "request": request,
         "slug": slug,
         "title": title,
@@ -726,7 +1043,7 @@ async def notes_list_partial(request: Request):
     if not user:
         raise HTTPException(401)
     notes = _list_notes(user["sub"])
-    return templates.TemplateResponse("_note_list.html", {
+    return templates.TemplateResponse(request, "_note_list.html", {
         "request": request,
         "notes": notes,
     })
@@ -756,7 +1073,7 @@ async def note_save(request: Request, slug: str, content: str = Form(...), title
     if slug_changed:
         return Response(headers={"HX-Redirect": "/notes"})
     display_title = title or new_slug.replace("_", " ").title()
-    resp = templates.TemplateResponse("_note_editor.html", {
+    resp = templates.TemplateResponse(request, "_note_editor.html", {
         "request": request,
         "slug": new_slug,
         "title": display_title,
@@ -831,7 +1148,7 @@ async def calendar_page(request: Request):
     upcoming.sort(key=lambda x: x["dt"])
     upcoming = upcoming[:10]
 
-    return templates.TemplateResponse("calendar.html", _ctx(
+    return templates.TemplateResponse(request, "calendar.html", _ctx(
         request, user, "calendar",
         year=year, month=month, month_name=month_name, today=today,
         weeks=weeks, events_by_day=ebd, event_colors=EVENT_COLORS,
@@ -957,7 +1274,7 @@ async def calendar_parse_text(request: Request):
     text = (body.get("text") or "").strip()
     if not text:
         return JSONResponse({"events": []})
-    events = _cal_parse_events_from_text(text)
+    events = await asyncio.to_thread(lambda: _cal_parse_events_from_text(text))
     return JSONResponse({"events": events})
 
 
@@ -979,7 +1296,7 @@ async def calendar_console_route(request: Request):
     events_hint = "; ".join(event_hints) if event_hints else "none"
 
     intent_prompt = fmt_prompt(PROMPTS["web"]["cal_intent"], now_iso=now_iso, events_hint=events_hint, text=text)
-    raw_intent = ask_llm(intent_prompt, timeout=20)
+    raw_intent = await asyncio.to_thread(lambda: ask_llm(intent_prompt, timeout=20))
     intent = "add"
     ev_id: str | None = None
     if raw_intent:
@@ -1138,20 +1455,20 @@ def _contacts_for(chat_id: int, q: str = "", offset: int = 0) -> tuple[list[dict
 
 
 @app.get("/contacts", response_class=HTMLResponse)
-async def contacts_page(request: Request, q: str = "", page: int = 0):
+async def contacts_page(request: Request, q: str = "", pg: int = 0):
     user = _get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
-    offset = page * PAGE_SIZE
+    offset = pg * PAGE_SIZE
     contacts, total = _contacts_for(chat_id, q=q, offset=offset)
     pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     return templates.TemplateResponse(
-        "contacts.html",
+        request, "contacts.html",
         _ctx(request, user, "contacts",
              contacts=contacts, total=total, q=q,
-             page=page, pages=pages, page_size=PAGE_SIZE),
+             pg=pg, pages=pages, page_size=PAGE_SIZE),
     )
 
 
@@ -1161,9 +1478,9 @@ async def contacts_new_form(request: Request):
     if not user:
         return RedirectResponse("/login", status_code=302)
     return templates.TemplateResponse(
-        "contacts.html",
+        request, "contacts.html",
         _ctx(request, user, "contacts",
-             contacts=[], total=0, q="", page=0, pages=1, page_size=PAGE_SIZE,
+             contacts=[], total=0, q="", pg=0, pages=1, page_size=PAGE_SIZE,
              show_form=True, form_contact=None),
     )
 
@@ -1204,9 +1521,9 @@ async def contacts_detail(request: Request, cid: str):
     if not contact:
         return RedirectResponse("/contacts", status_code=302)
     return templates.TemplateResponse(
-        "contacts.html",
+        request, "contacts.html",
         _ctx(request, user, "contacts",
-             contacts=[], total=0, q="", page=0, pages=1, page_size=PAGE_SIZE,
+             contacts=[], total=0, q="", pg=0, pages=1, page_size=PAGE_SIZE,
              show_form=True, form_contact=contact),
     )
 
@@ -1249,6 +1566,115 @@ async def contacts_delete(request: Request, cid: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Documents
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _docs_chat_id(user: dict) -> int:
+    """Return the telegram_chat_id for the logged-in web user, or 0 if not linked."""
+    account = find_account_by_id(user["sub"])
+    return int((account or {}).get("telegram_chat_id") or 0)
+
+
+@app.get("/documents", response_class=HTMLResponse)
+async def docs_page(request: Request, msg: str = "", error: str = ""):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    chat_id = _docs_chat_id(user)
+    docs: list[dict] = []
+    rag_available = False
+    try:
+        if _store:
+            rag_available = _store.has_document_search()
+            if rag_available:
+                docs = _store.list_documents(chat_id) if chat_id else []
+    except Exception as e:
+        log.warning("[Docs/Web] list_documents failed: %s", e)
+    return templates.TemplateResponse(
+        request, "docs.html",
+        _ctx(request, user, "docs",
+             docs=docs, rag_available=rag_available,
+             no_telegram=(chat_id == 0), msg=msg, error=error),
+    )
+
+
+@app.post("/documents/upload")
+async def docs_upload(request: Request, file: UploadFile = File(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    chat_id = _docs_chat_id(user)
+    if not chat_id:
+        return RedirectResponse("/documents?error=Link+your+Telegram+account+first", status_code=303)
+    if not _store or not _store.has_document_search():
+        return RedirectResponse("/documents?error=RAG+not+available", status_code=303)
+
+    orig_name = file.filename or "upload"
+    ext = Path(orig_name).suffix.lower()
+    from features.bot_documents import _SUPPORTED_EXTS, _process_doc_file
+    if ext not in _SUPPORTED_EXTS:
+        supported = ", ".join(sorted(_SUPPORTED_EXTS))
+        return RedirectResponse(f"/documents?error=Unsupported+file+type.+Supported:+{supported}", status_code=303)
+
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        return RedirectResponse("/documents?error=File+too+large+(max+20+MB)", status_code=303)
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = Path(tmp.name)
+    try:
+        _process_doc_file(chat_id, tmp_path, ext, orig_name)
+    except Exception as e:
+        log.error("[Docs/Web] upload failed: %s", e)
+        return RedirectResponse("/documents?error=Upload+failed", status_code=303)
+    return RedirectResponse(f"/documents?msg=Uploaded+{orig_name}", status_code=303)
+
+
+@app.post("/documents/{doc_id}/rename")
+async def docs_rename(request: Request, doc_id: str, title: str = Form(...)):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if _store:
+        try:
+            _store.update_document_field(doc_id, title=title.strip())
+        except Exception as e:
+            log.warning("[Docs/Web] rename failed: %s", e)
+    return RedirectResponse("/documents", status_code=303)
+
+
+@app.post("/documents/{doc_id}/share")
+async def docs_toggle_share(request: Request, doc_id: str):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if _store:
+        try:
+            chat_id = _docs_chat_id(user)
+            docs = _store.list_documents(chat_id) if chat_id else []
+            d = next((x for x in docs if x["doc_id"] == doc_id), None)
+            if d:
+                _store.update_document_field(doc_id, is_shared=0 if d.get("is_shared") else 1)
+        except Exception as e:
+            log.warning("[Docs/Web] share toggle failed: %s", e)
+    return RedirectResponse("/documents", status_code=303)
+
+
+@app.post("/documents/{doc_id}/delete")
+async def docs_delete(request: Request, doc_id: str):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if _store:
+        try:
+            _store.delete_document(doc_id)
+        except Exception as e:
+            log.warning("[Docs/Web] delete failed: %s", e)
+    return RedirectResponse("/documents", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Mail
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1271,15 +1697,24 @@ def _mail_creds_path(uid: str) -> Path:
 
 
 def _load_mail_creds_for_user(uid: str) -> Optional[dict]:
-    """Load mail creds for a web user, falling back to their linked Telegram chat_id."""
+    """Load mail creds for a web user via store (DB primary, file fallback)."""
+    # Primary: look up telegram_chat_id via web account, then use store
+    acc = find_account_by_id(uid)
+    if acc and acc.get("telegram_chat_id"):
+        try:
+            from core.store import store as _st
+            data = _st.get_mail_creds(int(acc["telegram_chat_id"]))
+            if data:
+                return data
+        except Exception:
+            pass
+    # File fallback for migration — uid-keyed or chat_id-keyed
     p = _mail_creds_path(uid)
     if p.exists():
         try:
             return json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             pass
-    # Legacy fallback: Telegram-linked account may have creds under numeric chat_id
-    acc = find_account_by_id(uid)
     if acc and acc.get("telegram_chat_id"):
         tp = Path(_TARIS_DIR) / "mail_creds" / f"{acc['telegram_chat_id']}.json"
         if tp.exists():
@@ -1327,7 +1762,7 @@ async def mail_page(request: Request, show_settings: bool = False, error: str = 
             )["label"],
         }
 
-    return templates.TemplateResponse("mail.html", _ctx(
+    return templates.TemplateResponse(request, "mail.html", _ctx(
         request, user, "mail",
         digest_text=digest_text,
         waveform=_waveform(),
@@ -1596,27 +2031,230 @@ def _get_vosk_model_web():
     return _vosk_model_web
 
 
+_fw_web_model_cache: dict = {}   # {(model_size, device, compute): WhisperModel}
+
+
+def _stt_faster_whisper_web(raw_pcm: bytes, sample_rate: int = 16000, lang: str = "ru") -> Optional[str]:
+    """Self-contained faster-whisper STT for web endpoints.
+
+    Avoids importing bot_voice (which pulls in telegram bot machinery).
+    Uses local HuggingFace cache path — no network/auth requests.
+    """
+    from faster_whisper import WhisperModel  # type: ignore[import]
+    import numpy as _np
+
+    cache_key = (FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE)
+    if cache_key not in _fw_web_model_cache:
+        # Resolve local HuggingFace cache path to avoid network/auth requests.
+        model_arg = FASTER_WHISPER_MODEL
+        _snapshots = (
+            Path.home() / ".cache" / "huggingface" / "hub"
+            / f"models--Systran--faster-whisper-{FASTER_WHISPER_MODEL}"
+            / "snapshots"
+        )
+        if _snapshots.is_dir():
+            snaps = sorted(_snapshots.iterdir())
+            if snaps:
+                model_arg = str(snaps[-1])
+                log.info(f"[FasterWhisper/Web] using local cache: {model_arg}")
+        log.info(
+            f"[FasterWhisper/Web] loading model={FASTER_WHISPER_MODEL} "
+            f"device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE}"
+        )
+        _fw_web_model_cache[cache_key] = WhisperModel(
+            model_arg, device=FASTER_WHISPER_DEVICE, compute_type=FASTER_WHISPER_COMPUTE
+        )
+
+    model = _fw_web_model_cache[cache_key]
+    audio_np = _np.frombuffer(raw_pcm, dtype=_np.int16).astype(_np.float32) / 32768.0
+    if sample_rate != 16000:
+        from scipy.signal import resample as _resample  # type: ignore[import]
+        audio_np = _resample(audio_np, int(len(audio_np) * 16000 / sample_rate)).astype(_np.float32)
+
+    lang_map = {"ru": "ru", "en": "en", "de": "de", "sl": "sl"}
+    segments, info = model.transcribe(
+        audio_np,
+        language=lang_map.get(lang, "ru"),
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500),
+        condition_on_previous_text=False,
+    )
+    text = " ".join(seg.text.strip() for seg in segments).strip()
+    if text:
+        log.debug(f"[FasterWhisper/Web] ({info.language} {info.language_probability:.2f}): {text[:80]}")
+    return text or None
+
+
+def _stt_openai_whisper_web(raw_pcm: bytes, sample_rate: int = 16000, lang: str = STT_LANG) -> Optional[str]:
+    """STT via OpenAI Whisper API.
+
+    Best accuracy for ru/en/de/sl. Requires OPENAI_API_KEY in bot.env.
+    PCM → WAV in memory → POST to /v1/audio/transcriptions.
+    Falls back gracefully if openai package is absent or API key missing.
+    """
+    if not OPENAI_API_KEY:
+        log.warning("[OpenAI/STT] OPENAI_API_KEY not set — cannot use openai_whisper")
+        return None
+    try:
+        from openai import OpenAI as _OpenAI  # type: ignore[import]
+    except ImportError:
+        log.warning("[OpenAI/STT] openai package not installed — cannot use openai_whisper")
+        return None
+
+    import io, wave as _wave
+
+    buf = io.BytesIO()
+    with _wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)          # 16-bit PCM
+        wf.setframerate(sample_rate)
+        wf.writeframes(raw_pcm)
+    buf.seek(0)
+    buf.name = "audio.wav"          # openai SDK reads .name for content-type hint
+
+    client = _OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+    resp = client.audio.transcriptions.create(
+        model=STT_OPENAI_MODEL,
+        file=buf,
+        language=lang,
+    )
+    text = (resp.text or "").strip()
+    if text:
+        log.debug(f"[OpenAI/STT] lang={lang}: {text[:80]}")
+    return text or None
+
+
+def _stt_vosk_web(raw_pcm: bytes, sample_rate: int = 16000, **_kw) -> Optional[str]:
+    """STT via local Vosk offline model."""
+    import vosk as _vosk_lib
+    import json as _vj_local
+    model = _get_vosk_model_web()
+    rec = _vosk_lib.KaldiRecognizer(model, sample_rate)
+    rec.SetWords(True)
+    CHUNK = 4000 * 2
+    for i in range(0, len(raw_pcm), CHUNK):
+        rec.AcceptWaveform(raw_pcm[i:i + CHUNK])
+    result = _vj_local.loads(rec.FinalResult())
+    text = result.get("text", "").strip()
+    text = re.sub(r"\[\?([^\]]+)\]", r"\1", text)
+    return text or None
+
+
+# ── STT dispatch table — mirrors LLM _DISPATCH pattern ────────────────────────
+# Keyed by STT_PROVIDER / STT_FALLBACK_PROVIDER value.
+# Each callable: (raw_pcm: bytes, sample_rate: int, lang: str) -> Optional[str]
+_STT_DISPATCH: dict = {
+    "faster_whisper":  _stt_faster_whisper_web,
+    "openai_whisper":  _stt_openai_whisper_web,
+    "vosk":            _stt_vosk_web,
+}
+
+
+def _stt_call(provider: str, raw_pcm: bytes, sample_rate: int) -> Optional[str]:
+    """Invoke one STT provider from _STT_DISPATCH; return text or None on failure."""
+    fn = _STT_DISPATCH.get(provider)
+    if fn is None:
+        log.warning(f"[STT] unknown provider '{provider}'")
+        return None
+    return fn(raw_pcm, sample_rate, lang=STT_LANG)
+
+
+def _stt_web(raw_pcm: bytes, sample_rate: int = 16000) -> str:
+    """STT dispatch with configurable primary + fallback provider.
+
+    Mirrors the LLM ask_llm() fallback pattern:
+      1. Try STT_PROVIDER.
+      2. On failure, try STT_FALLBACK_PROVIDER (if set and different).
+      3. Return empty string when all providers fail.
+
+    Supported providers: faster_whisper | openai_whisper | vosk
+    Configure in bot.env:
+      STT_PROVIDER=openai_whisper
+      STT_FALLBACK_PROVIDER=faster_whisper   # or vosk
+      STT_LANG=ru
+    """
+    primary  = STT_PROVIDER
+    fallback = STT_FALLBACK_PROVIDER
+
+    try:
+        result = _stt_call(primary, raw_pcm, sample_rate)
+        if result:
+            return result
+        log.debug(f"[STT] {primary} returned empty (no speech detected)")
+    except ImportError:
+        log.warning(f"[STT] {primary}: package not installed")
+    except Exception as exc:
+        log.warning(f"[STT] {primary} failed: {exc}")
+
+    if fallback and fallback != primary:
+        log.warning(f"[STT] falling back to {fallback}")
+        try:
+            result = _stt_call(fallback, raw_pcm, sample_rate)
+            return result or ""
+        except Exception as exc2:
+            log.error(f"[STT] {fallback} fallback also failed: {exc2}")
+
+    return ""
+
+
 def _voice_pipeline_status() -> list[dict]:
     """Check real filesystem to report component readiness."""
     d = Path(_TARIS_DIR)
     ffmpeg_ok = Path("/usr/bin/ffmpeg").exists()
     vosk_ok = (d / "vosk-model-small-ru").is_dir()
     taris_ok = Path(TARIS_BIN).exists()
-    piper_bin_ok = Path("/usr/local/bin/piper").exists()
+    piper_bin_ok = Path(PIPER_BIN).exists()
     piper_med = (d / "ru_RU-irina-medium.onnx").exists()
     piper_low = (d / "ru_RU-irina-low.onnx").exists()
     active_model = get_active_model() or "default"
+
+    # STT entry — reflects actual STT_PROVIDER + optional STT_FALLBACK_PROVIDER
+    def _stt_status(provider: str) -> dict:
+        if provider == "faster_whisper":
+            from pathlib import Path as _P
+            fw_snap = (
+                _P.home() / ".cache" / "huggingface" / "hub"
+                / f"models--Systran--faster-whisper-{FASTER_WHISPER_MODEL}"
+                / "snapshots"
+            )
+            fw_ok = fw_snap.is_dir() and any(fw_snap.iterdir())
+            return {
+                "icon": "🎤", "name": f"STT (faster-whisper {FASTER_WHISPER_MODEL})",
+                "status": "ready" if fw_ok else "missing",
+                "detail": f"model={FASTER_WHISPER_MODEL} device={FASTER_WHISPER_DEVICE} compute={FASTER_WHISPER_COMPUTE}"
+                          if fw_ok else f"faster-whisper-{FASTER_WHISPER_MODEL} not in HF cache",
+            }
+        if provider == "openai_whisper":
+            api_key_set = bool(OPENAI_API_KEY)
+            return {
+                "icon": "🎤", "name": f"STT (OpenAI Whisper {STT_OPENAI_MODEL})",
+                "status": "ready" if api_key_set else "missing",
+                "detail": f"model={STT_OPENAI_MODEL} lang={STT_LANG}"
+                          if api_key_set else "OPENAI_API_KEY not set in bot.env",
+            }
+        # vosk / default
+        return {
+            "icon": "🎤", "name": "STT (Vosk)",
+            "status": "ready" if vosk_ok else "missing",
+            "detail": "vosk-model-small-ru" if vosk_ok else "Model not found",
+        }
+
+    stt_entry = _stt_status(STT_PROVIDER)
+    # Append fallback note to detail when configured
+    if STT_FALLBACK_PROVIDER and STT_FALLBACK_PROVIDER != STT_PROVIDER:
+        fb = _stt_status(STT_FALLBACK_PROVIDER)
+        stt_entry["detail"] += f" | fallback → {fb['name'].replace('STT (', '').rstrip(')')}"
+        if fb["status"] != "ready":
+            stt_entry["detail"] += " ⚠️ fallback not ready"
+
     return [
         {
             "icon": "🎵", "name": "Audio (ffmpeg)",
             "status": "ready" if ffmpeg_ok else "missing",
             "detail": "OGG ↔ PCM conversion",
         },
-        {
-            "icon": "🎤", "name": "STT (Vosk)",
-            "status": "ready" if vosk_ok else "missing",
-            "detail": "vosk-model-small-ru" if vosk_ok else "Model not found",
-        },
+        stt_entry,
         {
             "icon": "🤖", "name": f"LLM ({active_model})",
             "status": "ready" if taris_ok else "missing",
@@ -1648,7 +2286,7 @@ async def voice_page(request: Request):
         except Exception:
             pass
 
-    return templates.TemplateResponse("voice.html", _ctx(
+    return templates.TemplateResponse(request, "voice.html", _ctx(
         request, user, "voice",
         pipeline=_voice_pipeline_status(),
         transcript=transcript,
@@ -1706,7 +2344,7 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
     if not text:
         raise HTTPException(400, "Text is empty after stripping")
 
-    piper_bin = "/usr/local/bin/piper"
+    piper_bin = PIPER_BIN
     if not Path(piper_bin).exists():
         raise HTTPException(503, "Piper TTS not installed")
 
@@ -1714,32 +2352,35 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
     tmpfs_model = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
     low_model   = d / "ru_RU-irina-low.onnx"
     med_model   = d / "ru_RU-irina-medium.onnx"
+    # Prefer tmpfs → low → medium (by preference), else fall back to PIPER_MODEL config
     if tmpfs_model.exists():
         model_path = str(tmpfs_model)
     elif low_model.exists():
         model_path = str(low_model)
     elif med_model.exists():
         model_path = str(med_model)
+    elif Path(PIPER_MODEL).exists():
+        model_path = PIPER_MODEL
     else:
         raise HTTPException(503, "No Piper TTS voice model found")
 
     try:
-        piper_result = subprocess.run(
+        piper_result = await asyncio.to_thread(lambda: subprocess.run(
             [piper_bin, "--model", model_path, "--output-raw"],
             input=text.encode("utf-8"),
             capture_output=True,
             timeout=120,
-        )
+        ))
         raw_pcm = piper_result.stdout
         if not raw_pcm:
             raise ValueError(f"Piper returned no output (rc={piper_result.returncode})")
 
-        ff_result = subprocess.run(
+        ff_result = await asyncio.to_thread(lambda: subprocess.run(
             ["ffmpeg", "-y",
              "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
              "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
             input=raw_pcm, capture_output=True, timeout=30,
-        )
+        ))
         ogg_bytes = ff_result.stdout
         if not ogg_bytes:
             raise ValueError(f"ffmpeg returned no output (rc={ff_result.returncode})")
@@ -1755,7 +2396,7 @@ async def voice_tts_endpoint(request: Request, text: str = Form(...)):
 
 @app.post("/voice/transcribe")
 async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(...)):
-    """Accept browser audio upload → Vosk STT → return transcript JSON."""
+    """Accept browser audio upload → STT (faster-whisper or Vosk) → return transcript JSON."""
     user = _get_current_user(request)
     if not user:
         raise HTTPException(401)
@@ -1765,50 +2406,51 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
         raise HTTPException(400, "Empty audio")
 
     tmp_in_path = None
+    pl = PipelineLog(user_id=user.get("sub", "anon"))
+    dbg = VoiceDebugSession(user_id=user.get("sub", "anon"),
+                            debug_mode=VOICE_DEBUG_MODE,
+                            debug_dir=Path(VOICE_DEBUG_DIR))
     try:
+        ext = (audio.filename or "audio.webm").rsplit(".", 1)[-1].lower() or "webm"
+        dbg.save_raw_audio(audio_data, ext=ext)
+
         # Save uploaded audio to temp file
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
             tmp_in.write(audio_data)
             tmp_in_path = tmp_in.name
 
         # ffmpeg: WebM/OGG → 16 kHz mono S16LE PCM
-        ff = subprocess.run(
+        t0_decode = time.monotonic()
+        ff = await asyncio.to_thread(lambda: subprocess.run(
             ["ffmpeg", "-y", "-i", tmp_in_path,
              "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1"],
             capture_output=True, timeout=30,
-        )
+        ))
         raw_pcm = ff.stdout
         if not raw_pcm:
             raise ValueError(f"ffmpeg decode failed (rc={ff.returncode}): {ff.stderr[:200]}")
+        pl.log_decode(raw_pcm, int((time.monotonic() - t0_decode) * 1000))
+        dbg.save_pcm(raw_pcm)
 
         duration_s = round(len(raw_pcm) / (16000 * 2), 1)
+        audio_ms = int(duration_s * 1000)
 
-        # Vosk STT
-        vosk_dir = str(Path(_TARIS_DIR) / "vosk-model-small-ru")
-        if not Path(vosk_dir).is_dir():
-            raise HTTPException(503, "Vosk model not installed")
-
-        import vosk as _vosk_lib
-        import json as _vj
-        model = _vosk_lib.Model(vosk_dir)
-        rec = _vosk_lib.KaldiRecognizer(model, 16000)
-        rec.SetWords(True)
-
-        CHUNK = 4000 * 2  # 4000 frames × 2 bytes
-        for i in range(0, len(raw_pcm), CHUNK):
-            rec.AcceptWaveform(raw_pcm[i:i + CHUNK])
-        result = _vj.loads(rec.FinalResult())
-
-        transcript = result.get("text", "").strip()
-        # Strip low-confidence markers  [?word] → word
-        transcript = re.sub(r"\[\?([^\]]+)\]", r"\1", transcript)
+        # STT — routes by STT_PROVIDER (faster_whisper for openclaw, vosk otherwise)
+        transcript = await asyncio.to_thread(
+            lambda: pl.timed_stt(lambda: _stt_web(raw_pcm, 16000), audio_ms=audio_ms)
+        )
+        dbg.save_stt(transcript)
+        dbg.finalise({"endpoint": "transcribe", "stt_provider": STT_PROVIDER})
 
         # Save as last transcript
         last_t_file = Path(_TARIS_DIR) / "last_transcript.txt"
         ts_now = datetime.now().strftime("%Y-%m-%d %H:%M")
         last_t_file.write_text(f"[web] {ts_now}  {transcript}", encoding="utf-8")
 
-        return {"transcript": transcript, "duration": duration_s}
+        resp: dict = {"transcript": transcript, "duration": duration_s, "stt_provider": STT_PROVIDER}
+        if dbg.session_id:
+            resp["debug_session_id"] = dbg.session_id
+        return resp
 
     except HTTPException:
         raise
@@ -1825,9 +2467,10 @@ async def voice_transcribe_endpoint(request: Request, audio: UploadFile = File(.
 
 @app.post("/voice/chat")
 async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
-    """Full voice conversation pipeline: browser audio → Vosk STT → LLM → Piper TTS.
+    """Full voice conversation pipeline: browser audio → STT → LLM → Piper TTS.
 
-    Returns JSON: {user_text, reply_text, audio_b64}
+    STT engine is selected by STT_PROVIDER (faster-whisper for openclaw, Vosk otherwise).
+    Returns JSON: {user_text, reply_text, audio_b64[, debug_session_id]}
     Mirrors the Telegram bot's _handle_voice_message() flow.
     """
     user = _get_current_user(request)
@@ -1838,36 +2481,42 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
     if not audio_data:
         raise HTTPException(400, "Empty audio")
 
+    pl = PipelineLog(user_id=user.get("sub", "anon"))
+    dbg = VoiceDebugSession(user_id=user.get("sub", "anon"),
+                            debug_mode=VOICE_DEBUG_MODE,
+                            debug_dir=Path(VOICE_DEBUG_DIR))
     tmp_in_path = None
     try:
+        ext = (audio.filename or "audio.webm").rsplit(".", 1)[-1].lower() or "webm"
+        dbg.save_raw_audio(audio_data, ext=ext)
+
         # ── Stage 1: decode browser audio → 16 kHz mono PCM ───────────────────
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
             tmp_in.write(audio_data)
             tmp_in_path = tmp_in.name
 
-        ff = subprocess.run(
+        t0_decode = time.monotonic()
+        ff = await asyncio.to_thread(lambda: subprocess.run(
             ["ffmpeg", "-y", "-i", tmp_in_path,
              "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1"],
             capture_output=True, timeout=30,
-        )
+        ))
         raw_pcm = ff.stdout
         if not raw_pcm:
             raise ValueError(f"ffmpeg decode failed (rc={ff.returncode}): {ff.stderr[:200]}")
+        pl.log_decode(raw_pcm, int((time.monotonic() - t0_decode) * 1000))
+        dbg.save_pcm(raw_pcm)
 
-        # ── Stage 2: Vosk STT ──────────────────────────────────────────────────
-        import vosk as _vosk_lib
-        import json as _vj
-        vosk_model = _get_vosk_model_web()
-        rec = _vosk_lib.KaldiRecognizer(vosk_model, 16000)
-        rec.SetWords(True)
-        CHUNK = 4000 * 2
-        for i in range(0, len(raw_pcm), CHUNK):
-            rec.AcceptWaveform(raw_pcm[i:i + CHUNK])
-        stt_result = _vj.loads(rec.FinalResult())
-        user_text = stt_result.get("text", "").strip()
-        user_text = re.sub(r"\[\?([^\]]+)\]", r"\1", user_text)  # strip low-conf markers
+        audio_ms = int(len(raw_pcm) / (16000 * 2) * 1000)
+
+        # ── Stage 2: STT ───────────────────────────────────────────────────────
+        user_text = await asyncio.to_thread(
+            lambda: pl.timed_stt(lambda: _stt_web(raw_pcm, 16000), audio_ms=audio_ms)
+        )
+        dbg.save_stt(user_text)
 
         if not user_text:
+            dbg.finalise({"endpoint": "voice_chat", "error": "no_speech"})
             return {"user_text": "", "reply_text": "", "audio_b64": "", "error": "no_speech"}
 
         # Save for the last-transcript panel
@@ -1877,47 +2526,70 @@ async def voice_chat_endpoint(request: Request, audio: UploadFile = File(...)):
         )
 
         # ── Stage 3: LLM ───────────────────────────────────────────────────────
-        reply_text = ask_llm(user_text, timeout=90)
+        reply_text = await asyncio.to_thread(
+            lambda: pl.timed_llm(lambda: ask_llm(user_text, timeout=90), input_text=user_text)
+        )
         if not reply_text:
             reply_text = "No response from LLM."
+        dbg.save_llm_answer(reply_text)
 
         # ── Stage 4: Piper TTS ─────────────────────────────────────────────────
         audio_b64 = ""
         tts_text = re.sub(r"[*_`#~]", "", reply_text)
         tts_text = re.sub(r"\[([^\]]*?)\]\([^)]*?\)", r"\1", tts_text)
         tts_text = tts_text.strip()[:600]
+        dbg.save_tts_input(tts_text)
 
         if tts_text:
             d = Path(_TARIS_DIR)
             tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
             low_m     = d / "ru_RU-irina-low.onnx"
             med_m     = d / "ru_RU-irina-medium.onnx"
-            piper_bin = "/usr/local/bin/piper"
+            piper_bin = PIPER_BIN
             model_path = (
                 str(tmpfs_m) if tmpfs_m.exists() else
                 str(low_m)   if low_m.exists()   else
-                str(med_m)   if med_m.exists()   else None
+                str(med_m)   if med_m.exists()   else
+                PIPER_MODEL  if Path(PIPER_MODEL).exists() else None
             )
             if model_path and Path(piper_bin).exists():
                 try:
-                    pr = subprocess.run(
-                        [piper_bin, "--model", model_path, "--output-raw"],
-                        input=tts_text.encode("utf-8"),
-                        capture_output=True, timeout=180,
-                    )
-                    if pr.stdout:
-                        ff2 = subprocess.run(
-                            ["ffmpeg", "-y",
-                             "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
-                             "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
-                            input=pr.stdout, capture_output=True, timeout=30,
+                    def _run_tts() -> Optional[bytes]:
+                        pr = subprocess.run(
+                            [piper_bin, "--model", model_path, "--output-raw"],
+                            input=tts_text.encode("utf-8"),
+                            capture_output=True, timeout=180,
                         )
-                        if ff2.stdout:
-                            audio_b64 = base64.b64encode(ff2.stdout).decode()
+                        if pr.stdout:
+                            ff2 = subprocess.run(
+                                ["ffmpeg", "-y",
+                                 "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
+                                 "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
+                                input=pr.stdout, capture_output=True, timeout=30,
+                            )
+                            return ff2.stdout if ff2.stdout else None
+                        return None
+
+                    ogg_bytes = await asyncio.to_thread(
+                        lambda: pl.timed_tts(_run_tts, input_text=tts_text)
+                    )
+                    if ogg_bytes:
+                        audio_b64 = base64.b64encode(ogg_bytes).decode()
+                        dbg.save_tts_output(ogg_bytes)
                 except Exception as tts_err:
                     log.warning(f"[Web/VoiceChat TTS] {tts_err}")
 
-        return {"user_text": user_text, "reply_text": reply_text, "audio_b64": audio_b64}
+        dbg.finalise({
+            "endpoint": "voice_chat",
+            "stt_provider": STT_PROVIDER,
+            "llm_provider": _LLM_UI_LABEL,
+            "has_tts": bool(audio_b64),
+        })
+
+        resp: dict = {"user_text": user_text, "reply_text": reply_text, "audio_b64": audio_b64}
+        if dbg.session_id:
+            resp["debug_session_id"] = dbg.session_id
+        return resp
 
     except HTTPException:
         raise
@@ -1946,7 +2618,7 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
     if not user_text:
         raise HTTPException(400, "Empty message")
 
-    reply_text = ask_llm(user_text, timeout=90)
+    reply_text = await asyncio.to_thread(lambda: ask_llm(user_text, timeout=90))
     if not reply_text:
         reply_text = "No response from LLM."
 
@@ -1961,26 +2633,29 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
         tmpfs_m   = Path("/dev/shm/piper/ru_RU-irina-medium.onnx")
         low_m     = d / "ru_RU-irina-low.onnx"
         med_m     = d / "ru_RU-irina-medium.onnx"
-        piper_bin = "/usr/local/bin/piper"
+        piper_bin = PIPER_BIN
         model_path = (
             str(tmpfs_m) if tmpfs_m.exists() else
             str(low_m)   if low_m.exists()   else
-            str(med_m)   if med_m.exists()   else None
+            str(med_m)   if med_m.exists()   else
+            PIPER_MODEL  if Path(PIPER_MODEL).exists() else None
         )
         if model_path and Path(piper_bin).exists():
             try:
-                pr = subprocess.run(
+                _tts_text = tts_text  # capture for lambda
+                pr = await asyncio.to_thread(lambda: subprocess.run(
                     [piper_bin, "--model", model_path, "--output-raw"],
-                    input=tts_text.encode("utf-8"),
+                    input=_tts_text.encode("utf-8"),
                     capture_output=True, timeout=180,
-                )
+                ))
                 if pr.stdout:
-                    ff2 = subprocess.run(
+                    _pr_out = pr.stdout
+                    ff2 = await asyncio.to_thread(lambda: subprocess.run(
                         ["ffmpeg", "-y",
                          "-f", "s16le", "-ar", "22050", "-ac", "1", "-i", "pipe:0",
                          "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "pipe:1"],
-                        input=pr.stdout, capture_output=True, timeout=30,
-                    )
+                        input=_pr_out, capture_output=True, timeout=30,
+                    ))
                     if ff2.stdout:
                         audio_b64 = base64.b64encode(ff2.stdout).decode()
             except Exception as tts_err:
@@ -2048,7 +2723,7 @@ async def admin_page(request: Request):
     except Exception:
         release_notes = []
 
-    return templates.TemplateResponse("admin.html", _ctx(
+    return templates.TemplateResponse(request, "admin.html", _ctx(
         request, user, "admin",
         stats=system_status,
         users=admin_users,
@@ -2134,6 +2809,315 @@ async def admin_reset_password(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Internal REST API — used by skill-taris (sintaris-openclaw, DEVICE_VARIANT=openclaw)
+# Auth: Authorization: Bearer <TARIS_API_TOKEN>
+# Loop-prevention: when LLM_PROVIDER=openclaw, skill-taris must NOT relay
+# chat requests back to Taris (would create an infinite loop).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _verify_api_token(request: Request) -> None:
+    """Raise HTTP 401 when the Bearer token is missing or wrong."""
+    if not TARIS_API_TOKEN:
+        raise HTTPException(401, detail="API token not configured (TARIS_API_TOKEN)")
+    auth = request.headers.get("Authorization", "")
+    token = auth.removeprefix("Bearer ").strip()
+    if token != TARIS_API_TOKEN:
+        raise HTTPException(401, detail="Invalid API token")
+
+
+@app.get("/api/status")
+async def api_status(request: Request):
+    """Health check for skill-taris and external monitors."""
+    _verify_api_token(request)
+    return JSONResponse({"status": "ok", "version": BOT_VERSION, "provider": LLM_PROVIDER})
+
+
+@app.get("/api/version")
+async def api_version():
+    """Public — returns current software stack info (no auth required)."""
+    return JSONResponse({
+        "version":  BOT_VERSION,
+        "stt":      _STT_UI_LABEL,
+        "llm":      _LLM_UI_LABEL,
+        "device":   _DEVICE_UI_LABEL,
+        "stt_raw":  STT_PROVIDER,
+        "llm_raw":  LLM_PROVIDER,
+    })
+
+
+# ── Voice debug endpoints ─────────────────────────────────────────────────────
+
+@app.get("/voice/debug/sessions")
+async def voice_debug_sessions(request: Request, last_n: int = 30):
+    """List recent voice debug sessions (requires auth). Only works when VOICE_DEBUG_MODE=1."""
+    user = _get_current_user(request)
+    if not user:
+        raise HTTPException(401)
+    if not VOICE_DEBUG_MODE:
+        return JSONResponse({"enabled": False, "sessions": []})
+    sessions = list_debug_sessions(Path(VOICE_DEBUG_DIR), last_n=last_n)
+    return JSONResponse({"enabled": True, "debug_dir": str(VOICE_DEBUG_DIR), "sessions": sessions})
+
+
+@app.get("/voice/debug/{session_id}/{filename}")
+async def voice_debug_download(request: Request, session_id: str, filename: str):
+    """Download a single file from a debug session directory.
+
+    URL: /voice/debug/<session_id>/<filename>
+    Example: /voice/debug/2026-03-28_11-40-00_123__admin/tts_output.ogg
+    """
+    from fastapi.responses import FileResponse
+    user = _get_current_user(request)
+    if not user:
+        raise HTTPException(401)
+    if not VOICE_DEBUG_MODE:
+        raise HTTPException(404, "Debug mode is disabled")
+    # Security: prevent path traversal
+    if ".." in session_id or "/" in session_id or ".." in filename or "/" in filename:
+        raise HTTPException(400, "Invalid path")
+    file_path = Path(VOICE_DEBUG_DIR) / session_id / filename
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(404, f"Not found: {filename}")
+    # Determine MIME type
+    mime = {
+        "ogg": "audio/ogg", "webm": "audio/webm", "wav": "audio/wav",
+        "pcm": "application/octet-stream", "txt": "text/plain; charset=utf-8",
+        "json": "application/json",
+    }.get(filename.rsplit(".", 1)[-1].lower(), "application/octet-stream")
+    return FileResponse(str(file_path), media_type=mime,
+                        filename=f"{session_id}__{filename}")
+
+
+
+@app.get("/api/logs")
+async def api_logs(request: Request, date: Optional[str] = None,
+                   last_n: int = 100, stage: Optional[str] = None):
+    """Return pipeline JSONL log records for analytics.
+
+    Query params:
+      date   – YYYY-MM-DD (default: today UTC)
+      last_n – max records to return (default: 100)
+      stage  – filter by stage: stt | llm | tts | rag | decode
+    """
+    _verify_api_token(request)
+    records = read_pipeline_logs(date=date, last_n=last_n, stage=stage)
+    return JSONResponse({"records": records, "count": len(records)})
+
+
+@app.get("/api/logs/stats")
+async def api_logs_stats(request: Request, date: Optional[str] = None):
+    """Return per-stage latency statistics for a given date.
+
+    Returns avg_ms, p95_ms, min_ms, max_ms, count, error_count, providers per stage.
+    """
+    _verify_api_token(request)
+    stats = get_pipeline_stats(date=date)
+    return JSONResponse({"date": date or "today", "stats": stats})
+
+
+@app.post("/api/benchmark")
+async def api_benchmark(request: Request):
+    """Run a synthetic STT+LLM+TTS benchmark and return timing breakdown.
+
+    Measures each stage independently on a fixed test prompt.
+    Useful for comparing STT models, LLM providers, and TTS engines.
+
+    Body (JSON): {"prompt": "...", "lang": "ru"}  (optional — defaults provided)
+    """
+    _verify_api_token(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    lang = body.get("lang", "ru")
+    test_prompts = {
+        "ru": "Привет, расскажи мне что-нибудь интересное о космосе.",
+        "en": "Hello, tell me something interesting about space.",
+        "de": "Hallo, erzähl mir etwas Interessantes über den Weltraum.",
+    }
+    prompt = body.get("prompt", test_prompts.get(lang, test_prompts["ru"]))
+
+    pl = PipelineLog(session_id="benchmark", user_id="api")
+    result: dict = {"prompt": prompt, "lang": lang, "stages": {}}
+
+    # ── LLM benchmark ──────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    llm_error = None
+    llm_reply = ""
+    try:
+        llm_reply = await asyncio.to_thread(lambda: ask_llm(prompt, timeout=60)) or ""
+    except Exception as e:
+        llm_error = str(e)
+    llm_ms = int((time.monotonic() - t0) * 1000)
+    pl.log("llm", provider=_llm_provider_label(), lang=lang,
+           input_chars=len(prompt), output_chars=len(llm_reply),
+           duration_ms=llm_ms, error=llm_error)
+    result["stages"]["llm"] = {
+        "provider": _llm_provider_label(), "duration_ms": llm_ms,
+        "input_chars": len(prompt), "output_chars": len(llm_reply),
+        "error": llm_error,
+    }
+
+    # ── TTS benchmark (if piper available) ────────────────────────────────
+    tts_text = (llm_reply or prompt)[:200]
+    d = Path(_TARIS_DIR)
+    piper_bin = PIPER_BIN
+    model_path = next(
+        (str(p) for p in [d / "ru_RU-irina-low.onnx", d / "ru_RU-irina-medium.onnx",
+                           Path(PIPER_MODEL)]
+         if p.exists()), None
+    )
+    if model_path and Path(piper_bin).exists():
+        t0 = time.monotonic()
+        tts_error = None
+        tts_audio_ms = 0
+        try:
+            def _run_piper() -> bytes:
+                pr = subprocess.run(
+                    [piper_bin, "--model", model_path, "--output-raw"],
+                    input=tts_text.encode("utf-8"), capture_output=True, timeout=60,
+                )
+                return pr.stdout or b""
+            tts_out = await asyncio.to_thread(_run_piper)
+            if tts_out:
+                tts_audio_ms = int(len(tts_out) / (22050 * 2) * 1000)
+        except Exception as e:
+            tts_error = str(e)
+        tts_ms = int((time.monotonic() - t0) * 1000)
+        pl.log("tts", provider="piper", lang=lang,
+               input_chars=len(tts_text), audio_ms=tts_audio_ms,
+               duration_ms=tts_ms, error=tts_error)
+        result["stages"]["tts"] = {
+            "provider": "piper", "model": model_path.rsplit("/", 1)[-1],
+            "duration_ms": tts_ms, "audio_ms": tts_audio_ms,
+            "rtf": round(tts_ms / tts_audio_ms, 3) if tts_audio_ms else None,
+            "error": tts_error,
+        }
+
+    # ── STT benchmark (silence probe — real audio requires a test fixture) ─
+    t0 = time.monotonic()
+    stt_error = None
+    stt_result = None
+    try:
+        silence_pcm = b"\x00" * (16000 * 2 * 2)   # 2 s of silence
+        stt_result = await asyncio.to_thread(
+            lambda: _stt_faster_whisper_web(silence_pcm, 16000, lang=lang)
+        )
+    except Exception as e:
+        stt_error = str(e)
+    stt_ms = int((time.monotonic() - t0) * 1000)
+    pl.log("stt", provider=_stt_provider_label(), lang=lang,
+           audio_ms=2000, output_chars=len(stt_result or ""),
+           duration_ms=stt_ms, error=stt_error)
+    result["stages"]["stt"] = {
+        "provider": _stt_provider_label(), "duration_ms": stt_ms,
+        "audio_ms": 2000, "rtf": round(stt_ms / 2000, 3),
+        "note": "silence probe only — use benchmark_stt.py for real WER",
+        "error": stt_error,
+    }
+
+    return JSONResponse(result)
+
+
+def _stt_provider_label() -> str:
+    if STT_PROVIDER == "faster_whisper":
+        return f"faster_whisper:{FASTER_WHISPER_MODEL}:{FASTER_WHISPER_DEVICE}"
+    return STT_PROVIDER
+
+
+def _llm_provider_label() -> str:
+    from core.bot_config import OLLAMA_MODEL
+    if LLM_PROVIDER == "ollama":
+        return f"ollama:{OLLAMA_MODEL}"
+    return LLM_PROVIDER
+
+
+@app.post("/api/chat")
+async def api_chat(request: Request):
+    """Send a prompt to the active LLM and return the reply.
+
+    Body (JSON): {"message": "...", "timeout": 60}
+    Response:    {"reply": "..."}
+    """
+    _verify_api_token(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+    message = (body.get("message") or "").strip()
+    if not message:
+        raise HTTPException(400, detail="'message' field is required")
+    t = min(int(body.get("timeout", 60)), 120)
+    pl = PipelineLog(user_id="api")
+    reply = pl.timed_llm(lambda: ask_llm(message, timeout=t), input_text=message)
+    return JSONResponse({"reply": reply})
+
+
+@app.post("/mcp/search")
+async def mcp_search(request: Request):
+    """MCP-compatible RAG search endpoint (Phase D).
+
+    Exposes local knowledge base as an MCP tool that can be called by
+    external AI agents and MCP clients.
+
+    Body (JSON): {"query": "...", "chat_id": <int>, "top_k": 3}
+    Response:    {"chunks": [{"doc_id": "...", "chunk_text": "...", "score": 0.9}, ...],
+                  "strategy": "fts5" | "hybrid" | "skipped",
+                  "count": <int>}
+    Auth:        Authorization: Bearer <TARIS_API_TOKEN>
+    """
+    if not MCP_SERVER_ENABLED:
+        raise HTTPException(503, detail="MCP server is disabled")
+    _verify_api_token(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(400, detail="'query' field is required")
+    chat_id = int(body.get("chat_id", 0))
+    top_k   = min(int(body.get("top_k", 3)), 10)
+
+    try:
+        from core.bot_rag import retrieve_context
+        chunks, _, strategy, trace = retrieve_context(chat_id, query, top_k=top_k)
+        result_chunks = [
+            {
+                "doc_id":     c.get("doc_id", ""),
+                "chunk_text": (c.get("chunk_text") or c.get("content") or "")[:800],
+                "score":      float(c.get("score", 0.0)),
+            }
+            for c in chunks
+        ]
+        return JSONResponse({
+            "chunks":   result_chunks,
+            "strategy": strategy,
+            "count":    len(result_chunks),
+        })
+    except Exception as exc:
+        log.error("[MCP-server] /mcp/search error: %s", exc)
+        raise HTTPException(500, detail="RAG search failed")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dynamic Screen DSL route
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/screen/{screen_id}")
+async def dynamic_screen(request: Request, screen_id: str):
+    user = _require_auth(request)
+    account = find_account_by_id(user["sub"]) or {}
+    lang = account.get("language", "en")
+    role = user.get("role", "user")
+    ctx = UserContext(user_id=user["sub"], chat_id=0, lang=lang, role=role, variant=DEVICE_VARIANT)
+    screen = load_screen(f"screens/{screen_id}.yaml", ctx, t_func=_web_t)
+    return templates.TemplateResponse(
+        request, "dynamic.html", _ctx(request, user, screen_id, screen=screen),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Startup
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -2159,4 +3143,6 @@ if __name__ == "__main__":
     else:
         log.warning("[Web] No SSL cert found in ssl/key.pem + ssl/cert.pem — "
                     "serving plain HTTP (mic API will not work in browsers)")
-    uvicorn.run("bot_web:app", host="0.0.0.0", port=8080, reload=False, **_ssl_kwargs)
+    _root_path = os.environ.get("ROOT_PATH", "")
+    uvicorn.run("bot_web:app", host="0.0.0.0", port=8080, reload=False,
+                root_path=_root_path, **_ssl_kwargs)

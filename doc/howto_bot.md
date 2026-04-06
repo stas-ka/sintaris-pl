@@ -6,6 +6,41 @@
 
 ---
 
+## Features — What Taris Can Do
+
+Taris is a personal AI assistant with the following capabilities:
+
+| Feature | Description |
+|---|---|
+| 🤖 **AI Chat** | Multi-turn conversation with LLM (Ollama/OpenAI). Supports Russian, German, English. |
+| 📄 **Knowledge Base (RAG)** | Upload PDF, DOCX, TXT documents; the bot uses them as context when answering questions. Hybrid FTS5 + vector search. |
+| 🗓 **Calendar** | Create, view, edit, delete events. Natural language input ("on Tuesday at 3pm"). Reminders. Console mode for conversational calendar management. |
+| 📧 **Mail Digest** | Summarise Gmail inbox with AI. Configure mail credentials via the bot. |
+| 📝 **Notes** | Create and manage personal Markdown notes. Voice dictation supported. |
+| 🎤 **Voice Assistant** | Send voice messages — the bot transcribes (Vosk/faster-whisper) and responds with TTS (Piper). Hotword detection for hands-free use. |
+| 👥 **Contacts** | Personal contact book. Search and manage contacts via the menu. |
+| 🔐 **Access Control** | Admin, user, developer, and guest roles. Admin approves new users. |
+| 🌐 **Web Interface** | Full web UI at `https://<host>:8080/` — chat, calendar, notes, documents, admin panel. |
+| 🔊 **Voice Settings** | Toggle VAD, Whisper STT, parallel TTS, model warm-up per user. |
+| 📊 **System Info** | CPU, memory, disk, uptime, service status. Admin can restart services. |
+| 🌍 **Multilingual** | Full Russian, English, and German interface. Language auto-detected or manually set. |
+
+---
+
+## Variants
+
+Taris runs in two flavours depending on the hardware:
+
+| Variant | Hardware | Web UI | STT |
+|---|---|---|---|
+| **taris / PicoClaw** | Raspberry Pi (OpenClawPI / OpenClawPI2) | `https://agents.sintaris.net/picoassist/` | Vosk (offline) |
+| **OpenClaw** | Linux workstation (TariStation2 / TariStation1) | `http://localhost:8080/` (TariStation2) · `http://SintAItion:8080/` (TariStation1) | faster-whisper |
+
+- **PicoClaw** is the default variant. All Pi-specific instructions in this guide apply to PicoClaw.
+- **OpenClaw** runs on a local Linux workstation, uses **faster-whisper** for STT instead of Vosk, and supports remote **Ollama** LLM inference in addition to cloud providers.
+
+---
+
 ## Getting Started
 
 1. Open the bot in Telegram and send `/start`.
@@ -36,7 +71,10 @@ Open-ended conversation with the AI. Ask anything — questions, explanations, t
 ---
 
 ### 🖥️ System Chat
-Ask about the state of the Raspberry Pi in plain language. The bot translates your request into a shell command, shows it to you, and asks for confirmation before running.
+
+> ⚠️ **System Chat has moved to the Admin Panel.** It is no longer in the main menu and is accessible only to **Admin** and **Developer** users.
+
+Ask about the state of the system in plain language. The bot translates your request into a shell command, shows it for confirmation, then executes it.
 
 **Example requests:**
 - `show disk usage`
@@ -46,7 +84,7 @@ Ask about the state of the Raspberry Pi in plain language. The bot translates yo
 - `memory usage`
 - `uptime`
 
-> ⚠️ Only available for **Full** and **Admin** users (not guests).
+See **Admin Panel → System → 🖥️ System Chat** below.
 
 ---
 
@@ -57,18 +95,24 @@ Voice messages work in **all bot modes** — no separate Voice Session button is
 1. Open the bot in any mode (💬 **Chat**, 📝 **Notes**, 🗓 **Calendar**, etc.)
 2. In the Telegram input bar, hold the **🎤 microphone** button to record.
 3. Release to send the voice message.
-4. The bot transcribes your speech offline (Vosk), sends the text to the AI, and replies with both text and a Piper TTS voice note.
+4. The bot transcribes your speech offline, sends the text to the AI, and replies with both text and a Piper TTS voice note.
 
-> 🗣️ The STT model is selected automatically based on your Telegram language: Russian (`vosk-model-small-ru`) or German (`vosk-model-small-de`). For all other languages the Russian model is used.
+> 🗣️ **PicoClaw (Pi):** STT model selected by Telegram language — Russian (`vosk-model-small-ru`) or German (`vosk-model-small-de`).  
+> 🗣️ **OpenClaw (TariStation2 / SintAItion):** Uses **faster-whisper** (`small` model, int8) — more accurate than Vosk, all languages supported.  
+> ⏱️ On TariStation2, the first voice message after a bot restart may take **3–5 seconds longer** while the STT model loads. All subsequent messages are fast.
 
 ---
 
 ### � Profile
-View your account details and link your Telegram account to the web interface.
+View your account details, personalise your voice, and link your Telegram account to the web interface.
 
 - Shows your name, username, Telegram chat ID, role, and registration date.
 - If you have configured mail credentials, the registered email is shown (masked).
 - Tap **🔗 Link to Web** to generate a 6-character one-time code (valid 15 minutes). Use it on the Web UI `/register` page to link your accounts.
+- **🎤 Voice** — toggle TTS voice gender:
+  - **Female (default):** Irina (`ru_RU-irina-medium.onnx`)
+  - **Male:** Dmitri (`ru_RU-dmitri-medium.onnx`)
+  - Setting is stored per-user and takes effect immediately on the next voice reply.
 
 ---
 ### 📒 Contacts
@@ -120,7 +164,8 @@ Full system management. Visible only to **Admin** users.
 
 #### System
 - **📜 Changelog** — browse full version history with release notes.
-- **🖥️ System Chat** — available from both admin and full-user menu.
+- **🖥️ System Chat** — ask about the state of the system in plain language. The bot translates the request into a shell command, shows it for confirmation, then runs it. Available to **Admin** and **Developer** users only (moved from main menu).
+- **🔍 RAG / Knowledge Base** — enables/disables FTS5-based RAG for grounding LLM answers in uploaded documents. Upload documents via the Web UI (`POST /admin/rag/upload`); relevant chunks are automatically prepended to LLM prompts during chat.
 
 > To find a user's chat ID, ask them to message [@userinfobot](https://t.me/userinfobot) on Telegram.
 
@@ -167,13 +212,79 @@ The installed app opens in standalone mode (no browser chrome) and supports quic
 
 ---
 
-## Commands
+## 🔍 Knowledge Base (RAG)
+
+> 🧪 **BETA** — Available on both PicoClaw and OpenClaw variants.
+
+Admins can upload documents to the bot's knowledge base. During chat, the most relevant text chunks are automatically prepended to the LLM prompt, grounding answers in your documents.
+
+### Uploading Documents
+- Open the Web UI and navigate to the **Admin** panel.
+- Use the **Upload Document** form or send a `POST` request to `/admin/rag/upload`.
+- Supported formats: plain text, Markdown, PDF (PyMuPDF + pdfminer fallback), DOCX.
+- Documents are split into chunks (~512 characters) and indexed in **SQLite FTS5** full-text search.
+- Duplicate documents (same SHA256 hash) are detected — you can replace or keep both.
+
+### How RAG Works
+1. User sends a message in 💬 Chat.
+2. `bot_rag.classify_query()` routes the query: **simple** (skip RAG), **factual** (use RAG), **contextual** (RAG if docs available).
+3. `bot_rag.retrieve_context()` selects search strategy based on hardware tier:
+   - **FTS5_ONLY** — BM25 full-text search (low RAM)
+   - **HYBRID** — BM25 + vector similarity + Reciprocal Rank Fusion (4–8 GB RAM)
+   - **FULL** — hybrid + reranking (≥ 8 GB RAM)
+4. Top-K chunks are prepended to the LLM prompt as `[KNOWLEDGE FROM USER DOCUMENTS]`.
+5. LLM produces a grounded answer. Retrieval metrics logged to `rag_log`.
+
+### Admin Controls (Telegram)
+- Admin panel → **System** → **🔍 RAG / Knowledge Base** — toggle RAG on/off at runtime.
+- Admin panel → **🔍 RAG** → **📊 Stats** — view retrieval latency, query type breakdown, top queries.
+- The toggle writes/removes `~/.taris/rag_disabled` (flag file; presence = RAG off).
+
+### Per-User RAG Settings
+Each user can override the system defaults in **Profile → ⚙️ RAG Settings**:
+- **Top-K** — number of chunks to inject (1–20, ± 1)
+- **Chunk size** — maximum characters per chunk (200–4000, ± 200)
+- Press **↩️ Reset** to restore system defaults.
+
+### Configuration
+| Constant | Default | Env var | Description |
+|---|---|---|---|
+| `RAG_ENABLED` | `true` | `RAG_ENABLED` | Master on/off switch |
+| `RAG_TOP_K` | `3` | `RAG_TOP_K` | Max chunks injected per request (overridable per-user) |
+| `RAG_CHUNK_SIZE` | `512` | `RAG_CHUNK_SIZE` | Characters per chunk when indexing |
+| `RAG_FLAG_FILE` | `~/.taris/rag_disabled` | — | Flag file (presence = RAG off) |
+
+---
+
+## 🛠 Developer Menu
+
+> Available to users with the **developer** role only.
+
+The Developer Menu provides debugging and monitoring tools accessible via Telegram.
+
+Access: Main Menu → **🛠 Dev**
+
+| Button | What it does |
+|---|---|
+| 💬 Dev Chat | Enter developer chat mode (LLM with developer context) |
+| 🔄 Restart Bot | Restart the Telegram service (requires confirmation) |
+| 📋 View Log | Show the last 30 lines of `telegram_bot.log` |
+| 🐛 Last Error | Show the most recent ERROR entry from the journal |
+| 📂 File List | List `~/.taris/*.py` files with sizes and modification times |
+| 🔒 Security Log | Show the last 20 security events (access denials, suspicious activity) |
+
+Security events are automatically logged to the `security_events` database table whenever an access denial or suspicious action occurs.
+
+---
+
+
 
 | Command | Description |
 |---------|-------------|
 | `/start` | Show welcome message and main menu |
 | `/menu` | Open main menu |
 | `/status` | Show current mode and service status |
+| `/help_guide` | Link to this user guide |
 
 ---
 
@@ -232,13 +343,24 @@ In the **Web Interface**, you can also manually change the language in ⚙️ Se
 
 ## Voice Requirements
 
-Voice recognition and speech synthesis run **fully offline** on the Pi — no cloud API needed.
+Voice recognition and speech synthesis run **fully offline** — no cloud API needed.
+
+### PicoClaw (Raspberry Pi)
 
 | Component | Details |
 |-----------|---------|
 | STT | Vosk `vosk-model-small-ru` (48 MB, Russian) + `vosk-model-small-de` (48 MB, German) |
 | TTS | Piper `ru_RU-irina-medium` (66 MB, Russian) + `de_DE-thorsten-medium.onnx` (65 MB, German) |
 | Audio HAT | Joy-IT RB-TalkingPI (for standalone voice assistant) |
+
+### OpenClaw (TariStation2 / SintAItion)
+
+| Component | Details |
+|-----------|---------|
+| STT | faster-whisper `small` model, int8 — RU 22% WER, DE 22% WER, EN 14% WER |
+| TTS | Piper `ru_RU-irina-medium` + `de_DE-thorsten-medium.onnx` (same as PicoClaw) |
+| Cold start | First voice message after restart: +3–5 s (STT model lazy-loads on TariStation2) |
+| SintAItion | STT model preloaded at startup — zero cold-start delay |
 
 ---
 
@@ -247,6 +369,8 @@ Voice recognition and speech synthesis run **fully offline** on the Pi — no cl
 | Problem | Likely cause | Fix |
 |---------|-------------|-----|
 | Bot doesn't respond | Service stopped | Admin: `sudo systemctl restart taris-telegram` |
+| First voice message very slow (+3–5 s) | STT model lazy-loading (TariStation2 only) | Normal on first message after restart; all subsequent messages are fast |
+| Menu buttons freeze / "query is too old" | Memory pressure (check swap with `free -m`) | Admin: verify `FASTER_WHISPER_PRELOAD=0` in bot.env; see admin guide |
 | Voice reply missing audio | Piper not installed | Run `setup_voice.sh` |
 | Mail digest fails | Gmail credentials expired | Check IMAP App Password in `bot.env` |
 | "Admins only" on System Chat | You are a guest user | Ask admin to upgrade your access |

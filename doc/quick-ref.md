@@ -111,6 +111,22 @@ plink -pw "%HOSTPWD%" -batch stas@<HOST> "echo %HOSTPWD% | sudo -S systemctl res
 
 Full deploy steps → `.github/instructions/bot-deploy.instructions.md`
 
+### User Data Directories (must survive every deploy)
+
+| Path | Content | Backup? |
+|------|---------|---------|
+| `~/.taris/taris.db` | All user data (SQLite) | ✅ |
+| `~/.taris/bot.env` | Secrets | ✅ |
+| `~/.taris/notes/` | Note files (.md) | ✅ |
+| `~/.taris/docs/` | Uploaded RAG documents (PDF/DOCX) | ✅ |
+| `~/.taris/mail_creds/` | Email credentials | ✅ |
+| `~/.taris/screens/` | Screen DSL YAML | ✅ |
+| `~/.taris/error_protocols/` | Error reports | ✅ |
+| `~/.taris/calendar/` | Legacy calendar JSON (migrated to DB) | ✅ |
+
+After restore: run `python3 setup/migrate_to_db.py` to re-index docs and sync legacy JSON → DB.
+Full data map → `doc/install-new-target.md §User Data: Storage, Backup & Migration`
+
 ---
 
 ## Remote Hosts

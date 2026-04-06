@@ -23,6 +23,7 @@ class UserContext:
     chat_id: int | None  # Telegram chat_id; None for web-only users
     lang: str = "ru"     # ru | en | de
     role: str = "user"   # user | admin | developer | guest
+    variant: str = "taris"  # taris | openclaw — deployment target variant
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,8 @@ Before executing any deploy step, read:
 
 **PI2-first rule**: ALWAYS deploy to PI2 (`OpenClawPI2`) first and verify before deploying to PI1 (`OpenClawPI`).
 
+**PI1 branch rule**: PI1 (`OpenClawPI`) only receives code from the **`master` branch**. NEVER deploy a feature branch to PI1. Before deploying to PI1, confirm `git branch` shows `master`. If on a feature branch, abort PI1 deploy and inform the user to merge first.
+
 ---
 
 ## Step 0 — Pre-flight check
@@ -162,7 +164,16 @@ plink -pw "PASS" -batch stas@HOST "grep BOT_VERSION ~/.taris/core/bot_config.py"
 
 ## Step 7 — (If `host=both`) Repeat Steps 1–6 for PI1
 
-Only proceed to PI1 after PI2 verification passes all checks in Step 5.
+> ⚠️ **Branch gate**: Before deploying to PI1, check the current git branch:
+> ```bat
+> git branch --show-current
+> ```
+> If the output is **not `master`**, **STOP**. Do NOT deploy to PI1. Inform the user:
+> "PI1 only receives the master branch. Please merge to master first."
+
+Only proceed to PI1 after:
+1. PI2 verification passes all checks in Step 5.
+2. Current branch is `master`.
 
 PI1 credentials: `OpenClawPI` / password from `%HOSTPWD%`
 

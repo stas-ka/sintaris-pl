@@ -24,7 +24,7 @@ Access restriction (enforced by callers):
 
 import re
 
-from core.bot_config import BOT_NAME, log
+from core.bot_config import BOT_NAME, log_security as log
 from core.bot_prompts import PROMPTS, fmt_prompt
 
 
@@ -184,6 +184,7 @@ ADMIN_ALLOWED_CMDS: set[str] = {
     "ps", "top", "htop", "uptime", "uname", "date", "hostname", "id", "who",
     "systemctl status", "journalctl", "ping", "curl", "dmesg", "lsblk",
     "vcgencmd", "lscpu", "lsusb", "env", "printenv", "stat", "wc", "sort",
+    "echo",  # knowledge answers: LLM may return echo "answer text" for informational questions
 }
 
 # Developer: all admin commands + service control + code/file operations

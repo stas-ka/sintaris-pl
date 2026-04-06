@@ -162,7 +162,8 @@ class DataStore(Protocol):
     def save_document_meta(self, doc_id: str, chat_id: int,
                            title: str, file_path: str,
                            doc_type: str,
-                           metadata: dict | None = None) -> None:
+                           metadata: dict | None = None,
+                           doc_hash: str | None = None) -> None:
         """Store document metadata (file content lives on disk)."""
         ...
 
@@ -172,6 +173,14 @@ class DataStore(Protocol):
 
     def delete_document(self, doc_id: str) -> None:
         """Remove document metadata record (does NOT delete the file on disk)."""
+        ...
+
+    def update_document_field(self, doc_id: str, **fields) -> None:
+        """Update arbitrary scalar fields on a document record."""
+        ...
+
+    def get_document_by_hash(self, chat_id: int, doc_hash: str) -> dict | None:
+        """Return document matching sha256 hash for given user, or None."""
         ...
 
     # ── Vector / RAG ──────────────────────────────────────────────────────────
@@ -228,6 +237,157 @@ class DataStore(Protocol):
 
     def delete_text_chunks(self, doc_id: str) -> None:
         """Remove all FTS5 text chunks for a document. Silent if not found."""
+        ...
+
+    def get_chunks_without_embeddings(self, chat_id_filter: int | None = None) -> list[dict]:
+        """Return chunks with no corresponding vector embedding.
+        Returns [{doc_id, chunk_idx, chat_id, chunk_text}].
+        """
+        ...
+
+    def log_rag_activity(self, chat_id: int, query: str, n_chunks: int, chars: int,
+                         latency_ms: int = 0, query_type: str = "contextual",
+                         n_fts5: int = 0, n_vector: int = 0, n_mcp: int = 0) -> None:
+        """Record a RAG retrieval event for auditing / admin log viewer."""
+        ...
+
+    def list_rag_log(self, limit: int = 20) -> list[dict]:
+        """Return the most recent RAG log entries, newest first.
+        Each entry: {id, chat_id, query, n_chunks, chars_injected, created_at}.
+        """
+        ...
+
+    # ── Operational tables (Layer 2 migration) ────────────────────────────────
+
+    def append_history_tracked(self, chat_id: int, role: str, content: str,
+                                call_id: str | None = None) -> int:
+        """Insert a history row with call_id tracking. Returns the row id."""
+        ...
+
+    def log_llm_call(
+        self, call_id: str, chat_id: int, provider: str,
+        history_ids: list, prompt_chars: int, response_ok: bool,
+        *, model: str = "", temperature: float = 0.0,
+        system_chars: int = 0, history_chars: int = 0,
+        rag_chunks_count: int = 0, rag_context_chars: int = 0,
+        response_preview: str = "", context_snapshot: str = "",
+    ) -> None:
+        """Log an LLM call with full trace metadata."""
+        ...
+
+    def get_llm_trace(self, chat_id: int, limit: int = 10) -> list[dict]:
+        """Return the N most recent LLM calls for a user."""
+        ...
+
+    def set_tts_pending(self, chat_id: int, msg_id: int) -> None:
+        """Record a pending TTS message (orphan cleanup tracking)."""
+        ...
+
+    def get_tts_pending(self, chat_id: int) -> int | None:
+        """Return pending TTS msg_id for user, or None."""
+        ...
+
+    def clear_tts_pending(self, chat_id: int) -> None:
+        """Remove TTS pending record for user."""
+        ...
+
+    def save_summary(self, chat_id: int, summary: str,
+                     tier: str = "mid", msg_count: int = 0) -> None:
+        """Store a conversation summary for a user."""
+        ...
+
+    def count_summaries(self, chat_id: int, tier: str = "mid") -> int:
+        """Return count of summaries for user at given tier."""
+        ...
+
+    def get_summaries_oldest(self, chat_id: int, tier: str = "mid") -> list[dict]:
+        """Return all summaries for user at tier, oldest first."""
+        ...
+
+    def delete_summaries(self, chat_id: int, tier: str | None = None) -> None:
+        """Delete summaries for user. tier=None deletes all tiers."""
+        ...
+
+    def get_all_summaries(self, chat_id: int) -> list[dict]:
+        """Return all summaries for user sorted by tier DESC, created_at ASC."""
+        ...
+
+    def get_user_pref(self, chat_id: int, key: str, default: str = "1") -> str:
+        """Get a per-user preference value."""
+        ...
+
+    def set_user_pref(self, chat_id: int, key: str, value: str) -> None:
+        """Set a per-user preference value."""
+        ...
+
+    def log_security_event(self, chat_id: int, event_type: str,
+                           detail: str = "") -> None:
+        """Record a security event."""
+        ...
+
+    def list_security_events(self, limit: int = 50) -> list[dict]:
+        """Return recent security events, newest first."""
+        ...
+
+    def list_active_chat_ids(self) -> list[int]:
+        """Return all distinct chat_ids that have conversation history."""
+        ...
+
+    # ── Web accounts (replaces accounts.json) ────────────────────────────────
+
+    def upsert_web_account(self, account: dict) -> None:
+        """Insert or replace a web account record (for migration + create)."""
+        ...
+
+    def find_web_account(self, *,
+                         user_id: str | None = None,
+                         username: str | None = None,
+                         chat_id: int | None = None) -> dict | None:
+        """Look up a web account by user_id, username, or telegram_chat_id."""
+        ...
+
+    def update_web_account(self, user_id: str, **fields) -> bool:
+        """Update fields on a web account. Returns True if found."""
+        ...
+
+    def list_web_accounts(self) -> list[dict]:
+        """Return all web accounts."""
+        ...
+
+    # ── Password reset tokens (replaces reset_tokens.json) ───────────────────
+
+    def save_reset_token(self, token: str, username: str, expires: str) -> None:
+        """Store a new reset token (expires is ISO-8601 string)."""
+        ...
+
+    def find_reset_token(self, token: str) -> dict | None:
+        """Return reset token record if found and not used."""
+        ...
+
+    def mark_reset_token_used(self, token: str) -> None:
+        """Mark a reset token as used."""
+        ...
+
+    def delete_reset_tokens_for_user(self, username: str) -> None:
+        """Remove all existing reset tokens for a username."""
+        ...
+
+    # ── Telegram↔Web link codes (replaces web_link_codes.json) ───────────────
+
+    def save_link_code(self, code: str, chat_id: int, expires_at: str) -> None:
+        """Store a web link code (expires_at is ISO-8601 string)."""
+        ...
+
+    def find_link_code(self, code: str) -> dict | None:
+        """Return link code record {code, chat_id, expires_at} or None."""
+        ...
+
+    def delete_link_code(self, code: str) -> None:
+        """Remove a link code."""
+        ...
+
+    def delete_expired_link_codes(self) -> None:
+        """Remove all expired link codes (cleanup)."""
         ...
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────

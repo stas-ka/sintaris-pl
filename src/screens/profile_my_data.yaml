@@ -1,0 +1,12 @@
+# My Data — summary of user's stored data.
+# Variables: name, tg_id, lang, reg_date, notes_count, cal_count,
+#            contacts_count, mail_status
+
+title_key: profile_my_data_msg
+parse_mode: Markdown
+
+widgets:
+  - type: button_row
+    buttons:
+      - label_key: btn_back
+        action: profile

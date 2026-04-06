@@ -79,6 +79,19 @@ a:hover { text-decoration: underline; }
 .sidebar-brand { font-size: 16px; font-weight: 700; color: #fff; }
 .sidebar-version { font-size: 11px; color: var(--text-dim); }
 
+.sidebar-stack {
+  padding: 6px 14px 4px;
+  border-top: 1px solid #2a2a4a;
+  margin-top: 2px;
+}
+.stack-row {
+  font-size: 10px; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.7;
+  cursor: default;
+}
+.stack-row:hover { color: #c4b5fd; }
+
 .sidebar hr { border: none; border-top: 1px solid #2a2a4a; margin: 0 12px 8px; }
 
 .sidebar-section-label {
@@ -482,13 +495,119 @@ input:focus, select:focus { border-color: var(--accent); }
   color: var(--text-primary);
 }
 
+/* ── Hamburger (hidden on desktop) ─────────────────────────── */
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 6px 8px;
+  min-width: 40px;
+  min-height: 40px;
+  line-height: 1;
+  margin-right: 4px;
+}
+
+/* ── Sidebar drawer overlay ─────────────────────────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 149;
+}
+.sidebar-overlay.open { display: block; }
+
+/* ── Mobile bottom navigation ───────────────────────────────── */
+.mobile-nav {
+  display: none;
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .sidebar { display: none; }
+
+  /* ── Base typography ───────────────────────────────────────── */
+  body { font-size: 15px; }
+
+  /* ── Sidebar: hide by default, slide in from left ──────────── */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 150;
+    width: 260px;
+  }
+  .sidebar.open { transform: translateX(0); }
   .main-area { margin-left: 0; }
+
+  /* ── Topbar: show hamburger, tighter ─────────────────────────*/
+  .hamburger { display: flex; align-items: center; }
+  .topbar { padding: 10px 12px; }
+  .topbar h1 { font-size: 16px; margin: 0; }
+
+  /* ── Content: extra bottom padding for nav bar ───────────────*/
+  .content {
+    padding: 12px 12px 80px;  /* 80px = bottom nav height */
+  }
+
+  /* ── Mobile bottom nav ───────────────────────────────────────*/
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-sidebar);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .mobile-nav a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 2px 6px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 10px;
+    gap: 2px;
+    min-height: 56px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-nav a.active { color: var(--accent-light); }
+  .mobile-nav a .nav-icon { font-size: 20px; line-height: 1; }
+  .mobile-nav a:hover { color: var(--text-primary); background: none; }
+
+  /* ── Touch targets: 44×44 px minimum ────────────────────────*/
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+  button, [role="button"] { touch-action: manipulation; }
+  .sidebar-nav a { padding: 13px 16px; font-size: 15px; }
+
+  /* ── Layout helpers ──────────────────────────────────────────*/
   .notes-layout { grid-template-columns: 1fr; }
   .quick-actions { flex-direction: column; }
   .stat-row { flex-direction: column; }
   .pipeline-grid { grid-template-columns: 1fr; }
   .login-card { margin: 16px; }
+
+  /* ── Cards ───────────────────────────────────────────────────*/
+  .card { padding: 12px 14px; }
+  .quick-card { min-width: 0; width: 100%; }
+
+  /* ── Chat container full height ──────────────────────────────*/
+  .chat-container { height: calc(100vh - 150px); min-height: 320px; }
+
+  /* ── Voice box height ────────────────────────────────────────*/
+  .vc-box { height: calc(100vh - 240px); min-height: 300px; }
+
+  /* ── Tables ──────────────────────────────────────────────────*/
+  .admin-table { font-size: 13px; }
+  .admin-table th, .admin-table td { padding: 8px 6px; }
 }

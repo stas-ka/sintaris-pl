@@ -3,7 +3,7 @@
 **Architecture:** 20-module split — Telegram core (v2026.3.19) + shared LLM/auth + Web UI layer (v2026.3.28)  
 **Entry point (Telegram):** `src/telegram_menu_bot.py` (~280 lines — handlers + `main()`)  
 **Entry point (Web):** `src/bot_web.py` — FastAPI application, all HTTP routes  
-**Version:** 2026.3.28
+**Version:** 2026.4.1
 
 Use this map to locate any function by module. Modules are organized into packages under `src/`:
 
@@ -31,10 +31,14 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 
 | Module | Package | Lines | Responsibility |
 |---|---|---|---|
-| `bot_config.py` | `core/` | ~120 | Constants, env loading, logging setup — no deps |
+| `bot_config.py` | `core/` | ~120 | Constants, env loading, logging setup — no deps; exports `TARIS_DIR` |
 | `bot_state.py` | `core/` | ~115 | Mutable runtime dicts, voice_opts/dynamic_users I/O; web link codes |
 | `bot_instance.py` | `core/` | ~12 | `bot = TeleBot(...)` singleton |
-| `bot_db.py` | `core/` | ~60 | SQLite init and connection helper |
+| `bot_db.py` | `core/` | ~60 | SQLite schema + `init_db()` + thread-local connection; uses `TARIS_DIR` |
+| `store_base.py` | `core/` | ~60 | `DataStore` Protocol + `StoreCapabilityError` |
+| `store.py` | `core/` | ~50 | Factory singleton `create_store()` — selects SQLite or PostgreSQL adapter; uses `TARIS_DIR` |
+| `store_sqlite.py` | `core/` | ~320 | Full SQLite adapter with optional sqlite-vec vector support |
+| `store_postgres.py` | `core/` | ~200 | PostgreSQL + pgvector adapter (OpenClaw / VPS) |
 | `bot_llm.py` | `core/` | ~250 | Pluggable LLM backend — 6 providers via `LLM_PROVIDER`; `ask_llm()` unified entry point; shared by Telegram + Web |
 | `bot_security.py` | `security/` | ~200 | 3-layer prompt injection guard; `SECURITY_PREAMBLE`; `_wrap_user_input()` |
 | `bot_auth.py` | `security/` | ~200 | JWT/bcrypt authentication, `accounts.json` — Web UI only |
@@ -51,6 +55,9 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_ui.py` | `ui/` | ~150 | Screen DSL dataclasses: `Screen`, `Button`, `Card`, `Toggle`, `Spinner`, etc. |
 | `bot_actions.py` | `ui/` | ~300 | Action handlers returning `Screen` objects — shared logic layer |
 | `render_telegram.py` | `ui/` | ~220 | Renders `Screen` → Telegram `send_message` / `InlineKeyboardMarkup` |
+| `screen_loader.py` | `ui/` | ~330 | Declarative YAML/JSON → `Screen` loader with schema validation, caching, i18n, visibility rules |
+| `screen.schema.json` | `screens/` | ~200 | JSON Schema (draft-07) for YAML screen file validation — all 10 widget types |
+| `*.yaml` (10 files) | `screens/` | ~15 ea | Declarative screen definitions: main_menu, admin_menu, help, notes_menu, note_view, note_raw, note_edit, profile, profile_lang, profile_my_data |
 | `telegram_menu_bot.py` | `src/` | ~280 | Entry point: handlers + `main()` |
 | `bot_web.py` | `src/` | ~2000 | FastAPI app: all HTTP routes, Jinja2 templates, HTMX endpoints, HTTPS :8080 |
 
@@ -60,22 +67,25 @@ No imports from other `bot_*` modules. Root of the dependency tree.
 
 | Symbol / Function | Purpose |
 |---|---|
+| `TARIS_DIR` | Runtime data directory — `os.environ.get("TARIS_HOME") or ~/.taris` |
+| `_th(rel)` | Helper: `os.path.join(TARIS_DIR, rel)` — used internally for all 31 path constants |
 | `BOT_VERSION` | `"YYYY.M.D"` — bump on every user-visible change |
 | `BOT_TOKEN` | Telegram bot token from `bot.env` |
 | `ALLOWED_USERS` | `set[int]` — full-access chat IDs |
 | `ADMIN_USERS` | `set[int]` — admin chat IDs |
+| `DEVICE_VARIANT` | `"picoclaw"` or `"openclaw"` — controls variant-specific features |
 | `TARIS_BIN` | `/usr/bin/picoclaw` |
-| `TARIS_CONFIG` | `~/.taris/config.json` |
-| `ACTIVE_MODEL_FILE` | `~/.taris/active_model.txt` |
+| `TARIS_CONFIG` | `TARIS_DIR/config.json` |
+| `ACTIVE_MODEL_FILE` | `TARIS_DIR/active_model.txt` |
 | `PIPER_BIN` | `/usr/local/bin/piper` |
-| `PIPER_MODEL` | `~/.taris/ru_RU-irina-medium.onnx` |
+| `PIPER_MODEL` | `TARIS_DIR/ru_RU-irina-medium.onnx` |
 | `PIPER_MODEL_TMPFS` | `/dev/shm/piper/...` (RAM-disk copy) |
-| `PIPER_MODEL_LOW` | `~/.taris/ru_RU-irina-low.onnx` |
+| `PIPER_MODEL_LOW` | `TARIS_DIR/ru_RU-irina-low.onnx` |
 | `WHISPER_BIN` | `/usr/local/bin/whisper-cpp` |
-| `WHISPER_MODEL` | `~/.taris/ggml-base.bin` |
-| `VOSK_MODEL_PATH` | `~/.taris/vosk-model-small-ru/` |
-| `NOTES_DIR` | `~/.taris/notes/` |
-| `_PENDING_TTS_FILE` | `~/.taris/pending_tts.json` |
+| `WHISPER_MODEL` | `TARIS_DIR/ggml-base.bin` |
+| `VOSK_MODEL_PATH` | `TARIS_DIR/vosk-model-small-ru/` |
+| `NOTES_DIR` | `TARIS_DIR/notes/` |
+| `_PENDING_TTS_FILE` | `TARIS_DIR/pending_tts.json` |
 | `_VOICE_OPTS_DEFAULTS` | All 10 voice-opt flags (all `False`) |
 | `_load_env_file(path)` | Parse `KEY=VALUE` file → `os.environ` |
 | `log` | `logging.getLogger("taris-tgbot")` |
@@ -105,6 +115,11 @@ Imports: `bot_config` only.
 | `_web_link_codes` | `dict[str, tuple[int, float]]` — active Telegram↔Web link codes (code → (chat_id, expiry)) |
 | `generate_web_link_code(chat_id)` | Create 6-char uppercase code with 15-min TTL → returns code string |
 | `validate_web_link_code(code)` | Verify code is valid + not expired → returns `chat_id` and consumes code (one-time use) |
+| `add_to_history(chat_id, role, content)` | Append message to `chat_history` DB; triggers tiered summarization at `CONV_SUMMARY_THRESHOLD` |
+| `load_conversation_history()` | Load all user histories from DB on startup |
+| `get_memory_context(chat_id)` | Return formatted summaries string (mid + long tier) for injection into system message |
+| `_summarize_session_async(chat_id)` | Background thread: summarizes oldest messages → `conversation_summaries` table |
+| `clear_history(chat_id)` | Clear `chat_history` + `conversation_summaries` for user (all tiers) |
 
 ---
 
@@ -114,11 +129,86 @@ Imports: `bot_config` only.
 
 | Symbol | Purpose |
 |---|---|
-| `bot` | `telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")` — shared by all modules |
+| `_409Handler` | `ExceptionHandler` subclass; swallows `ApiException` with HTTP 409 (Conflict) so a stale long-poll connection on restart doesn't crash the process |
+| `bot` | `telebot.TeleBot(BOT_TOKEN, parse_mode=None, exception_handler=_409Handler())` — shared by all modules; `parse_mode=None` prevents silent send failures when LLM/user content contains Markdown special characters |
 
 ---
 
-## bot_access.py — Core Utilities
+## core/bot_db.py — SQLite Layer
+
+Imports: `bot_config` (incl. `TARIS_DIR`).
+
+| Symbol / Function | Purpose |
+|---|---|
+| `DB_PATH` | `TARIS_DIR/taris.db` — SQLite database file path |
+| `init_db(conn)` | `CREATE TABLE IF NOT EXISTS` for all tables — safe to call on every startup |
+| `get_conn()` | Thread-local `sqlite3.Connection` (auto-opens + inits on first use per thread) |
+
+---
+
+## core/store.py — DataStore Factory
+
+Imports: `bot_config` (incl. `TARIS_DIR`), `store_base`.
+
+| Symbol / Function | Purpose |
+|---|---|
+| `create_store()` | Reads `STORE_BACKEND`; returns SQLite or PostgreSQL adapter |
+| `store` | Module-level singleton — `from core.store import store` |
+
+---
+
+## core/bot_rag.py — RAG Intelligence Layer *(v2026.4.1)*
+
+Imports: `bot_config`, `core.store`, `core.bot_mcp_client`.
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `classify_query(text, has_documents)` | `"simple"\|"factual"\|"contextual"` | Heuristic — no LLM. Simple=short/greeting, factual=knowledge+docs, contextual=fallback |
+| `detect_rag_capability()` | `RAGCapability` enum | Checks RAM (psutil) + vector availability; cached after first call |
+| `reciprocal_rank_fusion(fts5_results, vector_results, k=60)` | merged list | Deduplicates by `id`, scores with 1/(rank+k), sorts descending |
+| `retrieve_context(chat_id, query, top_k, max_chars)` | `(chunks, assembled, strategy)` | Unified entry point: auto-selects FTS5_ONLY / HYBRID / FULL; merges MCP remote chunks via RRF if `MCP_REMOTE_URL` set |
+
+`RAGCapability` enum values: `FTS5_ONLY` (< 4 GB RAM), `HYBRID` (4-8 GB), `FULL` (≥ 8 GB)
+Strategy string extended with `+mcp` when remote chunks merged (e.g. `"hybrid+mcp"`).
+
+---
+
+## core/bot_mcp_client.py — Remote MCP RAG Client *(v2026.4.1)*
+
+Imports: `bot_config`, stdlib `urllib.request`, `json`.
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `query_remote(query, chat_id, top_k)` | `list[dict]` | POST to `MCP_REMOTE_URL/search`; returns chunk dicts `{text, score, source}`; skips if CB open |
+| `circuit_status()` | `dict` | Returns CB health: `{state, failures, last_failure, reset_at}` |
+| `_cb_is_open()` | `bool` | True = circuit open (fail fast, skip remote); checks `_CB_RESET_SEC=300` cooldown |
+| `_cb_record_failure()` | — | Increments `_cb_failures`; opens CB after `_CB_THRESHOLD=3` |
+| `_cb_record_success()` | — | Resets `_cb_failures` to 0, closes CB |
+
+Auth: `TARIS_API_TOKEN` as `Bearer` header. No external SDK required (stdlib only).
+
+---
+
+## features/bot_dev.py — Developer Menu *(v2026.3.32)*
+
+Imports: `bot_config`, `bot_instance`, `core.bot_db`.
+
+| Function | Purpose |
+|---|---|
+| `handle_dev_menu(chat_id)` | Sends developer menu keyboard (only to `_is_developer()` users) |
+| `handle_dev_chat(chat_id, call)` | Sets `_user_mode = "dev_chat"`, sends mode indicator |
+| `handle_dev_restart(chat_id)` | Sends confirm-restart prompt with `dev_restart_confirmed` callback |
+| `handle_dev_restart_confirmed(chat_id)` | `systemctl restart taris-telegram` — requires developer role |
+| `handle_dev_log(chat_id)` | Sends last 30 lines of `telegram_bot.log` |
+| `handle_dev_error(chat_id)` | Sends last ERROR entry from journal |
+| `handle_dev_files(chat_id)` | Lists `~/.taris/*.py` with sizes + mtimes |
+| `handle_dev_security_log(chat_id)` | Fetches last 20 rows from `security_events` table |
+| `log_security_event(chat_id, event_type, detail)` | INSERT into `security_events` table |
+| `log_access_denied(chat_id, resource)` | Convenience wrapper: `log_security_event(…, "access_denied", …)` |
+
+---
+
+
 
 Imports: `bot_config`, `bot_state`, `bot_instance`.
 
@@ -146,8 +236,10 @@ Imports: `bot_config`, `bot_state`, `bot_instance`.
 |---|---|
 | `_detect_text_lang(text)` | Heuristic: Cyrillic ratio → `'ru'` / `'en'` / `None` |
 | `_resolve_lang(chat_id, user_text)` | Priority chain: detected → TG lang → Russian |
-| `_with_lang(chat_id, user_text)` | Prepend LLM language instruction |
-| `_with_lang_voice(chat_id, stt_text)` | Same + hint for low-confidence words `[?word]` |
+| `_with_lang(chat_id, user_text)` | Single-turn LLM call: prepend security preamble + bot config + lang instruction into one string |
+| `_with_lang_voice(chat_id, stt_text)` | Same as `_with_lang` + hint for low-confidence words `[?word]` |
+| `_build_system_message(chat_id, user_text)` | Multi-turn: returns `role:system` content — security preamble + bot config + tiered memory note + lang instruction |
+| `_user_turn_content(chat_id, user_text)` | Multi-turn: returns current user turn content — RAG context + user text (no preamble) |
 
 ### Text utilities
 
@@ -211,7 +303,7 @@ Pure functions — no Telegram API calls. Imports: `bot_config` only.
 
 ## bot_voice.py — Voice Pipeline
 
-Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
+Imports: `bot_config` (incl. `TARIS_DIR`), `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 ### Orphaned TTS tracker
 
@@ -231,6 +323,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 | Function | Purpose |
 |---|---|
+| `_voice_lang(chat_id)` | Returns TTS/voice language: `STT_LANG` if configured, else falls back to Telegram UI language (`_lang(chat_id)`). Ensures TTS speaks the user's voice language, not their Telegram client locale |
 | `_piper_model_path()` | Priority: tmpfs → low model → medium (default) |
 | `_setup_tmpfs_model(enable)` | Copy / remove ONNX to/from `/dev/shm/piper/` |
 | `_warm_piper_cache()` | Pre-run Piper with `"."` input to warm ONNX page cache |
@@ -242,8 +335,9 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 | Function | Purpose |
 |---|---|
-| `_vad_filter_pcm(raw_pcm, sample_rate)` | WebRTC VAD: strip non-speech frames (§5.3) |
+| `_vad_filter_pcm(raw_pcm, sample_rate)` | WebRTC VAD: strip non-speech frames; `speech_pad_ms=200` (v2026.4.19+) |
 | `_stt_whisper(raw_pcm, sample_rate)` | whisper.cpp STT + hallucination guard (sparse-output check); returns transcript or `None` |
+| `_stt_faster_whisper(raw_pcm, sample_rate)` | faster-whisper batch STT; `without_timestamps=True`, threads capped to `2×cpu_count−1`; lazy-loaded singleton keyed by `(model, device, compute_type)` (v2026.4.19+) |
 | `_load_vosk_model_cached()` | Test helper: lazy Vosk model singleton (used by T11) |
 
 ### Session + pipeline
@@ -251,7 +345,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 | Function | Purpose |
 |---|---|
 | `_start_voice_session(chat_id)` | Set mode `'voice'`, show instructions |
-| `_handle_voice_message(chat_id, voice_obj)` | Full pipeline: OGG→PCM→[VAD]→[Whisper\|Vosk]→[NoteCmd\|LLM]→TTS→send |
+| `_handle_voice_message(chat_id, voice_obj)` | Full pipeline: OGG→PCM→[VAD]→[Whisper\|Vosk\|FasterWhisper]→[NoteCmd\|SystemChat\|LLM]→TTS→send; if `_user_mode=="system"` dispatches to `_handle_system_message()` so admin role guards apply in voice mode |
 | `_handle_note_read_aloud(chat_id, slug)` | Load note, synthesise body via Piper TTS, send as voice message with title caption |
 
 ---
@@ -264,7 +358,7 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`, `
 
 | Function | Purpose |
 |---|---|
-| `_admin_keyboard()` | Admin inline keyboard (shows pending-reg count) |
+| `_admin_keyboard(chat_id)` | Admin inline keyboard (shows pending-reg count); all labels localized via `_t(chat_id, ...)` (v2026.3.43) |
 | `_handle_admin_menu(chat_id)` | Show admin panel |
 
 ### Guest-user management
@@ -362,7 +456,14 @@ Imports: `bot_config`, `bot_state`, `bot_instance`, `bot_access`, `bot_users`.
 
 | Function | Purpose |
 |---|---|
-| `_handle_chat_message(chat_id, user_text)` | Forward to taris LLM, return reply |
+| `_handle_chat_message(chat_id, user_text)` | Forward to LLM via `ask_llm_with_history()` with `[role:system] + history + [user_turn]` structure; response sent with `parse_mode=None` |
+
+### Screen DSL helpers (v2026.3.43)
+
+| Function | Purpose |
+|---|---|
+| `_screen_ctx(chat_id)` | Build a `ScreenContext` dict with user role, lang, and bot state for DSL rendering |
+| `_render(chat_id, path, variables)` | Load YAML screen at `path`, merge `variables` + `_screen_ctx()`, send via `render_telegram.render_screen()` |
 
 ---
 
@@ -545,25 +646,30 @@ Imports: `bot_config` only. Shared by Telegram and Web channels.
 
 | Function | Purpose |
 |---|---|
-| `get_active_model() -> str` | Read active model name from `active_model.txt` |
+| `get_active_model() -> str` | Read active model name from `active_model.txt`; strips `provider/` prefix (e.g. `openai/gpt-4o-mini` → `gpt-4o-mini`) to prevent HTTP 400 |
 | `set_active_model(name)` | Write model name to `active_model.txt` |
 | `list_models() -> list[dict]` | Read `model_list` from `config.json` |
+| `get_per_func_provider(use_case) -> str` | Return admin-set provider override for use_case (`"chat"`, `"voice"`, `"system"`, `"calendar"`), or `""` to use `LLM_PROVIDER` |
+| `set_per_func_provider(use_case, provider)` | Write per-function override to `llm_per_func.json`; `""` clears override |
 | `_clean_output(raw) -> str` | Strip log lines, printf wrappers, ANSI from CLI output |
-| `_http_post_json(url, payload, timeout)` | Shared HTTP helper for REST-based providers (OpenAI, YandexGPT, Gemini, Anthropic, local) |
+| `_http_post_json(url, payload, timeout)` | Shared HTTP helper for REST-based providers; retries on HTTP 429; logs model name on 4xx errors (v2026.4.22+) |
 | `_ask_taris(prompt, timeout)` | OpenRouter via `taris agent` CLI subprocess (default; `LLM_PROVIDER=taris`) |
 | `_ask_openai(prompt, timeout)` | OpenAI / OpenAI-compatible REST API (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`) |
 | `_ask_yandexgpt(prompt, timeout)` | YandexGPT REST API (`YANDEXGPT_API_KEY`, `YANDEXGPT_FOLDER_ID`, `YANDEXGPT_MODEL_URI`) |
 | `_ask_gemini(prompt, timeout)` | Google Gemini REST API (`GEMINI_API_KEY`, `GEMINI_MODEL`) |
 | `_ask_anthropic(prompt, timeout)` | Anthropic Claude REST API (`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`) |
 | `_ask_local(prompt, timeout)` | Local llama.cpp HTTP server (`LLAMA_CPP_URL` default `http://127.0.0.1:8081`) |
+| `_ask_ollama(prompt, timeout)` | Ollama single-turn HTTP POST to `/api/generate` (`OLLAMA_URL`, `OLLAMA_MODEL`) |
 | `_DISPATCH` | `dict` mapping `LLM_PROVIDER` values → provider functions |
-| `ask_llm(prompt, timeout=60) -> str` | Public entry point: routes via `_DISPATCH`; if primary fails and `LLM_LOCAL_FALLBACK=true`, retries via `_ask_local()` with `⚠️ [local fallback]` prefix |
+| `ask_llm(prompt, timeout=60) -> str` | Single-turn entry point: routes via `_DISPATCH`; if primary fails and `LLM_LOCAL_FALLBACK=true`, retries via `_ask_local()` with `⚠️ [local fallback]` prefix |
+| `ask_llm_with_history(messages, timeout, use_case) -> str` | Multi-turn entry point: checks `get_per_func_provider(use_case)` first, then `LLM_PROVIDER`; sends native multi-turn to openai/anthropic/ollama/yandexgpt/gemini/local; voice calls must pass `use_case="voice"` (v2026.4.23+) |
+| `_format_history_as_text(messages) -> str` | Fallback: collapses messages into plain text for providers without native multi-turn support |
 
 ---
 
 ## bot_auth.py — Web UI Authentication
 
-Imports: `bot_config` only. Used by Web UI channel exclusively.
+Imports: `bot_config` (incl. `TARIS_DIR`). Used by Web UI channel exclusively.
 
 ### Account management
 
@@ -655,6 +761,81 @@ Imports: `bot_config`, `bot_instance`, `bot_ui`.
 | `Spinner` | `bot.send_message("⏳ …")` — edited on completion |
 | `Confirm` | Two-button keyboard ✅/❌ |
 | `Redirect` | Immediately calls the target action handler |
+
+---
+
+## screen_loader.py — Declarative Screen DSL Loader
+
+Imports: `bot_ui` (all 11 dataclasses). Optional: `yaml` (pyyaml), `jsonschema`.
+
+Loads YAML/JSON screen definitions from `src/screens/` and returns `Screen` objects identical to those built programmatically in `bot_actions.py`. Both Telegram and Web renderers work unchanged.
+
+### Feature flags
+
+| Flag | Effect when absent |
+|---|---|
+| `_HAS_YAML` | Only `.json` files can be loaded (`.yaml` raises warning) |
+| `_HAS_JSONSCHEMA` | Schema validation silently skipped |
+
+### Globals
+
+| Symbol | Purpose |
+|---|---|
+| `_screen_cache` | `dict[str, dict]` — parsed file cache (cleared by `reload_screens()`) |
+| `_SCHEMA` | Lazy-loaded JSON Schema object (from `screen.schema.json`) |
+| `_VAR_RE` | `re.compile(r"\{(\w+)\}")` — variable substitution pattern |
+| `_WIDGET_BUILDERS` | `dict[str, Callable]` — type name → builder function registry |
+
+### Public API
+
+| Function | Purpose |
+|---|---|
+| `load_screen(path, user, variables, t_func)` | Main entry point: load YAML/JSON → resolve i18n + variables + visibility → return `Screen` |
+| `load_all_screens(directory)` | Pre-load all files in a directory → `dict[str, dict]` (raw parsed data) |
+| `reload_screens()` | Clear `_screen_cache` — call for hot-reload without restart |
+
+### Internal helpers
+
+| Function | Purpose |
+|---|---|
+| `_get_schema()` | Lazy-load `screen.schema.json` from `../screens/` relative to module |
+| `_validate_screen(data, path)` | Validate parsed dict against JSON Schema; `log.warning()` on error, never crashes |
+| `_load_file(path)` | Read + parse YAML/JSON + cache + validate; returns raw dict |
+| `_resolve_text(widget, key, t_func, lang, variables)` | Resolve `title_key` / `label_key` / `text_key` → literal text via i18n + variable substitution |
+| `_resolve_action(action, variables)` | Substitute `{var}` in callback action strings |
+| `_is_visible(widget, user, variables)` | Check `visible_roles` and `visible_if` conditions |
+| `_substitute(text, variables)` | Replace `{var_name}` patterns with values from `variables` dict |
+| `_register(type_name)` | Decorator: register a builder function in `_WIDGET_BUILDERS` |
+
+### Widget builders (registered via `@_register`)
+
+| Builder | Widget type | Returns |
+|---|---|---|
+| `_build_button(w, ...)` | `button` | `Button` |
+| `_build_button_row(w, ...)` | `button_row` | `ButtonRow` |
+| `_build_card(w, ...)` | `card` | `Card` |
+| `_build_text_input(w, ...)` | `text_input` | `TextInput` |
+| `_build_toggle(w, ...)` | `toggle` | `Toggle` |
+| `_build_audio_player(w, ...)` | `audio_player` | `AudioPlayer` |
+| `_build_markdown(w, ...)` | `markdown` | `MarkdownBlock` |
+| `_build_spinner(w, ...)` | `spinner` | `Spinner` |
+| `_build_confirm(w, ...)` | `confirm` | `Confirm` |
+| `_build_redirect(w, ...)` | `redirect` | `Redirect` |
+
+### Screen files (`src/screens/`)
+
+| File | Screen | Key variables |
+|---|---|---|
+| `main_menu.yaml` | Main user menu | — |
+| `admin_menu.yaml` | Admin panel menu | `{pending_badge}` |
+| `help.yaml` | Role-filtered help text | — |
+| `notes_menu.yaml` | Notes submenu | — |
+| `note_view.yaml` | Single note detail | `{slug}`, `{note_title}`, `{note_content}` |
+| `note_raw.yaml` | Raw text view | `{slug}`, `{note_title}`, `{note_content}` |
+| `note_edit.yaml` | Note edit options | `{slug}`, `{note_title}` |
+| `profile.yaml` | User profile card | `{user_name}`, `{role}`, `{chat_id}`, etc. |
+| `profile_lang.yaml` | Language selection | — |
+| `profile_my_data.yaml` | Stored data summary | `{notes_count}`, `{calendar_count}`, etc. |
 
 ---
 
@@ -782,6 +963,8 @@ Imports: all `bot_*` modules. Entry point for web channel. ~2000 lines, 41 route
 | `DELETE` | `/admin/user/{user_id}` | Delete web user account |
 | `POST` | `/admin/user/{user_id}/approve` | Approve pending web user |
 | `POST` | `/admin/user/{user_id}/block` | Block web user |
+| `GET` | `/screen/{screen_id}` | Dynamic Screen DSL renderer — serve YAML screen by ID (v2026.3.43) |
+| `POST` | `/mcp/search` | MCP-compatible RAG search; Bearer-token auth; returns RRF-ranked chunks (v2026.4.1) |
 
 ---
 
@@ -834,6 +1017,14 @@ All `data=` keys handled in `callback_handler()`:
 | `voice_opts_menu` | `_handle_voice_opts_menu` |
 | `voice_opt_toggle:<key>` | `_handle_voice_opt_toggle` |
 | `admin_changelog` | `_handle_admin_changelog` |
+| `admin_rag_menu` | `_handle_admin_rag_menu` — RAG toggle + activity log (v2026.3.43) |
+| `admin_rag_toggle` | `_handle_admin_rag_toggle` — flip `RAG_FLAG_FILE` presence (v2026.3.43) |
+| `admin_rag_log` | `_handle_admin_rag_log` — show last 20 RAG queries + chunks (v2026.3.43) |
+| `admin_rag_settings` | `_handle_admin_rag_settings` — show RAG settings panel (top-k, chunk, timeout) (v2026.3.30+2) |
+| `admin_rag_set_topk` | `_start_admin_rag_set("rag_top_k")` — prompt for new top-K value |
+| `admin_rag_set_chunk` | `_start_admin_rag_set("rag_chunk_size")` — prompt for new chunk size |
+| `admin_rag_set_timeout` | `_start_admin_rag_set("rag_timeout")` — prompt for new RAG timeout |
+| `reload_screens` | `reload_screens()` in `screen_loader` — hot-reload YAML screen cache (v2026.3.43) |
 | `menu_notes` | `_handle_notes_menu` |
 | `note_create` | `_start_note_create` |
 | `note_list` | `_handle_note_list` |
@@ -873,10 +1064,32 @@ All `data=` keys handled in `callback_handler()`:
 | `errp_start` | `_start_error_protocol` |
 | `errp_send` | `_errp_send` |
 | `errp_cancel` | `_errp_cancel` |
+| `doc_detail:<id>` | `_handle_doc_detail` — document detail view: type, chunks, size, shared, created (v2026.3.30+2) |
+| `doc_rename:<id>` | `_handle_doc_rename_prompt` — start rename flow (input mode `doc_rename`) |
+| `doc_rename_confirm:<id>` | `_handle_doc_rename_confirm` — apply new name |
+| `doc_share:<id>` | `_handle_doc_share_toggle` — flip `shared` flag |
+| `doc_del:<id>` | `_handle_doc_delete_request` — show delete confirmation |
+| `doc_del_confirm:<id>` | `_handle_doc_delete_confirm` — actual delete |
 | `cancel` | clear pending cmd/note/mode |
 | `run:<hash>` | `_execute_pending_cmd` |
+| `admin_rag_stats` | `_handle_admin_rag_stats` — RAG monitoring dashboard: latency, query types, top queries *(v2026.3.32)* |
+| `dev_menu` | `handle_dev_menu` — Developer Menu (developer role only) *(v2026.3.32)* |
+| `dev_chat` | `handle_dev_chat` — enter dev chat mode *(v2026.3.32)* |
+| `dev_restart` | `handle_dev_restart` — show restart confirmation *(v2026.3.32)* |
+| `dev_restart_confirmed` | `handle_dev_restart_confirmed` — execute restart *(v2026.3.32)* |
+| `dev_log` | `handle_dev_log` — last 30 log lines *(v2026.3.32)* |
+| `dev_error` | `handle_dev_error` — last ERROR entry from journal *(v2026.3.32)* |
+| `dev_files` | `handle_dev_files` — list `~/.taris/*.py` *(v2026.3.32)* |
+| `dev_security_log` | `handle_dev_security_log` — last 20 `security_events` rows *(v2026.3.32)* |
+| `profile_rag_settings` | `_handle_profile_rag_settings` — per-user RAG settings panel *(v2026.3.32)* |
+| `profile_rag_topk_inc` | `_handle_profile_rag_adjust("rag_top_k", +1)` *(v2026.3.32)* |
+| `profile_rag_topk_dec` | `_handle_profile_rag_adjust("rag_top_k", -1)` *(v2026.3.32)* |
+| `profile_rag_chunk_inc` | `_handle_profile_rag_adjust("rag_chunk_size", +200)` *(v2026.3.32)* |
+| `profile_rag_chunk_dec` | `_handle_profile_rag_adjust("rag_chunk_size", -200)` *(v2026.3.32)* |
+| `profile_rag_reset` | `_handle_profile_rag_reset` — reset to system defaults *(v2026.3.32)* |
+| `profile_toggle_memory` | `_handle_profile_toggle_memory` — per-user memory on/off *(v2026.3.32)* |
 
----
+
 
 ## Key Files on Pi (runtime)
 

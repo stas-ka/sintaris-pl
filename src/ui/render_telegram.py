@@ -63,7 +63,8 @@ def _make_button(btn: Button) -> InlineKeyboardButton:
 
 
 def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
-                  reply_to_message_id: int | None = None) -> None:
+                  reply_to_message_id: int | None = None,
+                  screen_path: str = "") -> None:
     """
     Render a Screen to a Telegram chat.
 
@@ -109,8 +110,9 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
             if isinstance(w, MarkdownBlock):
                 # Attach keyboard to last MarkdownBlock if no more text follows
                 is_last = (text_widgets[-1] is w)
+                msg_text = w.text if w.text.strip() else "\u200b"  # guard empty/whitespace
                 bot.send_message(
-                    chat_id, w.text,
+                    chat_id, msg_text,
                     parse_mode=screen.parse_mode,
                     reply_markup=(ikm if is_last else None),
                     **_common()
@@ -190,12 +192,16 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
                 sent_at_least_one = True
 
         except Exception as exc:
-            log.error("[render_telegram] widget render error: %s", exc)
+            log.error("[render_telegram] widget render error in %s: %s",
+                      screen_path or screen.title or "?", exc)
 
     # --- If nothing was sent yet, emit the screen title + any remaining keyboard ---
+    # Use screen.title as-is: it may already contain Markdown (e.g. "🔐 *Admin Panel*")
+    # from strings.json. Applying _escape_md() + wrapping in *..* would double-escape.
     if not sent_at_least_one:
+        msg_text = screen.title if screen.title else "\u200b"  # zero-width space if empty
         bot.send_message(
-            chat_id, f"*{_escape_md(screen.title)}*",
+            chat_id, msg_text,
             parse_mode="Markdown",
             reply_markup=ikm,
             **_common()
@@ -204,8 +210,9 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
 
     # --- Orphan keyboard (button rows with no associated text) ---
     if ikm is not None:
+        msg_text = screen.title if screen.title else "\u200b"
         bot.send_message(
-            chat_id, f"*{_escape_md(screen.title)}*",
+            chat_id, msg_text,
             parse_mode="Markdown",
             reply_markup=ikm,
             **_common()

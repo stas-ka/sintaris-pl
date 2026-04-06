@@ -43,7 +43,7 @@
         ask the LLM, and reply with synthesised speech — the same pipeline as the Telegram bot.
       </div>
       <div style="color:#f59e0b; font-size:12px; margin-top:4px">
-        ⚠️ First turn ≈ 30–90 s on Pi 3 B+ (Vosk STT + LLM + Piper TTS)
+        ⚠️ First turn ≈ 30–90 s on Pi 3 B+ ({{ stt_label }} STT + LLM + Piper TTS)
       </div>
     </div>
     <!-- JS appends chat-bubble elements here -->
@@ -87,7 +87,7 @@
       <span id="vc-timer" class="fw-bold text-white"
             style="display:none; min-width:36px; text-align:right">0:00</span>
       <button id="vc-btn" class="btn btn-primary" onclick="toggleVoiceChat()"
-              style="min-width:130px; padding:10px 20px; font-size:15px">
+              style="min-width:130px; padding:10px 20px; font-size:15px; touch-action:manipulation; min-height:48px">
         🎤 Record
       </button>
     </div>
@@ -219,15 +219,40 @@ async function vcStartRecord() {
 
 /* ── Stop recording ───────────────────────────────────────────────────────── */
 function vcStopRecord() {
-  if (vcRec && vcRec.state !== 'inactive') vcRec.stop();
   clearInterval(vcInterval); cancelAnimationFrame(vcAnimFrame);
   document.getElementById('vc-timer').style.display = 'none';
   document.getElementById('vc-waveform').style.display = 'none';
-  if (vcStream) { vcStream.getTracks().forEach(t => t.stop()); vcStream = null; }
   if (vcAudioCtx) { vcAudioCtx.close(); vcAudioCtx = null; }
   const btn = document.getElementById('vc-btn');
   btn.textContent = '🎤 Record'; btn.classList.replace('btn-danger', 'btn-primary');
   vcSetStatus('⏳ Sending audio to server…');
+
+  if (vcRec && vcRec.state !== 'inactive') {
+    /* iOS Safari: request final chunk, then stop. onstop fires after last data. */
+    vcRec.requestData && vcRec.requestData();
+    vcRec.stop();
+    /* Safety fallback: if onstop doesn't fire within 3 s, send what we have */
+    const rec = vcRec;
+    const chunks = vcChunks;
+    const mime = rec.mimeType || 'audio/webm';
+    const stream = vcStream;
+    const timeout = setTimeout(() => {
+      if (vcBusy) return;   /* onstop already fired */
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (chunks.length > 0) vcSendChat(new Blob(chunks, { type: mime }));
+      else { vcSetStatus('⚠️ No audio captured — tap again'); vcBusy = false; }
+    }, 3000);
+    /* Wrap onstop so it also clears the fallback and stops the stream */
+    const origOnStop = rec.onstop;
+    rec.onstop = () => {
+      clearTimeout(timeout);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      origOnStop();
+    };
+    vcStream = null;
+  } else {
+    if (vcStream) { vcStream.getTracks().forEach(t => t.stop()); vcStream = null; }
+  }
 }
 
 /* ── Send to /voice/chat — full STT → LLM → TTS pipeline ─────────────────── */
@@ -276,7 +301,7 @@ async function vcSendChat(blob) {
     }
 
     vcAddBubble('user', j.user_text, vcNow(), null);
-    vcAddBubble('bot',  j.reply_text, vcNow(), j.audio_b64 || null);
+    vcAddBubble('bot',  j.reply_text, vcNow(), j.audio_b64 || null, j.debug_session_id || null);
 
     /* auto-play the reply audio */
     if (j.audio_b64) {
@@ -300,7 +325,7 @@ async function vcSendChat(blob) {
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
-function vcAddBubble(role, text, time, audio_b64) {
+function vcAddBubble(role, text, time, audio_b64, debug_session_id) {
   const thread = document.getElementById('vc-thread');
   const div = document.createElement('div');
   div.className = 'chat-bubble ' + (role === 'user' ? 'chat-user' : 'chat-bot');
@@ -309,9 +334,30 @@ function vcAddBubble(role, text, time, audio_b64) {
     try {
       const bin = atob(audio_b64), bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/ogg' }));
-      audioHtml = '<div class="mt-sm"><audio controls src="' + url
-        + '" style="width:100%;height:36px;border-radius:8px"></audio></div>';
+      const blob = new Blob([bytes], { type: 'audio/ogg' });
+      const url = URL.createObjectURL(blob);
+      // Download button — uses blob URL for TTS audio
+      const dlTs = new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
+      const dlHref = debug_session_id
+        ? '/voice/debug/' + encodeURIComponent(debug_session_id) + '/tts_output.ogg'
+        : url;
+      const dlAttr = debug_session_id ? '' : ' download="tts_' + dlTs + '.ogg"';
+      audioHtml = '<div class="mt-sm" style="display:flex;align-items:center;gap:8px">'
+        + '<audio controls src="' + url + '" style="flex:1;height:36px;border-radius:8px"></audio>'
+        + '<a href="' + dlHref + '"' + dlAttr + ' title="Download audio" style="font-size:1.2em;text-decoration:none">📥</a>'
+        + '</div>';
+    } catch (_) {}
+  }
+  if (role === 'user' && audio_b64) {
+    // User recording download (audio_b64 is raw user audio b64)
+    try {
+      const bin = atob(audio_b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes]));
+      const dlTs = new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
+      audioHtml = '<div class="mt-sm" style="display:flex;align-items:center;gap:8px">'
+        + '<a href="' + url + '" download="input_' + dlTs + '.webm" title="Download recording" style="font-size:0.85em;opacity:0.7;text-decoration:none">📥 recording</a>'
+        + '</div>';
     } catch (_) {}
   }
   div.innerHTML =
@@ -339,7 +385,7 @@ function vcAddRawBubble(id, role, inner, time) {
 }
 
 const _STAGE_LABELS = {
-  stt: '🎤 Transcribing speech (Vosk STT)…',
+  stt: '🎤 Transcribing speech ({{ stt_label }} STT)…',
   llm: '🤖 Taris thinking (LLM)…',
   tts: '🔊 Generating audio reply (Piper TTS)…'
 };
@@ -397,7 +443,7 @@ async function vcSendTextMsg() {
     const data = await r.json();
 
     if (data.audio_b64) vcSetStage('tts');
-    vcAddBubble('bot', data.reply_text || '…', vcNow(), data.audio_b64 || null);
+    vcAddBubble('bot', data.reply_text || '…', vcNow(), data.audio_b64 || null, data.debug_session_id || null);
     vcScrollThread();
   } catch (e) {
     vcAddBubble('bot', '❌ Network error: ' + e.message, vcNow(), null);

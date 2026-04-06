@@ -16,30 +16,40 @@ All business logic lives in the bot_* modules:
 """
 
 import os
+import signal
 import threading
+import time as _time
 
 # ─── Core ────────────────────────────────────────────────────────────────────
 from core.bot_config import (
     BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
-    PIPER_MODEL_TMPFS, LLM_PROVIDER,
+    PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER, DEVICE_VARIANT,
+    FASTER_WHISPER_PRELOAD,
     log,
 )
 import core.bot_state as _st
 
 from core.bot_instance import bot
 from core.bot_logger import configure_alert_handler, attach_alerts_to_main_log
+from core.bot_embeddings import EmbeddingService
 
 # ─── Shared utilities ─────────────────────────────────────────────────────────
 from telegram.bot_access import (
     _is_allowed, _is_admin, _is_guest,
-    _deny, _set_lang, _send_menu,
+    _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
 )
 
+# ─── Screen DSL ───────────────────────────────────────────────────────────────
+from ui.bot_ui import UserContext
+from ui.screen_loader import load_screen, reload_screens
+from ui.render_telegram import render_screen
+
 # ─── Data layer ───────────────────────────────────────────────────────────────
 from telegram.bot_users import (
     _upsert_registration, _is_blocked_reg, _is_pending_reg,
+    _get_pending_registrations,
     _slug, _load_note_text, _save_note_file,
 )
 
@@ -47,7 +57,7 @@ from telegram.bot_users import (
 from features.bot_voice import (
     _handle_voice_message, _handle_note_read_aloud, _handle_digest_tts,
     _warm_piper_cache, _start_persistent_piper, _setup_tmpfs_model,
-    _cleanup_orphaned_tts,
+    _cleanup_orphaned_tts, _fw_preload,
 )
 
 # ─── Admin handlers ───────────────────────────────────────────────────────────
@@ -62,8 +72,15 @@ from telegram.bot_admin import (
     _handle_admin_changelog,
     _handle_admin_logs_menu, _handle_admin_logs_show,
     _handle_admin_llm_menu, _handle_set_llm,
+    _handle_admin_llm_per_func, _handle_admin_llm_set,
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
+    _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
+    _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
+    _handle_admin_rag_settings, _handle_admin_rag_stats, _start_admin_rag_set, _finish_admin_rag_set,
+    _handle_admin_rag_user_settings, _handle_admin_rag_user_adjust, _handle_admin_rag_user_reset,
+    _handle_admin_llm_trace,
+    _handle_admin_memory_menu, _handle_admin_mem_set_start,
     _admin_keyboard,
 )
 
@@ -73,14 +90,20 @@ from telegram.bot_handlers import (
     _handle_chat_message,
     _handle_system_message, _execute_pending_cmd,
     _handle_notes_menu, _handle_note_list, _start_note_create,
-    _handle_note_open, _handle_note_raw, _start_note_edit, _handle_note_delete,
+    _handle_note_open, _handle_note_raw, _start_note_edit,
+    _handle_note_delete, _handle_note_delete_confirmed,
     _start_note_append, _start_note_replace,
+    _start_note_rename, _handle_note_download, _handle_note_download_zip,
     _notes_menu_keyboard,
+    _note_slug_from_cb,
     _handle_profile,
     _handle_web_link,
     _start_profile_edit_name, _finish_profile_edit_name,
     _start_profile_change_pw, _finish_profile_change_pw,
     _handle_profile_lang, _set_profile_lang, _handle_profile_my_data,
+    _handle_profile_clear_memory, _handle_profile_clear_memory_confirmed,
+    _handle_profile_toggle_memory,
+    _handle_profile_voice_gender,
     _pending_profile,
 )
 
@@ -134,6 +157,25 @@ from features.bot_documents import (
     _handle_doc_upload,
     _handle_doc_delete,
     _handle_doc_delete_confirmed,
+    _handle_doc_detail,
+    _handle_doc_rename_start,
+    _handle_doc_rename_done,
+    _handle_doc_share_toggle,
+    _handle_doc_replace,
+    _handle_doc_keep_both,
+    _pending_rename as _docs_pending_rename,
+)
+from features.bot_dev import (
+    _handle_dev_menu,
+    _handle_dev_chat_start,
+    handle_dev_chat_message,
+    _handle_dev_restart,
+    _handle_dev_restart_confirmed,
+    _handle_dev_log,
+    _handle_dev_error,
+    _handle_dev_files,
+    _handle_dev_security_log,
+    log_access_denied,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -208,6 +250,19 @@ def cmd_menu(message):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# /link — generate a web-account link code
+# ─────────────────────────────────────────────────────────────────────────────
+
+@bot.message_handler(commands=["link"])
+def cmd_link(message):
+    if not _is_allowed(message.chat.id):
+        _deny(message.chat.id)
+        return
+    _set_lang(message.chat.id, message.from_user)
+    _handle_web_link(message.chat.id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # /status
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -221,15 +276,28 @@ def cmd_status(message):
     mode         = _st._user_mode.get(cid, "—")
     active_model = _get_active_model() or "default"
 
-    services = [
-        ("🤖 Telegram Bot",    "taris-telegram"),
-        ("🌐 AI Gateway",      "taris-gateway"),
-        ("🎤 Voice Assistant", "taris-voice"),
-    ]
+    # Service list and systemctl scope differ by variant
+    if DEVICE_VARIANT == "openclaw":
+        services = [
+            ("🤖 Telegram Bot",    "taris-telegram"),
+            ("🌐 Web UI",          "taris-web"),
+            ("🧠 Ollama LLM",      "ollama"),
+        ]
+        systemctl_scope = ["--user"]
+    else:
+        services = [
+            ("🤖 Telegram Bot",    "taris-telegram"),
+            ("🌐 AI Gateway",      "taris-gateway"),
+            ("🎤 Voice Assistant", "taris-voice"),
+        ]
+        systemctl_scope = []
+
     svc_lines = []
     for label, svc_name in services:
-        _, state = _run_subprocess(["systemctl", "is-active", svc_name], timeout=5)
-        state = state.strip()
+        _, state = _run_subprocess(
+            ["systemctl"] + systemctl_scope + ["is-active", svc_name], timeout=5
+        )
+        state = state.strip() or "unknown"
         icon  = "✅" if state == "active" else "❌"
         svc_lines.append(f"{icon} {label}: `{state}`")
 
@@ -256,20 +324,42 @@ def cmd_status(message):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
+    _cb_t0 = _time.perf_counter()
     cid  = call.message.chat.id
     if not _is_allowed(cid):
-        bot.answer_callback_query(call.id, "⛔ Access denied")
+        try:
+            bot.answer_callback_query(call.id, "⛔ Access denied")
+        except Exception:
+            pass
         return
 
     _set_lang(cid, call.from_user)
     data = call.data
-    bot.answer_callback_query(call.id)   # dismiss spinner
+
+    _ack_t0 = _time.perf_counter()
+    try:
+        bot.answer_callback_query(call.id)   # dismiss spinner
+    except Exception as _ack_err:
+        # Callback expired (>60s old) or already answered — log and continue.
+        # Do NOT propagate: unhandled ApiTelegramException in a worker triggers
+        # raise_exceptions() in the polling loop, which doubles the poll backoff
+        # (0.25s → 60s) and makes the bot appear frozen.
+        log.warning("[PERF] answer_callback_query failed (data=%s): %s", data, _ack_err)
+        return
+    _ack_ms = (_time.perf_counter() - _ack_t0) * 1000
+    if _ack_ms > 300:
+        log.warning("[PERF] answer_callback_query slow: %.0fms (data=%s)", _ack_ms, data)
 
     # ── Navigation ─────────────────────────────────────────────────────────
     if data == "menu":
         _st._user_mode.pop(cid, None)
         _st._pending_cmd.pop(cid, None)
-        _send_menu(cid)
+        _st._system_history.pop(cid, None)
+        role = "admin" if _is_admin(cid) else "guest" if _is_guest(cid) else "user"
+        ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role=role)
+        screen = load_screen("screens/main_menu.yaml", ctx,
+                             t_func=lambda _lang_arg, key: _t(cid, key))
+        render_screen(screen, cid, bot)
 
     # ── Mail digest ────────────────────────────────────────────────────────
     elif data == "digest":
@@ -296,15 +386,11 @@ def callback_handler(call):
 
     # ── Help ───────────────────────────────────────────────────────────────
     elif data == "help":
-        if _is_admin(cid):
-            key = "help_text_admin"
-        elif _is_guest(cid):
-            key = "help_text_guest"
-        else:
-            key = "help_text"
-        bot.send_message(cid, _t(cid, key),
-                         parse_mode="Markdown",
-                         reply_markup=_back_keyboard())
+        role = "admin" if _is_admin(cid) else "guest" if _is_guest(cid) else "user"
+        ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role=role)
+        screen = load_screen("screens/help.yaml", ctx,
+                             t_func=lambda _lang_arg, key: _t(cid, key))
+        render_screen(screen, cid, bot)
     # ── User profile ───────────────────────────────────────────────────────────
     elif data == "profile":
         if not _is_allowed(cid): return _deny(cid)
@@ -327,10 +413,47 @@ def callback_handler(call):
     elif data == "profile_my_data":
         if not _is_allowed(cid): return _deny(cid)
         _handle_profile_my_data(cid)
+    elif data == "profile_clear_memory":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_clear_memory(cid)
+    elif data == "profile_clear_memory_confirm":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_clear_memory_confirmed(cid)
+    elif data == "profile_toggle_memory":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_toggle_memory(cid)
+    elif data == "profile_voice_gender":
+        if not _is_allowed(cid): return _deny(cid)
+        _handle_profile_voice_gender(cid)
+    # ── Developer menu ─────────────────────────────────────────────────────
+    elif data == "dev_menu":
+        _handle_dev_menu(cid)
+    elif data == "dev_chat":
+        _handle_dev_chat_start(cid)
+    elif data == "dev_restart":
+        _handle_dev_restart(cid)
+    elif data == "dev_restart_confirmed":
+        _handle_dev_restart_confirmed(cid)
+    elif data == "dev_log":
+        _handle_dev_log(cid)
+    elif data == "dev_error":
+        _handle_dev_error(cid)
+    elif data == "dev_files":
+        _handle_dev_files(cid)
+    elif data == "dev_security_log":
+        _handle_dev_security_log(cid)
     # ── Admin panel ────────────────────────────────────────────────────────
+    elif data == "noop":
+        pass  # separator buttons — ignore silently
     elif data == "admin_menu":
         if _is_admin(cid):
-            _handle_admin_menu(cid)
+            pending_count = len(_get_pending_registrations())
+            pending_badge = f"  ({pending_count} new)" if pending_count else ""
+            ctx = UserContext(user_id=cid, chat_id=cid, lang=_lang(cid), role="admin")
+            screen = load_screen("screens/admin_menu.yaml", ctx,
+                                 variables={"pending_badge": pending_badge},
+                                 t_func=lambda _lang_arg, key: _t(cid, key))
+            render_screen(screen, cid, bot)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -407,6 +530,116 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    elif data.startswith("admin_llm_for:"):
+        if _is_admin(cid):
+            _handle_admin_llm_per_func(cid, data[len("admin_llm_for:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_llm_set:"):
+        if _is_admin(cid):
+            parts = data[len("admin_llm_set:"):].split(":", 1)
+            use_case = parts[0]
+            provider = parts[1] if len(parts) > 1 else ""
+            _handle_admin_llm_set(cid, use_case, provider)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_voice_config":
+        if _is_admin(cid):
+            _handle_admin_voice_config(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_stt_set:"):
+        if _is_admin(cid):
+            _handle_admin_stt_set(cid, data[len("admin_stt_set:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_fw_model:"):
+        if _is_admin(cid):
+            _handle_admin_fw_model_set(cid, data[len("admin_fw_model:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── RAG administration ────────────────────────────────────────────
+    elif data == "admin_rag_menu":
+        if _is_admin(cid):
+            _handle_admin_rag_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_toggle":
+        if _is_admin(cid):
+            _handle_admin_rag_toggle(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_log":
+        if _is_admin(cid):
+            _handle_admin_rag_log(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_stats":
+        if _is_admin(cid):
+            _handle_admin_rag_stats(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_llm_trace":
+        if _is_admin(cid):
+            _handle_admin_llm_trace(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_memory_menu":
+        if _is_admin(cid):
+            _handle_admin_memory_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data in ("admin_mem_set_hist", "admin_mem_set_summ", "admin_mem_set_mid"):
+        if _is_admin(cid):
+            _handle_admin_mem_set_start(cid, data[len("admin_mem_set_"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_settings":
+        if _is_admin(cid):
+            _handle_admin_rag_settings(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data in ("admin_rag_set_topk", "admin_rag_set_chunk", "admin_rag_set_timeout", "admin_rag_set_temp"):
+        if _is_admin(cid):
+            _start_admin_rag_set(cid, data[len("admin_rag_set_"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_user_settings":
+        if _is_admin(cid):
+            _handle_admin_rag_user_settings(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data in ("admin_rag_user_topk_inc", "admin_rag_user_topk_dec",
+                  "admin_rag_user_chunk_inc", "admin_rag_user_chunk_dec"):
+        if _is_admin(cid):
+            key   = "topk" if "topk" in data else "chunk"
+            delta = 1 if data.endswith("_inc") else -1
+            if key == "chunk": delta *= 200
+            _handle_admin_rag_user_adjust(cid, key, delta)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_rag_user_reset":
+        if _is_admin(cid):
+            _handle_admin_rag_user_reset(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -424,6 +657,14 @@ def callback_handler(call):
     elif data == "admin_changelog":
         if _is_admin(cid):
             _handle_admin_changelog(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Screen DSL reload ──────────────────────────────────────────────────
+    elif data == "reload_screens":
+        if _is_admin(cid):
+            reload_screens()
+            bot.send_message(cid, "✅ Screens reloaded")
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -461,45 +702,80 @@ def callback_handler(call):
 
     elif data.startswith("note_open:"):
         if not _is_guest(cid):
-            _handle_note_open(cid, data[len("note_open:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_open:"):]) or data[len("note_open:"):]
+            _handle_note_open(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data.startswith("note_tts:"):
         if not _is_guest(cid):
-            _handle_note_read_aloud(cid, data[len("note_tts:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_tts:"):]) or data[len("note_tts:"):]
+            _handle_note_read_aloud(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data.startswith("note_raw:"):
         if not _is_guest(cid):
-            _handle_note_raw(cid, data[len("note_raw:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_raw:"):]) or data[len("note_raw:"):]
+            _handle_note_raw(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data.startswith("note_edit:"):
         if not _is_guest(cid):
-            _start_note_edit(cid, data[len("note_edit:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_edit:"):]) or data[len("note_edit:"):]
+            _start_note_edit(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data.startswith("note_append:"):
         if not _is_guest(cid):
-            _start_note_append(cid, data[len("note_append:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_append:"):]) or data[len("note_append:"):]
+            _start_note_append(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data.startswith("note_replace:"):
         if not _is_guest(cid):
-            _start_note_replace(cid, data[len("note_replace:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_replace:"):]) or data[len("note_replace:"):]
+            _start_note_replace(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data.startswith("note_delete:"):
         if not _is_guest(cid):
-            _handle_note_delete(cid, data[len("note_delete:"):])
+            slug = _note_slug_from_cb(cid, data[len("note_delete:"):]) or data[len("note_delete:"):]
+            _handle_note_delete(cid, slug)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_del_confirm:"):
+        if not _is_guest(cid):
+            slug = _note_slug_from_cb(cid, data[len("note_del_confirm:"):]) or data[len("note_del_confirm:"):]
+            _handle_note_delete_confirmed(cid, slug)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_rename:"):
+        if not _is_guest(cid):
+            slug = _note_slug_from_cb(cid, data[len("note_rename:"):]) or data[len("note_rename:"):]
+            _start_note_rename(cid, slug)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("note_download:"):
+        if not _is_guest(cid):
+            slug = _note_slug_from_cb(cid, data[len("note_download:"):]) or data[len("note_download:"):]
+            _handle_note_download(cid, slug)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "note_download_zip":
+        if not _is_guest(cid):
+            _handle_note_download_zip(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Send as email ───────────────────────────────────────────────────────
     elif data.startswith("note_email:"):
         from telegram.bot_users import _load_note_text
@@ -700,12 +976,27 @@ def callback_handler(call):
     elif data == "menu_docs":
         if not _is_guest(cid):
             _handle_docs_menu(cid)
+    elif data.startswith("doc_detail:"):
+        if not _is_guest(cid):
+            _handle_doc_detail(cid, data[len("doc_detail:"):])
+    elif data.startswith("doc_rename:"):
+        if not _is_guest(cid):
+            _handle_doc_rename_start(cid, data[len("doc_rename:"):])
+    elif data.startswith("doc_share:"):
+        if not _is_guest(cid):
+            _handle_doc_share_toggle(cid, data[len("doc_share:"):])
     elif data.startswith("doc_del:"):
         if not _is_guest(cid):
             _handle_doc_delete(cid, data[len("doc_del:"):])
     elif data.startswith("doc_del_confirm:"):
         if not _is_guest(cid):
             _handle_doc_delete_confirmed(cid, data[len("doc_del_confirm:"):])
+    elif data.startswith("doc_replace:"):
+        if not _is_guest(cid):
+            _handle_doc_replace(cid, data[len("doc_replace:"):])
+    elif data == "doc_keep_both":
+        if not _is_guest(cid):
+            _handle_doc_keep_both(cid)
     # ── Confirm / cancel system command ────────────────────────────────────
     elif data == "cancel":
         _st._pending_cmd.pop(cid, None)
@@ -721,6 +1012,11 @@ def callback_handler(call):
     elif data.startswith("run:"):
         _execute_pending_cmd(cid)
 
+    _cb_ms = (_time.perf_counter() - _cb_t0) * 1000
+    if _cb_ms > 500:
+        log.warning("[PERF] callback slow: %.0fms (data=%s cid=%s)", _cb_ms, data, cid)
+    else:
+        log.debug("[PERF] callback: %.0fms (data=%s)", _cb_ms, data)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Text message router
@@ -753,7 +1049,9 @@ def text_handler(message):
     mode = _st._user_mode.get(cid)
 
     if mode is None:
-        _send_menu(cid, greeting=False)
+        # Default to chat mode — don't force menu on every unrouted text
+        _st._user_mode[cid] = "chat"
+        _handle_chat_message(cid, message.text)
         return
 
     # ── Profile self-service text flows ────────────────────────────────────────
@@ -777,6 +1075,36 @@ def text_handler(message):
     if mode == "admin_remove_user":
         if _is_admin(cid):
             _finish_admin_remove_user(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            bot.send_message(cid, _t(cid, "admin_only"))
+        return
+
+    if mode in ("admin_rag_set_topk", "admin_rag_set_chunk", "admin_rag_set_timeout", "admin_rag_set_temp"):
+        if _is_admin(cid):
+            _finish_admin_rag_set(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            bot.send_message(cid, _t(cid, "admin_only"))
+        return
+
+    if mode is not None and mode.startswith("admin_mem_"):
+        if _is_admin(cid):
+            setting_key = mode[len("admin_mem_"):]  # "hist", "summ", or "mid"
+            db_keys = {
+                "hist": "CONVERSATION_HISTORY_MAX",
+                "summ": "CONV_SUMMARY_THRESHOLD",
+                "mid":  "CONV_MID_MAX",
+            }
+            try:
+                val = int(message.text.strip())
+                from core.bot_db import db_set_system_setting
+                db_set_system_setting(db_keys[setting_key], str(val))
+                _st._user_mode.pop(cid, None)
+                bot.send_message(cid, f"✅ {db_keys[setting_key]} = {val}")
+                _handle_admin_memory_menu(cid)
+            except (ValueError, KeyError):
+                bot.send_message(cid, "❌ Please enter a valid integer.")
         else:
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "admin_only"))
@@ -833,11 +1161,7 @@ def text_handler(message):
         title_line = (existing or "").splitlines()[0] if existing else f"# {slug}"
         content    = f"{title_line}\n\n{message.text.strip()}"
         _save_note_file(cid, slug, content)
-        title = title_line.lstrip("# ").strip()
-        bot.send_message(cid,
-                         _t(cid, "note_updated", title=_escape_md(title)),
-                         parse_mode="Markdown",
-                         reply_markup=_notes_menu_keyboard(cid))
+        _handle_note_open(cid, slug)
         return
 
     if mode == "note_append_content":
@@ -854,12 +1178,31 @@ def text_handler(message):
         existing   = _load_note_text(cid, slug) or ""
         content    = existing.rstrip() + "\n\n" + message.text.strip()
         _save_note_file(cid, slug, content)
-        title_line = existing.splitlines()[0] if existing else f"# {slug}"
-        title = title_line.lstrip("# ").strip()
-        bot.send_message(cid,
-                         _t(cid, "note_updated", title=_escape_md(title)),
-                         parse_mode="Markdown",
-                         reply_markup=_notes_menu_keyboard(cid))
+        _handle_note_open(cid, slug)
+        return
+
+    if mode == "note_rename_title":
+        if _is_guest(cid):
+            _st._user_mode.pop(cid, None)
+            _st._pending_note.pop(cid, None)
+            return
+        info = _st._pending_note.pop(cid, {})
+        _st._user_mode.pop(cid, None)
+        slug = info.get("slug")
+        if not slug:
+            _send_menu(cid, greeting=False)
+            return
+        new_title  = message.text.strip()[:100]
+        existing   = _load_note_text(cid, slug)
+        if existing is None:
+            bot.send_message(cid, _t(cid, "note_not_found"),
+                             reply_markup=_notes_menu_keyboard(cid))
+            return
+        lines = existing.splitlines()
+        body_lines = lines[2:] if len(lines) > 2 else (lines[1:] if len(lines) > 1 else [])
+        content = f"# {new_title}\n\n" + "\n".join(body_lines).strip()
+        _save_note_file(cid, slug, content)
+        _handle_note_open(cid, slug)
         return
 
     # ── Email recipient address entry ─────────────────────────────────
@@ -951,13 +1294,29 @@ def text_handler(message):
             _st._user_mode.pop(cid, None)
         return
 
+    if mode == "doc_rename":
+        if not _is_guest(cid):
+            _handle_doc_rename_done(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            _docs_pending_rename.pop(cid, None)
+        return
+
+    if mode == "dev_chat":
+        handle_dev_chat_message(cid, message.text)
+        return
+
     # ── Chat modes ─────────────────────────────────────────────────────────
     if mode == "chat":
-        _handle_chat_message(cid, message.text)
+        bot.send_chat_action(cid, "typing")
+        threading.Thread(target=_handle_chat_message, args=(cid, message.text),
+                         daemon=True, name=f"chat-{cid}").start()
 
     elif mode == "system":
         if _is_admin(cid):           # defense-in-depth: guard even at routing level
-            _handle_system_message(cid, message.text)
+            bot.send_chat_action(cid, "typing")
+            threading.Thread(target=_handle_system_message, args=(cid, message.text),
+                             daemon=True, name=f"syschat-{cid}").start()
         else:
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "security_admin_only"),
@@ -979,7 +1338,9 @@ def voice_handler(message):
     if _st._user_mode.get(cid) == "errp_collect" and cid in _st._pending_error_protocol:
         _errp_collect_voice(cid, message.voice)
         return
-    _handle_voice_message(cid, message.voice)
+    bot.send_chat_action(cid, "typing")
+    threading.Thread(target=_handle_voice_message, args=(cid, message.voice),
+                     daemon=True, name=f"voice-{cid}").start()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1014,8 +1375,12 @@ def document_handler(message):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    from core.bot_db import init_db as _init_db
-    _init_db()
+    from core.bot_db import _is_postgres as _postgres_mode
+    if not _postgres_mode():
+        from core.bot_db import init_db as _init_db
+        _init_db()
+    else:
+        log.info("[DB] Postgres mode — skipping SQLite init_db()")
     log.info("=" * 50)
     log.info("Pico Telegram Menu Bot starting")
     from core.bot_config import ADMIN_USERS, ALLOWED_USERS
@@ -1045,6 +1410,28 @@ def main() -> None:
         log.info("[VoiceOpt] persistent_piper enabled — starting Piper keepalive")
         threading.Thread(target=_start_persistent_piper, daemon=True).start()
 
+    # FasterWhisper preloading: disabled by default (CUDA libs inflate RSS to 1 GB+).
+    # Re-enabled for the openclaw variant where the device is ROCm (AMD GPU), not CUDA,
+    # so the RAM penalty is lower and cold-start latency (~4s) is unacceptable.
+    # Override with FASTER_WHISPER_PRELOAD=0 in bot.env on low-memory machines.
+    if DEVICE_VARIANT == "openclaw" and FASTER_WHISPER_PRELOAD and (
+        STT_PROVIDER == "faster_whisper" or _st._voice_opts.get("faster_whisper_stt")
+    ):
+        log.info("[FasterWhisper] openclaw: preloading model in background thread")
+        threading.Thread(target=_fw_preload, daemon=True).start()
+    elif DEVICE_VARIANT == "openclaw" and not FASTER_WHISPER_PRELOAD:
+        log.info("[FasterWhisper] preload disabled (FASTER_WHISPER_PRELOAD=0) — lazy load on first voice message")
+
+    # Pre-warm embedding service so first RAG/chat call has no cold-start delay (~2s).
+    if DEVICE_VARIANT == "openclaw":
+        def _prewarm_embeddings():
+            svc = EmbeddingService.get()
+            if svc:
+                log.info("[Embeddings] pre-warmed at startup: backend=%s", svc.backend)
+            else:
+                log.debug("[Embeddings] pre-warm skipped (no embedding backend)")
+        threading.Thread(target=_prewarm_embeddings, daemon=True).start()
+
     # ── Startup tasks ─────────────────────────────────────────────────────
     _st.load_conversation_history()
     _cleanup_orphaned_tts()
@@ -1054,8 +1441,68 @@ def main() -> None:
     _cal_reschedule_all()
     threading.Thread(target=_cal_morning_briefing_loop, daemon=True).start()
 
+    # ── Low-memory warning (Linux /proc/meminfo — no psutil required) ────────
+    try:
+        _meminfo = {}
+        with open("/proc/meminfo") as _f:
+            for _line in _f:
+                _k, _, _v = _line.partition(":")
+                _meminfo[_k.strip()] = int(_v.split()[0])  # kB
+        _avail_mb  = _meminfo.get("MemAvailable", 0) // 1024
+        _swap_tot  = _meminfo.get("SwapTotal", 1)
+        _swap_used = _meminfo.get("SwapTotal", 0) - _meminfo.get("SwapFree", 0)
+        _swap_pct  = (_swap_used / _swap_tot * 100) if _swap_tot else 0
+        if _avail_mb < 512 or _swap_pct > 80:
+            log.warning(
+                "[Memory] LOW MEMORY at startup: available=%dMB  swap=%.0f%%"
+                " — menu callbacks may be slow due to swap I/O."
+                " Set FASTER_WHISPER_PRELOAD=0 in bot.env to free ~460 MB.",
+                _avail_mb, _swap_pct,
+            )
+        else:
+            log.info("[Memory] startup: available=%dMB  swap=%.0f%%", _avail_mb, _swap_pct)
+    except Exception:
+        pass  # non-Linux or /proc not available
+
+    # Auto-load system KB docs (user guide + admin guide) in background
+    def _ensure_system_docs() -> None:
+        try:
+            from setup.load_system_docs import _load_docs
+            _load_docs(force=False)
+        except Exception as exc:
+            log.debug("[SystemDocs] auto-load skipped: %s", exc)
+    threading.Thread(target=_ensure_system_docs, daemon=True).start()
+
     log.info("Polling Telegram…")
-    bot.infinity_polling(timeout=30, long_polling_timeout=20)
+
+    # Graceful shutdown: stop polling before process exits so Telegram drops
+    # the connection cleanly and the next start doesn't get a 409 Conflict.
+    def _on_stop(signum, _frame):
+        log.info(f"[Bot] signal {signum} — stopping polling…")
+        bot.stop_polling()
+
+    signal.signal(signal.SIGTERM, _on_stop)
+    signal.signal(signal.SIGINT,  _on_stop)
+
+    # timeout > long_polling_timeout: HTTP socket timeout must exceed Telegram hold time.
+    # long_polling_timeout=20: Telegram holds the connection 20s → well within NAT router's
+    #   typical 30-60s idle TCP timeout → prevents RemoteDisconnected errors.
+    #   Previously 55s caused ~70 RemoteDisconnected/hour on SintAItion (NAT kills idle TCP).
+    # timeout=25: fail fast on network loss (5s buffer over long_polling_timeout).
+    # logger_level=DEBUG: suppress telebot's ERROR-level ReadTimeout traceback spam —
+    #   reconnection is automatic; spamming ERROR fills journals on flaky connections.
+    # Outer loop: guards against the rare case where infinity_polling itself raises.
+    import logging as _logging
+    while True:
+        try:
+            bot.infinity_polling(
+                timeout=25, long_polling_timeout=20,
+                interval=0, logger_level=_logging.DEBUG,
+            )
+            break  # clean shutdown via _on_stop
+        except Exception as _poll_exc:
+            log.warning("[Bot] polling crashed: %s — restarting in 5s", _poll_exc)
+            import time as _t; _t.sleep(5)
 
 
 if __name__ == "__main__":

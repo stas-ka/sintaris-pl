@@ -1,31 +1,31 @@
 [Unit]
-Description=Picoclaw Telegram Menu Bot
+Description=Sintaris-PL Telegram Menu Bot
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=stas
-WorkingDirectory=/home/stas/.picoclaw
-ExecStart=/usr/bin/python3 /home/stas/.picoclaw/telegram_menu_bot.py
+WorkingDirectory=/home/stas/.sintaris-pl
+ExecStart=/usr/bin/python3 /home/stas/.sintaris-pl/telegram_menu_bot.py
 Restart=on-failure
 RestartSec=15
 Environment=PYTHONUNBUFFERED=1
 # Secrets and runtime config are loaded from bot.env (never committed to git).
-# Create /home/stas/.picoclaw/bot.env on the device with:
+# Create /home/stas/.sintaris-pl/bot.env on the device with:
 #
 #   BOT_TOKEN=<from @BotFather>
 #   ALLOWED_USERS=<comma-sep Telegram chat_ids with full access, e.g. 994963580>
 #   ADMIN_USERS=<comma-sep chat_ids with admin privileges (defaults to ALLOWED_USERS if omitted)>
-#   USERS_FILE=/home/stas/.picoclaw/users.json  # guest users added at runtime (optional)
+#   USERS_FILE=/home/stas/.sintaris-pl/users.json  # guest users added at runtime (optional)
 #   VOICE_TIMING_DEBUG=1                         # per-step timing in voice replies (test only)
 #
 # ALLOWED_USER (single ID) is also accepted for backwards compatibility.
 # See .credentials/.pico_env for the actual secret values (gitignored).
-EnvironmentFile=/home/stas/.picoclaw/bot.env
-Environment=PICOCLAW_BIN=/usr/bin/picoclaw
-Environment=DIGEST_SCRIPT=/home/stas/.picoclaw/gmail_digest.py
-Environment=LAST_DIGEST_FILE=/home/stas/.picoclaw/last_digest.txt
+EnvironmentFile=/home/stas/.sintaris-pl/bot.env
+Environment=TARIS_BIN=/usr/bin/picoclaw
+Environment=DIGEST_SCRIPT=/home/stas/.sintaris-pl/gmail_digest.py
+Environment=LAST_DIGEST_FILE=/home/stas/.sintaris-pl/last_digest.txt
 
 [Install]
 WantedBy=multi-user.target

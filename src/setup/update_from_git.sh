@@ -130,14 +130,17 @@ SRC_DIR="${REPO_DIR}"
 info "Backing up current installation to ${BACKUP_DIR}..."
 rm -rf "${BACKUP_DIR}" && mkdir -p "${BACKUP_DIR}"
 BOT_FILES=(
-  telegram_menu_bot.py bot_config.py bot_state.py bot_instance.py
-  bot_security.py bot_access.py bot_users.py bot_voice.py bot_calendar.py
-  bot_admin.py bot_handlers.py bot_mail_creds.py bot_email.py
-  gmail_digest.py voice_assistant.py strings.json release_notes.json
-  installed_git_hash.txt
+  telegram_menu_bot.py bot_web.py voice_assistant.py gmail_digest.py
+  strings.json release_notes.json installed_git_hash.txt
 )
 for f in "${BOT_FILES[@]}"; do
   [[ -f "${TARIS_DIR}/${f}" ]] && cp "${TARIS_DIR}/${f}" "${BACKUP_DIR}/"
+done
+# Backup package subdirectories
+for pkg in core telegram features ui security screens web; do
+  if [[ -d "${TARIS_DIR}/${pkg}" ]]; then
+    cp -r "${TARIS_DIR}/${pkg}" "${BACKUP_DIR}/${pkg}"
+  fi
 done
 for svc in taris-telegram taris-voice; do
   [[ -f "${SYSTEMD_DIR}/${svc}.service" ]] && \
@@ -148,10 +151,8 @@ ok "Backed up to ${BACKUP_DIR}"
 # ── Step 5: deploy bot source files ──────────────────────────────────────────
 info "Deploying bot files to ${TARIS_DIR}..."
 DEPLOYED=0
-for f in telegram_menu_bot.py bot_config.py bot_state.py bot_instance.py \
-          bot_security.py bot_access.py bot_users.py bot_voice.py bot_calendar.py \
-          bot_admin.py bot_handlers.py bot_mail_creds.py bot_email.py \
-          gmail_digest.py voice_assistant.py strings.json release_notes.json; do
+for f in telegram_menu_bot.py bot_web.py voice_assistant.py gmail_digest.py \
+          strings.json release_notes.json; do
   if [[ -f "${SRC_DIR}/${f}" ]]; then
     if ! cmp -s "${SRC_DIR}/${f}" "${TARIS_DIR}/${f}" 2>/dev/null; then
       cp "${SRC_DIR}/${f}" "${TARIS_DIR}/${f}"
@@ -162,6 +163,38 @@ for f in telegram_menu_bot.py bot_config.py bot_state.py bot_instance.py \
     warn "  Not in repo: ${f}"
   fi
 done
+
+# Deploy package subdirectories (core/, telegram/, features/, ui/, security/, screens/, web/)
+for pkg in core telegram features ui security screens; do
+  if [[ -d "${SRC_DIR}/${pkg}" ]]; then
+    mkdir -p "${TARIS_DIR}/${pkg}"
+    while IFS= read -r -d '' src_file; do
+      rel="${src_file#${SRC_DIR}/${pkg}/}"
+      dst_file="${TARIS_DIR}/${pkg}/${rel}"
+      mkdir -p "$(dirname "${dst_file}")"
+      if ! cmp -s "${src_file}" "${dst_file}" 2>/dev/null; then
+        cp "${src_file}" "${dst_file}"
+        info "  → ${pkg}/${rel} (changed)"
+        ((DEPLOYED++))
+      fi
+    done < <(find "${SRC_DIR}/${pkg}" -name "*.py" -o -name "*.yaml" -o -name "*.json" \
+              | grep -v '__pycache__' | tr '\n' '\0' | sort -z)
+  fi
+done
+# Deploy web/ (templates + static)
+if [[ -d "${SRC_DIR}/web" ]]; then
+  mkdir -p "${TARIS_DIR}/web"
+  while IFS= read -r -d '' src_file; do
+    rel="${src_file#${SRC_DIR}/web/}"
+    dst_file="${TARIS_DIR}/web/${rel}"
+    mkdir -p "$(dirname "${dst_file}")"
+    if ! cmp -s "${src_file}" "${dst_file}" 2>/dev/null; then
+      cp "${src_file}" "${dst_file}"
+      info "  → web/${rel} (changed)"
+      ((DEPLOYED++))
+    fi
+  done < <(find "${SRC_DIR}/web" -type f | grep -v '__pycache__' | tr '\n' '\0' | sort -z)
+fi
 ok "${DEPLOYED} files updated"
 
 # ── Step 6: sync service files ────────────────────────────────────────────────
@@ -204,9 +237,13 @@ if [[ "${DEPLOYED}" -gt 0 || "${RELOAD_NEEDED}" == "true" ]]; then
 
   if [[ "${FAILED}" == "true" ]]; then
     warn "Applying rollback from ${BACKUP_DIR}..."
-    cp "${BACKUP_DIR}"/*.py "${BACKUP_DIR}"/*.json "${TARIS_DIR}/" 2>/dev/null || true
+    find "${BACKUP_DIR}" -maxdepth 1 \( -name "*.py" -o -name "*.json" \) \
+      -exec cp {} "${TARIS_DIR}/" \; 2>/dev/null || true
     [[ -f "${BACKUP_DIR}/installed_git_hash.txt" ]] && \
       cp "${BACKUP_DIR}/installed_git_hash.txt" "${TARIS_DIR}/"
+    for pkg in core telegram features ui security screens web; do
+      [[ -d "${BACKUP_DIR}/${pkg}" ]] && cp -r "${BACKUP_DIR}/${pkg}" "${TARIS_DIR}/"
+    done
     for svc in taris-telegram taris-voice; do
       [[ -f "${BACKUP_DIR}/${svc}.service" ]] && \
         cp "${BACKUP_DIR}/${svc}.service" "${SYSTEMD_DIR}/"

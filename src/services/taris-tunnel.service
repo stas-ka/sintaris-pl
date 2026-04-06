@@ -1,6 +1,5 @@
 [Unit]
-Description=PicoAssist — reverse SSH tunnel to VPS
-Documentation=https://github.com/sipeed/picoclaw
+Description=Taris — reverse SSH tunnel to VPS
 After=network-online.target
 Wants=network-online.target
 

@@ -15,7 +15,7 @@ Dependency chain: bot_config → bot_db → store_base → store
 
 import os
 
-from core.bot_config import log
+from core.bot_config import log_datastore as log, TARIS_DIR
 from core.store_base import DataStore
 
 
@@ -38,9 +38,7 @@ def create_store() -> DataStore:
         return PostgresStore(dsn=dsn)
 
     # Default: SQLite
-    db_path = os.path.expanduser(
-        os.environ.get("STORE_DB_PATH", "~/.taris/taris.db")
-    )
+    db_path = os.environ.get("STORE_DB_PATH") or os.path.join(TARIS_DIR, "taris.db")
     log.info("[Store] Backend: SQLite (%s)", db_path)
     from core.store_sqlite import SQLiteStore
     return SQLiteStore(db_path=db_path)

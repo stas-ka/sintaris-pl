@@ -152,12 +152,21 @@ def _resolve_storage_id(chat_id: int) -> str:
 
 
 def _slug(title: str) -> str:
-    """Convert a note title to a safe filename slug (lowercase, underscores)."""
+    """Convert a note title to a safe filename slug (lowercase, underscores).
+
+    Limits to 48 bytes so that 'note_delete:{slug}' stays under Telegram's
+    64-byte callback_data limit (12 byte prefix + 48 byte slug = 60 bytes).
+    """
     s = title.lower().strip()
     s = _notes_re.sub(r"[^\w\s\u0400-\u04ff-]", "", s)
     s = _notes_re.sub(r"[\s]+", "_", s)
     s = s.strip("_")
-    return s[:60] or "note"
+    # Truncate by bytes — Cyrillic chars are 2 bytes each, pure char limit is wrong
+    encoded = s.encode("utf-8")
+    if len(encoded) > 48:
+        encoded = encoded[:48]
+        s = encoded.decode("utf-8", errors="ignore").rstrip("_")
+    return s or "note"
 
 
 def _notes_user_dir(chat_id: int) -> Path:
@@ -165,14 +174,49 @@ def _notes_user_dir(chat_id: int) -> Path:
 
     If the Telegram chat_id is linked to a web account, uses the web UUID
     so that notes are shared between Telegram and the Web UI.
+
+    Auto-migration: if notes exist under the old str(chat_id) directory and
+    the resolved storage_id is a UUID (account was linked after notes were
+    created), the files are moved transparently so existing notes remain visible.
     """
-    p = Path(NOTES_DIR) / _resolve_storage_id(chat_id)
+    import shutil as _shutil
+    storage_id = _resolve_storage_id(chat_id)
+    p = Path(NOTES_DIR) / storage_id
     p.mkdir(parents=True, exist_ok=True)
+
+    # Migrate notes created before account linking from chat_id dir → UUID dir
+    if storage_id != str(chat_id):
+        old_dir = Path(NOTES_DIR) / str(chat_id)
+        if old_dir.exists() and any(old_dir.glob("*.md")):
+            for src in sorted(old_dir.glob("*.md")):
+                dst = p / src.name
+                if not dst.exists():
+                    _shutil.move(str(src), str(dst))
+                    log.info(f"[Notes] migrated '{src.name}' {old_dir.name} → {p.name}")
+            if not any(old_dir.glob("*.md")):
+                try:
+                    old_dir.rmdir()
+                    log.info(f"[Notes] removed empty old dir {old_dir.name}")
+                except Exception:
+                    pass
     return p
 
 
 def _list_notes_for(chat_id: int) -> list[dict]:
-    """Return [{slug, title, mtime}] sorted by modification time (newest first)."""
+    """Return [{slug, title, mtime}] sorted by modification time (newest first).
+
+    Reads from the DB index (store.list_notes) if available; falls back to
+    scanning .md files for backward compatibility with non-migrated data.
+    """
+    try:
+        db_notes = store.list_notes(chat_id)
+        if db_notes:
+            return [{"slug": n["slug"], "title": n["title"],
+                     "mtime": 0} for n in db_notes]
+    except Exception as _e:
+        log.debug("[Notes] store.list_notes failed (%s), using file scan", _e)
+
+    # File-based fallback: scan notes directory
     d = _notes_user_dir(chat_id)
     notes = []
     for f in sorted(d.glob("*.md"), key=lambda x: -x.stat().st_mtime):
@@ -185,21 +229,28 @@ def _list_notes_for(chat_id: int) -> list[dict]:
 
 
 def _load_note_text(chat_id: int, slug: str) -> Optional[str]:
-    """Return note file contents or None if not found."""
+    """Return note contents: reads from store (DB) first, falls back to .md file."""
+    try:
+        from core.store import store as _st
+        note = _st.load_note(chat_id, slug)
+        if note and note.get("content"):
+            return note["content"]
+    except Exception as _e:
+        log.debug("[Notes] store.load_note failed (%s), using file fallback", _e)
+    # File fallback (backward compat / non-migrated)
     p = _notes_user_dir(chat_id) / f"{slug}.md"
     return p.read_text(encoding="utf-8") if p.exists() else None
 
 
 def _save_note_file(chat_id: int, slug: str, content: str) -> None:
-    """Write note file (creates or overwrites)."""
+    """Write note file (creates or overwrites) and update store + DB index."""
     p = _notes_user_dir(chat_id) / f"{slug}.md"
     p.write_text(content, encoding="utf-8")
     log.info(f"[Notes] saved '{slug}' for user {chat_id}")
+    _title = (content.splitlines()[0].lstrip("# ").strip()
+              if content.strip() else slug.replace("_", " "))
     try:
-        _title = (content.splitlines()[0].lstrip("# ").strip()
-                  if content.strip() else slug.replace("_", " "))
         store.save_note(chat_id, slug, _title, content)
-        p.write_text(content, encoding="utf-8")  # restore: store overwrites with # header
     except Exception as _e:
         log.warning("[Notes] store.save_note failed: %s", _e)
 

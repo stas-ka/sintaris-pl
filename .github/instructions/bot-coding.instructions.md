@@ -136,5 +136,42 @@ Before deploying, ask: *"Which target(s) shall I deploy to? (OpenClawPI / OpenCl
 
 ## Documentation Maintenance
 
-When adding features: update `doc/arch/<topic>.md` + `README.md` in same commit.  
+When adding features: update `doc/architecture/<topic>.md` + `README.md` in same commit.  
 Full doc update: use `/taris-update-doc` skill.
+
+## Continuous Test Improvement — MANDATORY
+
+**Every bug fix** must add a regression test that would have caught the bug.  
+**Every new feature** must add tests covering the happy path and main failure modes.
+
+### Where tests live
+
+| What changed | Where to add test |
+|---|---|
+| Voice pipeline, STT, TTS, config constants | `src/tests/test_voice_regression.py` — add T-numbered function |
+| LLM provider, `bot_llm.py` | `src/tests/llm/` — add pytest function |
+| Web UI route or endpoint | `src/tests/ui/` — Playwright test |
+| OpenClaw-specific (STT routing, Ollama, API) | `src/tests/test_voice_regression.py` T27+ range |
+
+### Test ID convention (`test_voice_regression.py`)
+
+```python
+# Add to TEST_FUNCTIONS list at the bottom; name function t_<feature>_<what>
+def t_web_stt_provider():
+    """T31: verify web UI voice endpoints use STT_PROVIDER routing, not hardcoded Vosk."""
+    ...
+    return results   # list of TestResult(name, status, detail)
+```
+
+Then add to the `TEST_FUNCTIONS` list and document in `doc/test-suite.md`.
+
+### Regression test checklist (per bug fix)
+
+1. What was the symptom? → write a test that detects it
+2. What was the root cause? → assert the corrected invariant
+3. Is there a fallback / degradation path? → test the fallback too
+4. Run the new test to confirm it passes: `PYTHONPATH=src python3 src/tests/test_voice_regression.py --test <name>`
+5. Add test ID + description to `doc/test-suite.md`
+6. Include in same commit as the fix
+
+> **No fix without a test. No feature without a test. Tests are permanent documentation of intended behaviour.**
