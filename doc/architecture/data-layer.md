@@ -1,6 +1,6 @@
 # Taris — Data Layer
 
-**Version:** `2026.4.30`  
+**Version:** `2026.4.31`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -151,9 +151,22 @@ Runtime overrides: `core/rag_settings.py` reads `~/.taris/rag_settings.json`.
 
 ---
 
+## ✅ Completed migrations (v2026.4.31)
+
+| What | Script / method |
+|---|---|
+| SQLite → Postgres (all tables, 316 rows) | `src/setup/migrate_sqlite_to_postgres.py` (idempotent) |
+| `accounts.json` → `web_accounts` table | `security/bot_auth.py` `ensure_admin_account()` auto-migrates on startup |
+| `mail_creds/*.json` → `mail_creds` table | `features/bot_mail_creds.py` `_load_creds()` — store-primary, file fallback |
+| `web_link_codes.json` → `web_link_codes` table | `core/bot_state.py` `generate_web_link_code()` |
+| `notes/*.md` (SQLite index) → Postgres notes | `src/setup/migrate_sqlite_to_postgres.py` |
+
+**OpenClaw rule:** `STORE_BACKEND=postgres` → SQLite is NEVER created or written. `init_db()` guarded by `_postgres_mode()`.
+
+---
+
 ## ⏳ Open items
 
 | Item | TODO ref |
 |---|---|
 | Calendar events: migrate from JSON files to DB table | [TODO.md §9](../TODO.md#9-flexible-storage-architecture-) |
-| Full SQLite→Postgres migration script | [TODO.md §9](../TODO.md#9-flexible-storage-architecture-) |
