@@ -418,7 +418,7 @@ def _handle_profile_voice_gender(chat_id: int) -> None:
         from core.store import store as _store
         current = _voice_gender_is_male(chat_id)
         new_val = not current
-        _store.set_voice_opt(chat_id, "voice_male", new_val)
+        _store.set_voice_opt("voice_male", new_val, chat_id=chat_id)
         label = _t(chat_id, "profile_voice_gender_male_set" if new_val else "profile_voice_gender_female_set")
         bot.send_message(chat_id, label, parse_mode="Markdown", reply_markup=_back_keyboard())
     except Exception as _e:

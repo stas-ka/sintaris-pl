@@ -186,7 +186,7 @@ def _save_voice_opts() -> None:
         from core.store_sqlite import _VOICE_OPT_COLUMNS     # injection-safe whitelist
         for key, val in _voice_opts.items():
             if key in _VOICE_OPT_COLUMNS:
-                store.set_voice_opt(None, key, val)
+                store.set_voice_opt(key, val)
     except Exception as _e:
         log.warning(f"[VoiceOpts] store.set_voice_opt failed: {_e}")
 

@@ -787,7 +787,7 @@ async def profile_voice_gender(request: Request, voice_male: str = Form("off")):
     try:
         from core.store import store as _store
         new_val = voice_male.lower() in ("on", "1", "true", "male")
-        _store.set_voice_opt(int(chat_id), "voice_male", new_val)
+        _store.set_voice_opt("voice_male", new_val, chat_id=int(chat_id))
     except Exception as _e:
         log.warning(f"[Web] profile/voice-gender failed for user={user['username']}: {_e}")
         return RedirectResponse("/profile?error=Could+not+update+voice+preference", status_code=302)
