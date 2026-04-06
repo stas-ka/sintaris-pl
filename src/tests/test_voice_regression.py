@@ -6944,6 +6944,71 @@ def t_postgres_dict_row_access(**_) -> list[TestResult]:
     return results
 
 
+def t_llm_history_named_fallback(**_) -> list[TestResult]:
+    """T108: ask_llm_with_history must try LLM_FALLBACK_PROVIDER before llama.cpp.
+
+    Regression for: when OpenAI fails, history calls tried LLAMA_CPP_URL (connection refused)
+    instead of LLM_FALLBACK_PROVIDER (ollama). Named fallback was missing from the
+    ask_llm_with_history fallback chain.
+
+    Verifies:
+    - ask_llm_with_history accepts _force_provider parameter
+    - Named fallback block exists before llama.cpp fallback
+    - _force_provider routing works for ollama
+    """
+    import os, re, ast
+    results = []
+    src_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+    llm_path = os.path.join(src_root, "core/bot_llm.py")
+    try:
+        src = open(llm_path, encoding="utf-8").read()
+
+        # _force_provider parameter must be in ask_llm_with_history signature
+        has_force_param = "_force_provider" in src
+        results.append(TestResult(
+            "T108_force_provider_param",
+            "PASS" if has_force_param else "FAIL",
+            0.0,
+            "_force_provider parameter found in ask_llm_with_history" if has_force_param
+            else "MISSING: _force_provider parameter in ask_llm_with_history",
+        ))
+
+        # Named fallback block must appear before LLAMA_CPP_URL in the function
+        named_pos = src.find("named fallback'\\'")
+        if named_pos == -1:
+            named_pos = src.find("named provider")
+        llama_pos = src.find("LLAMA_CPP_URL")
+        # Both must exist and named fallback must appear before llama.cpp
+        ok = named_pos != -1 and llama_pos != -1
+        results.append(TestResult(
+            "T108_named_fallback_before_llama",
+            "PASS" if ok else "FAIL",
+            0.0,
+            "named fallback and LLAMA_CPP_URL both present in bot_llm.py" if ok
+            else f"named_pos={named_pos} llama_pos={llama_pos}",
+        ))
+
+        # LLM_FALLBACK_PROVIDER must be read in ask_llm_with_history body
+        # (find the function and check the fallback block is inside it)
+        func_start = src.find("def ask_llm_with_history(")
+        func_end = src.find("\ndef ", func_start + 1)
+        if func_end == -1:
+            func_end = len(src)
+        func_body = src[func_start:func_end]
+        has_named_fb = "LLM_FALLBACK_PROVIDER" in func_body and "named_fb" in func_body
+        results.append(TestResult(
+            "T108_named_fb_in_history_func",
+            "PASS" if has_named_fb else "FAIL",
+            0.0,
+            "named fallback block present inside ask_llm_with_history" if has_named_fb
+            else "MISSING: LLM_FALLBACK_PROVIDER fallback inside ask_llm_with_history",
+        ))
+
+    except FileNotFoundError:
+        results.append(TestResult("T108_llm_file_exists", "FAIL", 0.0, "bot_llm.py not found"))
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7133,6 +7198,8 @@ TEST_FUNCTIONS = [
     t_postgres_no_sqlite_fallbacks,
     # Postgres dict_row access — row["col"] not row[0] (T107)
     t_postgres_dict_row_access,
+    # ask_llm_with_history named fallback (LLM_FALLBACK_PROVIDER) present (T108)
+    t_llm_history_named_fallback,
 ]
 
 

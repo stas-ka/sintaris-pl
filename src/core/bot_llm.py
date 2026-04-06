@@ -529,7 +529,8 @@ def _format_history_as_text(messages: list) -> str:
 
 
 def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "chat",
-                          _no_history_fallback: bool = False) -> str:
+                          _no_history_fallback: bool = False,
+                          _force_provider: str = "") -> str:
     """Call the configured LLM with a full conversation history.
 
     ``messages`` is a list of ``{"role": "user"|"assistant", "content": str}``
@@ -542,7 +543,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
       - taris (default)          → formatted as plain-text transcript
     """
     per_func = get_per_func_provider(use_case)
-    provider = per_func if per_func else LLM_PROVIDER.lower()
+    provider = _force_provider.lower() if _force_provider else (per_func if per_func else LLM_PROVIDER.lower())
     primary_error: Exception = RuntimeError("unknown")
 
     try:
@@ -665,6 +666,21 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
         else:
             log.warning(f"[LLM] {provider} failed in history call: {exc}")
         primary_error = exc
+
+    # ── Named fallback (LLM_FALLBACK_PROVIDER) ───────────────────────────────
+    named_fb = LLM_FALLBACK_PROVIDER.lower() if LLM_FALLBACK_PROVIDER else ""
+    if named_fb and named_fb != provider:
+        log.warning(f"[LLM] falling back to named provider '{named_fb}' after {provider} failure")
+        try:
+            result = ask_llm_with_history(
+                messages, timeout, use_case=use_case, _no_history_fallback=True,
+                _force_provider=named_fb,
+            )
+            if result:
+                log.debug(f"[LLM] named fallback '{named_fb}' succeeded in history call")
+                return result
+        except Exception as exc2:
+            log.error(f"[LLM] named fallback '{named_fb}' also failed in history call: {exc2}")
 
     if (LLM_LOCAL_FALLBACK or os.path.exists(LLM_FALLBACK_FLAG_FILE)) and provider != "local":
         log.warning(

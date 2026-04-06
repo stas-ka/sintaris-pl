@@ -1,5 +1,14 @@
 [
   {
+    "version": "2026.4.33",
+    "date": "2026-04-06",
+    "changes": [
+      "fix: ask_llm_with_history now tries LLM_FALLBACK_PROVIDER (ollama) before legacy llama.cpp fallback — eliminates 'connection refused' error when primary LLM fails",
+      "fix: list_active_chat_ids uses row['chat_id'] (dict_row compat)",
+      "test: T108 regression test for named fallback in ask_llm_with_history"
+    ]
+  },
+  {
     "version": "2026.4.32",
     "date": "2026-04-06",
     "changes": [
