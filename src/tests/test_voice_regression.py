@@ -7059,6 +7059,52 @@ def t_llm_system_chat_fallback(*, gt, verbose=False):
     return results
 
 
+def t_system_chat_host_context(*, gt, verbose=False):
+    """T110: _handle_system_message must inject host OS/HW context into LLM system prompt.
+    Checks that _build_host_ctx() exists, _HOST_CTX is used in _run(), and the context
+    includes hostname, OS, CPU, temp-tools, and package-manager fields.
+    """
+    results = []
+    try:
+        handlers_src = (SRC_ROOT / "telegram" / "bot_handlers.py").read_text()
+
+        checks = [
+            ("T110_build_host_ctx_func",    "def _build_host_ctx()",     "def _build_host_ctx() function present"),
+            ("T110_host_ctx_cached",         "_HOST_CTX",                 "_HOST_CTX cache variable present"),
+            ("T110_host_ctx_injected",       "_HOST_CTX}",                "_HOST_CTX injected into sys_content"),
+            ("T110_hostname_field",          "Hostname",                  "Hostname field in host context"),
+            ("T110_cpu_field",               "cpu_model",                 "CPU model detection present"),
+            ("T110_temp_tools_field",        "Temp tools",                "Temp tools field in host context"),
+            ("T110_pkg_mgr_field",           "pkg_mgr",                   "Package manager detection present"),
+        ]
+        for test_id, pattern, detail in checks:
+            found = pattern in handlers_src
+            results.append(TestResult(test_id, "PASS" if found else "FAIL", 0.0,
+                                       detail if found else f"MISSING: {pattern!r} not found in bot_handlers.py"))
+
+        # Live check: _HOST_CTX must contain real host data (hostname not empty, not 'unknown')
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(SRC_ROOT))
+            import importlib, os as _os
+            _os.environ.setdefault("DEVICE_VARIANT", "openclaw")
+            _bh = importlib.import_module("telegram.bot_handlers")
+            hctx = getattr(_bh, "_HOST_CTX", "")
+            has_hostname = "Hostname" in hctx and "unknown" not in hctx.split("Hostname")[1].split("\n")[0]
+            results.append(TestResult(
+                "T110_live_host_ctx",
+                "PASS" if has_hostname else "WARN",
+                0.0,
+                f"_HOST_CTX live check: {'ok' if has_hostname else 'hostname missing or unknown'}"
+            ))
+        except Exception as e:
+            results.append(TestResult("T110_live_host_ctx", "SKIP", 0.0, f"import failed: {e}"))
+
+    except FileNotFoundError:
+        results.append(TestResult("T110_file_exists", "FAIL", 0.0, "bot_handlers.py not found"))
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7252,6 +7298,8 @@ TEST_FUNCTIONS = [
     t_llm_history_named_fallback,
     # system chat: ollama timeout guard + global default fallback (T109)
     t_llm_system_chat_fallback,
+    # system chat: host OS/HW context injected into LLM prompt (T110)
+    t_system_chat_host_context,
 ]
 
 

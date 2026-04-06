@@ -622,6 +622,88 @@ def _refresh_digest(chat_id: int) -> None:
 
 _SYSTEM_PROMPT = PROMPTS["system_prompt"]
 
+
+def _build_host_ctx() -> str:
+    """Collect host OS / hardware facts once at startup and return a context block.
+
+    Gathers: hostname, OS distro, kernel, arch, CPU model, RAM, disk,
+    available temperature tools, init system, and package manager.
+    This is injected into the system-chat system prompt so the LLM can
+    generate commands adapted to the actual host.
+    """
+    import platform, shutil
+
+    def _run(cmd: list[str], default: str = "unknown") -> str:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            return out.stdout.strip() or default
+        except Exception:
+            return default
+
+    def _read(path: str, default: str = "unknown") -> str:
+        try:
+            return Path(path).read_text().strip() or default
+        except Exception:
+            return default
+
+    # OS info
+    hostname = platform.node()
+    kernel = platform.release()
+    arch = platform.machine()
+    os_name = _run(["sh", "-c", "grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '\"'"], platform.system())
+    init = "systemd" if shutil.which("systemctl") else ("openrc" if shutil.which("rc-service") else "unknown")
+    pkg_mgr = next((p for p in ("apt", "dnf", "pacman", "apk", "brew") if shutil.which(p)), "unknown")
+
+    # CPU
+    cpu_model = _run(["sh", "-c", "grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2"], "unknown").strip()
+    if not cpu_model or cpu_model == "unknown":  # Raspberry Pi / ARM
+        cpu_model = _run(["sh", "-c", "grep -i 'Model' /proc/cpuinfo | head -1 | cut -d: -f2"], "unknown").strip()
+
+    # RAM / disk
+    ram = _run(["sh", "-c", "free -h | awk '/^Mem:/{print $2\" total, \"$3\" used\"}'"], "unknown")
+    disk = _run(["sh", "-c", "df -h / | awk 'NR==2{print $2\" total, \"$3\" used, \"$5\" full\"}'"], "unknown")
+
+    # Temperature tools available
+    temp_tools: list[str] = []
+    if shutil.which("sensors"):
+        temp_tools.append("sensors (lm-sensors)")
+    if shutil.which("vcgencmd"):
+        temp_tools.append("vcgencmd measure_temp (Raspberry Pi)")
+    thermal_zones = list(Path("/sys/class/thermal").glob("thermal_zone*/temp")) if Path("/sys/class/thermal").exists() else []
+    if thermal_zones:
+        types = []
+        for tz in thermal_zones[:4]:
+            t = _read(str(tz.parent / "type"), "")
+            if t:
+                types.append(t)
+        temp_tools.append(f"/sys/class/thermal ({', '.join(types) or str(len(thermal_zones)) + ' zones'})")
+    if not temp_tools:
+        temp_tools.append("none detected")
+
+    # Misc tools relevant to system administration
+    extra_tools = [t for t in ("htop", "top", "iotop", "lsof", "ss", "netstat", "ip", "ifconfig",
+                                "journalctl", "systemctl", "docker", "kubectl") if shutil.which(t)]
+
+    lines = [
+        "[HOST ENVIRONMENT — use this to generate commands that work on this specific host]",
+        f"Hostname     : {hostname}",
+        f"OS           : {os_name}",
+        f"Kernel       : {kernel}  arch: {arch}",
+        f"CPU          : {cpu_model}",
+        f"RAM          : {ram}",
+        f"Disk /       : {disk}",
+        f"Init system  : {init}",
+        f"Package mgr  : {pkg_mgr}",
+        f"Temp tools   : {', '.join(temp_tools)}",
+        f"Admin tools  : {', '.join(extra_tools) or 'none'}",
+        "[END HOST ENVIRONMENT]",
+    ]
+    return "\n".join(lines)
+
+
+# Cached once at import time — host info doesn't change at runtime.
+_HOST_CTX: str = _build_host_ctx()
+
 # Broad emoji / pictograph regex — matches everything the Unicode Standard
 # classifies as emoji / symbol characters.
 # NOTE: \u requires 4 hex digits, \U requires exactly 8 hex digits.
@@ -769,7 +851,7 @@ def _handle_system_message(chat_id: int, user_text: str) -> None:
 
     def _run():
         # Build multi-turn messages: system prompt + prior system-chat history + current request
-        sys_content = f"{_SYSTEM_PROMPT}\n\n{_config_ctx}"
+        sys_content = f"{_SYSTEM_PROMPT}\n\n{_config_ctx}\n\n{_HOST_CTX}"
         hist = _st._system_history.get(chat_id, [])
         messages = [{"role": "system", "content": sys_content}] + hist + [{"role": "user", "content": user_text}]
         try:
