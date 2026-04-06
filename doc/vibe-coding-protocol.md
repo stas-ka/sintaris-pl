@@ -1214,3 +1214,5 @@ Every ~3 months, measure baseline health:
 | 21:28 UTC | | 21:23 UTC | 21:28 UTC | 5m | fix: LLM_FALLBACK_PROVIDER missing in ask_llm_with_history + dict_row list_active_chat_ids | 2 | 3 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/store_postgres.py, src/tests/test_voice_regression.py, src/core/bot_config.py, src/release_notes.json | done |
 
 | 20:03 UTC | 20:03 UTC | 20:10 UTC | 7m | check old Copilot session results + complete pending tasks (commit vibe-coding-protocol, full test suite v2026.4.33) | committed vibe-coding-protocol.md; PASS 446 FAIL 4 (pre-existing) SKIP 22 WARN 1 | 1 | 3 | claude-sonnet-4.6 | doc/vibe-coding-protocol.md | done |
+
+| 20:13 UTC | 20:13 UTC | 20:23 UTC | 10m | fix: system chat no-command — ollama timeout bypass + per-func fallback chain gap (v2026.4.34) | ollama effective_timeout respects use_case=system; global LLM_PROVIDER tried when per-func+named_fb both fail; T109 | 3 | 1 | claude-sonnet-4.6 | src/core/bot_llm.py, src/core/bot_config.py, src/release_notes.json, src/tests/test_voice_regression.py | done |
