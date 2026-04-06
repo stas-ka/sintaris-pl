@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.29",
+    "date":    "2026-04-06",
+    "title":   "Fix: notes stored to wrong path on Postgres (str(chat_id) vs UUID dir); note content recovered",
+    "notes":   "- store_postgres.py: save_note/load_note/delete_note used os.path.join(NOTES_DIR, str(chat_id)) — ignoring UUID account linking. For users linked to a web account, notes were written/read from the wrong directory.\n- Fix: added _notes_storage_dir(chat_id) static method that reads accounts.json and resolves to the correct UUID path (mirrors _resolve_storage_id in bot_users.py).\n- Data recovery: orphaned notes from earlier sessions (u-a9d8b5df, u-f55429b7) migrated to the current user's UUID directory (u-21323d0f). Content and SQLite index restored.\n- Regression test T102 (store_postgres_notes_uuid_path) added"
+  },
+  {
     "version": "2026.4.28",
     "date":    "2026-04-06",
     "title":   "Fix: clicking notes crashes with 'text must be non-empty' for empty note files",

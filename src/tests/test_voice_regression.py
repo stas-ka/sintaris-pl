@@ -6648,6 +6648,75 @@ def t_note_open_empty_file(**_) -> list[TestResult]:
     return results
 
 
+def t_store_postgres_notes_uuid_path(**_) -> list[TestResult]:
+    """T102: store_postgres.py note methods must use UUID path, not str(chat_id).
+
+    Root cause: save_note/load_note/delete_note in store_postgres.py used
+    os.path.join(NOTES_DIR, str(chat_id)) — ignoring account UUID linking.
+    When Telegram accounts are linked to web accounts (accounts.json), notes are
+    stored under a UUID dir (e.g. u-21323d0f) not the raw chat_id dir (994963580).
+    Fix: added _notes_storage_dir(chat_id) static method that reads accounts.json
+    and resolves to the correct UUID directory (mirrors _resolve_storage_id in bot_users.py).
+    """
+    import time
+    results: list[TestResult] = []
+    t0 = time.time()
+    try:
+        src_path = Path(__file__).parents[1] / "core" / "store_postgres.py"
+        text = src_path.read_text(encoding="utf-8")
+
+        # The bad old pattern: os.path.join(NOTES_DIR, str(chat_id)) in individual methods
+        # One occurrence is OK (it's the fallback inside _notes_storage_dir itself)
+        # Multiple occurrences means the methods still use the raw str(chat_id) path
+        bad_pattern_count = text.count("NOTES_DIR, str(chat_id)")
+        if bad_pattern_count > 1:
+            results.append(TestResult(
+                "store_postgres_notes_uuid_path", "FAIL", round(time.time() - t0, 3),
+                f"Found {bad_pattern_count} occurrence(s) of 'NOTES_DIR, str(chat_id)' — "
+                "notes still use raw chat_id path instead of UUID"
+            ))
+            return results
+
+        # Must have _notes_storage_dir method
+        if "_notes_storage_dir" not in text:
+            results.append(TestResult(
+                "store_postgres_notes_uuid_path", "FAIL", round(time.time() - t0, 3),
+                "_notes_storage_dir helper not found in store_postgres.py"
+            ))
+            return results
+
+        # Must read accounts.json (UUID resolution)
+        if "accounts.json" not in text and "ACCOUNTS_FILE" not in text:
+            results.append(TestResult(
+                "store_postgres_notes_uuid_path", "FAIL", round(time.time() - t0, 3),
+                "_notes_storage_dir does not resolve accounts.json for UUID mapping"
+            ))
+            return results
+
+        # save_note/load_note/delete_note must use _notes_storage_dir, not raw str(chat_id)
+        for method in ("save_note", "load_note", "delete_note"):
+            # Find the method block and check it calls _notes_storage_dir
+            idx = text.find(f"def {method}(")
+            if idx == -1:
+                continue
+            method_block = text[idx:idx + 600]
+            if "_notes_storage_dir" not in method_block:
+                results.append(TestResult(
+                    "store_postgres_notes_uuid_path", "FAIL", round(time.time() - t0, 3),
+                    f"{method} does not call _notes_storage_dir — still uses old path"
+                ))
+                return results
+
+        results.append(TestResult(
+            "store_postgres_notes_uuid_path", "PASS", round(time.time() - t0, 3),
+            "store_postgres note methods use _notes_storage_dir(chat_id) for UUID path resolution"
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("store_postgres_notes_uuid_path", "FAIL", 0.0,
+                                   "store_postgres.py not found"))
+    return results
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 TEST_FUNCTIONS = [
     t_piper_json_present,
@@ -6826,6 +6895,8 @@ TEST_FUNCTIONS = [
     t_doc_detail_datetime_safe,
     # _handle_note_open: 0-byte note files get note_empty_body placeholder (T101)
     t_note_open_empty_file,
+    # store_postgres note methods use UUID path via _notes_storage_dir(chat_id) (T102)
+    t_store_postgres_notes_uuid_path,
 ]
 
 

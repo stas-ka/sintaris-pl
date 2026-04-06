@@ -315,11 +315,25 @@ class PostgresStore:
 
     # ── Notes ─────────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _notes_storage_dir(chat_id: int) -> str:
+        """Return per-user notes directory, using UUID if account is linked."""
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            from security.bot_auth import ACCOUNTS_FILE
+            data = _json.loads(_Path(ACCOUNTS_FILE).read_text(encoding="utf-8"))
+            for acct in data.get("accounts", []):
+                if acct.get("telegram_chat_id") == chat_id:
+                    return os.path.join(NOTES_DIR, acct["user_id"])
+        except Exception:
+            pass
+        return os.path.join(NOTES_DIR, str(chat_id))
+
     def save_note(self, chat_id: int, slug: str, title: str, content: str) -> None:
-        import os as _os
-        note_dir = _os.path.join(NOTES_DIR, str(chat_id))
-        _os.makedirs(note_dir, exist_ok=True)
-        note_path = _os.path.join(note_dir, f"{slug}.md")
+        note_dir = self._notes_storage_dir(chat_id)
+        os.makedirs(note_dir, exist_ok=True)
+        note_path = os.path.join(note_dir, f"{slug}.md")
         with open(note_path, "w", encoding="utf-8") as fh:
             fh.write(content)
 
@@ -341,8 +355,7 @@ class PostgresStore:
             ).fetchone()
 
         result = dict(row) if row else {"slug": slug, "chat_id": chat_id, "title": slug}
-        import os as _os
-        note_path = _os.path.join(NOTES_DIR, str(chat_id), f"{slug}.md")
+        note_path = os.path.join(self._notes_storage_dir(chat_id), f"{slug}.md")
         try:
             result["content"] = open(note_path, encoding="utf-8").read()
         except FileNotFoundError:
@@ -366,10 +379,9 @@ class PostgresStore:
             )
             conn.commit()
 
-        import os as _os
-        path = _os.path.join(NOTES_DIR, str(chat_id), f"{slug}.md")
+        path = os.path.join(self._notes_storage_dir(chat_id), f"{slug}.md")
         try:
-            _os.remove(path)
+            os.remove(path)
         except FileNotFoundError:
             pass
         return (cur.rowcount or 0) > 0
