@@ -1,6 +1,6 @@
 # Taris — Voice Pipeline Architecture
 
-**Version:** `2026.4.23`  
+**Version:** `2026.4.25`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -185,14 +185,21 @@ ffmpeg subprocess:
 return bytes (OGG)
 ```
 
-**Piper model priority chain:**
+**Piper model priority chain (per-user, RU/EN):**
 ```
 tmpfs_model ON  AND  /dev/shm/piper/...onnx exists  →  tmpfs (fastest)
     ↓ else
+voice_male ON   AND  ~/.taris/ru_RU-dmitri-medium.onnx exists  →  male voice
+    ↓ else
 piper_low_model ON  AND  ~/.taris/ru_RU-irina-low.onnx exists  →  low model
     ↓ else
-default:  ~/.taris/ru_RU-irina-medium.onnx
+default:  ~/.taris/ru_RU-irina-medium.onnx  (female)
 ```
+
+> **Per-user voice gender** (`voice_male`, v2026.4.25): toggle in **Profile → 🎙 Voice**.  
+> Male model: `ru_RU-dmitri-medium.onnx`. Female (default): `ru_RU-irina-medium.onnx`.  
+> German users always get `de_DE-thorsten-medium.onnx` (no gender variants yet).  
+> Stored as `voice_male` in `voice_opts` table (SQLite + PostgreSQL). `_piper_model_path(chat_id)` in `src/features/bot_voice.py`.
 
 ### 5.4 STT — Vosk vs Whisper
 

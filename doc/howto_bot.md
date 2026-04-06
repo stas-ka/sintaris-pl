@@ -104,11 +104,15 @@ Voice messages work in **all bot modes** — no separate Voice Session button is
 ---
 
 ### � Profile
-View your account details and link your Telegram account to the web interface.
+View your account details, personalise your voice, and link your Telegram account to the web interface.
 
 - Shows your name, username, Telegram chat ID, role, and registration date.
 - If you have configured mail credentials, the registered email is shown (masked).
 - Tap **🔗 Link to Web** to generate a 6-character one-time code (valid 15 minutes). Use it on the Web UI `/register` page to link your accounts.
+- **🎤 Voice** — toggle TTS voice gender:
+  - **Female (default):** Irina (`ru_RU-irina-medium.onnx`)
+  - **Male:** Dmitri (`ru_RU-dmitri-medium.onnx`)
+  - Setting is stored per-user and takes effect immediately on the next voice reply.
 
 ---
 ### 📒 Contacts

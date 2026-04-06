@@ -1,6 +1,6 @@
 # Taris — Data Layer
 
-**Version:** `2026.4.9`  
+**Version:** `2026.4.25`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -57,8 +57,11 @@ All backends implement this. Do NOT import `store_sqlite` or `store_postgres` di
 | `system_settings` | Admin-configured globals | `key, value` (e.g. `CONVERSATION_HISTORY_MAX`, `CONV_SUMMARY_THRESHOLD`) |
 | `security_events` | Security audit log | `chat_id, event_type, detail, created_at` |
 | `llm_calls` | LLM call trace | `chat_id, model, prompt_chars, response_chars, latency_ms, rag_chunks, context_snapshot` |
+| `voice_opts` | Per-user TTS/STT flags | `chat_id, silence_strip, low_sample_rate, warm_piper, parallel_tts, user_audio_toggle, tmpfs_model, vad_prefilter, whisper_stt, piper_low_model, persistent_piper, voice_timing_debug, vosk_fallback, voice_male` |
+| `global_voice_opts` | Bot-wide voice flags | `key, value` — global defaults overridden by admin Voice Config |
 
-**Add a new column:** Add `ALTER TABLE ... ADD COLUMN ...` in `init_db()` — wrapped in `try/except OperationalError` for idempotency. See existing examples at `bot_db.py` lines ~85–100.
+**Add a new column:** Add `ALTER TABLE ... ADD COLUMN ...` in `init_db()` — wrapped in `try/except OperationalError` for idempotency. See existing examples at `bot_db.py` lines ~85–100.  
+**PostgreSQL:** also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` to the `_migrations` list in `store_postgres.py` `_connect()`. Without this the column is missing in existing PG databases.
 
 ---
 
