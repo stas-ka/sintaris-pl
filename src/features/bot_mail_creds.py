@@ -141,26 +141,40 @@ def _last_digest_file(chat_id: int) -> Path:
 
 
 def _load_creds(chat_id: int) -> Optional[dict]:
+    # DB is primary; file is migration fallback
+    try:
+        data = store.get_mail_creds(chat_id)
+        if data:
+            return data
+    except Exception:
+        pass
     f = _creds_file(chat_id)
     if not f.exists():
         return None
     try:
-        return json.loads(f.read_text(encoding="utf-8"))
+        data = json.loads(f.read_text(encoding="utf-8"))
+        # Migrate to DB on first load
+        try:
+            store.save_mail_creds(chat_id, data)
+        except Exception:
+            pass
+        return data
     except Exception:
         return None
 
 
 def _save_creds(chat_id: int, data: dict) -> None:
+    try:
+        store.save_mail_creds(chat_id, data)
+    except Exception as _e:
+        log.warning("[Mail] store.save_mail_creds failed: %s", _e)
+    # Keep file as backup copy
     f = _creds_file(chat_id)
     f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         os.chmod(f, stat.S_IRUSR | stat.S_IWUSR)   # chmod 600 — owner only
     except Exception:
         pass                                         # non-fatal, best-effort
-    try:
-        store.save_mail_creds(chat_id, data)
-    except Exception as _e:
-        log.warning("[Mail] store.save_mail_creds failed: %s", _e)
 
 
 def _delete_creds(chat_id: int) -> None:

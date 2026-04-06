@@ -114,35 +114,34 @@ def generate_web_link_code(chat_id: int) -> str:
     """Generate a 6-character alphanumeric link code for the given chat_id.
     Any previous code for this user is replaced. Returns the new code."""
     import random, string
-    codes = _load_web_link_codes()
-    # Revoke any existing code for this user
-    for existing_code, entry in list(codes.items()):
-        if entry["chat_id"] == chat_id:
-            del codes[existing_code]
+    from core.store import store as _st
     code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    codes[code] = {
-        "chat_id":    chat_id,
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=WEB_LINK_CODE_TTL_MINUTES),
-    }
-    _save_web_link_codes(codes)
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=WEB_LINK_CODE_TTL_MINUTES)).isoformat()
+    _st.delete_expired_link_codes()
+    _st.save_link_code(code, chat_id, expires_at)
     return code
 
 
 def validate_web_link_code(code: str) -> Optional[int]:
     """Validate a link code. Returns chat_id if valid, None if invalid/expired.
     Consumes the code on success (single-use)."""
-    codes = _load_web_link_codes()
-    key   = code.upper().strip()
-    entry = codes.get(key)
-    if not entry:
+    from core.store import store as _st
+    key = code.upper().strip()
+    row = _st.find_link_code(key)
+    if not row:
         return None
-    if datetime.now(timezone.utc) > entry["expires_at"]:
-        codes.pop(key, None)
-        _save_web_link_codes(codes)
+    try:
+        exp = datetime.fromisoformat(str(row["expires_at"]))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > exp:
+            _st.delete_link_code(key)
+            return None
+    except (ValueError, KeyError):
+        _st.delete_link_code(key)
         return None
-    codes.pop(key, None)  # single-use
-    _save_web_link_codes(codes)
-    return entry["chat_id"]
+    _st.delete_link_code(key)  # single-use
+    return row["chat_id"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Singleton caches
@@ -228,21 +227,15 @@ _conversation_history: dict[int, list] = {}
 def add_to_history(chat_id: int, role: str, content: str,
                    call_id: str | None = None) -> int:
     """Append a message to the user's history.
-    Writes to SQLite (primary storage) and the in-memory cache.
+    Writes to DB (SQLite or Postgres via store) and the in-memory cache.
     When the session reaches CONV_SUMMARY_THRESHOLD messages, triggers async summarization.
     Returns the DB row id for call-tracking purposes.
     """
     from core.bot_db import db_add_history
     db_id = db_add_history(chat_id, role, content, call_id)
-    try:
-        from core.store import store as _st
-        _st.append_history(chat_id, role, content)
-    except Exception as _e:
-        log.debug("[State] store.append_history failed: %s", _e)
     hist = _conversation_history.setdefault(chat_id, [])
     hist.append({"role": role, "content": content, "_db_id": db_id})
     if len(hist) >= get_conv_summary_threshold() and role == "assistant":
-        # Summarize what we have before trimming
         _summarize_session_async(chat_id, list(hist))
     if len(hist) > get_conv_history_max():
         _conversation_history[chat_id] = hist[-get_conv_history_max():]
@@ -264,13 +257,12 @@ def get_history_with_ids(chat_id: int) -> list[dict]:
 
 def clear_history(chat_id: int) -> None:
     """Clear the conversation history for a user (in-memory + DB + all summary tiers)."""
-    from core.bot_db import db_clear_history, get_db
+    from core.bot_db import db_clear_history
     _conversation_history.pop(chat_id, None)
     db_clear_history(chat_id)
     try:
-        db = get_db()
-        db.execute("DELETE FROM conversation_summaries WHERE chat_id = ?", (chat_id,))
-        db.commit()
+        from core.store import store as _store
+        _store.delete_summaries(chat_id)
     except Exception as exc:
         log.warning("[Memory] clear summaries failed: %s", exc)
 
@@ -282,7 +274,7 @@ def _summarize_session_async(chat_id: int, messages: list) -> None:
     def _do():
         try:
             from core.bot_llm import ask_llm
-            from core.bot_db import get_db
+            from core.store import store as _store
             sample = "\n".join(
                 f"{m['role'].upper()}: {m['content'][:200]}" for m in messages[-20:]
             )
@@ -295,37 +287,19 @@ def _summarize_session_async(chat_id: int, messages: list) -> None:
             summary = ask_llm(prompt, timeout=30)
             if not summary or len(summary.strip()) < 10:
                 return
-            db = get_db()
-            # Count mid-tier summaries
-            count = db.execute(
-                "SELECT COUNT(*) FROM conversation_summaries WHERE chat_id=? AND tier='mid'",
-                (chat_id,),
-            ).fetchone()[0]
+            count = _store.count_summaries(chat_id, "mid")
             if count >= get_conv_mid_max():
-                # Compact mid-term → long-term
-                rows = db.execute(
-                    "SELECT summary FROM conversation_summaries "
-                    "WHERE chat_id=? AND tier='mid' ORDER BY created_at ASC",
-                    (chat_id,),
-                ).fetchall()
-                all_text = "\n".join(r[0] for r in rows)
+                rows = _store.get_summaries_oldest(chat_id, "mid")
+                all_text = "\n".join(r["summary"] for r in rows)
                 long_prompt = (
                     "Compress these conversation summaries into one concise paragraph "
                     "preserving key facts, preferences and topics:\n\n" + all_text
                 )
                 long_summary = ask_llm(long_prompt, timeout=30)
                 if long_summary and len(long_summary.strip()) >= 10:
-                    db.execute("DELETE FROM conversation_summaries WHERE chat_id=? AND tier='mid'", (chat_id,))
-                    db.execute(
-                        "INSERT INTO conversation_summaries(chat_id, summary, tier, msg_count) VALUES(?,?,?,?)",
-                        (chat_id, long_summary.strip(), "long", len(messages)),
-                    )
-                    db.commit()
-            db.execute(
-                "INSERT INTO conversation_summaries(chat_id, summary, tier, msg_count) VALUES(?,?,?,?)",
-                (chat_id, summary.strip(), "mid", len(messages)),
-            )
-            db.commit()
+                    _store.delete_summaries(chat_id, "mid")
+                    _store.save_summary(chat_id, long_summary.strip(), "long", len(messages))
+            _store.save_summary(chat_id, summary.strip(), "mid", len(messages))
             log.info("[Memory] stored mid-term summary for user %s", chat_id)
         except Exception as exc:
             log.warning("[Memory] summarize failed: %s", exc)
@@ -336,18 +310,13 @@ def _summarize_session_async(chat_id: int, messages: list) -> None:
 def get_memory_context(chat_id: int) -> str:
     """Return formatted long+mid-term memory summaries as a context prefix (may be empty)."""
     try:
-        from core.bot_db import get_db
-        db = get_db()
-        rows = db.execute(
-            "SELECT tier, summary FROM conversation_summaries "
-            "WHERE chat_id=? ORDER BY tier DESC, created_at ASC",
-            (chat_id,),
-        ).fetchall()
+        from core.store import store as _store
+        rows = _store.get_all_summaries(chat_id)
         if not rows:
             return ""
         parts = ["[Memory context from previous sessions:]"]
         for r in rows:
-            parts.append(f"[{r[0].upper()}] {r[1]}")
+            parts.append(f"[{r['tier'].upper()}] {r['summary']}")
         return "\n".join(parts) + "\n"
     except Exception as exc:
         log.debug("[Memory] get_memory_context failed: %s", exc)
@@ -357,6 +326,21 @@ def get_memory_context(chat_id: int) -> str:
 def load_conversation_history() -> None:
     """Load recent histories from the DB into the in-memory cache (call once at startup)."""
     try:
+        from core.store import store as _store
+        from core.bot_db import _is_postgres
+        if _is_postgres():
+            chat_ids = _store.list_active_chat_ids()
+            loaded = 0
+            for cid in chat_ids:
+                rows = _store.get_history(cid, last_n=get_conv_history_max())
+                if rows:
+                    _conversation_history[cid] = [
+                        {"role": r["role"], "content": r["content"], "_db_id": r.get("id", 0)}
+                        for r in rows
+                    ]
+                    loaded += 1
+            log.info("[State] loaded history for %d users from Postgres", loaded)
+            return
         from core.bot_db import get_db, db_get_history
         conn = get_db()
         chat_ids = [
@@ -370,8 +354,7 @@ def load_conversation_history() -> None:
             if rows:
                 _conversation_history[cid] = rows
                 loaded += 1
-        if loaded:
-            log.info(f"[History] Loaded DB histories for {loaded} users")
+        log.info("[State] loaded history for %d users from SQLite", loaded)
     except Exception as exc:
         log.warning(f"[History] Could not load conversation history from DB: {exc}")
 

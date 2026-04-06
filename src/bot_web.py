@@ -1697,15 +1697,24 @@ def _mail_creds_path(uid: str) -> Path:
 
 
 def _load_mail_creds_for_user(uid: str) -> Optional[dict]:
-    """Load mail creds for a web user, falling back to their linked Telegram chat_id."""
+    """Load mail creds for a web user via store (DB primary, file fallback)."""
+    # Primary: look up telegram_chat_id via web account, then use store
+    acc = find_account_by_id(uid)
+    if acc and acc.get("telegram_chat_id"):
+        try:
+            from core.store import store as _st
+            data = _st.get_mail_creds(int(acc["telegram_chat_id"]))
+            if data:
+                return data
+        except Exception:
+            pass
+    # File fallback for migration — uid-keyed or chat_id-keyed
     p = _mail_creds_path(uid)
     if p.exists():
         try:
             return json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             pass
-    # Legacy fallback: Telegram-linked account may have creds under numeric chat_id
-    acc = find_account_by_id(uid)
     if acc and acc.get("telegram_chat_id"):
         tp = Path(_TARIS_DIR) / "mail_creds" / f"{acc['telegram_chat_id']}.json"
         if tp.exists():

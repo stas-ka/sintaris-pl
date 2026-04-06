@@ -6718,6 +6718,89 @@ def t_store_postgres_notes_uuid_path(**_) -> list[TestResult]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+def t_web_accounts_store_methods(**_) -> list[TestResult]:
+    """T103: web_accounts/reset_tokens/link_codes methods must exist in both store backends."""
+    import os
+    results = []
+    required = [
+        "upsert_web_account", "find_web_account", "update_web_account", "list_web_accounts",
+        "save_reset_token", "find_reset_token", "mark_reset_token_used", "delete_reset_tokens_for_user",
+        "save_link_code", "find_link_code", "delete_link_code", "delete_expired_link_codes",
+    ]
+    src_root = os.path.join(os.path.dirname(__file__), "..")
+    for fname in ("core/store_postgres.py", "core/store_sqlite.py", "core/store_base.py"):
+        path = os.path.normpath(os.path.join(src_root, fname))
+        try:
+            src = open(path, encoding="utf-8").read()
+        except FileNotFoundError:
+            results.append(TestResult(f"T103_{fname}_exists", "FAIL", 0.0, "file not found"))
+            continue
+        missing = [m for m in required if f"def {m}" not in src]
+        if missing:
+            results.append(TestResult(f"T103_{fname}", "FAIL", 0.0, f"missing: {missing}"))
+        else:
+            results.append(TestResult(f"T103_{fname}", "PASS", 0.0, f"all {len(required)} methods present"))
+    return results
+
+
+def t_system_settings_json_file(**_) -> list[TestResult]:
+    """T104: db_get_system_setting / db_set_system_setting must use SYSTEM_SETTINGS_PATH (JSON file), not get_db()."""
+    import os
+    results = []
+    src_root = os.path.join(os.path.dirname(__file__), "..")
+    path = os.path.normpath(os.path.join(src_root, "core/bot_db.py"))
+    try:
+        src = open(path, encoding="utf-8").read()
+    except FileNotFoundError:
+        return [TestResult("T104_bot_db_exists", "FAIL", 0.0, "bot_db.py not found")]
+    if "SYSTEM_SETTINGS_PATH" not in src:
+        results.append(TestResult("T104_system_settings_path", "FAIL", 0.0, "SYSTEM_SETTINGS_PATH not defined"))
+    else:
+        results.append(TestResult("T104_system_settings_path", "PASS", 0.0, "constant defined"))
+    lines = src.splitlines()
+    in_func = False
+    func_lines = []
+    for line in lines:
+        if "def db_get_system_setting" in line:
+            in_func = True
+        if in_func:
+            func_lines.append(line)
+            if line.strip().startswith("def ") and len(func_lines) > 1:
+                break
+    func_src = "\n".join(func_lines)
+    if "get_db()" in func_src:
+        results.append(TestResult("T104_no_get_db_in_settings", "FAIL", 0.0, "db_get_system_setting still calls get_db()"))
+    else:
+        results.append(TestResult("T104_no_get_db_in_settings", "PASS", 0.0, "no get_db() in system settings"))
+    return results
+
+
+def t_mail_creds_store_primary(**_) -> list[TestResult]:
+    """T105: bot_mail_creds._load_creds must try store.get_mail_creds() before file."""
+    import os
+    results = []
+    src_root = os.path.join(os.path.dirname(__file__), "..")
+    path = os.path.normpath(os.path.join(src_root, "features/bot_mail_creds.py"))
+    try:
+        src = open(path, encoding="utf-8").read()
+    except FileNotFoundError:
+        return [TestResult("T105_file_exists", "FAIL", 0.0, "bot_mail_creds.py not found")]
+    start = src.find("def _load_creds(")
+    if start == -1:
+        return [TestResult("T105_load_creds_exists", "FAIL", 0.0, "_load_creds not found")]
+    end = src.find("\ndef ", start + 1)
+    func_src = src[start:end] if end != -1 else src[start:]
+    store_pos = func_src.find("store.get_mail_creds")
+    file_pos  = func_src.find(".read_text(") if ".read_text(" in func_src else func_src.find("json.loads")
+    if store_pos == -1:
+        results.append(TestResult("T105_store_call_present", "FAIL", 0.0, "store.get_mail_creds not in _load_creds"))
+    elif file_pos != -1 and store_pos > file_pos:
+        results.append(TestResult("T105_store_before_file", "FAIL", 0.0, "file read comes before store call"))
+    else:
+        results.append(TestResult("T105_store_primary", "PASS", 0.0, "store.get_mail_creds called first"))
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -6897,6 +6980,12 @@ TEST_FUNCTIONS = [
     t_note_open_empty_file,
     # store_postgres note methods use UUID path via _notes_storage_dir(chat_id) (T102)
     t_store_postgres_notes_uuid_path,
+    # web_accounts store methods present in both backends (T103)
+    t_web_accounts_store_methods,
+    # system_settings uses JSON file, not get_db() (T104)
+    t_system_settings_json_file,
+    # mail_creds _load_creds uses store as primary (T105)
+    t_mail_creds_store_primary,
 ]
 
 
@@ -6930,7 +7019,7 @@ def _print_summary(results: list[TestResult]) -> None:
     print(f"{'TEST':<{pad}}  {'STATUS':<6}  {'TIME':>7}  DETAIL")
     print(f"{'─' * (pad + 50)}")
     for r in results:
-        detail_short = r.detail.splitlines()[0][:70]
+        detail_short = (r.detail.splitlines() or [""])[0][:70]
         print(f"{r.name:<{pad}}  {r.color()}{r.status:<6}{_RST}  {r.duration_s:>6.2f}s  {detail_short}")
     print(f"{'─' * (pad + 50)}")
     counts = {s: sum(1 for r in results if r.status == s) for s in ("PASS", "FAIL", "WARN", "SKIP")}

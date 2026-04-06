@@ -27,14 +27,8 @@ from telegram.bot_access import _is_developer, _is_admin, _t, _run_subprocess
 def log_security_event(chat_id: int, event_type: str, detail: str = "") -> None:
     """Record a security event in DB + security.log file."""
     try:
-        from core.bot_db import get_db
-        db = get_db()
-        db.execute(
-            """INSERT INTO security_events(chat_id, event_type, detail, created_at)
-               VALUES (?, ?, ?, datetime('now'))""",
-            (chat_id, event_type, detail[:500]),
-        )
-        db.commit()
+        from core.store import store as _store
+        _store.log_security_event(chat_id, event_type, detail)
     except Exception as exc:
         log.debug("[Security] DB log failed: %s", exc)
 
@@ -218,12 +212,8 @@ def _handle_dev_security_log(chat_id: int) -> None:
         bot.send_message(chat_id, _t(chat_id, "dev_no_access"))
         return
     try:
-        from core.bot_db import get_db
-        db = get_db()
-        rows = db.execute(
-            "SELECT created_at, event_type, chat_id, detail "
-            "FROM security_events ORDER BY created_at DESC LIMIT 50"
-        ).fetchall()
+        from core.store import store as _store
+        rows = _store.list_security_events(limit=50)
     except Exception as exc:
         bot.send_message(chat_id, f"⚠️ DB error: {exc}")
         return
@@ -233,8 +223,8 @@ def _handle_dev_security_log(chat_id: int) -> None:
     else:
         lines = ["🔒 *Security Log (last 50)*\n"]
         for r in rows:
-            ts = str(r[0])[:16]
-            lines.append(f"`{ts}` `{r[1][:20]:<20}` uid={r[2]} {r[3][:60]}")
+            ts = str(r["created_at"])[:16]
+            lines.append(f"`{ts}` `{str(r['event_type'])[:20]:<20}` uid={r['chat_id']} {str(r['detail'])[:60]}")
         text = "\n".join(lines)
 
     kb = InlineKeyboardMarkup()

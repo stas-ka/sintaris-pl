@@ -795,8 +795,298 @@ class SQLiteStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def rag_stats(self) -> dict:
-        """Return aggregate RAG stats for the admin monitoring page."""
+    def append_history_tracked(self, chat_id: int, role: str, content: str,
+                                call_id: str | None = None) -> int:
+        db = self._db()
+        cur = db.execute(
+            "INSERT INTO chat_history (chat_id, role, content, call_id) VALUES (?,?,?,?)",
+            (chat_id, role, content, call_id),
+        )
+        db.commit()
+        return cur.lastrowid or 0
+
+    def log_llm_call(
+        self, call_id: str, chat_id: int, provider: str,
+        history_ids: list, prompt_chars: int, response_ok: bool,
+        *, model: str = "", temperature: float = 0.0,
+        system_chars: int = 0, history_chars: int = 0,
+        rag_chunks_count: int = 0, rag_context_chars: int = 0,
+        response_preview: str = "", context_snapshot: str = "",
+    ) -> None:
+        import json as _json
+        db = self._db()
+        db.execute(
+            "INSERT OR IGNORE INTO llm_calls "
+            "(call_id, chat_id, provider, history_count, history_ids, prompt_chars, response_ok,"
+            " model, temperature, system_chars, history_chars,"
+            " rag_chunks_count, rag_context_chars, response_preview, context_snapshot) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                call_id, chat_id, provider, len(history_ids),
+                _json.dumps(history_ids), prompt_chars, 1 if response_ok else 0,
+                model, temperature, system_chars, history_chars,
+                rag_chunks_count, rag_context_chars,
+                response_preview[:300] if response_preview else "",
+                context_snapshot,
+            ),
+        )
+        db.commit()
+
+    def get_llm_trace(self, chat_id: int, limit: int = 10) -> list[dict]:
+        rows = self._db().execute(
+            "SELECT call_id, provider, model, temperature, history_count, history_chars,"
+            " system_chars, rag_chunks_count, rag_context_chars,"
+            " response_preview, context_snapshot, response_ok, created_at "
+            "FROM llm_calls WHERE chat_id=? ORDER BY created_at DESC LIMIT ?",
+            (chat_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def set_tts_pending(self, chat_id: int, msg_id: int) -> None:
+        db = self._db()
+        db.execute(
+            "INSERT INTO tts_pending (chat_id, msg_id) VALUES (?, ?)"
+            " ON CONFLICT (chat_id) DO UPDATE SET msg_id = excluded.msg_id",
+            (chat_id, msg_id),
+        )
+        db.commit()
+
+    def get_tts_pending(self, chat_id: int) -> int | None:
+        row = self._db().execute(
+            "SELECT msg_id FROM tts_pending WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        return row[0] if row else None
+
+    def clear_tts_pending(self, chat_id: int) -> None:
+        db = self._db()
+        db.execute("DELETE FROM tts_pending WHERE chat_id = ?", (chat_id,))
+        db.commit()
+
+    def save_summary(self, chat_id: int, summary: str,
+                     tier: str = "mid", msg_count: int = 0) -> None:
+        db = self._db()
+        db.execute(
+            "INSERT INTO conversation_summaries (chat_id, summary, tier, msg_count)"
+            " VALUES (?, ?, ?, ?)",
+            (chat_id, summary, tier, msg_count),
+        )
+        db.commit()
+
+    def count_summaries(self, chat_id: int, tier: str = "mid") -> int:
+        row = self._db().execute(
+            "SELECT COUNT(*) FROM conversation_summaries WHERE chat_id=? AND tier=?",
+            (chat_id, tier),
+        ).fetchone()
+        return row[0] if row else 0
+
+    def get_summaries_oldest(self, chat_id: int, tier: str = "mid") -> list[dict]:
+        rows = self._db().execute(
+            "SELECT id, summary, tier, msg_count, created_at "
+            "FROM conversation_summaries WHERE chat_id=? AND tier=? "
+            "ORDER BY created_at ASC",
+            (chat_id, tier),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_summaries(self, chat_id: int, tier: str | None = None) -> None:
+        db = self._db()
+        if tier is None:
+            db.execute(
+                "DELETE FROM conversation_summaries WHERE chat_id = ?", (chat_id,)
+            )
+        else:
+            db.execute(
+                "DELETE FROM conversation_summaries WHERE chat_id = ? AND tier = ?",
+                (chat_id, tier),
+            )
+        db.commit()
+
+    def get_all_summaries(self, chat_id: int) -> list[dict]:
+        rows = self._db().execute(
+            "SELECT tier, summary FROM conversation_summaries "
+            "WHERE chat_id = ? ORDER BY tier DESC, created_at ASC",
+            (chat_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_user_pref(self, chat_id: int, key: str, default: str = "1") -> str:
+        try:
+            row = self._db().execute(
+                "SELECT value FROM user_prefs WHERE chat_id=? AND key=?", (chat_id, key)
+            ).fetchone()
+            return row[0] if row else default
+        except Exception:
+            return default
+
+    def set_user_pref(self, chat_id: int, key: str, value: str) -> None:
+        db = self._db()
+        db.execute(
+            """INSERT INTO user_prefs(chat_id, key, value, updated_at)
+               VALUES(?,?,?,datetime('now'))
+               ON CONFLICT(chat_id,key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')""",
+            (chat_id, key, value),
+        )
+        db.commit()
+
+    def log_security_event(self, chat_id: int, event_type: str,
+                           detail: str = "") -> None:
+        try:
+            db = self._db()
+            db.execute(
+                "INSERT INTO security_events (chat_id, event_type, detail)"
+                " VALUES (?, ?, ?)",
+                (chat_id, event_type, detail[:500]),
+            )
+            db.commit()
+        except Exception:
+            pass
+
+    def list_security_events(self, limit: int = 50) -> list[dict]:
+        rows = self._db().execute(
+            "SELECT created_at, event_type, chat_id, detail "
+            "FROM security_events ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_active_chat_ids(self) -> list[int]:
+        rows = self._db().execute(
+            "SELECT DISTINCT chat_id FROM chat_history"
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    # ── Web accounts ──────────────────────────────────────────────────────────
+
+    def upsert_web_account(self, account: dict) -> None:
+        db = self._db()
+        db.execute(
+            """INSERT INTO web_accounts
+               (user_id, username, display_name, pw_hash, role, status,
+                telegram_chat_id, created, is_approved)
+               VALUES (?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 username=excluded.username, display_name=excluded.display_name,
+                 pw_hash=excluded.pw_hash, role=excluded.role,
+                 status=excluded.status, telegram_chat_id=excluded.telegram_chat_id,
+                 is_approved=excluded.is_approved""",
+            (
+                account["user_id"], account["username"].lower(),
+                account.get("display_name", ""),
+                account["pw_hash"], account.get("role", "user"),
+                account.get("status", "active"),
+                account.get("telegram_chat_id"),
+                account.get("created", ""),
+                1 if account.get("is_approved") else 0,
+            ),
+        )
+        db.commit()
+
+    def find_web_account(self, *,
+                         user_id: str | None = None,
+                         username: str | None = None,
+                         chat_id: int | None = None) -> dict | None:
+        db = self._db()
+        if user_id:
+            row = db.execute(
+                "SELECT * FROM web_accounts WHERE user_id = ?", (user_id,)
+            ).fetchone()
+        elif username:
+            row = db.execute(
+                "SELECT * FROM web_accounts WHERE username = ?", (username.lower(),)
+            ).fetchone()
+        elif chat_id is not None:
+            row = db.execute(
+                "SELECT * FROM web_accounts WHERE telegram_chat_id = ?", (chat_id,)
+            ).fetchone()
+        else:
+            return None
+        return dict(row) if row else None
+
+    def update_web_account(self, user_id: str, **fields) -> bool:
+        _allowed = {"username", "display_name", "pw_hash", "role", "status",
+                    "telegram_chat_id", "is_approved"}
+        updates = {k: v for k, v in fields.items() if k in _allowed}
+        if not updates:
+            return False
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        db = self._db()
+        cur = db.execute(
+            f"UPDATE web_accounts SET {set_clause} WHERE user_id = ?",
+            list(updates.values()) + [user_id],
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+    def list_web_accounts(self) -> list[dict]:
+        rows = self._db().execute(
+            "SELECT * FROM web_accounts ORDER BY created"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Password reset tokens ─────────────────────────────────────────────────
+
+    def save_reset_token(self, token: str, username: str, expires: str) -> None:
+        db = self._db()
+        db.execute(
+            """INSERT INTO web_reset_tokens (token, username, expires)
+               VALUES (?, ?, ?)
+               ON CONFLICT(token) DO UPDATE SET
+                 username=excluded.username, expires=excluded.expires, used=0""",
+            (token, username.lower(), expires),
+        )
+        db.commit()
+
+    def find_reset_token(self, token: str) -> dict | None:
+        row = self._db().execute(
+            "SELECT * FROM web_reset_tokens WHERE token = ? AND used = 0", (token,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def mark_reset_token_used(self, token: str) -> None:
+        db = self._db()
+        db.execute("UPDATE web_reset_tokens SET used = 1 WHERE token = ?", (token,))
+        db.commit()
+
+    def delete_reset_tokens_for_user(self, username: str) -> None:
+        db = self._db()
+        db.execute(
+            "DELETE FROM web_reset_tokens WHERE username = ?", (username.lower(),)
+        )
+        db.commit()
+
+    # ── Telegram↔Web link codes ───────────────────────────────────────────────
+
+    def save_link_code(self, code: str, chat_id: int, expires_at: str) -> None:
+        db = self._db()
+        db.execute(
+            """INSERT INTO web_link_codes (code, chat_id, expires_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(code) DO UPDATE SET
+                 chat_id=excluded.chat_id, expires_at=excluded.expires_at""",
+            (code, chat_id, expires_at),
+        )
+        db.commit()
+
+    def find_link_code(self, code: str) -> dict | None:
+        row = self._db().execute(
+            "SELECT code, chat_id, expires_at FROM web_link_codes WHERE code = ?",
+            (code,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def delete_link_code(self, code: str) -> None:
+        db = self._db()
+        db.execute("DELETE FROM web_link_codes WHERE code = ?", (code,))
+        db.commit()
+
+    def delete_expired_link_codes(self) -> None:
+        db = self._db()
+        db.execute(
+            "DELETE FROM web_link_codes WHERE expires_at < datetime('now')"
+        )
+        db.commit()
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
         db = self._db()
         row = db.execute(
             "SELECT COUNT(*) as total, AVG(latency_ms) as avg_latency_ms,"

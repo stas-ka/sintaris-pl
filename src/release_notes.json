@@ -1,6 +1,18 @@
 [
   {
-    "version": "2026.4.29",
+    "version": "2026.4.30",
+    "date": "2026-04-06",
+    "changes": [
+      "All user data migrated to DB (Postgres on OpenClaw, SQLite on PicoClaw)",
+      "web_accounts, web_reset_tokens, web_link_codes tables in both backends",
+      "bot_auth.py: accounts and reset tokens now DB-backed; auto-migrates accounts.json on first run",
+      "bot_state.py: Telegram link codes now stored in DB (web_link_codes table)",
+      "bot_mail_creds.py: store.get_mail_creds() is now primary; file is migration fallback",
+      "bot_web.py: _load_mail_creds_for_user uses DB via store",
+      "T103-T105: regression tests for web_accounts store methods, system_settings JSON, mail_creds store primary"
+    ]
+  },
+  {
     "date":    "2026-04-06",
     "title":   "Fix: notes stored to wrong path on Postgres (str(chat_id) vs UUID dir); note content recovered",
     "notes":   "- store_postgres.py: save_note/load_note/delete_note used os.path.join(NOTES_DIR, str(chat_id)) — ignoring UUID account linking. For users linked to a web account, notes were written/read from the wrong directory.\n- Fix: added _notes_storage_dir(chat_id) static method that reads accounts.json and resolves to the correct UUID path (mirrors _resolve_storage_id in bot_users.py).\n- Data recovery: orphaned notes from earlier sessions (u-a9d8b5df, u-f55429b7) migrated to the current user's UUID directory (u-21323d0f). Content and SQLite index restored.\n- Regression test T102 (store_postgres_notes_uuid_path) added"

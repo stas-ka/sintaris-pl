@@ -7,6 +7,7 @@ using CREATE TABLE IF NOT EXISTS (safe to call on every startup).
 Dependency chain: bot_config → bot_db  (no other bot_* imports here)
 """
 
+import json
 import sqlite3
 import threading
 import os
@@ -16,8 +17,20 @@ from core.bot_config import log_datastore as log, TARIS_DIR
 # ── Database file path ────────────────────────────────────────────────────────
 DB_PATH = os.path.join(TARIS_DIR, "taris.db")
 
+SYSTEM_SETTINGS_PATH = os.path.join(TARIS_DIR, "system_settings.json")
+
 # Thread-local storage for per-thread connections
 _local = threading.local()
+
+
+def _is_postgres() -> bool:
+    return os.environ.get("STORE_BACKEND", "sqlite").lower() == "postgres"
+
+
+def _get_store():
+    """Lazy store accessor — avoids circular imports at module load time."""
+    from core.store import store  # noqa: PLC0415
+    return store
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 _SCHEMA_SQL = """
@@ -226,6 +239,36 @@ CREATE TABLE IF NOT EXISTS security_events (
 );
 CREATE INDEX IF NOT EXISTS idx_sec_events_chat ON security_events(chat_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sec_events_type ON security_events(event_type, created_at DESC);
+
+-- Web UI accounts (replaces accounts.json)
+CREATE TABLE IF NOT EXISTS web_accounts (
+    user_id           TEXT    PRIMARY KEY,
+    username          TEXT    UNIQUE NOT NULL,
+    display_name      TEXT    DEFAULT '',
+    pw_hash           TEXT    NOT NULL,
+    role              TEXT    DEFAULT 'user',
+    status            TEXT    DEFAULT 'active',
+    telegram_chat_id  INTEGER,
+    created           TEXT    DEFAULT (datetime('now')),
+    is_approved       INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_web_accounts_chat ON web_accounts(telegram_chat_id);
+
+-- Password reset tokens (replaces reset_tokens.json)
+CREATE TABLE IF NOT EXISTS web_reset_tokens (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    token    TEXT    UNIQUE NOT NULL,
+    username TEXT    NOT NULL,
+    expires  TEXT    NOT NULL,
+    used     INTEGER DEFAULT 0
+);
+
+-- Telegram↔Web link codes (replaces web_link_codes.json)
+CREATE TABLE IF NOT EXISTS web_link_codes (
+    code        TEXT    PRIMARY KEY,
+    chat_id     INTEGER NOT NULL,
+    expires_at  TEXT    NOT NULL
+);
 """
 
 
@@ -331,7 +374,12 @@ def db_get_voice_opts() -> dict:
 
 def db_add_history(chat_id: int, role: str, content: str,
                    call_id: str | None = None) -> int:
-    """Insert a conversation message into the DB. Returns the row id."""
+    """Insert a conversation message. Returns the row id."""
+    if _is_postgres():
+        try:
+            return _get_store().append_history_tracked(chat_id, role, content, call_id)
+        except Exception as exc:
+            log.warning("[History] store.append_history_tracked failed: %s", exc)
     conn = get_db()
     cur = conn.execute(
         "INSERT INTO chat_history (chat_id, role, content, call_id) VALUES (?,?,?,?)",
@@ -342,8 +390,12 @@ def db_add_history(chat_id: int, role: str, content: str,
 
 
 def db_get_history(chat_id: int, limit: int = 15) -> list:
-    """Return the last *limit* messages for chat_id, oldest first.
-    Each entry includes '_db_id' for call-tracking purposes."""
+    """Return the last *limit* messages for chat_id, oldest first."""
+    if _is_postgres():
+        try:
+            return _get_store().get_history(chat_id, last_n=limit)
+        except Exception as exc:
+            log.warning("[History] store.get_history failed: %s", exc)
     conn = get_db()
     rows = conn.execute(
         "SELECT id, role, content FROM chat_history "
@@ -358,6 +410,12 @@ def db_get_history(chat_id: int, limit: int = 15) -> list:
 
 def db_clear_history(chat_id: int) -> None:
     """Delete all stored conversation history for a user."""
+    if _is_postgres():
+        try:
+            _get_store().clear_history(chat_id)
+            return
+        except Exception as exc:
+            log.warning("[History] store.clear_history failed: %s", exc)
     conn = get_db()
     conn.execute("DELETE FROM chat_history WHERE chat_id = ?", (chat_id,))
     conn.commit()
@@ -376,15 +434,18 @@ def db_log_llm_call(
     response_preview: str = "",
     context_snapshot: str = "",
 ) -> None:
-    """Record which history entries were sent to the LLM in this call.
-
-    Extended trace params (all keyword-only) capture the full context breakdown:
-    - model/temperature: LLM runtime params
-    - system_chars/history_chars/rag_context_chars: context size breakdown
-    - rag_chunks_count: number of RAG document chunks injected
-    - response_preview: first 300 chars of the LLM response
-    - context_snapshot: JSON list of last N history messages (role + short preview)
-    """
+    if _is_postgres():
+        try:
+            _get_store().log_llm_call(
+                call_id, chat_id, provider, history_ids, prompt_chars, response_ok,
+                model=model, temperature=temperature, system_chars=system_chars,
+                history_chars=history_chars, rag_chunks_count=rag_chunks_count,
+                rag_context_chars=rag_context_chars,
+                response_preview=response_preview, context_snapshot=context_snapshot,
+            )
+            return
+        except Exception as exc:
+            log.warning("[LLMTrace] store.log_llm_call failed: %s", exc)
     import json as _json
     conn = get_db()
     conn.execute(
@@ -408,6 +469,11 @@ def db_log_llm_call(
 
 def db_get_llm_trace(chat_id: int, limit: int = 10) -> list:
     """Return the N most recent LLM calls for a user with full trace info."""
+    if _is_postgres():
+        try:
+            return _get_store().get_llm_trace(chat_id, limit=limit)
+        except Exception as exc:
+            log.warning("[LLMTrace] store.get_llm_trace failed: %s", exc)
     conn = get_db()
     rows = conn.execute(
         "SELECT call_id, provider, model, temperature, history_count, history_chars,"
@@ -424,7 +490,11 @@ def db_get_llm_trace(chat_id: int, limit: int = 10) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def db_get_user_pref(chat_id: int, key: str, default: str = "1") -> str:
-    """Get a user preference value from DB."""
+    if _is_postgres():
+        try:
+            return _get_store().get_user_pref(chat_id, key, default)
+        except Exception as exc:
+            log.warning("[UserPrefs] store.get_user_pref failed: %s", exc)
     try:
         db = get_db()
         row = db.execute(
@@ -436,7 +506,12 @@ def db_get_user_pref(chat_id: int, key: str, default: str = "1") -> str:
 
 
 def db_set_user_pref(chat_id: int, key: str, value: str) -> None:
-    """Set a user preference in DB."""
+    if _is_postgres():
+        try:
+            _get_store().set_user_pref(chat_id, key, value)
+            return
+        except Exception as exc:
+            log.warning("[UserPrefs] store.set_user_pref failed: %s", exc)
     try:
         db = get_db()
         db.execute(
@@ -455,24 +530,26 @@ def db_set_user_pref(chat_id: int, key: str, value: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def db_get_system_setting(key: str, default: str = "") -> str:
-    """Get a system setting from DB."""
+    """Get a system setting from JSON file (~/.taris/system_settings.json)."""
     try:
-        db = get_db()
-        row = db.execute("SELECT value FROM system_settings WHERE key=?", (key,)).fetchone()
-        return row[0] if row else default
+        with open(SYSTEM_SETTINGS_PATH) as f:
+            return json.load(f).get(key, default)
     except Exception:
         return default
 
 
 def db_set_system_setting(key: str, value: str) -> None:
-    """Set a system setting in DB."""
+    """Set a system setting in JSON file (~/.taris/system_settings.json)."""
     try:
-        db = get_db()
-        db.execute(
-            """INSERT INTO system_settings(key, value, updated_at) VALUES(?,?,datetime('now'))
-               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')""",
-            (key, value),
-        )
-        db.commit()
+        data: dict = {}
+        try:
+            with open(SYSTEM_SETTINGS_PATH) as f:
+                data = json.load(f)
+        except Exception:
+            pass
+        data[key] = value
+        os.makedirs(os.path.dirname(SYSTEM_SETTINGS_PATH), exist_ok=True)
+        with open(SYSTEM_SETTINGS_PATH, "w") as f:
+            json.dump(data, f, indent=2)
     except Exception as exc:
         log.warning("[SysSettings] set failed: %s", exc)
