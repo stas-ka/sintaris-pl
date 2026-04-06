@@ -627,7 +627,8 @@ def _build_host_ctx() -> str:
     """Collect host OS / hardware facts once at startup and return a context block.
 
     Gathers: hostname, OS distro, kernel, arch, CPU model, RAM, disk,
-    available temperature tools, init system, and package manager.
+    available temperature tools, init system, package manager, network interfaces,
+    and available network/speed diagnostic tools.
     This is injected into the system-chat system prompt so the LLM can
     generate commands adapted to the actual host.
     """
@@ -680,6 +681,22 @@ def _build_host_ctx() -> str:
     if not temp_tools:
         temp_tools.append("none detected")
 
+    # Network interfaces (UP only, skip loopback)
+    net_ifaces_raw = _run(["sh", "-c", "ip -o link show | awk '{print $2, $9}'"], "")
+    net_ifaces = [
+        line.rstrip(":") for line in net_ifaces_raw.splitlines()
+        if "UP" in line and not line.startswith("lo:")
+    ]
+    default_iface = _run(["sh", "-c", "ip route | awk '/^default/{print $5; exit}'"], "unknown")
+    default_gw = _run(["sh", "-c", "ip route | awk '/^default/{print $3; exit}'"], "unknown")
+
+    # Network speed / diagnostic tools
+    speed_tools = [t for t in ("speedtest-cli", "speedtest", "iperf3", "nload", "iftop",
+                                "vnstat", "nethogs", "ifstat", "bmon") if shutil.which(t)]
+    if not speed_tools:
+        # Always available fallbacks
+        speed_tools = ["cat /proc/net/dev (rx/tx counters)", "curl -o /dev/null (HTTP speed test)"]
+
     # Misc tools relevant to system administration
     extra_tools = [t for t in ("htop", "top", "iotop", "lsof", "ss", "netstat", "ip", "ifconfig",
                                 "journalctl", "systemctl", "docker", "kubectl") if shutil.which(t)]
@@ -695,6 +712,8 @@ def _build_host_ctx() -> str:
         f"Init system  : {init}",
         f"Package mgr  : {pkg_mgr}",
         f"Temp tools   : {', '.join(temp_tools)}",
+        f"Net ifaces   : {', '.join(net_ifaces) or 'none'} (default: {default_iface}, gw: {default_gw})",
+        f"Speed tools  : {', '.join(speed_tools)}",
         f"Admin tools  : {', '.join(extra_tools) or 'none'}",
         "[END HOST ENVIRONMENT]",
     ]
