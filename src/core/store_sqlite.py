@@ -1086,7 +1086,8 @@ class SQLiteStore:
         )
         db.commit()
 
-    # ── Lifecycle ─────────────────────────────────────────────────────────────
+    def rag_stats(self) -> dict:
+        """Return aggregate RAG stats for the admin monitoring page."""
         db = self._db()
         row = db.execute(
             "SELECT COUNT(*) as total, AVG(latency_ms) as avg_latency_ms,"

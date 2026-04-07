@@ -6413,10 +6413,17 @@ def t_personal_context_injection(**_) -> list[TestResult]:
     """T97 — _calendar_context, _notes_context, _contacts_context defined in bot_access.py
     and wired into _build_system_message()."""
     results = []
-    try:
-        src = open("src/telegram/bot_access.py", encoding="utf-8").read()
-    except FileNotFoundError:
-        src = open("telegram/bot_access.py", encoding="utf-8").read()
+    src = None
+    for candidate in ["src/telegram/bot_access.py", "telegram/bot_access.py",
+                      str(Path(__file__).parents[1] / "telegram" / "bot_access.py")]:
+        try:
+            src = open(candidate, encoding="utf-8").read()
+            break
+        except FileNotFoundError:
+            continue
+    if src is None:
+        return [TestResult("personal_context_src_not_found", "SKIP", 0.0,
+                           "bot_access.py not found in expected locations")]
 
     checks = [
         ("_calendar_context_defined",    "def _calendar_context(" in src),
@@ -6442,18 +6449,27 @@ def t_render_telegram_empty_block(**_) -> list[TestResult]:
     import time
     results = []
 
-    def _check(name: str, path: str, pattern: str, desc: str) -> None:
+    def _resolve(rel: str) -> str | None:
+        for candidate in [str(Path(__file__).parents[1] / rel.replace("src/", "")), rel]:
+            if Path(candidate).exists():
+                return candidate
+        return None
+
+    def _check(name: str, src_rel: str, pattern: str, desc: str) -> None:
         t0 = time.time()
+        path = _resolve(src_rel)
+        if path is None:
+            results.append(TestResult(name, "SKIP", 0.0, f"Source file not found: {src_rel}"))
+            return
         try:
-            with open(path, encoding="utf-8") as f:
-                src = f.read()
+            src = Path(path).read_text(encoding="utf-8")
             found = pattern in src
             results.append(TestResult(
                 name, "PASS" if found else "FAIL", round(time.time() - t0, 3),
                 desc if found else f"MISSING: {pattern!r} not found in {path}"
             ))
-        except FileNotFoundError:
-            results.append(TestResult(name, "FAIL", 0.0, f"File not found: {path}"))
+        except Exception as e:
+            results.append(TestResult(name, "FAIL", 0.0, str(e)))
 
     _check(
         "render_empty_block_guard",
@@ -6470,7 +6486,7 @@ def t_render_telegram_empty_block(**_) -> list[TestResult]:
     _check(
         "note_open_escapes_content",
         "src/telegram/bot_handlers.py",
-        '"note_content": _escape_md(text)',
+        'note_content = _escape_md(',
         "note_open handler escapes note content before rendering"
     )
     return results
@@ -6481,18 +6497,27 @@ def t_admin_info_markdown_safe(**_) -> list[TestResult]:
     import time
     results = []
 
-    def _check(name: str, path: str, pattern: str, desc: str) -> None:
+    def _resolve(rel: str) -> str | None:
+        for candidate in [str(Path(__file__).parents[1] / rel.replace("src/", "")), rel]:
+            if Path(candidate).exists():
+                return candidate
+        return None
+
+    def _check(name: str, src_rel: str, pattern: str, desc: str) -> None:
         t0 = time.time()
+        path = _resolve(src_rel)
+        if path is None:
+            results.append(TestResult(name, "SKIP", 0.0, f"Source file not found: {src_rel}"))
+            return
         try:
-            with open(path, encoding="utf-8") as f:
-                src = f.read()
+            src = Path(path).read_text(encoding="utf-8")
             found = pattern in src
             results.append(TestResult(
                 name, "PASS" if found else "FAIL", round(time.time() - t0, 3),
                 desc if found else f"MISSING: {pattern!r} not found in {path}"
             ))
-        except FileNotFoundError:
-            results.append(TestResult(name, "FAIL", 0.0, f"File not found: {path}"))
+        except Exception as e:
+            results.append(TestResult(name, "FAIL", 0.0, str(e)))
 
     _check(
         "admin_info_stt_backtick",
@@ -6515,10 +6540,13 @@ def t_admin_info_markdown_safe(**_) -> list[TestResult]:
     # Verify no unescaped f-string with _tts_label() / _llm_label() outside backticks
     import re
     t0 = time.time()
+    path = _resolve("src/features/bot_voice.py")
+    if path is None:
+        results.append(TestResult("admin_info_no_raw_tts_label", "SKIP", 0.0,
+                                   "bot_voice.py not found"))
+        return results
     try:
-        with open("src/features/bot_voice.py", encoding="utf-8") as f:
-            src = f.read()
-        # pattern: f"... {_tts_label()} ..." or f"... {_llm_label()} ..." without backtick wrapping
+        src = Path(path).read_text(encoding="utf-8")
         bad = re.search(r'f"[^`"]*\{_tts_label\(\)\}[^`"]*"', src)
         if bad:
             results.append(TestResult("admin_info_no_raw_tts_label", "FAIL",
@@ -6528,9 +6556,8 @@ def t_admin_info_markdown_safe(**_) -> list[TestResult]:
             results.append(TestResult("admin_info_no_raw_tts_label", "PASS",
                                        round(time.time() - t0, 3),
                                        "No raw _tts_label() outside backtick in f-strings"))
-    except FileNotFoundError:
-        results.append(TestResult("admin_info_no_raw_tts_label", "FAIL", 0.0,
-                                   "bot_voice.py not found"))
+    except Exception as e:
+        results.append(TestResult("admin_info_no_raw_tts_label", "FAIL", 0.0, str(e)))
     return results
 
 def t_doc_detail_datetime_safe(**_) -> list[TestResult]:

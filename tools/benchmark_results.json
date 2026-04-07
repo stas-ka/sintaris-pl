@@ -1,52 +1,251 @@
-{
-  "timestamp": "2026-03-31T00:35:56.176081",
-  "n_iterations": 50,
-  "platform": {
-    "os": "posix",
-    "cpu_count": 4
+[
+  {
+    "timestamp": "2026-03-31T00:35:56.176081",
+    "n_iterations": 50,
+    "platform": {
+      "os": "posix",
+      "cpu_count": 4
+    },
+    "results": [
+      {
+        "name": "registrations upsert",
+        "file_us": 415.41,
+        "db_us": 9.36,
+        "ratio": 0.023,
+        "faster": "db"
+      },
+      {
+        "name": "registration lookup",
+        "file_us": 150.29,
+        "db_us": 14.95,
+        "ratio": 0.099,
+        "faster": "db"
+      },
+      {
+        "name": "calendar batch save+load",
+        "file_us": 252.03,
+        "db_us": 105.75,
+        "ratio": 0.42,
+        "faster": "db"
+      },
+      {
+        "name": "voice opts roundtrip",
+        "file_us": 141.67,
+        "db_us": 56.54,
+        "ratio": 0.399,
+        "faster": "db"
+      },
+      {
+        "name": "guest users set",
+        "file_us": 152.37,
+        "db_us": 101.27,
+        "ratio": 0.665,
+        "faster": "db"
+      },
+      {
+        "name": "notes upsert+load",
+        "file_us": 86.52,
+        "db_us": 55.68,
+        "ratio": 0.644,
+        "faster": "db"
+      }
+    ]
   },
-  "results": [
-    {
-      "name": "registrations upsert",
-      "file_us": 415.41,
-      "db_us": 9.36,
-      "ratio": 0.023,
-      "faster": "db"
+  {
+    "timestamp": "2026-04-07T07:47:42.783318",
+    "n_iterations": 500,
+    "platform": {
+      "os": "posix",
+      "cpu_count": 24
     },
-    {
-      "name": "registration lookup",
-      "file_us": 150.29,
-      "db_us": 14.95,
-      "ratio": 0.099,
-      "faster": "db"
+    "results": [
+      {
+        "name": "registrations upsert",
+        "file_us": 661.56,
+        "db_us": 1.4,
+        "ratio": 0.002,
+        "faster": "db"
+      },
+      {
+        "name": "registration lookup",
+        "file_us": 193.28,
+        "db_us": 1.93,
+        "ratio": 0.01,
+        "faster": "db"
+      },
+      {
+        "name": "calendar batch save+load",
+        "file_us": 46.92,
+        "db_us": 41.35,
+        "ratio": 0.881,
+        "faster": "db"
+      },
+      {
+        "name": "voice opts roundtrip",
+        "file_us": 23.12,
+        "db_us": 7.9,
+        "ratio": 0.342,
+        "faster": "db"
+      },
+      {
+        "name": "guest users set",
+        "file_us": 25.44,
+        "db_us": 15.34,
+        "ratio": 0.603,
+        "faster": "db"
+      },
+      {
+        "name": "notes upsert+load",
+        "file_us": 25.51,
+        "db_us": 6.85,
+        "ratio": 0.269,
+        "faster": "db"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-04-07T07:59:11.806981",
+    "n_iterations": 200,
+    "platform": {
+      "os": "posix",
+      "cpu_count": 24
     },
-    {
-      "name": "calendar batch save+load",
-      "file_us": 252.03,
-      "db_us": 105.75,
-      "ratio": 0.42,
-      "faster": "db"
+    "results": [
+      {
+        "name": "registrations upsert",
+        "file_us": 423.5,
+        "db_us": 2.17,
+        "ratio": 0.005,
+        "faster": "db"
+      },
+      {
+        "name": "registration lookup",
+        "file_us": 119.99,
+        "db_us": 2.77,
+        "ratio": 0.023,
+        "faster": "db"
+      },
+      {
+        "name": "calendar batch save+load",
+        "file_us": 58.84,
+        "db_us": 27.97,
+        "ratio": 0.475,
+        "faster": "db"
+      },
+      {
+        "name": "voice opts roundtrip",
+        "file_us": 37.56,
+        "db_us": 12.46,
+        "ratio": 0.332,
+        "faster": "db"
+      },
+      {
+        "name": "guest users set",
+        "file_us": 42.14,
+        "db_us": 25.38,
+        "ratio": 0.602,
+        "faster": "db"
+      },
+      {
+        "name": "notes upsert+load",
+        "file_us": 26.28,
+        "db_us": 10.72,
+        "ratio": 0.408,
+        "faster": "db"
+      }
+    ]
+  },
+  {
+    "label": "menu_navigation \u2014 SintAItion (2026-04-07)",
+    "timestamp": "2026-04-07T06:00:57.149825+00:00",
+    "benchmark": "menu_navigation",
+    "n_iterations": 50,
+    "platform": {
+      "node": "SintAItion",
+      "system": "Linux",
+      "release": "6.17.0-19-generic",
+      "machine": "x86_64",
+      "python": "3.12.3"
     },
-    {
-      "name": "voice opts roundtrip",
-      "file_us": 141.67,
-      "db_us": 56.54,
-      "ratio": 0.399,
-      "faster": "db"
-    },
-    {
-      "name": "guest users set",
-      "file_us": 152.37,
-      "db_us": 101.27,
-      "ratio": 0.665,
-      "faster": "db"
-    },
-    {
-      "name": "notes upsert+load",
-      "file_us": 86.52,
-      "db_us": 55.68,
-      "ratio": 0.644,
-      "faster": "db"
-    }
-  ]
-}
+    "results": [
+      {
+        "name": "TC01 main_menu_keyboard admin  [no I/O]",
+        "avg_us": 9.2,
+        "min_us": 8.9,
+        "max_us": 10.8
+      },
+      {
+        "name": "TC02 main_menu_keyboard user   [no I/O]",
+        "avg_us": 7.3,
+        "min_us": 7.2,
+        "max_us": 10.4
+      },
+      {
+        "name": "TC03 send_menu admin           [mocked send_message]",
+        "avg_us": 9.8,
+        "min_us": 9.7,
+        "max_us": 10.1
+      },
+      {
+        "name": "TC04 notes_submenu             [no I/O]",
+        "avg_us": 11.0,
+        "min_us": 10.5,
+        "max_us": 13.7
+      },
+      {
+        "name": "TC05 notes_list empty dir      [JSON: scan dir]",
+        "avg_us": 37.9,
+        "min_us": 33.7,
+        "max_us": 46.2
+      },
+      {
+        "name": "TC06 notes_list 10 files       [JSON: scan + stat 10 files]",
+        "avg_us": 165.1,
+        "min_us": 159.7,
+        "max_us": 229.2
+      },
+      {
+        "name": "TC07 admin_menu                [JSON: read registrations badge]",
+        "avg_us": 20.7,
+        "min_us": 20.2,
+        "max_us": 25.6
+      },
+      {
+        "name": "TC08 admin_user_list           [JSON: read all registrations]",
+        "avg_us": 130.2,
+        "min_us": 127.8,
+        "max_us": 137.0
+      },
+      {
+        "name": "TC09 calendar_menu empty       [JSON: missing file \u2192 []]",
+        "avg_us": 40.1,
+        "min_us": 37.7,
+        "max_us": 47.7
+      },
+      {
+        "name": "TC10 calendar_menu 10 events   [JSON: read+parse 10-event file]",
+        "avg_us": 104.8,
+        "min_us": 102.3,
+        "max_us": 109.6
+      },
+      {
+        "name": "TC11 contacts_menu 0 contacts  [SQLite: COUNT=0]",
+        "avg_us": 18.8,
+        "min_us": 18.1,
+        "max_us": 22.6
+      },
+      {
+        "name": "TC12 contacts_menu 10 contacts [SQLite: COUNT=10]",
+        "avg_us": 34.7,
+        "min_us": 34.0,
+        "max_us": 41.3
+      },
+      {
+        "name": "TC13 contacts_list 10 contacts [SQLite: SELECT+paginate]",
+        "avg_us": 70.1,
+        "min_us": 69.4,
+        "max_us": 72.9
+      }
+    ]
+  }
+]

@@ -45,7 +45,7 @@ print(f"{'[DRY-RUN] ' if DRY_RUN else ''}Migrating {DB_PATH} → Postgres")
 
 migrated = {k: 0 for k in [
     "users", "calendar_events", "chat_history", "conversation_summaries",
-    "documents", "notes", "user_prefs", "security_events",
+    "documents", "contacts", "notes", "user_prefs", "security_events",
     "global_voice_opts", "llm_calls"
 ]}
 
@@ -132,20 +132,79 @@ if not DRY_RUN:
 else:
     migrated["conversation_summaries"] = len(rows)
 
-# ── 5. Notes ─────────────────────────────────────────────────────────────────
+# ── 5. Documents ─────────────────────────────────────────────────────────────
 rows = sq.execute(
-    "SELECT chat_id, slug, title, content FROM notes_index WHERE content != ''"
+    "SELECT doc_id, chat_id, title, file_path, doc_type, metadata, doc_hash FROM documents"
 ).fetchall()
-print(f"  notes_index: {len(rows)} rows")
+print(f"  documents: {len(rows)} rows")
+import json as _json
 for r in rows:
     d = dict(r)
     if not DRY_RUN:
         try:
-            pg.save_note(d["chat_id"], d["slug"], d["title"] or d["slug"], d["content"] or "")
+            meta = _json.loads(d["metadata"]) if d.get("metadata") else None
+            pg.save_document_meta(
+                d["doc_id"], d["chat_id"], d["title"] or "",
+                d["file_path"] or "", d["doc_type"] or "file",
+                metadata=meta, doc_hash=d.get("doc_hash"),
+            )
+            migrated["documents"] += 1
+        except Exception as e:
+            print(f"    ⚠️  document {d.get('doc_id')}: {e}")
+    else:
+        print(f"    [dry] doc chat_id={d['chat_id']} title={d['title']!r}")
+        migrated["documents"] += 1
+
+# ── 5b. Contacts ─────────────────────────────────────────────────────────────
+_contacts_tbl = [r[1] for r in sq.execute("PRAGMA table_info(contacts)").fetchall()]
+if _contacts_tbl:
+    rows = sq.execute(
+        "SELECT id, chat_id, name, phone, email, address, notes FROM contacts"
+    ).fetchall()
+    print(f"  contacts: {len(rows)} rows")
+    for r in rows:
+        d = dict(r)
+        chat_id = d.pop("chat_id")
+        if not DRY_RUN:
+            try:
+                d["id"] = d.get("id") or None
+                pg.save_contact(chat_id, d)
+                migrated["contacts"] += 1
+            except Exception as e:
+                print(f"    ⚠️  contact {d.get('name')}: {e}")
+        else:
+            print(f"    [dry] contact chat_id={chat_id} name={d.get('name')!r}")
+            migrated["contacts"] += 1
+else:
+    print("  contacts: table not found — skipping")
+
+# ── 6. Notes ─────────────────────────────────────────────────────────────────
+# Migrate ALL notes — most notes on SintAItion have content in .md files, not SQLite.
+# For empty-content rows: read content from ~/.taris/notes/<chat_id>/<slug>.md
+rows = sq.execute(
+    "SELECT chat_id, slug, title, content FROM notes_index"
+).fetchall()
+print(f"  notes_index: {len(rows)} rows")
+_notes_dir = TARIS_DIR / "notes"
+for r in rows:
+    d = dict(r)
+    content = d.get("content") or ""
+    if not content:
+        # Content lives in the .md file on disk — read it
+        note_path = _notes_dir / str(d["chat_id"]) / f"{d['slug']}.md"
+        if note_path.exists():
+            try:
+                content = note_path.read_text(encoding="utf-8")
+            except Exception as e:
+                print(f"    ⚠️  note file read {note_path}: {e}")
+    if not DRY_RUN:
+        try:
+            pg.save_note(d["chat_id"], d["slug"], d["title"] or d["slug"], content)
             migrated["notes"] += 1
         except Exception as e:
             print(f"    ⚠️  note {d['slug']}: {e}")
     else:
+        print(f"    [dry] note chat_id={d['chat_id']} slug={d['slug']!r} content_len={len(content)}")
         migrated["notes"] += 1
 
 # ── 6. User prefs ────────────────────────────────────────────────────────────

@@ -276,7 +276,10 @@ def clear_history(chat_id: int) -> None:
 
 
 def _summarize_session_async(chat_id: int, messages: list) -> None:
-    """Summarize the given messages and store as mid-term memory. Runs in background thread."""
+    """Summarize the given messages and store as mid-term memory. Runs in background thread.
+
+    Persists to the conversation_summaries table via store.save_summary().
+    """
     import threading
 
     def _do():

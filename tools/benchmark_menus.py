@@ -106,6 +106,9 @@ if not os.path.isdir(os.path.join(_SRC, "core")):
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
+# Ensure relative paths like "screens/..." resolve from the taris root dir
+os.chdir(_PARENT_DIR)
+
 import core.bot_db as bot_db  # noqa: E402
 
 # Redirect DB_PATH and force fresh thread-local connections
