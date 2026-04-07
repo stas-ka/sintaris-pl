@@ -778,24 +778,26 @@ class PostgresStore:
             conn.commit()
 
     def search_similar(self, embedding: list[float], chat_id: int,
-                       top_k: int = 5) -> list[dict]:
+                       top_k: int = 5, is_admin: bool = False) -> list[dict]:
         from core.store_base import StoreCapabilityError
         if not self._has_vec:
             raise StoreCapabilityError(
                 "pgvector not installed or not enabled — "
                 "run: CREATE EXTENSION vector;"
             )
+        # is_shared=1 → all users; is_shared=2 → admin-only
+        shared_filter = "is_shared IN (1, 2)" if is_admin else "is_shared = 1"
         with self._pool.connection() as conn:
             from pgvector.psycopg import register_vector
             register_vector(conn)
             rows = conn.execute(
-                "SELECT doc_id, chunk_idx, chunk_text, "
-                "  (embedding <=> %s::vector) AS distance "
-                "FROM vec_embeddings "
-                "WHERE (chat_id = %s OR doc_id IN ("
-                "  SELECT doc_id FROM documents WHERE is_shared = 1)) "
-                "ORDER BY embedding <=> %s::vector "
-                "LIMIT %s",
+                f"SELECT doc_id, chunk_idx, chunk_text, "
+                f"  (embedding <=> %s::vector) AS distance "
+                f"FROM vec_embeddings "
+                f"WHERE (chat_id = %s OR doc_id IN ("
+                f"  SELECT doc_id FROM documents WHERE {shared_filter})) "
+                f"ORDER BY embedding <=> %s::vector "
+                f"LIMIT %s",
                 (embedding, chat_id, embedding, top_k),
             ).fetchall()
         return [dict(r) for r in rows]
@@ -827,12 +829,15 @@ class PostgresStore:
             )
             conn.commit()
 
-    def search_fts(self, query: str, chat_id: int, top_k: int = 5) -> list[dict]:
+    def search_fts(self, query: str, chat_id: int, top_k: int = 5,
+                   is_admin: bool = False) -> list[dict]:
         """Full-text search across user's document chunks using Postgres tsvector.
 
         Uses 'simple' dictionary so no language-specific stemming is needed —
         works for Russian, German, and English without extra config.
         Falls back to ILIKE when no FTS tokens matched.
+
+        is_admin=True also includes admin-only shared docs (is_shared=2).
         """
         import re
         tokens = re.findall(r"\w+", query, re.UNICODE)
@@ -842,8 +847,10 @@ class PostgresStore:
 
         # plainto_tsquery automatically handles OR/AND; 'simple' = no stemming
         fts_query = " ".join(meaningful)
-        # Include user's own docs AND shared system docs (is_shared=1)
-        shared_clause = "(chat_id = %s OR doc_id IN (SELECT doc_id FROM documents WHERE is_shared = 1))"
+        # Include user's own docs AND shared system docs
+        # is_shared=1 → all users; is_shared=2 → admin-only
+        shared_filter = "is_shared IN (1, 2)" if is_admin else "is_shared = 1"
+        shared_clause = f"(chat_id = %s OR doc_id IN (SELECT doc_id FROM documents WHERE {shared_filter}))"
         try:
             with self._pool.connection() as conn:
                 rows = conn.execute(

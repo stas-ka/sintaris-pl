@@ -581,7 +581,7 @@ class SQLiteStore:
             db.commit()
 
     def search_similar(self, embedding: list[float], chat_id: int,
-                       top_k: int = 5) -> list[dict]:
+                       top_k: int = 5, is_admin: bool = False) -> list[dict]:
         if not self._has_vec:
             raise StoreCapabilityError(
                 "sqlite-vec not installed — vector search unavailable. "
@@ -591,7 +591,7 @@ class SQLiteStore:
         vec_blob = struct.pack(f"{len(embedding)}f", *embedding)
         # sqlite-vec KNN does NOT support compound WHERE (OR/IN) — fetch broadly and filter in Python
         fetch_k = max(top_k * 6, 30)  # fetch extra to survive filtering + dedup
-        shared_ids = set(self._get_shared_doc_ids())
+        shared_ids = set(self._get_shared_doc_ids(include_admin=is_admin))
         # Unfiltered KNN — sqlite-vec requires simple single-column WHERE for KNN
         rows = self._db().execute(
             "SELECT doc_id, chunk_idx, chat_id, chunk_text, distance"
@@ -667,7 +667,7 @@ class SQLiteStore:
         db.commit()
 
     def search_fts(self, query: str, chat_id: int,
-                   top_k: int = 5) -> list[dict]:
+                   top_k: int = 5, is_admin: bool = False) -> list[dict]:
         """BM25 full-text search across user's document chunks (own + shared).
 
         Sanitises the query to bare words (removes FTS5 special chars) so
@@ -675,6 +675,8 @@ class SQLiteStore:
         Uses OR semantics so partial matches work — FTS5 default AND requires
         all words in one chunk which is too strict for natural language queries.
         Returns [{doc_id, chunk_idx, chunk_text, score}] ordered best-first.
+
+        is_admin=True also includes admin-only shared docs (is_shared=2).
         """
         import re
         tokens = re.findall(r"\w+", query, re.UNICODE)
@@ -685,8 +687,8 @@ class SQLiteStore:
         # OR joining: any chunk matching at least one keyword is a candidate;
         # BM25 rank naturally promotes chunks with more/rarer keyword hits
         safe_q = " OR ".join(meaningful)
-        # Include own docs + shared docs from any user
-        shared_ids = self._get_shared_doc_ids()
+        # Include own docs + shared docs (admin-only docs only for admins)
+        shared_ids = self._get_shared_doc_ids(include_admin=is_admin)
         try:
             if shared_ids:
                 placeholders = ",".join("?" * len(shared_ids))
@@ -712,12 +714,21 @@ class SQLiteStore:
             log.warning("[Store] FTS5 search error: %s", exc)
             return []
 
-    def _get_shared_doc_ids(self) -> list[str]:
-        """Return list of doc_ids marked is_shared=1 (from any user)."""
+    def _get_shared_doc_ids(self, include_admin: bool = False) -> list[str]:
+        """Return list of doc_ids marked as shared.
+
+        include_admin=False → only is_shared=1 (all-users shared)
+        include_admin=True  → is_shared IN (1,2) — also includes admin-only docs
+        """
         try:
-            rows = self._db().execute(
-                "SELECT doc_id FROM documents WHERE is_shared = 1"
-            ).fetchall()
+            if include_admin:
+                rows = self._db().execute(
+                    "SELECT doc_id FROM documents WHERE is_shared IN (1, 2)"
+                ).fetchall()
+            else:
+                rows = self._db().execute(
+                    "SELECT doc_id FROM documents WHERE is_shared = 1"
+                ).fetchall()
             return [r[0] for r in rows]
         except Exception:
             return []

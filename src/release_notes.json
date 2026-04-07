@@ -1,5 +1,15 @@
 [
   {
+    "version": "2026.4.37",
+    "date": "2026-04-07",
+    "changes": [
+      "fix: [BOT CAPABILITIES] tag no longer reproduced literally in LLM replies — security preamble now instructs LLM to enumerate capabilities in plain text",
+      "fix: admin guide (howto_admin.md) now stored as is_shared=2 (admin-only RAG); user guide remains is_shared=1 (all users)",
+      "feat: RAG retrieval (FTS5 + vector) passes is_admin flag so admin-only docs are returned only for admin users",
+      "fix: load_system_docs.py re-run required with --force to apply new is_shared=2 level for existing admin guide entries"
+    ]
+  },
+  {
     "version": "2026.4.36",
     "date": "2026-04-06",
     "changes": [

@@ -183,9 +183,12 @@ def retrieve_context(
     query: str,
     top_k: int | None = None,
     max_chars: int = 2000,
+    is_admin: bool = False,
 ) -> tuple[list[dict], str, str, dict]:
     """
     Unified RAG retrieval with adaptive routing + RRF fusion.
+
+    is_admin=True includes admin-only shared documents (is_shared=2).
 
     Returns:
         (chunks, assembled_text, strategy_used, trace)
@@ -214,7 +217,7 @@ def retrieve_context(
 
     # 2. FTS5 search (always available)
     try:
-        fts5_results = store.search_fts(query, chat_id, top_k * 2) or []
+        fts5_results = store.search_fts(query, chat_id, top_k * 2, is_admin=is_admin) or []
     except Exception as exc:
         log.warning("[RAG] FTS5 search failed: %s", exc)
         fts5_results = []
@@ -228,7 +231,7 @@ def retrieve_context(
             if svc is not None:
                 vec = svc.embed(query)
                 if vec:
-                    vector_results = store.search_similar(vec, chat_id, top_k * 2) or []
+                    vector_results = store.search_similar(vec, chat_id, top_k * 2, is_admin=is_admin) or []
         except Exception as exc:
             log.debug("[RAG] vector search failed (non-fatal): %s", exc)
 

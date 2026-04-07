@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 log = logging.getLogger("load_system_docs")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-# Chat ID 0 = system; all users see is_shared docs
+# Chat ID 0 = system; is_shared=1 docs visible to all users, is_shared=2 to admins only
 SYSTEM_CHAT_ID = 0
 
 # Source files relative to repo root (or ~/.taris/ if deployed)
@@ -91,13 +91,21 @@ def _load_docs(force: bool = False) -> None:
         sys.exit(1)
 
     for tag, title, text in sources:
-        _ingest(store, tag, title, text, force)
+        # Admin guide is shared only with admin users (is_shared=2);
+        # user guide is shared with everyone (is_shared=1).
+        shared_level = 2 if tag == "taris_admin_guide" else 1
+        _ingest(store, tag, title, text, force, shared_level=shared_level)
 
     log.info("System docs loaded. Run once or with --force to refresh after doc updates.")
 
 
-def _ingest(store, tag: str, title: str, text: str, force: bool) -> None:
-    """Chunk, embed, and store a system document."""
+def _ingest(store, tag: str, title: str, text: str, force: bool, shared_level: int = 1) -> None:
+    """Chunk, embed, and store a system document.
+
+    shared_level:
+      1 — visible to all users (user guide)
+      2 — visible to admin users only (admin guide)
+    """
     doc_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
     # Use a stable doc_id based on tag so re-runs are idempotent
     doc_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"taris.system.{tag}"))
@@ -132,9 +140,9 @@ def _ingest(store, tag: str, title: str, text: str, force: bool) -> None:
         doc_hash=doc_hash,
         metadata={"tag": tag, "n_chunks": len(chunks), "system": True},
     )
-    # Mark shared immediately
+    # Mark shared immediately (1 = all users; 2 = admin-only)
     try:
-        store.update_document_field(doc_id, is_shared=1)
+        store.update_document_field(doc_id, is_shared=shared_level)
     except Exception as e:
         log.warning("  [%s] could not mark is_shared: %s", tag, e)
 

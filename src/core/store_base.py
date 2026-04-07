@@ -199,11 +199,12 @@ class DataStore(Protocol):
         ...
 
     def search_similar(self, embedding: list[float], chat_id: int,
-                       top_k: int = 5) -> list[dict]:
+                       top_k: int = 5, is_admin: bool = False) -> list[dict]:
         """KNN search within user's embeddings.
 
         Returns [{doc_id, chunk_text, distance}] sorted by distance ascending.
         Raises StoreCapabilityError if has_vector_search() is False.
+        is_admin=True also includes admin-only shared docs (is_shared=2).
         """
         ...
 
@@ -227,11 +228,12 @@ class DataStore(Protocol):
         ...
 
     def search_fts(self, query: str, chat_id: int,
-                   top_k: int = 5) -> list[dict]:
+                   top_k: int = 5, is_admin: bool = False) -> list[dict]:
         """BM25 full-text search in user's document chunks.
 
         Returns [{doc_id, chunk_text, score}] sorted by relevance descending.
         Returns [] if no results or FTS not supported.
+        is_admin=True also includes admin-only shared docs (is_shared=2).
         """
         ...
 

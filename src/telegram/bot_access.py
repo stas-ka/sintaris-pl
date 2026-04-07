@@ -293,8 +293,9 @@ def _docs_rag_context(chat_id: int, query: str) -> str:
 
         t0 = time.monotonic()
         import concurrent.futures
+        _user_is_admin = _is_admin(chat_id)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-            _fut = _pool.submit(retrieve_context, chat_id, query, top_k, 2000)
+            _fut = _pool.submit(retrieve_context, chat_id, query, top_k, 2000, _user_is_admin)
             try:
                 chunks, assembled, strategy, trace = _fut.result(timeout=rag_timeout)
             except concurrent.futures.TimeoutError:
