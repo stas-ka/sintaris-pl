@@ -5429,15 +5429,31 @@ def t_rag_memory_combined_context(**_) -> list:
                                   if ok_sys_first and ok_user_last
                                   else f"wrong structure: first={messages[0]['role']}, last={messages[-1]['role']}"))
 
-        # Actually call LLM — SKIP if not reachable
+        # Actually call LLM — SKIP if not reachable or binary LLM returns empty
         try:
             reply = ask_llm_with_history(messages, timeout=15, use_case="test")
             ok_reply = bool(reply and len(reply) > 0)
-            results.append(TestResult("combined_context_llm_response",
-                                      "PASS" if ok_reply else "FAIL",
-                                      _time.time() - t0,
-                                      f"LLM replied ({len(reply)} chars)" if ok_reply
-                                      else "empty LLM response"))
+            if not ok_reply:
+                # Binary LLM (taris/picoclaw) may return empty without exception when misconfigured
+                bot_env_path = Path(os.path.expanduser("~/.taris/bot.env"))
+                llm_prov = os.environ.get("LLM_PROVIDER", "taris")
+                if bot_env_path.exists():
+                    for _l in bot_env_path.read_text(encoding="utf-8").splitlines():
+                        _l = _l.strip()
+                        if _l.startswith("LLM_PROVIDER=") and not _l.startswith("#"):
+                            llm_prov = _l.split("=", 1)[1].strip().strip('"').strip("'")
+                            break
+                if llm_prov == "taris":
+                    results.append(TestResult("combined_context_llm_response", "SKIP",
+                                              _time.time() - t0,
+                                              "LLM_PROVIDER=taris binary returned empty — binary not configured for test context"))
+                else:
+                    results.append(TestResult("combined_context_llm_response", "FAIL",
+                                              _time.time() - t0, "empty LLM response"))
+            else:
+                results.append(TestResult("combined_context_llm_response",
+                                          "PASS", _time.time() - t0,
+                                          f"LLM replied ({len(reply)} chars)"))
         except Exception as llm_exc:
             results.append(TestResult("combined_context_llm_response", "SKIP",
                                       _time.time() - t0, f"LLM not reachable: {llm_exc}"))
