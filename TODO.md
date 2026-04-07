@@ -174,7 +174,7 @@ Replace Jinja2 with NiceGUI for richer interactivity — evaluate RAM footprint 
 
 ---
 
-## 9. Flexible Storage Architecture 🔲
+## 9. Flexible Storage Architecture 🔄
 
 Multi-backend storage with adapter pattern:  
 **PicoClaw / ZeroClaw** → SQLite + `sqlite-vec` (vector search, local RAG) · **OpenClaw** → PostgreSQL + pgvector.  
@@ -191,7 +191,7 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 | Phase 2c | Dual-write wrappers: existing JSON writers also call adapter | ✅ Done (v2026.3.32) |
 | Phase 2d | `documents` + `vec_embeddings` tables; `upsert_embedding` / `search_similar` | ✅ Done (v2026.4.13) |
 | Phase 3 | `migrate_to_db.py` — JSON → adapter (idempotent) | ✅ |
-| Phase 4 | Switch all reads to adapter; remove JSON writes | 🔄 In progress (notes + calendar done in v2026.3.31) |
+| Phase 4 | Switch all reads to adapter; remove JSON writes | 🔄 In progress — notes/calendar/contacts/mail_creds ✅; voice_opts/registrations dual-write ⚠️; dynamic_users JSON-only ⚠️ |
 | Phase 5 | `store_postgres.py` PostgreSQL adapter; test on OpenClaw | ✅ Done (v2026.4.13) |
 | Phase 6 | RAG (§4.1) via `search_similar()`; conversation memory (§2.1) via `append_history()` | ✅ Done (v2026.4.13) |
 
@@ -207,12 +207,12 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 - [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
 ### 9.1 Storing of user data in the local database not in files
 - [x] Notes reads from DB (`store.list_notes()`); file fallback preserved; double-write bug fixed (v2026.3.30)
-- [x] Notes content stored in DB (`notes_index.content` column); `_load_note_text` reads DB first, file fallback; `_save_note_file` writes content to DB (v2026.3.31) 🔲 _being deployed_
-- [x] Calendar data stored in database — DB-primary via `store.save_event/load_events/delete_event`; JSON file write removed (v2026.3.31) 🔲 _being deployed_
+- [x] Notes content stored in DB (`notes_index.content` column); `_load_note_text` reads DB first, file fallback; `_save_note_file` writes content to DB (v2026.3.31)
+- [x] Calendar data stored in database — DB-primary via `store.save_event/load_events/delete_event`; JSON file write removed (v2026.3.31)
 - [x] All kinds of memory (conversation context) stored in database — `chat_history` + `conversation_summaries` tables; cleared via Profile (v2026.3.30+5)
 - [x] All user contacts stored in database — `store.save_contact / list_contacts / delete_contact / search_contacts` in `store_sqlite.py`
 - [x] Migration scripts exist — `src/setup/migrate_to_db.py` idempotent JSON → DB (v2026.3.30)
-- [x] Per-user preferences stored in DB — `user_prefs` table; `db_get_user_pref / db_set_user_pref` (v2026.3.31) 🔲 _being deployed_
+- [x] Per-user preferences stored in DB — `user_prefs` table; `db_get_user_pref / db_set_user_pref` (v2026.3.31)
 - [ ] Last interactions, opened UI and status of UI stored in database — not yet implemented
 - [x] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target (v2026.4.13)
 - [x] `src/setup/migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL migration (was migrate_sqlite_to_pg.py; 316 rows migrated v2026.4.31)
