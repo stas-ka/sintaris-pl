@@ -236,6 +236,10 @@ app = FastAPI(
 )
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+# Expose HTTPS availability to all templates so the HTTP→HTTPS redirect
+# script in base.html only runs when SSL cert is actually configured.
+_HTTPS_AVAILABLE = (BASE / "ssl" / "key.pem").exists() and (BASE / "ssl" / "cert.pem").exists()
+templates.env.globals["https_available"] = _HTTPS_AVAILABLE
 
 
 @app.middleware("http")

@@ -8,7 +8,8 @@
   <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- Auto-redirect HTTP → HTTPS so mic / Speech API features work -->
+  <!-- Auto-redirect HTTP → HTTPS so mic / Speech API features work (only when SSL is configured) -->
+  {% if https_available %}
   <script>
     if (location.protocol === 'http:' &&
         location.hostname !== 'localhost' &&
@@ -16,6 +17,7 @@
       location.replace(location.href.replace('http:', 'https:'));
     }
   </script>
+  {% endif %}
 
   <!-- Pico CSS (classless baseline) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
