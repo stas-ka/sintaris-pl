@@ -28,11 +28,11 @@ argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and ta
 | Target | Alias | Type | Transport | Branch rule |
 |---|---|---|---|---|
 | TariStation2 (engineering) | local machine | `cp` + `systemctl --user` | local filesystem | any branch |
-| TariStation1 (SintAItion, production) | `SintAItion` | `scp` + `ssh` | remote SSH | `taris-openclaw` only |
+| TariStation1 (SintAItion, production) | `SintAItion` | `scp` + `ssh` | remote SSH | `master` only |
 
-> ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`taris-openclaw` branch**.  
-> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `taris-openclaw`.  
-> If on a feature branch — **STOP**. Do not deploy to TariStation1. Inform the user to merge to `taris-openclaw` first.
+> ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
+> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.  
+> If on a feature branch — **STOP**. Do not deploy to TariStation1. Inform the user to merge to `master` first.
 
 > ⚠️ **TariStation1 confirmation rule**: After TariStation2 tests pass, **STOP and ask the user**:  
 > `"TariStation2 deployment verified ✅. Shall I also deploy to TariStation1 (SintAItion)?"`  
@@ -284,7 +284,7 @@ If ANY pass criterion is missing — **STOP. Do not proceed to TariStation1.**
 ## Step 2b — Incremental Deploy (TariStation1 / SintAItion)
 
 > ⚠️ **Only run this after TariStation2 is verified AND user/owner has confirmed.**  
-> ⚠️ **Only run on the `taris-openclaw` branch** (`git branch --show-current` must show `taris-openclaw`).
+> ⚠️ **Only run on the `master` branch** (`git branch --show-current` must show `master`).
 
 ```bash
 source /home/stas/projects/sintaris-pl/.env

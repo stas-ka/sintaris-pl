@@ -22,7 +22,7 @@ Before executing any deploy step, read:
 
 **TariStation2-first rule**: ALWAYS deploy to TariStation2 (local) first and verify before deploying to TariStation1 (SintAItion).
 
-**TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives code from the **`taris-openclaw` branch**. Before deploying to TariStation1, confirm `git branch --show-current` shows `taris-openclaw`. If on a feature branch, abort TariStation1 deploy and inform the user.
+**TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives code from the **`master` branch**. Before deploying to TariStation1, confirm `git branch --show-current` shows `master`. If on a feature branch, abort TariStation1 deploy and inform the user.
 
 **TariStation1 confirmation rule**: After TariStation2 is verified, **STOP and explicitly ask the user** before proceeding to TariStation1. Never auto-deploy to TariStation1.
 
@@ -156,7 +156,7 @@ Also verify branch before TariStation1:
 
 ```bash
 git branch --show-current
-# Must print: taris-openclaw
+# Must print: master
 # If it prints anything else — inform the user and abort TariStation1 deploy
 ```
 

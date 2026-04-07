@@ -21,7 +21,7 @@ description: Setup, configure, troubleshoot, and extend the OpenClaw variant of 
 
 ## Context
 
-- **Branch**: `taris-openclaw` (sintaris-pl repo)
+- **Branch**: `master` (sintaris-pl repo — `taris-openclaw` is retired/protected)
 - **Data dir**: `~/.taris/` (NOT symlinked — must sync manually after source changes)
 - **Config**: `~/.taris/bot.env` — primary runtime config (gitignored)
 - **Service**: `systemctl --user start/stop/restart taris-web`

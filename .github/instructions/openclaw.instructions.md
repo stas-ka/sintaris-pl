@@ -8,7 +8,7 @@ These instructions apply when editing OpenClaw-specific source files.
 
 ## Branch & Variant
 
-- Active branch: **`taris-openclaw`** (not `master`, not `taris`)
+- Active branch: **`master`** (all OpenClaw work goes here — `taris-openclaw` branch is retired/protected)
 - `DEVICE_VARIANT=openclaw` in `~/.taris/bot.env` activates all openclaw defaults
 - Deployment: source in `sintaris-pl/src/` → deployed to `~/.taris/` (manual `cp`)
 - Service: `systemctl --user restart taris-web` (NOT the Pi pattern)

@@ -26,9 +26,9 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 | SSH | `plink -pw "PROD_%HOSTPWD%" -batch stas@OpenClawPI "<cmd>"` (LAN) |
 | SSH remote | `plink -pw "%PROD_HOSTPWD%" -batch stas@100.81.143.126 "<cmd>"` (Tailscale) |
 
-## OpenClaw Targets (taris-openclaw branch)
+## OpenClaw Targets (master branch)
 
-> ⚠️ **TariStation1 Branch Rule**: TariStation1 (`SintAItion`) only receives deployments from the **`taris-openclaw` branch**. TariStation2 (local) may receive any branch for development/testing.
+> ⚠️ **TariStation1 Branch Rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**. TariStation2 (local) may receive any branch for development/testing.
 > ⚠️ **TariStation1 Confirmation Rule**: Deploy to TariStation1 ONLY after explicit user/owner confirmation. Always deploy to TariStation2 first and verify all tests pass.
 
 | Key | Value |

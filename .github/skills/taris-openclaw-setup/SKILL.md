@@ -11,7 +11,7 @@ argument-hint: >
 
 | Item | Value |
 |---|---|
-| Branch | `taris-openclaw` |
+| Branch | `master` |
 | Source | `/home/stas/projects/sintaris-pl/src/` |
 | Data dir | `~/.taris/` (NOT symlinked — sync manually) |
 | Config | `~/.taris/bot.env` |
