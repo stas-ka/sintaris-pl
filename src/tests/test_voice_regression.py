@@ -3531,7 +3531,7 @@ def t_stt_fast_speech_accuracy(**_) -> list[TestResult]:
 
     # SKIP on Vosk targets — faster-whisper model tuning is not applicable
     bot_env_path = Path(os.path.expanduser("~/.taris/bot.env"))
-    stt_provider = os.environ.get("STT_PROVIDER", getattr(_cfg, "STT_PROVIDER", "vosk"))
+    stt_provider = os.environ.get("STT_PROVIDER", "vosk")
     if bot_env_path.exists():
         for _l in bot_env_path.read_text(encoding="utf-8").splitlines():
             _l = _l.strip()
@@ -7166,7 +7166,7 @@ def t_migrate_postgres_structure(**_) -> list[TestResult]:
     t0 = time.time()
 
     # SKIP on non-PostgreSQL targets — migration script is only relevant for postgres backend
-    store_backend = os.environ.get("STORE_BACKEND", getattr(_cfg, "STORE_BACKEND", "sqlite"))
+    store_backend = os.environ.get("STORE_BACKEND", "sqlite")
     if store_backend != "postgres":
         results.append(TestResult("T111_script_exists", "SKIP", time.time() - t0,
                                   f"STORE_BACKEND={store_backend} — T111 only applies to PostgreSQL deployments"))
