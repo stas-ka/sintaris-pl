@@ -115,7 +115,7 @@ Baseline: Pi 3 B+ ~115 s total; target <25 s with all opts ON.
 - [x] Admin Telegram UI: 📊 Logs button — tail last 50 lines per category
 - [x] Log rotation (`src/services/taris-logrotate`) — daily, 7 days, compress, copytruncate
 - [x] Telegram alert handler: CRITICAL/ERROR forwarded to admins on startup
-- [ ] create skill to download logs from target
+- [x] create skill to download logs from target (`taris-download-logs` skill → `.github/skills/taris-download-logs/SKILL.md` — v2026.4.40)
 
 ### 6.2 Host–Project Synchronization 🔲
 

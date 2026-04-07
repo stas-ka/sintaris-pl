@@ -17,6 +17,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/taris-update-doc` | Sync project documentation (`doc/architecture/`, code-map, TODO, README) with current implementation |
 | `/taris-test-ui` | Run Web UI Playwright + Telegram smoke tests; detect and fill coverage gaps via playwright-mcp |
 | `/taris-openclaw-setup` | Setup, configure, troubleshoot, and extend the OpenClaw variant (STT, LLM, sync, tests) |
+| `/taris-download-logs` | Download or tail log files (main, assistant, security, voice, datastore) from any target |
 
 📖 Full usage guide: [`doc/copilot-skills-guide.md`](../doc/copilot-skills-guide.md)
 

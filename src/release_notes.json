@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.40",
+    "date": "2026-04-07",
+    "title": "Download-logs skill and TODO audit",
+    "notes": "- feat: taris-download-logs skill added (.github/skills/taris-download-logs/SKILL.md)\n- feat: skill covers all 5 log categories (main, assistant, security, voice, datastore) for all 4 targets (ts2, ts1, pi2, pi1)\n- fix: TODO §6.1 download-logs item marked done\n- docs: copilot-instructions.md skills table updated"
+  },
+  {
     "version": "2026.4.39",
     "date": "2026-04-07",
     "title": "Fix Postgres RAG crash when pgvector unavailable",
