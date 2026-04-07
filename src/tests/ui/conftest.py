@@ -36,29 +36,19 @@ def ensure_test_accounts():
         sys.path.insert(0, _src)
     try:
         from security.bot_auth import (
-            _load_accounts, _save_accounts, create_account
+            create_account, update_account, find_account_by_username, change_password
         )
-        import bcrypt
 
         def _ensure(uname, upass, role):
-            """Ensure test account exists with exact pw_hash, role, and status.
-
-            Always resets the password and role so tests are deterministic
-            regardless of what was previously in accounts.json.
-            """
-            accs = _load_accounts()
-            target = next((a for a in accs if a.get("username") == uname.lower()), None)
-            if target is None:
+            """Ensure test account exists with exact pw_hash, role, and status."""
+            existing = find_account_by_username(uname.lower())
+            if existing is None:
                 create_account(uname, upass, role=role,
                                display_name=uname.capitalize(), status="active")
-                return
-            # Always reset pw_hash to known test password — ensures tests work
-            new_hash = bcrypt.hashpw(upass.encode(), bcrypt.gensalt(rounds=10)).decode()
-            target["pw_hash"] = new_hash
-            # Always set exact role (allow both upgrades and downgrades)
-            target["role"]   = role
-            target["status"] = "active"
-            _save_accounts(accs)
+            else:
+                # Reset to known credentials so tests are deterministic
+                change_password(existing["user_id"], upass)
+                update_account(existing["user_id"], role=role, status="active")
 
         _ensure(ADMIN_USER, ADMIN_PASS, "admin")
         _ensure(NORMAL_USER, NORMAL_PASS, "user")
@@ -66,6 +56,15 @@ def ensure_test_accounts():
         print(f"[conftest] WARNING: could not ensure test accounts: {e}")
 
 # ─── Playwright launch options ───────────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """Add --no-sandbox for CI/cloud environments where sandbox is not available."""
+    return {
+        **browser_type_launch_args,
+        "args": browser_type_launch_args.get("args", []) + ["--no-sandbox", "--disable-dev-shm-usage"],
+    }
+
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
