@@ -1079,6 +1079,11 @@ class SQLiteStore:
         db.execute("DELETE FROM web_link_codes WHERE code = ?", (code,))
         db.commit()
 
+    def delete_link_codes_by_user(self, chat_id: int) -> None:
+        db = self._db()
+        db.execute("DELETE FROM web_link_codes WHERE chat_id = ?", (chat_id,))
+        db.commit()
+
     def delete_expired_link_codes(self) -> None:
         db = self._db()
         db.execute(

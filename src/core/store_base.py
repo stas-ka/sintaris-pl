@@ -386,6 +386,10 @@ class DataStore(Protocol):
         """Remove a link code."""
         ...
 
+    def delete_link_codes_by_user(self, chat_id: int) -> None:
+        """Remove all active link codes for a given chat_id (used before issuing a new one)."""
+        ...
+
     def delete_expired_link_codes(self) -> None:
         """Remove all expired link codes (cleanup)."""
         ...

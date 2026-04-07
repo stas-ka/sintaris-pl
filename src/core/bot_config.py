@@ -82,7 +82,9 @@ USERS_FILE          = os.environ.get("USERS_FILE",
                           _th("users.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
                           _th("registrations.json"))
-TARIS_BIN        = os.environ.get("TARIS_BIN", "/usr/bin/taris")
+TARIS_BIN        = os.environ.get("TARIS_BIN") or (
+    "/usr/bin/picoclaw" if os.path.isfile("/usr/bin/picoclaw") else "/usr/bin/taris"
+)
 TARIS_CONFIG     = os.environ.get("TARIS_CONFIG",
                           _th("config.json"))
 

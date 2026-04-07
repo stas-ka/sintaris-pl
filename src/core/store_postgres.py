@@ -1293,6 +1293,11 @@ class PostgresStore:
             conn.execute("DELETE FROM web_link_codes WHERE code = %s", (code,))
             conn.commit()
 
+    def delete_link_codes_by_user(self, chat_id: int) -> None:
+        with self._pool.connection() as conn:
+            conn.execute("DELETE FROM web_link_codes WHERE chat_id = %s", (chat_id,))
+            conn.commit()
+
     def delete_expired_link_codes(self) -> None:
         with self._pool.connection() as conn:
             conn.execute("DELETE FROM web_link_codes WHERE expires_at < NOW()")

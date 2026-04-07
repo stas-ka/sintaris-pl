@@ -3529,32 +3529,47 @@ def t_stt_fast_speech_accuracy(**_) -> list[TestResult]:
     t0 = time.time()
     results: list[TestResult] = []
 
-    # ── 1. Structural guard: model must NOT be 'base' ─────────────────────────
-    # Read from env first, then fall back to bot.env so the guard works without
-    # manually sourcing bot.env before running the test.
-    fw_model = os.environ.get("FASTER_WHISPER_MODEL", "")
-    if not fw_model:
-        bot_env_path = Path(os.path.expanduser("~/.taris/bot.env"))
-        if bot_env_path.exists():
-            for line in bot_env_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if line.startswith("FASTER_WHISPER_MODEL=") and not line.startswith("#"):
-                    fw_model = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    break
-    if not fw_model:
-        fw_model = "base"   # fallback default matches bot_config.py
-
-    if fw_model == "base":
+    # SKIP on Vosk targets — faster-whisper model tuning is not applicable
+    bot_env_path = Path(os.path.expanduser("~/.taris/bot.env"))
+    stt_provider = os.environ.get("STT_PROVIDER", getattr(_cfg, "STT_PROVIDER", "vosk"))
+    if bot_env_path.exists():
+        for _l in bot_env_path.read_text(encoding="utf-8").splitlines():
+            _l = _l.strip()
+            if _l.startswith("STT_PROVIDER=") and not _l.startswith("#"):
+                stt_provider = _l.split("=", 1)[1].strip().strip('"').strip("'")
+                break
+    if stt_provider != "faster_whisper":
         results.append(TestResult(
-            "stt_model_not_base", "FAIL", time.time() - t0,
-            "FASTER_WHISPER_MODEL=base — known to fail on fast Russian speech. "
-            "Set FASTER_WHISPER_MODEL=small or better in bot.env",
+            "stt_model_not_base", "SKIP", time.time() - t0,
+            f"STT_PROVIDER={stt_provider} — faster-whisper model guard N/A on Vosk targets",
         ))
+        fw_model = "vosk-n/a"
     else:
-        results.append(TestResult(
-            "stt_model_not_base", "PASS", time.time() - t0,
-            f"FASTER_WHISPER_MODEL={fw_model} ✓ (not base)",
-        ))
+        # ── 1. Structural guard: model must NOT be 'base' ─────────────────────────
+        # Read from env first, then fall back to bot.env so the guard works without
+        # manually sourcing bot.env before running the test.
+        fw_model = os.environ.get("FASTER_WHISPER_MODEL", "")
+        if not fw_model:
+            if bot_env_path.exists():
+                for line in bot_env_path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line.startswith("FASTER_WHISPER_MODEL=") and not line.startswith("#"):
+                        fw_model = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        if not fw_model:
+            fw_model = "base"   # fallback default matches bot_config.py
+
+        if fw_model == "base":
+            results.append(TestResult(
+                "stt_model_not_base", "FAIL", time.time() - t0,
+                "FASTER_WHISPER_MODEL=base — known to fail on fast Russian speech. "
+                "Set FASTER_WHISPER_MODEL=small or better in bot.env",
+            ))
+        else:
+            results.append(TestResult(
+                "stt_model_not_base", "PASS", time.time() - t0,
+                f"FASTER_WHISPER_MODEL={fw_model} ✓ (not base)",
+            ))
 
     # ── 2. Check faster-whisper is installed ──────────────────────────────────
     try:
@@ -7149,6 +7164,13 @@ def t_migrate_postgres_structure(**_) -> list[TestResult]:
     results = []
     import re as _re
     t0 = time.time()
+
+    # SKIP on non-PostgreSQL targets — migration script is only relevant for postgres backend
+    store_backend = os.environ.get("STORE_BACKEND", getattr(_cfg, "STORE_BACKEND", "sqlite"))
+    if store_backend != "postgres":
+        results.append(TestResult("T111_script_exists", "SKIP", time.time() - t0,
+                                  f"STORE_BACKEND={store_backend} — T111 only applies to PostgreSQL deployments"))
+        return results
 
     script_path = Path(__file__).parents[1] / "setup" / "migrate_sqlite_to_postgres.py"
     if not script_path.exists():
