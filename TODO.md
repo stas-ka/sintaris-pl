@@ -58,7 +58,7 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 ## 4. Content & Knowledge
 - [x] Timeout monitoring — FTS search enforced with `rag_timeout` via `concurrent.futures` (v2026.3.30+4)
 - [x] Settings for LLM+RAG configurable via Admin Panel: top-K, chunk size, timeout, **temperature** (0.0–2.0) editable at runtime (v2026.3.30+4; seed/system-prompt/role are open)
-- [ ] Settings incl. credentials to connect to remote RAG MCP service via Admin panel → §4.2
+- [ ] Settings incl. credentials to connect to remote RAG MCP service via Admin panel → ✅ Implemented (v2026.4.38, Admin → RAG → Remote MCP)
 - [x] Information for the user about upload restrictions (Max 20 MB shown in docs menu and enforced at upload; `MAX_DOC_SIZE_MB=20` constant) (v2026.3.30+4)
 - [x] `store.log_rag_activity()` now called after every FTS retrieval — RAG log populated; Admin Panel shows last 20 queries (v2026.3.30+4; LLM prompt/response preview still open)
 - [ ] After uploading: save parse/chunk/embed stats as protocol in DB; show per-document stats to Admin (stats stored in meta — no UI yet)
@@ -86,7 +86,7 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 - [x] Expose `search_knowledge()` as local MCP tool server — `/mcp/search` endpoint in `bot_web.py` (Bearer-token auth) (v2026.4.1)
 - [x] Connect to external MCP RAG services via `MCP_REMOTE_URL` config in `bot.env` — `bot_mcp_client.py` (v2026.4.1)
 - [x] Circuit breaker + timeout (default 10 s) with fallback to local knowledge base — 3 failures → 5 min cooldown (v2026.4.1)
-- [ ] Credentials and endpoint URL configurable in Admin Panel
+- [x] Credentials and endpoint URL configurable in Admin Panel — Admin → RAG → 🔌 Remote MCP: URL/token/timeout/top_k; stored in `system_settings`; applied at runtime without restart (v2026.4.38)
 ---
 
 ## 5. Voice Pipeline
@@ -278,9 +278,9 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 - [x] **Install Ollama** — installed on SintAItion (v0.18.3); qwen3:14b fully in VRAM (14.8 GB AMD Radeon 890M); service: `~/.config/systemd/user/ollama.service`; `LLM_PROVIDER=openai`, `LLM_FALLBACK_PROVIDER=ollama` in `bot.env` (v2026.3.29+10)
 - [x] **Upgrade faster-whisper model** — upgraded to `small` model (244M params, WER ~5-8%); `base` (74M) had ~25% WER unacceptable for Russian commands; `FASTER_WHISPER_THREADS=8` for 24-core Ryzen AI; `setup_voice_openclaw.sh` default updated to `small` (v2026.3.29+10)
 - [x] **STT/LLM switch in admin menu** — `STT_PROVIDER` toggle (Vosk/FW) and FW model selection in Admin → Voice Config; LLM per-function provider switch in Admin → LLM Settings (v2026.3.29+8)
-- [ ] `src/setup/migrate_sqlite_to_pg.py` — taris.db → PostgreSQL migration script (§25.7)
-- [ ] pgvector HNSW index and full RAG pipeline on PostgreSQL (§25.6 Phase B)
-- [ ] Screen DSL: `visible_variants: [openclaw]` buttons shown only on OpenClaw (§21.6)
+- [x] `src/setup/migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL migration script; 316 rows migrated; idempotent (v2026.4.31)
+- [x] pgvector HNSW index and full RAG pipeline on PostgreSQL — `store_postgres.py` `search_similar()` + HNSW index; `bot_rag.py` hybrid RRF (v2026.4.13)
+- [x] Screen DSL: `visible_variants: [openclaw]` — implemented in `screen_loader.py`; already used in `admin_menu.yaml` (v2026.4.13)
 
 ## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader �
 
@@ -420,7 +420,7 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
   - [x] RRF fusion (k=60) combining FTS5 + vector results — `reciprocal_rank_fusion()` in `bot_rag.py` (v2026.3.32)
   - [x] Hardware-tier detection — `detect_rag_capability()` FTS5_ONLY/HYBRID/FULL (v2026.3.32)
   - [x] RAG monitoring dashboard — `_handle_admin_rag_stats()`, `rag_stats()`, latency_ms+query_type in rag_log (v2026.3.32)
-  - [ ] sqlite-vec HNSW for PicoClaw/SQLite backend — `install_sqlite_vec.sh` missing
+  - [x] sqlite-vec HNSW for PicoClaw/SQLite backend — `install_sqlite_vec.sh` + `vec_embeddings` virtual table + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` in `store_sqlite.py` (v2026.4.13)
 - [~] **Phase C — Document Management (partial):**
   - [x] Upload/chunk pipeline (`RAG_CHUNK_SIZE=512`, overlap=50) — `bot_documents.py` (v2026.3.30)
   - [x] Document sharing — `is_shared` flag + `_handle_doc_share_toggle()` (v2026.3.30)
@@ -429,9 +429,10 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
   - [x] Document deduplication — hash-based replace/keep-both flow (v2026.3.31)
   - [x] `PyMuPDF` for PDF + image extraction — try fitz first, [IMAGE: page N] placeholders, pdfminer fallback (v2026.3.32)
   - [x] Per-user `rag_settings` — rag_top_k/rag_chunk_size in user_prefs; Profile > ⚙️ RAG Settings (v2026.3.32)
-  - [ ] Separate `doc_sharing` permission table — sharing is a flag on documents row
+  - [x] Admin-only documents — `is_shared=2` level; full retrieval stack updated with `is_admin` flag (v2026.4.37)
+  - [x] MCP Remote RAG admin UI — Admin → RAG → Remote MCP: URL/token/timeout/top_k configurable at runtime; stored in `system_settings`; `bot_mcp_client.py` reads from DB first (v2026.4.38)
+  - [ ] Separate `doc_sharing` permission table — fine-grained per-user sharing (currently `is_shared` flag covers private/all-users/admin-only; full per-user ACL is future work → §27)
 - [x] **Phase D — Remote RAG + MCP:** `/mcp/search` endpoint + `bot_mcp_client.py` circuit breaker + RRF merge (v2026.4.1)
-- [ ] **Phase E — Multimodal (future, GPU/Pi 5+ only):** CLIP embeddings for image search; `docling` for complex PDFs; vision API fallback
 
 ### 25.7 Migration from PicoClaw
 - [ ] `python3 src/setup/migrate_sqlite_to_pg.py` (copies taris.db → PostgreSQL, idempotent)
@@ -502,3 +503,34 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - [ ] ≤50 concurrent users: single instance as above is sufficient
 - [ ] 50–200 users: Redis session cache (`REDIS_URL=redis://localhost:6379`); `uvicorn --workers 4`
 - [ ] 200+ users: horizontal scale via load balancer + multiple bot-web instances; RabbitMQ/Redis update queue
+
+---
+
+## 27. Multimodal RAG 🔲
+
+> **Hardware requirement:** GPU or Pi 5+ strongly recommended. CLIP/vision models are too slow for CPU-only inference at acceptable latency.
+> **Status:** Design phase. No implementation started. Tracked separately from core RAG pipeline (§25.6).
+
+### 27.1 Image Search (CLIP embeddings)
+
+- [ ] **CLIP embedding service** — `src/core/bot_clip.py`; encode images to 512-dim vectors at upload time; store in `vec_embeddings` with `doc_type=image`
+- [ ] **Image-aware chunker** — extract images from PDF/DOCX at upload; run CLIP encode; store metadata (page, caption if OCR available)
+- [ ] **Hybrid image+text retrieval** — image query via CLIP cosine similarity; merged with FTS5 text results via RRF; `bot_rag.py` image branch
+- [ ] **Admin toggle** — `CLIP_ENABLED` env var + admin UI toggle; graceful text-only fallback when disabled
+
+### 27.2 Complex PDF Extraction (docling)
+
+- [ ] **docling integration** — `pip install docling`; replace `PyMuPDF` for complex PDFs with tables/charts; output structured Markdown with preserved table layout
+- [ ] **Table extraction** — docling Markdown tables → chunked as structured text; column headers preserved in each chunk for better FTS5 recall
+- [ ] **Fallback chain** — docling (best) → PyMuPDF+fitz (fast) → pdfminer (text-only)
+
+### 27.3 Vision API Fallback
+
+- [ ] **Vision question answering** — when image chunk matched but no text context: call vision LLM (`GPT-4V` / `Gemini Vision`) with image + query; inject answer as synthetic RAG chunk
+- [ ] **Admin config** — `VISION_LLM_PROVIDER` and `VISION_LLM_MODEL` in `bot_config.py`; cost guard: `VISION_MAX_CALLS_PER_DAY`
+
+### 27.4 Per-User Document ACL (replaces §25.6 Phase C deferred item)
+
+- [ ] **`doc_sharing` table** — `(id, doc_id, grantee_id, permission, granted_by, expires_at)` replaces `is_shared` flag for fine-grained per-user sharing
+- [ ] **Migration** — convert existing `is_shared` rows to `doc_sharing` entries; keep backward compat for `is_shared IN (0,1,2)` during transition
+- [ ] **Share UI** — "Share with user" flow in bot_documents.py: type user ID or pick from contacts; set permission level (view/edit/revoke); show share list

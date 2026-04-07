@@ -1094,6 +1094,7 @@ def _handle_admin_rag_menu(chat_id: int) -> None:
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"),    callback_data="admin_rag_toggle"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),      callback_data="admin_rag_settings"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_rag_user_pref"), callback_data="admin_rag_user_settings"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_mcp"),           callback_data="admin_mcp_menu"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),                callback_data="admin_menu"))
     try:
         bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
@@ -1179,6 +1180,93 @@ def _finish_admin_rag_set(chat_id: int, text: str) -> None:
     _rset(key_map[param], val)
     bot.send_message(chat_id, _t(chat_id, "admin_rag_setting_saved"))
     _handle_admin_rag_settings(chat_id)
+
+
+def _handle_admin_mcp_menu(chat_id: int) -> None:
+    """Show MCP Remote RAG configuration with current values."""
+    from core.bot_db import db_get_system_setting
+    url = db_get_system_setting("mcp_remote_url") or "—"
+    token = db_get_system_setting("mcp_api_token")
+    token_display = "●●●●●●●●" if token else "—"
+    timeout = db_get_system_setting("mcp_timeout") or "15"
+    top_k = db_get_system_setting("mcp_remote_top_k") or "3"
+    text = "\n".join([
+        _t(chat_id, "admin_mcp_title"),
+        _t(chat_id, "admin_mcp_url").format(url=url),
+        _t(chat_id, "admin_mcp_token").format(token=token_display),
+        _t(chat_id, "admin_mcp_timeout").format(timeout=timeout),
+        _t(chat_id, "admin_mcp_top_k").format(top_k=top_k),
+    ])
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_mcp_set_url"),     callback_data="admin_mcp_set_url"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_mcp_set_token"),   callback_data="admin_mcp_set_token"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_mcp_set_timeout"), callback_data="admin_mcp_set_timeout"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_mcp_set_top_k"),   callback_data="admin_mcp_set_top_k"))
+    if db_get_system_setting("mcp_remote_url"):
+        kb.add(InlineKeyboardButton(_t(chat_id, "admin_mcp_clear"),   callback_data="admin_mcp_clear"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"),              callback_data="admin_rag_menu"))
+    try:
+        bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _start_admin_mcp_set(chat_id: int, field: str) -> None:
+    """Prompt admin to enter a new value for the given MCP field."""
+    prompts = {
+        "url":     "admin_mcp_prompt_url",
+        "token":   "admin_mcp_prompt_token",
+        "timeout": "admin_mcp_prompt_timeout",
+        "top_k":   "admin_mcp_prompt_top_k",
+    }
+    _st._user_mode[chat_id] = f"admin_mcp_set_{field}"
+    bot.send_message(chat_id, _t(chat_id, prompts.get(field, "admin_mcp_prompt_url")),
+                     reply_markup=_back_keyboard(chat_id, "admin_mcp_menu"))
+
+
+def _finish_admin_mcp_set(chat_id: int, text: str) -> None:
+    """Validate and save the MCP field the admin was entering."""
+    mode = _st._user_mode.pop(chat_id, "")
+    field = mode.replace("admin_mcp_set_", "")
+    from core.bot_db import db_set_system_setting
+    key_map = {
+        "url":     "mcp_remote_url",
+        "token":   "mcp_api_token",
+        "timeout": "mcp_timeout",
+        "top_k":   "mcp_remote_top_k",
+    }
+    val = text.strip()
+    if field == "timeout":
+        try:
+            assert 1 <= int(val) <= 120
+        except (ValueError, AssertionError):
+            bot.send_message(chat_id, _t(chat_id, "admin_mcp_invalid_timeout"))
+            _handle_admin_mcp_menu(chat_id)
+            return
+    elif field == "top_k":
+        try:
+            assert 1 <= int(val) <= 20
+        except (ValueError, AssertionError):
+            bot.send_message(chat_id, _t(chat_id, "admin_mcp_invalid_top_k"))
+            _handle_admin_mcp_menu(chat_id)
+            return
+    elif field == "url" and val and not val.startswith(("http://", "https://")):
+        bot.send_message(chat_id, _t(chat_id, "admin_mcp_invalid_url"))
+        _handle_admin_mcp_menu(chat_id)
+        return
+    db_key = key_map.get(field, f"mcp_{field}")
+    db_set_system_setting(db_key, val)
+    bot.send_message(chat_id, _t(chat_id, "admin_mcp_saved"))
+    _handle_admin_mcp_menu(chat_id)
+
+
+def _handle_admin_mcp_clear(chat_id: int) -> None:
+    """Clear the MCP remote URL, effectively disabling remote MCP."""
+    from core.bot_db import db_set_system_setting
+    db_set_system_setting("mcp_remote_url", "")
+    db_set_system_setting("mcp_api_token", "")
+    bot.send_message(chat_id, _t(chat_id, "admin_mcp_cleared"))
+    _handle_admin_mcp_menu(chat_id)
 
 
 def _handle_admin_rag_log(chat_id: int) -> None:

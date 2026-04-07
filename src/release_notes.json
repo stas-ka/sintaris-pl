@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.38",
+    "date": "2026-04-07",
+    "title": "MCP admin UI and TODO cleanup",
+    "notes": "- feat: Admin -> RAG -> Remote MCP: configure URL/token/timeout/top_k at runtime without restart\n- feat: bot_mcp_client reads MCP config from system_settings DB first (env fallback)\n- fix: TODO §19.4 all items marked done (migration script, pgvector HNSW, visible_variants already implemented)\n- fix: TODO §25.6 Phase B sqlite-vec marked done; Phase C MCP admin UI done\n- docs: §27 Multimodal RAG added as separate future topic (CLIP, docling, vision API, per-user ACL)"
+  },
+  {
     "version": "2026.4.37",
     "date": "2026-04-07",
     "changes": [

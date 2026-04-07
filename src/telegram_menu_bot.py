@@ -81,6 +81,7 @@ from telegram.bot_admin import (
     _handle_admin_rag_user_settings, _handle_admin_rag_user_adjust, _handle_admin_rag_user_reset,
     _handle_admin_llm_trace,
     _handle_admin_memory_menu, _handle_admin_mem_set_start,
+    _handle_admin_mcp_menu, _start_admin_mcp_set, _finish_admin_mcp_set, _handle_admin_mcp_clear,
     _admin_keyboard,
 )
 
@@ -640,6 +641,25 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── MCP remote RAG configuration ───────────────────────────────────────
+    elif data == "admin_mcp_menu":
+        if _is_admin(cid):
+            _handle_admin_mcp_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data in ("admin_mcp_set_url", "admin_mcp_set_token", "admin_mcp_set_timeout", "admin_mcp_set_top_k"):
+        if _is_admin(cid):
+            _start_admin_mcp_set(cid, data[len("admin_mcp_set_"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_mcp_clear":
+        if _is_admin(cid):
+            _handle_admin_mcp_clear(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -1083,6 +1103,14 @@ def text_handler(message):
     if mode in ("admin_rag_set_topk", "admin_rag_set_chunk", "admin_rag_set_timeout", "admin_rag_set_temp"):
         if _is_admin(cid):
             _finish_admin_rag_set(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            bot.send_message(cid, _t(cid, "admin_only"))
+        return
+
+    if mode is not None and mode.startswith("admin_mcp_set_"):
+        if _is_admin(cid):
+            _finish_admin_mcp_set(cid, message.text)
         else:
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "admin_only"))

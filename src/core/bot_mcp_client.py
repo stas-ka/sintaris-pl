@@ -70,17 +70,29 @@ def query_remote(query: str, chat_id: int, top_k: int | None = None) -> list[dic
     - Remote call fails / times out
 
     Each returned chunk dict has keys: ``doc_id``, ``chunk_text``, ``score``.
+
+    Configuration priority: system_settings DB (admin-editable) > bot.env / environment.
     """
     from core.bot_config import MCP_REMOTE_URL, MCP_TIMEOUT, TARIS_API_TOKEN, MCP_REMOTE_TOP_K
+    try:
+        from core.bot_db import db_get_system_setting as _gs
+        url     = _gs("mcp_remote_url") or MCP_REMOTE_URL
+        token   = _gs("mcp_api_token")  or TARIS_API_TOKEN
+        _to_s   = _gs("mcp_timeout")
+        timeout = int(_to_s) if _to_s else MCP_TIMEOUT
+        _tk_s   = _gs("mcp_remote_top_k")
+        default_top_k = int(_tk_s) if _tk_s else MCP_REMOTE_TOP_K
+    except Exception:
+        url, token, timeout, default_top_k = MCP_REMOTE_URL, TARIS_API_TOKEN, MCP_TIMEOUT, MCP_REMOTE_TOP_K
 
-    if not MCP_REMOTE_URL:
+    if not url:
         return []
 
     if _cb_is_open():
         log.debug("[MCP-client] circuit breaker open — skipping remote query")
         return []
 
-    k = top_k if top_k is not None else MCP_REMOTE_TOP_K
+    k = top_k if top_k is not None else default_top_k
 
     try:
         import urllib.request, json as _json
@@ -92,16 +104,16 @@ def query_remote(query: str, chat_id: int, top_k: int | None = None) -> list[dic
         }).encode()
 
         headers = {"Content-Type": "application/json"}
-        if TARIS_API_TOKEN:
-            headers["Authorization"] = f"Bearer {TARIS_API_TOKEN}"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
 
         req = urllib.request.Request(
-            MCP_REMOTE_URL,
+            url,
             data=payload,
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=MCP_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = _json.loads(resp.read())
 
         chunks = body.get("chunks", [])
