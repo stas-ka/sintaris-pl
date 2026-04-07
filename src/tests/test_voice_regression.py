@@ -6141,7 +6141,7 @@ def t_system_docs_structure(**_) -> list[TestResult]:
         "src/setup/load_system_docs.py exists",
     ))
     if loader.exists():
-        code = loader.read_text()
+        code = loader.read_text(encoding="utf-8", errors="replace")
         for check, desc in [
             ("SYSTEM_CHAT_ID = 0", "SYSTEM_CHAT_ID=0 constant"),
             ("def _load_docs", "_load_docs() main entry function"),
@@ -6149,7 +6149,8 @@ def t_system_docs_structure(**_) -> list[TestResult]:
             ("def _chunk", "_chunk() text splitter"),
             ("taris_user_guide", "user guide tag defined"),
             ("taris_admin_guide", "admin guide tag defined"),
-            ("is_shared=1", "documents marked is_shared"),
+            ("shared_level", "shared_level param: 1=all users, 2=admin-only"),
+            ("is_shared=2", "admin guide stored as is_shared=2 (admin-only)"),
             ("upsert_embedding(doc_id, idx, SYSTEM_CHAT_ID, chunks[idx], vec)",
              "correct upsert_embedding call"),
         ]:
@@ -6179,7 +6180,7 @@ def t_system_docs_structure(**_) -> list[TestResult]:
 
     # Check telegram_menu_bot.py auto-loads system docs at startup
     try:
-        bot_code = (SRC / "telegram_menu_bot.py").read_text()
+        bot_code = (SRC / "telegram_menu_bot.py").read_text(encoding="utf-8", errors="replace")
         results.append(TestResult(
             "startup_system_docs_thread",
             "PASS" if "_ensure_system_docs" in bot_code and "_load_docs" in bot_code else "FAIL", 0.0,
@@ -7432,6 +7433,134 @@ def t_admin_page_datetime_safe(**_) -> list[TestResult]:
     return results
 
 
+# T115 — prompts.json rule 5: [BOT CAPABILITIES] literal tag fix
+def t_bot_capabilities_tag_fix(**_) -> list[TestResult]:
+    """T115: security_preamble rule 5 must NOT instruct LLM to output [BOT CAPABILITIES] literally.
+
+    Root-cause: rule 5 said 'always use the [BOT CAPABILITIES] blocks', which
+    taught the LLM to reference that block by name instead of enumerating capabilities.
+    Fix: rule 5 must instruct LLM to enumerate capabilities directly and explicitly
+    say to never reproduce block marker names literally.
+    """
+    results = []
+    t0 = time.time()
+
+    prompts_file = Path(__file__).parent.parent / "prompts.json"
+    if not prompts_file.exists():
+        return [TestResult("T115_prompts_file", "FAIL", 0.0, "prompts.json not found")]
+
+    try:
+        import json as _json
+        prompts = _json.loads(prompts_file.read_text(encoding="utf-8"))
+        preamble = prompts.get("security_preamble", "")
+
+        # The preamble text that teaches LLM to output block marker names literally
+        bad_phrase = "[BOT CAPABILITIES]"
+        # Must say "never reproduce block markers" or similar
+        has_block_marker_warning = (
+            "block markers" in preamble or "never reproduce" in preamble
+        )
+        # Must NOT have the old "use the [BOT CAPABILITIES] block" phrase in a way
+        # that encourages literal output in bot responses
+        old_bad_pattern = "use the [BOT CAPABILITIES] block"
+
+        results.append(TestResult(
+            "T115_no_old_bad_pattern",
+            "PASS" if old_bad_pattern not in preamble else "FAIL",
+            time.time() - t0,
+            f"rule5 does not contain '{old_bad_pattern}' (causes literal tag output)" if old_bad_pattern not in preamble
+            else f"BUG: security_preamble still contains '{old_bad_pattern}'",
+        ))
+        results.append(TestResult(
+            "T115_has_block_marker_warning",
+            "PASS" if has_block_marker_warning else "FAIL",
+            time.time() - t0,
+            "security_preamble rule5 warns against outputting block markers literally" if has_block_marker_warning
+            else "MISSING: security_preamble should say 'never reproduce block markers'",
+        ))
+    except Exception as exc:
+        results.append(TestResult("T115_parse_error", "FAIL", 0.0, str(exc)))
+
+    return results
+
+
+# T116 — admin-only RAG: is_admin param propagates through entire retrieval stack
+def t_admin_only_rag_access(**_) -> list[TestResult]:
+    """T116: admin-only RAG (is_shared=2) — verify is_admin param in full retrieval stack.
+
+    Checks:
+    - load_system_docs._ingest accepts shared_level param; admin guide uses is_shared=2
+    - store_sqlite.search_fts + search_similar accept is_admin kwarg
+    - bot_rag.retrieve_context accepts is_admin kwarg
+    - bot_access._docs_rag_context passes _is_admin(chat_id) to retrieve_context
+    """
+    results = []
+    t0 = time.time()
+
+    src_root = Path(__file__).parent.parent
+    checks: list[tuple[Path, str, str]] = [
+        (
+            src_root / "setup/load_system_docs.py",
+            "is_shared=2",
+            "admin guide stored with is_shared=2 (admin-only)",
+        ),
+        (
+            src_root / "setup/load_system_docs.py",
+            "shared_level",
+            "_ingest() has shared_level param for per-doc access level",
+        ),
+        (
+            src_root / "core/store_sqlite.py",
+            "is_admin",
+            "store_sqlite.search_fts / search_similar accept is_admin param",
+        ),
+        (
+            src_root / "core/store_postgres.py",
+            "is_admin",
+            "store_postgres.search_fts / search_similar accept is_admin param",
+        ),
+        (
+            src_root / "core/store_base.py",
+            "is_admin",
+            "store_base abstract signatures include is_admin param",
+        ),
+        (
+            src_root / "core/bot_rag.py",
+            "is_admin",
+            "bot_rag.retrieve_context accepts is_admin param",
+        ),
+        (
+            src_root / "telegram/bot_access.py",
+            "_is_admin(chat_id)",
+            "bot_access._docs_rag_context calls _is_admin(chat_id)",
+        ),
+        (
+            src_root / "core/store_sqlite.py",
+            "is_shared IN (1, 2)",
+            "SQLite store admin query includes is_shared=2 documents",
+        ),
+        (
+            src_root / "core/store_postgres.py",
+            "is_shared IN (1, 2)",
+            "Postgres store admin query includes is_shared=2 documents",
+        ),
+    ]
+
+    for fpath, pattern, desc in checks:
+        try:
+            code = fpath.read_text(encoding="utf-8", errors="replace")
+            status = "PASS" if pattern in code else "FAIL"
+        except FileNotFoundError:
+            status = "SKIP"
+            desc = f"{fpath.name} not found"
+        results.append(TestResult(
+            f"T116_{fpath.name}_{pattern[:20].replace(' ', '_').replace('(', '').replace(')', '')}",
+            status, time.time() - t0, desc,
+        ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7635,6 +7764,10 @@ TEST_FUNCTIONS = [
     t_postgres_live_data,
     # bot_web.py admin page: created field uses str() before slicing (T114)
     t_admin_page_datetime_safe,
+    # prompts.json rule 5: never reproduce [BOT CAPABILITIES] tag literally (T115)
+    t_bot_capabilities_tag_fix,
+    # Admin-only RAG: search_fts/search_similar accept is_admin; load_system_docs uses is_shared=2 (T116)
+    t_admin_only_rag_access,
 ]
 
 

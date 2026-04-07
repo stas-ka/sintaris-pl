@@ -195,6 +195,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T111 | `migrate_postgres_structure` | `migrate_sqlite_to_postgres.py` covers all 10 required tables; notes has no `WHERE content != ''` filter (critical bug — omits file-backed notes); contacts uses `save_contact()`; documents uses `save_document_meta()`. | After editing the migration script or adding new tables |
 | T112 | `contacts_store_parity` | Both `store_sqlite.py` and `store_postgres.py` implement all 5 contacts methods: `save_contact`, `get_contact`, `list_contacts`, `delete_contact`, `search_contacts`. Live import check included. | After editing either store backend's contacts methods |
 | T113 | `postgres_live_data` | When `STORE_BACKEND=postgres`, all 5 core tables (users, calendar_events, notes_index, chat_history, conversation_summaries) have ≥1 row. SKIP if not on Postgres or `STORE_PG_DSN` not set. | After SQLite → Postgres migration to verify data was populated |
+| T114 | `admin_page_datetime_safe` | `bot_web.py` admin page uses `str(a.get('created', ''))[:10]` to safely handle `datetime.datetime` objects returned by Postgres backend. | After editing `bot_web.py` admin page handler |
+| T115 | `bot_capabilities_tag_fix` | `prompts.json` rule 5 must NOT contain the phrase that caused LLM to output `[BOT CAPABILITIES]` literally; must warn against reproducing block markers. | After editing `prompts.json` security preamble |
+| T116 | `admin_only_rag_access` | Full retrieval stack has `is_admin` param: `load_system_docs._ingest` uses `is_shared=2` for admin guide; `store_sqlite`/`store_postgres` `search_fts`/`search_similar` accept `is_admin`; `bot_rag.retrieve_context` propagates it; `bot_access._docs_rag_context` calls `_is_admin(chat_id)`. | After editing RAG retrieval stack or doc sharing logic |
 
 ### 2.6 When specific tests are mandatory
 
