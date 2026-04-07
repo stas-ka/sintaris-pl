@@ -57,8 +57,6 @@ _VOICE_OPT_COLUMNS = frozenset({
 
 # ── Schema DDL ────────────────────────────────────────────────────────────────
 _SCHEMA_SQL = """
-CREATE EXTENSION IF NOT EXISTS vector;
-
 CREATE TABLE IF NOT EXISTS users (
     chat_id     BIGINT PRIMARY KEY,
     username    TEXT,
@@ -186,13 +184,9 @@ CREATE TABLE IF NOT EXISTS vec_embeddings (
     chunk_idx  INTEGER     NOT NULL,
     chat_id    BIGINT      NOT NULL,
     chunk_text TEXT,
-    embedding  vector(384),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (doc_id, chunk_idx, chat_id)
 );
-CREATE INDEX IF NOT EXISTS idx_vec_embedding
-    ON vec_embeddings USING hnsw (embedding vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
 CREATE INDEX IF NOT EXISTS idx_vec_fts
     ON vec_embeddings USING GIN (to_tsvector('simple', coalesce(chunk_text, '')));
 
@@ -349,6 +343,26 @@ class PostgresStore:
             except Exception as exc:
                 conn.execute("ROLLBACK TO SAVEPOINT _mig")
                 log.debug("[StorePostgres] Migration skipped: %s", exc)
+
+        # pgvector-dependent schema (only when extension available)
+        if self._has_vec:
+            _vec_migrations = [
+                "ALTER TABLE vec_embeddings ADD COLUMN IF NOT EXISTS embedding vector(384)",
+                (
+                    "CREATE INDEX IF NOT EXISTS idx_vec_embedding "
+                    "ON vec_embeddings USING hnsw (embedding vector_cosine_ops) "
+                    "WITH (m = 16, ef_construction = 64)"
+                ),
+            ]
+            for mig in _vec_migrations:
+                try:
+                    conn.execute("SAVEPOINT _vmig")
+                    conn.execute(mig)
+                    conn.execute("RELEASE SAVEPOINT _vmig")
+                    log.debug("[StorePostgres] Vec migration applied: %.80s", mig)
+                except Exception as exc:
+                    conn.execute("ROLLBACK TO SAVEPOINT _vmig")
+                    log.debug("[StorePostgres] Vec migration skipped: %s", exc)
 
     # ── Users ─────────────────────────────────────────────────────────────────
 

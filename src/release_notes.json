@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.39",
+    "date": "2026-04-07",
+    "title": "Fix Postgres RAG crash when pgvector unavailable",
+    "notes": "- fix: vec_embeddings table DDL no longer includes embedding vector(384) column (pgvector dependency removed from base schema)\n- fix: embedding column and HNSW index added via conditional ALTER TABLE migration only when pgvector is available\n- fix: upsert_chunk_text and search_fts now work on all Postgres deployments regardless of pgvector status\n- fix: load_system_docs.py --force no longer crashes with UndefinedTable on pgvector-less deployments"
+  },
+  {
     "version": "2026.4.38",
     "date": "2026-04-07",
     "title": "MCP admin UI and TODO cleanup",
