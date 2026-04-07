@@ -189,21 +189,21 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 | Phase 2a | `store_base.py` Protocol + `store.py` factory singleton | ✅ Done (v2026.3.32) |
 | Phase 2b | `store_sqlite.py` full adapter (no vector yet) | ✅ Done (v2026.3.32) |
 | Phase 2c | Dual-write wrappers: existing JSON writers also call adapter | ✅ Done (v2026.3.32) |
-| Phase 2d | `documents` + `vec_embeddings` tables; `upsert_embedding` / `search_similar` | 🔲 |
+| Phase 2d | `documents` + `vec_embeddings` tables; `upsert_embedding` / `search_similar` | ✅ Done (v2026.4.13) |
 | Phase 3 | `migrate_to_db.py` — JSON → adapter (idempotent) | ✅ |
 | Phase 4 | Switch all reads to adapter; remove JSON writes | 🔄 In progress (notes + calendar done in v2026.3.31) |
 | Phase 5 | `store_postgres.py` PostgreSQL adapter; test on OpenClaw | ✅ Done (v2026.4.13) |
-| Phase 6 | RAG (§4.1) via `search_similar()`; conversation memory (§2.1) via `append_history()` | 🔲 |
+| Phase 6 | RAG (§4.1) via `search_similar()`; conversation memory (§2.1) via `append_history()` | ✅ Done (v2026.4.13) |
 
 - [x] `src/core/bot_db.py` schema + `init_db()` on startup — SQLite Phase 1 (v2026.3.30)
 - [x] `src/core/store_base.py` — `DataStore` Protocol definition + `StoreCapabilityError`
 - [x] `src/core/store.py` — `create_store()` factory + module-level `store` singleton
 - [x] `src/core/store_sqlite.py` — full SQLite adapter incl. sqlite-vec optional vector support
 - [x] `src/core/store_postgres.py` — PostgreSQL + pgvector adapter (OpenClaw) ✅ (v2026.4.13)
-- [ ] `src/core/bot_db.py` extended — add `documents` table; vec_embeddings created dynamically
-- [ ] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target
+- [x] `src/core/bot_db.py` extended — `documents` table added to schema; `vec_embeddings` managed via `store_sqlite.py` (Phase 2d) (v2026.4.13)
+- [x] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target (v2026.4.13)
 - [x] `src/setup/migrate_to_db.py` — JSON → adapter migration (Phase 3, idempotent)
-- [ ] `src/setup/migrate_sqlite_to_pg.py` — taris.db → PostgreSQL (Phase 5)
+- [x] `src/setup/migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL (Phase 5, was migrate_sqlite_to_pg.py; 316 rows migrated v2026.4.31)
 - [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
 ### 9.1 Storing of user data in the local database not in files
 - [x] Notes reads from DB (`store.list_notes()`); file fallback preserved; double-write bug fixed (v2026.3.30)
@@ -214,8 +214,8 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 - [x] Migration scripts exist — `src/setup/migrate_to_db.py` idempotent JSON → DB (v2026.3.30)
 - [x] Per-user preferences stored in DB — `user_prefs` table; `db_get_user_pref / db_set_user_pref` (v2026.3.31) 🔲 _being deployed_
 - [ ] Last interactions, opened UI and status of UI stored in database — not yet implemented
-- [ ] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target
-- [ ] `src/setup/migrate_sqlite_to_pg.py` — taris.db → PostgreSQL migration script
+- [x] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target (v2026.4.13)
+- [x] `src/setup/migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL migration (was migrate_sqlite_to_pg.py; 316 rows migrated v2026.4.31)
 
 ## 10. Upload and using documents as Knowledges
 - [x] FTS5 RAG context injection: `_docs_rag_context()` in `bot_access.py`; called from `_with_lang()` and `_with_lang_voice()`; caps at 2000 chars; guard on `RAG_ENABLED` and user docs present (v2026.3.30)
