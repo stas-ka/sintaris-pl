@@ -1134,6 +1134,53 @@ class SQLiteStore:
             "query_types": {r["query_type"]: r["cnt"] for r in types},
         }
 
+    def document_upload_stats(self) -> dict:
+        """Return aggregate document upload stats for the admin panel."""
+        db = self._db()
+        row = db.execute(
+            "SELECT"
+            " COUNT(*) AS total_docs,"
+            " SUM(CAST(json_extract(metadata,'$.n_chunks') AS INTEGER)) AS total_chunks,"
+            " AVG(CAST(json_extract(metadata,'$.n_chunks') AS INTEGER)) AS avg_chunks,"
+            " SUM(CAST(json_extract(metadata,'$.file_size_bytes') AS INTEGER)) AS total_bytes,"
+            " SUM(CAST(json_extract(metadata,'$.n_embedded') AS INTEGER)) AS total_embedded,"
+            " AVG(CAST(json_extract(metadata,'$.quality_pct') AS REAL)) AS avg_quality_pct"
+            " FROM documents"
+        ).fetchone()
+        recent = db.execute(
+            "SELECT doc_id, title, doc_type, metadata, created_at FROM documents"
+            " ORDER BY created_at DESC LIMIT 10"
+        ).fetchall()
+        recent_docs = []
+        for r in recent:
+            d = dict(r)
+            meta = {}
+            if d.get("metadata"):
+                try:
+                    meta = json.loads(d["metadata"])
+                except (ValueError, TypeError):
+                    pass
+            recent_docs.append({
+                "doc_id":         d["doc_id"],
+                "title":          d["title"],
+                "doc_type":       d.get("doc_type", "?"),
+                "n_chunks":       meta.get("n_chunks", 0),
+                "n_embedded":     meta.get("n_embedded", 0),
+                "file_size_bytes": meta.get("file_size_bytes", 0),
+                "quality_pct":    meta.get("quality_pct", 100),
+                "created_at":     str(d.get("created_at", "")),
+            })
+        r = dict(row) if row else {}
+        return {
+            "total_docs":     r.get("total_docs") or 0,
+            "total_chunks":   r.get("total_chunks") or 0,
+            "avg_chunks":     round(float(r.get("avg_chunks") or 0), 1),
+            "total_bytes":    r.get("total_bytes") or 0,
+            "total_embedded": r.get("total_embedded") or 0,
+            "avg_quality_pct": round(float(r.get("avg_quality_pct") or 100), 1),
+            "recent_docs":    recent_docs,
+        }
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def close(self) -> None:

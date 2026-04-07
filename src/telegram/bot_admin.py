@@ -1091,6 +1091,7 @@ def _handle_admin_rag_menu(chat_id: int) -> None:
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_view_log"),      callback_data="admin_rag_log"))
     kb.add(InlineKeyboardButton("📊 RAG Stats",                          callback_data="admin_rag_stats"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_doc_stats"),     callback_data="admin_doc_stats"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_toggle_rag"),    callback_data="admin_rag_toggle"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_rag_settings"),      callback_data="admin_rag_settings"))
     kb.add(InlineKeyboardButton(_t(chat_id, "admin_btn_rag_user_pref"), callback_data="admin_rag_user_settings"))
@@ -1322,6 +1323,42 @@ def _handle_admin_rag_stats(chat_id: int) -> None:
         lines.append("\n*Top queries:*")
         for i, q in enumerate(stats["top_queries"], 1):
             lines.append(f"  {i}. {q['query'][:40]} ({q['cnt']}×)")
+    text = "\n".join(lines)
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔙 RAG", callback_data="admin_rag_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_doc_stats(chat_id: int) -> None:
+    """Show aggregate document upload statistics: total docs, chunks, size, embeds, quality."""
+    from core.store import store as _store
+    try:
+        stats = _store.document_upload_stats()
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Document stats unavailable: {e}")
+        return
+    size_mb = round((stats.get("total_bytes") or 0) / 1_048_576, 2)
+    lines = [
+        _t(chat_id, "admin_doc_stats_title") + "\n",
+        _t(chat_id, "admin_doc_total").format(total=stats["total_docs"]),
+        _t(chat_id, "admin_doc_avg_chunks").format(avg=stats["avg_chunks"]),
+        _t(chat_id, "admin_doc_total_chunks").format(total=stats["total_chunks"]),
+        _t(chat_id, "admin_doc_total_size").format(size_mb=size_mb),
+        _t(chat_id, "admin_doc_total_embedded").format(total=stats["total_embedded"]),
+        _t(chat_id, "admin_doc_avg_quality").format(pct=stats["avg_quality_pct"]),
+    ]
+    recent = stats.get("recent_docs", [])
+    if recent:
+        lines.append(_t(chat_id, "admin_doc_recent_header"))
+        for i, doc in enumerate(recent[:5], 1):
+            size_kb = round((doc.get("file_size_bytes") or 0) / 1024, 1)
+            n_ch = doc.get("n_chunks", 0)
+            n_em = doc.get("n_embedded", 0)
+            title = (doc.get("title") or "")[:28]
+            lines.append(f"  {i}. {title} — {size_kb} KB, {n_ch} chunks, {n_em} vecs")
     text = "\n".join(lines)
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🔙 RAG", callback_data="admin_rag_menu"))

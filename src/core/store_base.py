@@ -259,6 +259,24 @@ class DataStore(Protocol):
         """
         ...
 
+    def rag_stats(self) -> dict:
+        """Return aggregate RAG monitoring stats for the admin panel.
+
+        Returns dict with keys: total, avg_latency_ms, avg_chunks,
+        total_chunks, total_chars, top_queries, query_types.
+        """
+        ...
+
+    def document_upload_stats(self) -> dict:
+        """Return aggregate document upload statistics for the admin panel.
+
+        Returns dict with keys: total_docs, avg_chunks, total_chunks,
+        total_bytes, total_embedded, avg_quality_pct, recent_docs.
+        recent_docs is a list of {doc_id, title, doc_type, n_chunks,
+        n_embedded, file_size_bytes, quality_pct, created_at} newest-first.
+        """
+        ...
+
     # ── Operational tables (Layer 2 migration) ────────────────────────────────
 
     def append_history_tracked(self, chat_id: int, role: str, content: str,

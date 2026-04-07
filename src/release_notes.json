@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.41",
+    "date": "2026-04-07",
+    "title": "Admin: per-document upload stats panel + TODO §4 audit",
+    "notes": "- feat: Admin → RAG → 📄 Doc Stats — shows total docs, avg/total chunks, total size, total embeddings, avg quality, last 5 uploads\n- feat: document_upload_stats() added to store_base/store_sqlite/store_postgres\n- fix: TODO §4 items marked done: MCP admin UI (v2026.4.38), EMBED_MODEL+bot_embeddings (v2026.4.14), pgvector HNSW (v2026.4.39), per-doc stats UI (this release)\n- i18n: admin_btn_doc_stats, admin_doc_stats_title, admin_doc_total/chunks/size/embedded/quality/recent_header added (ru/en/de)"
+  },
+  {
     "version": "2026.4.40",
     "date": "2026-04-07",
     "title": "Download-logs skill and TODO audit",

@@ -77,7 +77,8 @@ from telegram.bot_admin import (
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
     _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
     _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
-    _handle_admin_rag_settings, _handle_admin_rag_stats, _start_admin_rag_set, _finish_admin_rag_set,
+    _handle_admin_rag_settings, _handle_admin_rag_stats, _handle_admin_doc_stats,
+    _start_admin_rag_set, _finish_admin_rag_set,
     _handle_admin_rag_user_settings, _handle_admin_rag_user_adjust, _handle_admin_rag_user_reset,
     _handle_admin_llm_trace,
     _handle_admin_memory_menu, _handle_admin_mem_set_start,
@@ -586,6 +587,12 @@ def callback_handler(call):
     elif data == "admin_rag_stats":
         if _is_admin(cid):
             _handle_admin_rag_stats(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_doc_stats":
+        if _is_admin(cid):
+            _handle_admin_doc_stats(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

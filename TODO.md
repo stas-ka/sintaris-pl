@@ -58,10 +58,10 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 ## 4. Content & Knowledge
 - [x] Timeout monitoring — FTS search enforced with `rag_timeout` via `concurrent.futures` (v2026.3.30+4)
 - [x] Settings for LLM+RAG configurable via Admin Panel: top-K, chunk size, timeout, **temperature** (0.0–2.0) editable at runtime (v2026.3.30+4; seed/system-prompt/role are open)
-- [ ] Settings incl. credentials to connect to remote RAG MCP service via Admin panel → ✅ Implemented (v2026.4.38, Admin → RAG → Remote MCP)
+- [x] Settings incl. credentials to connect to remote RAG MCP service via Admin panel → ✅ Implemented (v2026.4.38, Admin → RAG → Remote MCP)
 - [x] Information for the user about upload restrictions (Max 20 MB shown in docs menu and enforced at upload; `MAX_DOC_SIZE_MB=20` constant) (v2026.3.30+4)
 - [x] `store.log_rag_activity()` now called after every FTS retrieval — RAG log populated; Admin Panel shows last 20 queries (v2026.3.30+4; LLM prompt/response preview still open)
-- [ ] After uploading: save parse/chunk/embed stats as protocol in DB; show per-document stats to Admin (stats stored in meta — no UI yet)
+- [x] After uploading: save parse/chunk/embed stats as protocol in DB; show per-document stats to Admin (stats stored in meta; Admin → RAG → 📄 Doc Stats panel added — v2026.4.41)
 
 
 ---
@@ -75,8 +75,8 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 - [x] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp — implemented in §3.1 (v2026.3.32)
 - [x] FTS5-only RAG pipeline: document upload → `_chunk_text()` (512-char) → `doc_chunks` FTS5 virtual table → `search_fts()` → LLM prompt injection in `bot_handlers.py` (v2026.3.43)
 - [x] `install_sqlite_vec.sh` setup script + `vec_embeddings` table (sqlite-vec `vec0`, 384-dim) + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` adapter methods ready in `store_sqlite.py` — schema and plumbing in place (v2026.4.13)
-- [ ] `all-MiniLM-L6-v2` embeddings via ONNX Runtime: no `EMBED_MODEL` constant, no embedding generation code wired yet; Pi 5/Server only; graceful FTS5-only fallback on Pi 3
-- [ ] pgvector HNSW (OpenClaw/VPS) — §25.6 scope
+- [x] `all-MiniLM-L6-v2` embeddings via ONNX Runtime: `EMBED_MODEL` constant in `bot_config.py`; `bot_embeddings.py` `EmbeddingService` (fastembed ONNX + sentence-transformers fallback); called from `bot_documents.py` during upload (v2026.4.14)
+- [x] pgvector HNSW (OpenClaw/VPS) — conditional `ALTER TABLE ADD COLUMN embedding vector(384)` + HNSW index (`m=16, ef_construction=64`) in `store_postgres._init_schema`, gated on `_has_vec` (v2026.4.39)
 - [x] Timeout monitoring for RAG/LLM calls — FTS enforced via `concurrent.futures` with `RAG_TIMEOUT` constant; `MCP_TIMEOUT` per provider still open (v2026.3.30+4)
 - [x] RAG activity log in DB (`rag_log` table + index) + Admin Panel: view last 20 queries + chunks injected; `log_rag_activity()` called after every FTS retrieval (v2026.3.30+4)
 

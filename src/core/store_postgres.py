@@ -1187,7 +1187,52 @@ class PostgresStore:
             "query_types": {t["query_type"]: t["cnt"] for t in types},
         }
 
-    # ── Lifecycle ─────────────────────────────────────────────────────────────
+    def document_upload_stats(self) -> dict:
+        """Return aggregate document upload stats for the admin panel."""
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT"
+                " COUNT(*) AS total_docs,"
+                " SUM((metadata->>'n_chunks')::int) AS total_chunks,"
+                " AVG((metadata->>'n_chunks')::float) AS avg_chunks,"
+                " SUM((metadata->>'file_size_bytes')::bigint) AS total_bytes,"
+                " SUM((metadata->>'n_embedded')::int) AS total_embedded,"
+                " AVG((metadata->>'quality_pct')::float) AS avg_quality_pct"
+                " FROM documents"
+            ).fetchone()
+            recent_rows = conn.execute(
+                "SELECT doc_id, title, doc_type, metadata, created_at"
+                " FROM documents ORDER BY created_at DESC LIMIT 10"
+            ).fetchall()
+        recent_docs = []
+        for r in recent_rows:
+            d = dict(r)
+            meta = {}
+            if d.get("metadata"):
+                try:
+                    meta = json.loads(d["metadata"]) if isinstance(d["metadata"], str) else d["metadata"]
+                except (ValueError, TypeError):
+                    pass
+            recent_docs.append({
+                "doc_id":          d["doc_id"],
+                "title":           d["title"],
+                "doc_type":        d.get("doc_type", "?"),
+                "n_chunks":        meta.get("n_chunks", 0),
+                "n_embedded":      meta.get("n_embedded", 0),
+                "file_size_bytes": meta.get("file_size_bytes", 0),
+                "quality_pct":     meta.get("quality_pct", 100),
+                "created_at":      str(d.get("created_at", "")),
+            })
+        r = dict(row) if row else {}
+        return {
+            "total_docs":      r.get("total_docs") or 0,
+            "total_chunks":    r.get("total_chunks") or 0,
+            "avg_chunks":      round(float(r.get("avg_chunks") or 0), 1),
+            "total_bytes":     r.get("total_bytes") or 0,
+            "total_embedded":  r.get("total_embedded") or 0,
+            "avg_quality_pct": round(float(r.get("avg_quality_pct") or 100), 1),
+            "recent_docs":     recent_docs,
+        }
 
     def upsert_web_account(self, account: dict) -> None:
         with self._pool.connection() as conn:
