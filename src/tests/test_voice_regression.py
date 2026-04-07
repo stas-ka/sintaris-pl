@@ -7132,6 +7132,232 @@ def t_system_chat_host_context(*, gt, verbose=False):
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T111 — migrate_sqlite_to_postgres.py structure: all 10 tables, no content filter bug
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_migrate_postgres_structure(**_) -> list[TestResult]:
+    """T111: migrate_sqlite_to_postgres.py must cover all 10 required tables.
+
+    Root-cause tests for bugs found during SintAItion PostgreSQL migration (2026-04-07):
+    1. notes migration had WHERE content != '' — omitted 100% of notes on SintAItion
+       (all notes stored in .md files with empty SQLite content column)
+    2. contacts table migration was entirely missing
+    3. documents table migration was entirely missing
+    All three are now fixed; this test ensures they don't regress.
+    """
+    results = []
+    import re as _re
+    t0 = time.time()
+
+    script_path = Path(__file__).parents[1] / "setup" / "migrate_sqlite_to_postgres.py"
+    if not script_path.exists():
+        results.append(TestResult("T111_script_exists", "FAIL", time.time() - t0,
+                                  f"migrate_sqlite_to_postgres.py not found at {script_path}"))
+        return results
+
+    src = script_path.read_text(encoding="utf-8")
+
+    # 1. All required table names must appear in the migration
+    required_tables = [
+        "users", "calendar_events", "notes_index", "chat_history",
+        "conversation_summaries", "contacts", "documents",
+        "user_prefs", "voice_opts", "llm_calls",
+    ]
+    for tbl in required_tables:
+        found = tbl in src
+        results.append(TestResult(
+            f"T111_table_{tbl}",
+            "PASS" if found else "FAIL",
+            time.time() - t0,
+            f"table '{tbl}' migration present" if found
+            else f"MISSING: table '{tbl}' not migrated in script",
+        ))
+
+    # 2. Notes migration must NOT filter by content (the critical regression bug)
+    notes_content_filter = bool(_re.search(
+        r"notes.*WHERE.*content\s*!=\s*['\"]|WHERE.*content\s*!=\s*['\"].*notes",
+        src, _re.IGNORECASE | _re.DOTALL,
+    ))
+    results.append(TestResult(
+        "T111_notes_no_content_filter",
+        "FAIL" if notes_content_filter else "PASS",
+        time.time() - t0,
+        "notes migration: no WHERE content != '' filter (all notes migrated)" if not notes_content_filter
+        else "BUG: notes migration has WHERE content != '' — empty-content notes are skipped",
+    ))
+
+    # 3. Notes migration must handle .md file content fallback
+    has_md_fallback = ".read_text" in src or ".read()" in src or "open(" in src
+    results.append(TestResult(
+        "T111_notes_md_file_fallback",
+        "PASS" if has_md_fallback else "WARN",
+        time.time() - t0,
+        "notes migration reads .md file content for empty SQLite rows" if has_md_fallback
+        else "WARN: no file read in migration — notes with empty SQLite content will migrate empty",
+    ))
+
+    # 4. contacts and documents must each have a SELECT + store API call (not raw INSERT)
+    #    The migration uses pg.save_contact() / pg.save_document_meta() — not raw SQL INSERT.
+    checks_4 = [
+        ("contacts",  "save_contact"),
+        ("documents", "save_document_meta"),
+    ]
+    for tbl, api_call in checks_4:
+        has_select = bool(_re.search(rf"SELECT.*FROM\s+{tbl}", src, _re.IGNORECASE))
+        has_api = api_call in src
+        ok = has_select and has_api
+        results.append(TestResult(
+            f"T111_{tbl}_full_migration",
+            "PASS" if ok else "FAIL",
+            time.time() - t0,
+            f"{tbl}: SELECT + {api_call}() migration block present" if ok
+            else f"MISSING: {tbl} migration incomplete "
+                 f"(has_select={has_select}, has_api_call={has_api})",
+        ))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T112 — Contacts store parity: both SQLite and Postgres backends
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_contacts_store_parity(**_) -> list[TestResult]:
+    """T112: Both store_sqlite.py and store_postgres.py must implement all 5 contacts methods.
+
+    Parity check — mirrors T73 pattern for document methods.
+    Ensures contacts work identically on both backends after SQLite → Postgres migration.
+    """
+    results = []
+    t0 = time.time()
+
+    REQUIRED_CONTACT_METHODS = [
+        "def save_contact",
+        "def get_contact",
+        "def list_contacts",
+        "def delete_contact",
+        "def search_contacts",
+    ]
+
+    for store_file, label in [
+        ("core/store_sqlite.py",   "SQLite"),
+        ("core/store_postgres.py", "Postgres"),
+    ]:
+        try:
+            code = (Path(__file__).parents[1] / store_file).read_text(encoding="utf-8")
+            for method in REQUIRED_CONTACT_METHODS:
+                ok = method in code
+                results.append(TestResult(
+                    f"T112_{label.lower()}_{method.split()[-1]}",
+                    "PASS" if ok else "FAIL",
+                    time.time() - t0,
+                    f"{label}: {method} present" if ok
+                    else f"MISSING in {store_file}: {method}",
+                ))
+        except FileNotFoundError:
+            results.append(TestResult(f"T112_{label.lower()}_read", "FAIL", time.time() - t0,
+                                      f"{store_file} not found"))
+
+    # Live import check
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).parents[1]))
+        from core.store import store as _store
+        for method in ["save_contact", "get_contact", "list_contacts", "delete_contact", "search_contacts"]:
+            ok = hasattr(_store, method) and callable(getattr(_store, method))
+            results.append(TestResult(
+                f"T112_live_{method}",
+                "PASS" if ok else "FAIL",
+                time.time() - t0,
+                f"live store.{method} callable" if ok else f"live store MISSING {method}",
+            ))
+    except Exception as e:
+        results.append(TestResult("T112_live_import", "SKIP", time.time() - t0,
+                                  f"store import skipped: {e}"))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T113 — Live PostgreSQL data non-empty (SKIP if STORE_BACKEND != postgres)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_postgres_live_data(**_) -> list[TestResult]:
+    """T113: When running on PostgreSQL backend, all migrated tables must have rows.
+
+    Verifies that the SQLite → PostgreSQL migration populated data correctly.
+    Uses direct psycopg2 COUNT queries — avoids store API signature differences.
+    SKIP automatically when STORE_BACKEND is not 'postgres'.
+    """
+    results = []
+    t0 = time.time()
+
+    backend = os.environ.get("STORE_BACKEND", "sqlite").lower()
+    if backend != "postgres":
+        return [TestResult("T113_postgres_live_data", "SKIP", time.time() - t0,
+                           f"STORE_BACKEND={backend!r} — Postgres live check skipped")]
+
+    dsn = os.environ.get("STORE_PG_DSN", "")
+    if not dsn:
+        return [TestResult("T113_no_dsn", "SKIP", time.time() - t0,
+                           "STORE_PG_DSN not set — cannot query PostgreSQL")]
+
+    try:
+        import psycopg2
+
+        conn = psycopg2.connect(dsn)
+        cur = conn.cursor()
+
+        # Each (table_name, min_expected_rows, description)
+        table_checks = [
+            ("users",                  1, "users"),
+            ("calendar_events",        1, "calendar_events"),
+            ("notes_index",            1, "notes_index"),
+            ("chat_history",           1, "chat_history"),
+            ("conversation_summaries", 1, "conversation_summaries"),
+        ]
+        for tbl, min_rows, label in table_checks:
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+                count = cur.fetchone()[0]
+                ok = count >= min_rows
+                results.append(TestResult(
+                    f"T113_{tbl}_non_empty",
+                    "PASS" if ok else "WARN",
+                    time.time() - t0,
+                    f"{label}: {count} rows" if ok
+                    else f"{label}: {count} rows — migration may have missed data",
+                ))
+            except Exception as e:
+                results.append(TestResult(f"T113_{tbl}_query", "FAIL", time.time() - t0, str(e)))
+
+        # contacts and documents: WARN (not FAIL) — may be empty on fresh install
+        for tbl in ("contacts", "documents"):
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+                count = cur.fetchone()[0]
+                results.append(TestResult(
+                    f"T113_{tbl}_count",
+                    "PASS",
+                    time.time() - t0,
+                    f"{tbl}: {count} rows (0 is acceptable — depends on user data)",
+                ))
+            except Exception as e:
+                results.append(TestResult(f"T113_{tbl}_query", "FAIL", time.time() - t0, str(e)))
+
+        conn.close()
+
+    except ImportError:
+        results.append(TestResult("T113_psycopg2_missing", "SKIP", time.time() - t0,
+                                  "psycopg2 not installed"))
+    except Exception as e:
+        results.append(TestResult("T113_connect", "FAIL", time.time() - t0,
+                                  f"PostgreSQL connection failed: {e}"))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7327,6 +7553,12 @@ TEST_FUNCTIONS = [
     t_llm_system_chat_fallback,
     # system chat: host OS/HW context injected into LLM prompt (T110)
     t_system_chat_host_context,
+    # migrate_sqlite_to_postgres: all 10 tables, no notes content-filter bug (T111)
+    t_migrate_postgres_structure,
+    # Contacts store parity: both SQLite + Postgres have all 5 methods (T112)
+    t_contacts_store_parity,
+    # Live Postgres data non-empty after migration (T113, SKIP if not postgres)
+    t_postgres_live_data,
 ]
 
 

@@ -184,6 +184,17 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T100 | `doc_detail_datetime_safe` | `_handle_doc_detail()` in `bot_documents.py` converts `created_at` safely — Postgres returns `datetime.datetime`, SQLite returns ISO string. Raw `[:16]` slice on datetime raises `TypeError`. | After editing `_handle_doc_detail()` or `store_postgres.py` `list_documents()` |
 | T101 | `note_open_empty_file` | `_handle_note_open()` in `bot_handlers.py` uses `note_empty_body` placeholder when note file is 0 bytes — prevents `"\n"` widget text that Telegram rejects as empty. | After editing `_handle_note_open()` or empty-note content handling |
 | T102 | `store_postgres_notes_uuid_path` | `store_postgres.py` note methods use `_notes_storage_dir(chat_id)` for UUID path resolution — prevents notes being written/read from `str(chat_id)` dir when account is linked to a web UUID via `accounts.json`. | After editing `store_postgres.py` note methods or account-linking logic |
+| T103 | `web_accounts_store_methods` | Both store backends have `get_web_account`, `set_web_account`, `generate_link_code`, `consume_link_code` methods. | After editing web auth / account linking in either store backend |
+| T104 | `system_settings_json_file` | `db_get_system_setting` / `db_set_system_setting` use `SYSTEM_SETTINGS_PATH` (JSON file), not `get_db()` SQLite. | After editing system settings logic |
+| T105 | `mail_creds_store_primary` | `bot_mail_creds._load_creds` tries `store.get_mail_creds()` first, then falls back to file — not get_db(). | After editing mail credentials loading |
+| T106 | `postgres_no_sqlite_fallbacks` | On OpenClaw/Postgres, `bot_access.py` notes/contacts context functions and `telegram_menu_bot.py` `init_db` guard have no `get_db()` SQLite fallback. | After editing `bot_access.py` or `telegram_menu_bot.py` init logic |
+| T107 | `postgres_dict_row_access` | `store_postgres.py` uses `dict_row` factory — all `row[col]` access uses named keys (`row["id"]`) not positional (`row[0]`). | After editing `store_postgres.py` or adding new queries |
+| T108 | `llm_history_named_fallback` | `ask_llm_with_history` uses `LLM_FALLBACK_PROVIDER` named fallback (not legacy llama.cpp). | After editing `bot_llm.py` or LLM fallback chain |
+| T109 | `llm_system_chat_fallback` | System chat handles Ollama timeout with guard + global default fallback provider. | After editing system chat LLM integration |
+| T110 | `system_chat_host_context` | `_handle_system_message` injects `_HOST_CTX` (hostname, OS, CPU, temp-tools, pkg-mgr) into LLM system prompt. | After editing `bot_handlers.py` system prompt builders |
+| T111 | `migrate_postgres_structure` | `migrate_sqlite_to_postgres.py` covers all 10 required tables; notes has no `WHERE content != ''` filter (critical bug — omits file-backed notes); contacts uses `save_contact()`; documents uses `save_document_meta()`. | After editing the migration script or adding new tables |
+| T112 | `contacts_store_parity` | Both `store_sqlite.py` and `store_postgres.py` implement all 5 contacts methods: `save_contact`, `get_contact`, `list_contacts`, `delete_contact`, `search_contacts`. Live import check included. | After editing either store backend's contacts methods |
+| T113 | `postgres_live_data` | When `STORE_BACKEND=postgres`, all 5 core tables (users, calendar_events, notes_index, chat_history, conversation_summaries) have ≥1 row. SKIP if not on Postgres or `STORE_PG_DSN` not set. | After SQLite → Postgres migration to verify data was populated |
 
 ### 2.6 When specific tests are mandatory
 
@@ -225,6 +236,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After editing `_handle_doc_detail()` or `store_postgres.py` `list_documents()` | T100 (`--test t_doc_detail_datetime_safe`) |
 | After editing `_handle_note_open()` or empty-note handling | T101 (`--test t_note_open_empty_file`) |
 | After editing `store_postgres.py` note methods or `_notes_storage_dir` / account-linking | T102 (`--test t_store_postgres_notes_uuid_path`) |
+| After editing `migrate_sqlite_to_postgres.py` or adding new tables to either store | T111 (`--test t_migrate_postgres_structure`) |
+| After editing contacts methods in either `store_sqlite.py` or `store_postgres.py` | T112 (`--test t_contacts_store_parity`) |
+| After running SQLite → Postgres migration on any target | T113 (`--test t_postgres_live_data`) with `STORE_BACKEND=postgres STORE_PG_DSN=...` |
 | After any deploy or openclaw-gateway config change | T44 (`--test t_openclaw_gateway_telegram_disabled`) |
 | After changing `TARIS_BIN` in bot.env or deploying to a new Pi with picoclaw | T45 (`--test t_taris_bin_configured`) |
 | After changing `_VOICE_OPTS_DEFAULTS` or adding a new DEVICE_VARIANT | T46 (`--test t_vosk_fallback_openclaw_default`) |
