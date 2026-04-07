@@ -2687,7 +2687,7 @@ async def admin_page(request: Request):
             "role":        role,
             "badge":       "purple" if role == "Admin" else "blue",
             "chat_id":     a.get("telegram_chat_id"),
-            "created":     a.get("created", "—")[:10] if a.get("created") else "—",
+            "created":     str(a.get("created", ""))[:10] if a.get("created") else "—",
             "status":      a.get("status", "active"),
         })
 

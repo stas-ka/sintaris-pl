@@ -7358,6 +7358,42 @@ def t_postgres_live_data(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T114 — bot_web.py admin page: created field uses str() before slicing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_admin_page_datetime_safe(**_) -> list[TestResult]:
+    """T114: admin_page() in bot_web.py must use str(a.get('created', ''))[:10].
+
+    Root-cause: on PostgreSQL backend, web_accounts.created is a datetime.datetime
+    object. The old code did a.get('created', '—')[:10] which raises
+    TypeError: 'datetime.datetime' object is not subscriptable.
+    Found by UI test TestAdmin (Internal Server Error on /admin).
+    """
+    results = []
+    t0 = time.time()
+
+    try:
+        src = (SRC_ROOT / "bot_web.py").read_text(encoding="utf-8")
+
+        # The fix: str() wrapping before slice
+        has_safe = 'str(a.get("created", ""))[:10]' in src
+        # The old bug pattern: direct slice on dict value
+        has_bug   = 'a.get("created", "—")[:10]' in src or "a.get('created', '—')[:10]" in src
+
+        results.append(TestResult(
+            "T114_admin_created_str_wrap",
+            "PASS" if has_safe and not has_bug else "FAIL",
+            time.time() - t0,
+            "admin_page uses str()[:10] for created field (datetime-safe)" if (has_safe and not has_bug)
+            else f"BUG: admin_page may crash on Postgres — has_safe={has_safe} has_bug={has_bug}",
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("T114_file_exists", "FAIL", 0.0, "bot_web.py not found"))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7559,6 +7595,8 @@ TEST_FUNCTIONS = [
     t_contacts_store_parity,
     # Live Postgres data non-empty after migration (T113, SKIP if not postgres)
     t_postgres_live_data,
+    # bot_web.py admin page: created field uses str() before slicing (T114)
+    t_admin_page_datetime_safe,
 ]
 
 
