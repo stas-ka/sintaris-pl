@@ -1287,3 +1287,14 @@ Every ~3 months, measure baseline health:
 | 17:13 UTC | Fixed send_telegram_notification() calling _make_bridge() (deleted in 40bddbc); should be _get_bridge(); caused NameError at runtime | 1 | 2 | claude-sonnet-4.6 | mcp_server.py | done |
 
 **Session 67 total: 1 bugfix (missed call site), 2 turns ✅**
+
+### Session 68 — 2026-04-08 (UTC)
+
+**Focus:** MCP bridge test fixes — VPS detection + approved display
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 17:25 UTC | Ran full interactive test, found approved=False despite decision=allow (test_bridge.py reads non-existent key) + Test 3 409 (VPS always-on undetected) | 1 | 1 | claude-sonnet-4.6 | — | analysis |
+| 17:26 UTC | Fixed: BridgeConfig.vps_host field + VPS_MCP_HOST env var; _vps_dispatcher_responding() fallback; approved computed from decision; .env updated | 2 | 3 | claude-sonnet-4.6 | telegram_bridge.py, test_bridge.py, .env | done |
+
+**Session 68 total: 2 fixes, 4 turns — VPS detection + approved display ✅**
