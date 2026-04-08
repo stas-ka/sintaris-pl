@@ -127,7 +127,7 @@ def await_telegram_confirmation(
     description=("Send a one-way notification to Telegram. Returns message id list.")
 )
 def send_telegram_notification(message: str) -> dict[str, Any]:
-    _, bridge = _make_bridge()
+    _, bridge = _get_bridge()
     if bridge is None:
         return _missing_config_response()
 
