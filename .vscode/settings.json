@@ -1,6 +1,7 @@
 {
   "chat.promptFiles": true,
   "chat.notifyWindowOnConfirmation": "windowNotFocused",
+  "task.allowAutomaticTasks": "on",
   "chat.hooks": {
     "PreToolUse": [
       {
