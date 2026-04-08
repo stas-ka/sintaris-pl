@@ -1322,3 +1322,16 @@ Every ~3 months, measure baseline health:
 | 18:35 UTC | Real-time task trigger: task-watcher.ps1 polls /tasks/peek every 5s, detects new /task, opens vscode://GitHub.copilot-chat/chat?query=<task> URI + auto-submits via SendKeys. mcp-tunnel.ps1 updated to auto-start watcher. Tested live — task detected + VS Code opened immediately. Commit 4015676 | 3 | 5 | claude-sonnet-4.6 | tools/copilot_telegram_bridge/task-watcher.ps1, mcp-tunnel.ps1 | done |
 
 **Session 70 total: 2 features — 409 eliminated (webhook), /task now triggers VS Code Copilot immediately ✅**
+
+---
+
+### Session 71 — 2026-04-08 (UTC)
+
+**Focus:** task-watcher HTTPS direct polling (no tunnel) + Windows startup auto-launch
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 18:59 UTC | HTTPS task API auth: _TaskAPIHandler._check_auth() (localhost=always OK, remote=?token=BOT_TOKEN required). nginx /tasks/ location added. VPS container rebuilt. Tested: 403 without token, 200 with token. Commits 30b94b5 | 3 | 3 | claude-sonnet-4.6 | mcp_server.py, VPS nginx | done |
+| 18:59 UTC | task-watcher no-tunnel mode: reads TELEGRAM_BOT_TOKEN from .env, polls HTTPS primary + tunnel fallback. Works without mcp-tunnel.ps1. VS Code tasks.json updated: watcher is its own runOn:folderOpen task (mcp-tunnel demoted to manual). install-startup.ps1 adds Windows Startup shortcut for 24/7 operation. Commit 45faa44 | 3 | 2 | claude-sonnet-4.6 | task-watcher.ps1, .vscode/tasks.json, install-startup.ps1 | done |
+
+**Session 71 total: 2 items — task-watcher now works without tunnel, starts at login ✅**
