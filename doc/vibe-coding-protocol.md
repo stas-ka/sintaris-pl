@@ -1335,3 +1335,13 @@ Every ~3 months, measure baseline health:
 | 18:59 UTC | task-watcher no-tunnel mode: reads TELEGRAM_BOT_TOKEN from .env, polls HTTPS primary + tunnel fallback. Works without mcp-tunnel.ps1. VS Code tasks.json updated: watcher is its own runOn:folderOpen task (mcp-tunnel demoted to manual). install-startup.ps1 adds Windows Startup shortcut for 24/7 operation. Commit 45faa44 | 3 | 2 | claude-sonnet-4.6 | task-watcher.ps1, .vscode/tasks.json, install-startup.ps1 | done |
 
 **Session 71 total: 2 items — task-watcher now works without tunnel, starts at login ✅**
+
+## Session 72 — 2026-04-08
+
+**Focus:** Gemma4 LLM evaluation infrastructure
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 22:14 UTC | Gemma4 evaluation: fix thinking-mode bug in benchmark (gemma4 missing from is_thinking_model), add --host/--target flags, T117-T120 regression tests, Linux eval script, Windows PS eval helper, evaluation report template. Commit 13e9587 | 3 | 4 | claude-sonnet-4.6 | benchmark_ollama_models.py, test_voice_regression.py, doc/test-suite.md, doc/gemma4-evaluation-report.md, tools/run_gemma4_evaluation.sh, tools/eval_gemma4_windows.ps1 | done |
+
+**Session 72 total: 1 item — Gemma4 evaluation infrastructure ready; T117-T120 all PASS ✅**
