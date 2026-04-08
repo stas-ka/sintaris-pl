@@ -33,6 +33,9 @@ from typing import Optional
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 
+# Target label shown in report headers (override via --target or BENCHMARK_TARGET env var)
+BENCHMARK_TARGET = os.environ.get("BENCHMARK_TARGET", "")
+
 # Models to benchmark if no --model flag given
 # (only models actually present in ollama list are tested)
 CANDIDATE_MODELS = [
@@ -256,12 +259,12 @@ def _get_available_models() -> list[str]:
 def _run_prompt(model: str, prompt: str, options: dict) -> dict:
     """
     Call Ollama generate API (non-streaming).
-    Disables thinking mode for qwen3/qwen3.5 models (they consume all tokens
-    in <think> blocks otherwise, returning empty responses).
+    Disables thinking mode for models that emit <think> blocks (qwen3, gemma4,
+    deepseek-r) to prevent consuming all tokens in CoT without producing output.
     Returns the full response dict from Ollama.
     """
     is_thinking_model = any(
-        tag in model.lower() for tag in ("qwen3", "qwen3.5", "deepseek-r")
+        tag in model.lower() for tag in ("qwen3", "qwen3.5", "deepseek-r", "gemma4")
     )
     payload = {
         "model": model,
@@ -481,7 +484,19 @@ def main():
     parser.add_argument("--quick",  action="store_true", help="Run only latency + ru_factual")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show response text")
     parser.add_argument("--prompt", help="Run only these prompts (comma-separated keys)")
+    parser.add_argument("--host",   metavar="URL",
+                        help="Ollama API base URL (overrides OLLAMA_URL env var), "
+                             "e.g. http://192.168.178.175:11434")
+    parser.add_argument("--target", metavar="NAME",
+                        help="Human-readable target label for reports, e.g. TariStation2 or SintAItion")
     args = parser.parse_args()
+
+    # Apply --host / --target overrides before any Ollama calls
+    global OLLAMA_URL, BENCHMARK_TARGET
+    if args.host:
+        OLLAMA_URL = args.host.rstrip("/")
+    if args.target:
+        BENCHMARK_TARGET = args.target
 
     # Determine prompt keys
     if args.quick:
@@ -530,7 +545,10 @@ def main():
 
     print(f"\n{'='*70}")
     print(f"Ollama LLM Benchmark — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"Target:  {OLLAMA_URL}")
+    target_label = BENCHMARK_TARGET or OLLAMA_URL
+    print(f"Target:  {target_label}")
+    if BENCHMARK_TARGET:
+        print(f"Ollama:  {OLLAMA_URL}")
     print(f"Models:  {', '.join(models)}")
     print(f"Prompts: {', '.join(prompt_keys)}")
     print(f"{'='*70}")

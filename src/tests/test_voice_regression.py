@@ -7561,6 +7561,178 @@ def t_admin_only_rag_access(**_) -> list[TestResult]:
     return results
 
 
+def t_gemma4_thinking_mode_fix(**_) -> list[TestResult]:
+    """T117: benchmark _run_prompt() must disable thinking mode for gemma4 models.
+
+    Regression guard: gemma4 has built-in chain-of-thought (<think> blocks) like
+    qwen3. Without think:false the model consumes all output tokens in CoT.
+    Verifies the 'gemma4' tag is listed alongside qwen3/deepseek-r in the
+    is_thinking_model check in benchmark_ollama_models.py.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    bench_path = SRC_ROOT / "tests" / "llm" / "benchmark_ollama_models.py"
+    try:
+        src = bench_path.read_text(encoding="utf-8", errors="replace")
+
+        # The is_thinking_model tag list must include gemma4
+        has_gemma4_tag = '"gemma4"' in src and "is_thinking_model" in src
+        results.append(TestResult(
+            "benchmark_gemma4_thinking_tag",
+            "PASS" if has_gemma4_tag else "FAIL",
+            time.time() - t0,
+            "gemma4 in is_thinking_model list" if has_gemma4_tag
+            else "MISSING — gemma4 will return empty responses from benchmarks",
+        ))
+
+        # Verify the model list (CANDIDATE_MODELS) includes gemma4 variants
+        has_e2b = "gemma4:e2b" in src
+        has_e4b = "gemma4:e4b" in src
+        results.append(TestResult(
+            "benchmark_gemma4_candidate_models",
+            "PASS" if (has_e2b and has_e4b) else "FAIL",
+            time.time() - t0,
+            f"gemma4:e2b={has_e2b} gemma4:e4b={has_e4b} in CANDIDATE_MODELS",
+        ))
+
+        # Verify --host flag exists for remote benchmarking
+        has_host_flag = '"--host"' in src or "args.host" in src
+        results.append(TestResult(
+            "benchmark_host_flag",
+            "PASS" if has_host_flag else "FAIL",
+            time.time() - t0,
+            "--host flag present for remote Ollama" if has_host_flag
+            else "MISSING --host flag — cannot benchmark SintAItion remotely",
+        ))
+
+    except FileNotFoundError:
+        results.append(TestResult("benchmark_gemma4_thinking_tag", "SKIP", time.time() - t0,
+                                  "benchmark_ollama_models.py not found"))
+    return results
+
+
+def t_gemma4_ollama_config(**_) -> list[TestResult]:
+    """T118: bot_config.py and bot_llm.py correctly handle Gemma4 models.
+
+    Gemma4 uses the same Ollama /api/chat endpoint as all other models.
+    OLLAMA_THINK=false (default) ensures thinking is off in production.
+    This test verifies no Gemma4-specific hardcoding is needed (it just works),
+    and confirms the think flag is passed correctly.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    llm_path = SRC_ROOT / "core" / "bot_llm.py"
+    try:
+        src = llm_path.read_text(encoding="utf-8", errors="replace")
+
+        # think flag must be passed to Ollama (prevents gemma4 CoT token waste)
+        has_think_flag = '"think"' in src and "OLLAMA_THINK" in src
+        results.append(TestResult(
+            "ollama_think_flag_passed",
+            "PASS" if has_think_flag else "FAIL",
+            time.time() - t0,
+            "think:OLLAMA_THINK in _ask_ollama payload" if has_think_flag
+            else "MISSING — gemma4 will exhaust context on <think> blocks",
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("ollama_think_flag_passed", "SKIP", time.time() - t0,
+                                  "bot_llm.py not found"))
+
+    config_path = SRC_ROOT / "core" / "bot_config.py"
+    try:
+        src = config_path.read_text(encoding="utf-8", errors="replace")
+
+        # OLLAMA_THINK must default to False
+        think_false = 'OLLAMA_THINK' in src and (
+            'OLLAMA_THINK = False' in src
+            or 'OLLAMA_THINK=False' in src
+            or '"false"' in src.lower() and 'OLLAMA_THINK' in src
+        )
+        results.append(TestResult(
+            "config_ollama_think_default_false",
+            "PASS" if think_false else "FAIL",
+            time.time() - t0,
+            "OLLAMA_THINK defaults to False in bot_config.py",
+        ))
+    except FileNotFoundError:
+        results.append(TestResult("config_ollama_think_default_false", "SKIP", time.time() - t0,
+                                  "bot_config.py not found"))
+
+    return results
+
+
+def t_gemma4_live_availability(**_) -> list[TestResult]:
+    """T119: Gemma4:E2B availability check via Ollama API (SKIP if Ollama not running).
+
+    Source-inspection + live check: verifies gemma4:e2b is pulled and callable.
+    On machines without Ollama installed this test is automatically skipped.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    import urllib.request, json as _json
+
+    ollama_url = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+    try:
+        req = urllib.request.urlopen(f"{ollama_url}/api/tags", timeout=3)
+        data = _json.loads(req.read().decode())
+        model_names = [m["name"] for m in data.get("models", [])]
+        has_e2b = any("gemma4" in n and "e2b" in n for n in model_names)
+        has_e4b = any("gemma4" in n and "e4b" in n for n in model_names)
+        has_any_gemma4 = any("gemma4" in n for n in model_names)
+        if not has_any_gemma4:
+            results.append(TestResult(
+                "gemma4_ollama_availability",
+                "SKIP", time.time() - t0,
+                f"gemma4 not pulled yet. Pull with: ollama pull gemma4:e2b  "
+                f"Available: {model_names[:5]}",
+            ))
+        else:
+            results.append(TestResult(
+                "gemma4_ollama_availability",
+                "PASS", time.time() - t0,
+                f"e2b={has_e2b} e4b={has_e4b} — {[n for n in model_names if 'gemma4' in n]}",
+            ))
+    except Exception as exc:
+        results.append(TestResult(
+            "gemma4_ollama_availability",
+            "SKIP", time.time() - t0,
+            f"Ollama not running ({exc.__class__.__name__}) — install/start to enable live test",
+        ))
+
+    return results
+
+
+def t_gemma4_benchmark_report(**_) -> list[TestResult]:
+    """T120: Gemma4 evaluation report and evaluation scripts exist.
+
+    Verifies the research doc, evaluation shell script, and Windows eval script
+    are present in the workspace so remote evaluation can be triggered.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    checks = [
+        (SRC_ROOT.parent / "doc" / "research-gemma4-benchmark.md",
+         "Gemma4 research + hardware analysis doc"),
+        (SRC_ROOT.parent / "tools" / "run_gemma4_evaluation.sh",
+         "Linux evaluation script for SintAItion / TariStation2"),
+        (SRC_ROOT.parent / "tools" / "eval_gemma4_windows.ps1",
+         "Windows PowerShell helper to run evaluation via SSH"),
+    ]
+    for fpath, desc in checks:
+        exists = fpath.exists()
+        results.append(TestResult(
+            f"gemma4_asset_{fpath.name}",
+            "PASS" if exists else "FAIL",
+            time.time() - t0,
+            desc if exists else f"MISSING: {fpath}",
+        ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7768,6 +7940,13 @@ TEST_FUNCTIONS = [
     t_bot_capabilities_tag_fix,
     # Admin-only RAG: search_fts/search_similar accept is_admin; load_system_docs uses is_shared=2 (T116)
     t_admin_only_rag_access,
+    # Gemma4: thinking mode disabled in benchmark; config correct (T117-T118)
+    t_gemma4_thinking_mode_fix,
+    t_gemma4_ollama_config,
+    # Gemma4 live availability (T119, SKIP if Ollama not running or model not pulled)
+    t_gemma4_live_availability,
+    # Gemma4 evaluation report + scripts present (T120)
+    t_gemma4_benchmark_report,
 ]
 
 

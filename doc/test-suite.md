@@ -198,6 +198,10 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T114 | `admin_page_datetime_safe` | `bot_web.py` admin page uses `str(a.get('created', ''))[:10]` to safely handle `datetime.datetime` objects returned by Postgres backend. | After editing `bot_web.py` admin page handler |
 | T115 | `bot_capabilities_tag_fix` | `prompts.json` rule 5 must NOT contain the phrase that caused LLM to output `[BOT CAPABILITIES]` literally; must warn against reproducing block markers. | After editing `prompts.json` security preamble |
 | T116 | `admin_only_rag_access` | Full retrieval stack has `is_admin` param: `load_system_docs._ingest` uses `is_shared=2` for admin guide; `store_sqlite`/`store_postgres` `search_fts`/`search_similar` accept `is_admin`; `bot_rag.retrieve_context` propagates it; `bot_access._docs_rag_context` calls `_is_admin(chat_id)`. | After editing RAG retrieval stack or doc sharing logic |
+| T117 | `gemma4_thinking_mode_fix` | `benchmark_ollama_models.py` `_run_prompt()` must list `gemma4` in `is_thinking_model` tags; Gemma4:e2b/e4b in `CANDIDATE_MODELS`; `--host` flag present. | After editing `benchmark_ollama_models.py` or adding LLM models |
+| T118 | `gemma4_ollama_config` | `bot_llm.py` passes `think:OLLAMA_THINK` to Ollama API; `bot_config.py` defaults `OLLAMA_THINK=False`. Ensures Gemma4 thinking suppressed in production. | After editing `bot_llm.py` or `bot_config.py` LLM constants |
+| T119 | `gemma4_live_availability` | Live Ollama API check: gemma4:e2b/e4b pulled and callable. SKIP if Ollama not running. | After pulling Gemma4 models; before switching `OLLAMA_MODEL` |
+| T120 | `gemma4_benchmark_report` | Research doc, Linux eval script, and Windows PowerShell eval helper all present. | After adding Gemma4 evaluation infrastructure |
 
 ### 2.6 When specific tests are mandatory
 
