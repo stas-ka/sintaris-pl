@@ -1298,3 +1298,15 @@ Every ~3 months, measure baseline health:
 | 17:26 UTC | Fixed: BridgeConfig.vps_host field + VPS_MCP_HOST env var; _vps_dispatcher_responding() fallback; approved computed from decision; .env updated | 2 | 3 | claude-sonnet-4.6 | telegram_bridge.py, test_bridge.py, .env | done |
 
 **Session 68 total: 2 fixes, 4 turns — VPS detection + approved display ✅**
+
+### Session 69 — 2026-04-08 (UTC)
+
+**Focus:** MCP bridge /task queue fix — tasks queued on VPS not visible to local get_pending_task()
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| ~17:35 UTC | Root cause: VPS dispatcher writes to /tmp/taris_tasks.json inside Docker; local stdio reads Windows %TEMP% — different file, always empty | 1 | 1 | claude-sonnet-4.6 | — | analysis |
+| ~17:40 UTC | Fix: HTTP task API (port 3002) in mcp_server.py SSE mode; get_pending_task() checks VPS_TASKS_URL; docker-compose.yml adds task-queue named volume + port 3002; mcp-tunnel.ps1 forwards port 3002; .env adds VPS_TASKS_URL | 4 | 5 | claude-sonnet-4.6 | mcp_server.py, docker-compose.yml, mcp-tunnel.ps1, .vscode/mcp.json | done |
+| ~17:50 UTC | Deploy to VPS: rebuild container, verify port 3002 /tasks/peek returns [] | 2 | 2 | claude-sonnet-4.6 | VPS docker | done |
+
+**Session 69 total: 1 feature (HTTP task API bridge), 8 turns — /task queue now accessible from local stdio ✅**
