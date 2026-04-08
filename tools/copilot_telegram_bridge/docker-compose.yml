@@ -1,0 +1,31 @@
+services:
+  mcp-telegram-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: copilot-mcp-telegram-bridge:latest
+    container_name: copilot-mcp-bridge
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_TIMEOUT_SECONDS=${TELEGRAM_TIMEOUT_SECONDS:-900}
+      - TELEGRAM_LONG_POLL_SECONDS=${TELEGRAM_LONG_POLL_SECONDS:-20}
+      - MCP_TRANSPORT=sse
+      - MCP_HOST=127.0.0.1
+      - MCP_PORT=3001
+    # Bind port 3001 only to VPS localhost — accessible via SSH tunnel
+    ports:
+      - "127.0.0.1:3001:3001"
+    network_mode: bridge
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3001/sse', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

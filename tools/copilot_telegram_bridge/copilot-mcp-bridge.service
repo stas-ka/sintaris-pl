@@ -1,0 +1,25 @@
+[Unit]
+Description=Copilot Telegram MCP Bridge (Docker)
+Documentation=https://github.com/stas-ka/sintaris-openclaw
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/copilot_docker
+EnvironmentFile=/opt/copilot_docker/.env
+ExecStart=/usr/bin/docker compose up --no-build
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=copilot-mcp-bridge
+
+[Install]
+WantedBy=multi-user.target
