@@ -35,15 +35,28 @@ NO_WAIT = "--no-wait" in sys.argv
 FORCE   = "--force"   in sys.argv
 
 def _vps_dispatcher_responding() -> bool:
-    """Return True only if the VPS SSE server is actually responding (not just tunnel port open)."""
+    """Return True if a remote VPS dispatcher owns the Telegram getUpdates long-poll.
+
+    Two checks (either is sufficient):
+    1. Local tunnel port 3001 is open and responding → tunnel is up → VPS is active.
+    2. VPS_MCP_HOST is set in .env → VPS is a permanently-running container
+       (restart: unless-stopped). If we have no local tunnel it is still polling
+       Telegram, so treat it as active to avoid 409 conflicts.
+    """
+    # Check 1: local tunnel
     try:
         req = urllib.request.Request("http://127.0.0.1:3001/", method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:
-            return resp.status < 500
+            if resp.status < 500:
+                return True
     except urllib.error.HTTPError:
-        return True   # got an HTTP error → server IS responding
+        return True   # HTTP error → server IS responding via tunnel
     except OSError:
-        return False  # connection refused or tunnel not reachable
+        pass  # no tunnel — fall through to check 2
+
+    # Check 2: VPS_MCP_HOST configured → always-on container is polling
+    vps_host = cfg.vps_host  # None if not set
+    return bool(vps_host)
 
 _vps_active = _vps_dispatcher_responding()
 
@@ -94,7 +107,8 @@ else:
         timeout_seconds=60,
     )
     decision = result.get("decision", "timeout")
-    print(f"  Result: decision={decision}, approved={result.get('approved', False)}")
+    approved = decision == "allow"
+    print(f"  Result: decision={decision}, approved={approved}")
     if decision == "timeout":
         print("  (timed out — that is OK, bot is working, just reply faster next time)")
 

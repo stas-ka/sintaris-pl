@@ -134,6 +134,7 @@ class BridgeConfig:
     chat_id: Optional[int]
     default_timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
     long_poll_seconds: int = DEFAULT_LONG_POLL_SECONDS
+    vps_host: Optional[str] = None  # set → always-on VPS docker container is polling
 
     @classmethod
     def from_env(cls, cwd: Optional[str] = None) -> "BridgeConfig":
@@ -153,12 +154,14 @@ class BridgeConfig:
             get_value("TELEGRAM_TIMEOUT_SECONDS", "TELEGRAM_APPROVAL_TIMEOUT_SECONDS")
         )
         long_poll = _parse_int(get_value("TELEGRAM_LONG_POLL_SECONDS"))
+        vps_host = get_value("VPS_MCP_HOST")
 
         return cls(
             bot_token=bot_token.strip(),
             chat_id=chat_id,
             default_timeout_seconds=timeout or DEFAULT_TIMEOUT_SECONDS,
             long_poll_seconds=long_poll or DEFAULT_LONG_POLL_SECONDS,
+            vps_host=vps_host,
         )
 
     def is_ready(self) -> bool:
