@@ -22,6 +22,11 @@ from telegram_bridge import BridgeConfig, TelegramBridge, pop_task, peek_task_qu
 
 mcp = FastMCP("telegramBridge")
 
+# Module-level bridge singleton — shared across all tool calls to avoid 409 conflicts.
+# In SSE mode this is initialised with the dispatcher before mcp.run(transport="sse").
+# In stdio mode it is created lazily (no dispatcher, falls back to polling).
+_bridge_singleton: TelegramBridge | None = None
+
 
 def _missing_config_response() -> dict[str, Any]:
     return {
@@ -34,16 +39,26 @@ def _missing_config_response() -> dict[str, Any]:
     }
 
 
-def _make_bridge() -> tuple[BridgeConfig, TelegramBridge] | tuple[BridgeConfig, None]:
-    cwd = os.getcwd()
-    config = BridgeConfig.from_env(cwd=cwd)
+def _get_bridge() -> tuple[BridgeConfig, TelegramBridge | None]:
+    """Return the shared bridge singleton, creating it lazily if needed.
+
+    In SSE mode the singleton is pre-created with the dispatcher running.
+    In stdio mode it is created here on first call (no dispatcher).
+    Either way all tool calls reuse the same instance and never cause
+    internal 409 conflicts against each other.
+    """
+    global _bridge_singleton
+    if _bridge_singleton is not None:
+        return _bridge_singleton.config, _bridge_singleton
+    config = BridgeConfig.from_env(cwd=os.getcwd())
     if not config.is_ready():
         return config, None
-    return config, TelegramBridge(config)
+    _bridge_singleton = TelegramBridge(config)
+    return config, _bridge_singleton
 
 
 def _run(mode: str, question: str, last_chat_text: str, timeout_seconds: int) -> dict[str, Any]:
-    _, bridge = _make_bridge()
+    _, bridge = _get_bridge()
     if bridge is None:
         return _missing_config_response()
 
@@ -147,7 +162,7 @@ def get_pending_task() -> dict[str, Any]:
     )
 )
 def complete_task(summary: str) -> dict[str, Any]:
-    _, bridge = _make_bridge()
+    _, bridge = _get_bridge()
     if bridge is None:
         return _missing_config_response()
 
@@ -155,14 +170,15 @@ def complete_task(summary: str) -> dict[str, Any]:
     message_ids = bridge.send_notification_text(message)
     return {"status": "sent", "message_ids": message_ids}
 
-
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "sse":
         config = BridgeConfig.from_env(cwd=os.getcwd())
         if config.is_ready():
-            bridge = TelegramBridge(config)
-            bridge.start_task_listener()
+            # Pre-create the singleton with the dispatcher so all tool calls
+            # share it instead of creating conflicting per-call instances.
+            _bridge_singleton = TelegramBridge(config)
+            _bridge_singleton.start_task_listener()
         mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
         mcp.settings.port = int(os.environ.get("MCP_PORT", "3001"))
         mcp.run(transport="sse")

@@ -2,18 +2,23 @@
 """Quick test of all three Telegram bridge functions.
 
 Usage:
-  python test_bridge.py             # full test (requires VPS container to be STOPPED)
-  python test_bridge.py --no-wait   # notification-only test (safe while VPS is running)
+  python test_bridge.py             # auto-detects VPS; does full test if VPS is unreachable
+  python test_bridge.py --no-wait   # notification-only test (always safe)
+  python test_bridge.py --force     # full interactive test even if tunnel port is open
 
 IMPORTANT: When the VPS dispatcher (docker container copilot-mcp-bridge) is running,
 it owns the Telegram getUpdates long-poll. Running wait tests locally at the same time
-causes HTTP 409 Conflict. Use --no-wait to test notifications only, or stop the VPS
-container first: plink -pw "..." boh@dev2null.website "sudo docker stop copilot-mcp-bridge"
+causes HTTP 409 Conflict. Stop the VPS container first:
+  plink -pw "zusammen2019" -batch boh@dev2null.website "echo zusammen2019 | sudo -S docker stop copilot-mcp-bridge"
+then run this script, then restart:
+  plink -pw "zusammen2019" -batch boh@dev2null.website "echo zusammen2019 | sudo -S systemctl start copilot-mcp-bridge"
 """
 from __future__ import annotations
 import socket
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -27,27 +32,37 @@ if not cfg.is_ready():
     sys.exit(1)
 
 NO_WAIT = "--no-wait" in sys.argv
+FORCE   = "--force"   in sys.argv
 
-# Detect if VPS SSE tunnel is active on localhost:3001
-_vps_active = False
-try:
-    s = socket.create_connection(("127.0.0.1", 3001), timeout=1)
-    s.close()
-    _vps_active = True
-except OSError:
-    pass
+def _vps_dispatcher_responding() -> bool:
+    """Return True only if the VPS SSE server is actually responding (not just tunnel port open)."""
+    try:
+        req = urllib.request.Request("http://127.0.0.1:3001/", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status < 500
+    except urllib.error.HTTPError:
+        return True   # got an HTTP error → server IS responding
+    except OSError:
+        return False  # connection refused or tunnel not reachable
 
-if _vps_active and not NO_WAIT:
+_vps_active = _vps_dispatcher_responding()
+
+if _vps_active and not NO_WAIT and not FORCE:
     print(
-        "WARNING: VPS SSE server detected on localhost:3001.\n"
-        "Running wait tests locally while VPS dispatcher is active will cause 409 Conflict.\n"
+        "WARNING: VPS SSE dispatcher is active on localhost:3001.\n"
+        "Running wait tests locally while VPS is running will cause 409 Conflict.\n"
         "Switching to --no-wait mode automatically.\n"
-        "To run full test: stop the VPS container first or use '--no-wait' to suppress this warning.\n"
+        "\nTo run full interactive test:\n"
+        "  1. plink -pw zusammen2019 -batch boh@dev2null.website "
+        "\"echo zusammen2019 | sudo -S docker stop copilot-mcp-bridge\"\n"
+        "  2. python test_bridge.py\n"
+        "  3. (restart VPS after test)\n"
+        "\nOr use --force to skip this check (only if VPS container is actually stopped).\n"
     )
     NO_WAIT = True
 
 print(f"Config OK — bot_token: ...{cfg.bot_token[-8:]}, chat_id: {cfg.chat_id}")
-print(f"Mode: {'notification-only (no-wait)' if NO_WAIT else 'full interactive'}")
+print(f"VPS active: {_vps_active}  |  Mode: {'notification-only (no-wait)' if NO_WAIT else 'full interactive'}")
 bridge = TelegramBridge(cfg)
 
 # --- Test 1: notification (no reply needed) ---

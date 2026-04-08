@@ -1,3 +1,17 @@
 {
-  "chat.promptFiles": true
+  "chat.promptFiles": true,
+  "chat.notifyWindowOnConfirmation": "windowNotFocused",
+  "chat.hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/sulme/AppData/Local/Programs/Python/Python312/python.exe ${workspaceFolder}/tools/copilot_telegram_bridge/scripts/telegram_pre_tool_use.py"
+          }
+        ]
+      }
+    ]
+  }
 }

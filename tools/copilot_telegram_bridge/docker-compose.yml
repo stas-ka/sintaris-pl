@@ -12,9 +12,11 @@ services:
       - TELEGRAM_TIMEOUT_SECONDS=${TELEGRAM_TIMEOUT_SECONDS:-900}
       - TELEGRAM_LONG_POLL_SECONDS=${TELEGRAM_LONG_POLL_SECONDS:-20}
       - MCP_TRANSPORT=sse
-      - MCP_HOST=127.0.0.1
+      # 0.0.0.0 so uvicorn accepts traffic from the Docker bridge interface.
+      # External access is still restricted to VPS localhost via the port binding below.
+      - MCP_HOST=0.0.0.0
       - MCP_PORT=3001
-    # Bind port 3001 only to VPS localhost — accessible via SSH tunnel
+    # Bind port 3001 only to VPS localhost — accessible via SSH tunnel only
     ports:
       - "127.0.0.1:3001:3001"
     network_mode: bridge
@@ -24,7 +26,7 @@ services:
         max-size: "5m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3001/sse', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3001/sse', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
