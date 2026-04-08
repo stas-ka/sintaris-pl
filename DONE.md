@@ -31,6 +31,15 @@
 | 0.20 Web TTS hardcoded Piper path | Fixed web TTS to use `PIPER_BIN` config constant instead of hardcoded path | v2026.3.29+4 |
 | 0.21 Voice pipeline ignored conversation history | `bot_voice.py` called bare `ask_llm()` (stateless); fixed to use `ask_llm_with_history()` with system message + long-term memory + history + `_voice_user_turn_content()`; both user and assistant turns now saved to `chat_history` via `add_to_history()`; T59 regression test added | v2026.3.30+5 |
 | 0.22 LLM context contamination (1837 year anchoring) | Added LLM call context trace tool: `llm_calls` table extended (model, temperature, system_chars, history_chars, rag_chunks, response_preview, context_snapshot); `db_get_llm_trace()`; Admin → LLM → 🔍 Context Trace panel shows last 5 calls with full breakdown; voice pipeline now logs to `llm_calls`; T60 (12 checks) | v2026.3.30+6 |
+| 0.23 System chat "Could not generate a command" | Code rewritten: `_extract_bash_cmd()`, `_ask_llm_strict()`, role-aware RBAC guards; old error message eliminated | v2026.3.30 |
+| 0.24 Delete personal context (memory) via Profile | `profile_clear_memory` button + handler wired in `profile.yaml` + `telegram_menu_bot.py` | v2026.3.30+ |
+| 0.25 Static texts hardcoded in Python | `bot_calendar.py` `cal_event_saved_prefix`, `bot_voice.py` `audio_interrupted` + `voice_note_msg` moved to `strings.json`; T55 regression test | v2026.3.30+1 |
+| 0.26 [BOT CAPABILITIES] tag not resolved in LLM response | `BOT_CAPABILITIES` placeholder replaced with resolved capabilities text at `ask_llm_with_history()` call time; tag no longer leaks to users | v2026.4.x |
+| 0.27 load_system_docs.py crash — `vec_embeddings` relation missing | `upsert_chunk_text()` in `store_postgres.py` writes to `doc_chunks` when `_has_vec=False`; no crash when pgvector extension unavailable | v2026.4.x |
+| 0.28 SintAItion voice LLM silently using Ollama (12–15 s lag) | `ask_llm_with_history()` defaulted to `use_case="chat"`; `per_func["chat"]="ollama"` routed voice to Ollama. Fix: `use_case="voice"` in voice pipeline | v2026.4.23 |
+| 0.29 `active_model.txt` with `openai/` prefix → HTTP 400 → 14 s Ollama fallback | `get_active_model()` strips `provider/` prefix before API call | v2026.4.22 |
+| 0.30 FasterWhisper thread cap silently ignored env var | Cap applied only on auto-detect; explicit `FASTER_WHISPER_THREADS` value now honoured | v2026.4.19 |
+| 0.31 Embedding pre-warm missing — first RAG call cost 2–3 s | `_prewarm_embeddings()` background thread at startup; model warm before first request | v2026.4.20 |
 ---
 
 
@@ -299,3 +308,87 @@ Per-user sliding window history stored in SQLite `chat_history` table; injected 
 
 ---
 
+## 4. Content & Knowledge ✅ All done (v2026.4.41)
+
+- [x] Timeout monitoring — FTS search enforced with `rag_timeout` via `concurrent.futures` (v2026.3.30+4)
+- [x] Settings for LLM+RAG configurable via Admin Panel: top-K, chunk size, timeout, **temperature** (0.0–2.0) editable at runtime (v2026.3.30+4)
+- [x] Settings incl. credentials to connect to remote RAG MCP service via Admin panel (v2026.4.38, Admin → RAG → Remote MCP)
+- [x] Information for the user about upload restrictions (Max 20 MB shown in docs menu; `MAX_DOC_SIZE_MB=20` constant) (v2026.3.30+4)
+- [x] `store.log_rag_activity()` after every FTS retrieval — RAG log populated; Admin Panel shows last 20 queries (v2026.3.30+4)
+- [x] After uploading: save parse/chunk/embed stats in DB; Admin → RAG → 📄 Doc Stats panel (v2026.4.41)
+
+### 4.1 Local RAG Knowledge Base ✅ Implemented (v2026.3.43 / v2026.4.14)
+
+- [x] RAG on/off toggle in Admin Panel via `RAG_FLAG_FILE`; `RAG_ENABLED`, `RAG_TOP_K`, `RAG_CHUNK_SIZE` constants; admin callbacks wired (v2026.3.43)
+- [x] Configurable RAG settings from Admin Panel UI: top-K, chunk size, timeout, temperature at runtime (v2026.3.30+4)
+- [x] Local LLM for RAG: `LLM_PROVIDER=local` via llama.cpp (v2026.3.32)
+- [x] FTS5-only RAG pipeline: `_chunk_text()` (512-char) → `doc_chunks` FTS5 table → `search_fts()` → LLM injection (v2026.3.43)
+- [x] `install_sqlite_vec.sh` + `vec_embeddings` table (sqlite-vec, 384-dim) + `upsert_embedding()` / `search_similar()` / `delete_embeddings()` in `store_sqlite.py` (v2026.4.13)
+- [x] `all-MiniLM-L6-v2` embeddings via ONNX Runtime: `EMBED_MODEL` in `bot_config.py`; `EmbeddingService` in `bot_embeddings.py` (v2026.4.14)
+- [x] pgvector HNSW — `ALTER TABLE ADD COLUMN embedding vector(384)` + HNSW index (`m=16, ef_construction=64`) in `store_postgres._init_schema`, gated on `_has_vec` (v2026.4.39)
+- [x] Timeout monitoring via `concurrent.futures` with `RAG_TIMEOUT` constant (v2026.3.30+4)
+- [x] RAG activity log (`rag_log` table) + Admin Panel: last 20 queries + chunks injected (v2026.3.30+4)
+
+### 4.2 Remote RAG Service (MCP) ✅ Implemented (v2026.4.1 / v2026.4.38)
+
+- [x] Expose `search_knowledge()` as MCP tool — `/mcp/search` endpoint in `bot_web.py` (Bearer-token auth) (v2026.4.1)
+- [x] Connect to external MCP RAG services via `MCP_REMOTE_URL` — `bot_mcp_client.py` (v2026.4.1)
+- [x] Circuit breaker + timeout (10 s default); 3 failures → 5 min cooldown; fallback to local KB (v2026.4.1)
+- [x] Credentials and endpoint URL configurable in Admin Panel — Admin → RAG → 🔌 Remote MCP; stored in `system_settings`; applied at runtime (v2026.4.38)
+
+---
+
+## 6.1 Logging & Monitoring ✅ Implemented (v2026.3.42 / v2026.4.40)
+
+- [x] Structured log categories: `assistant.log`, `security.log`, `voice.log`, `datastore.log` (`src/core/bot_logger.py`)
+- [x] Admin Telegram UI: 📊 Logs button — tail last 50 lines per category
+- [x] Log rotation (`src/services/taris-logrotate`) — daily, 7 days, compress, copytruncate
+- [x] Telegram alert handler: CRITICAL/ERROR forwarded to admins on startup
+- [x] `taris-download-logs` skill — `.github/skills/taris-download-logs/SKILL.md`; covers 5 log categories × 4 targets (v2026.4.40)
+
+---
+
+## 10.1 Short-, Middle- and Long-term Memories ✅ Implemented (v2026.3.30+5 / v2026.3.31)
+
+- [x] Short-term memory: sliding window in `_conversation_history` (in-memory + `chat_history` DB); size: `CONVERSATION_HISTORY_MAX` (default 15) (v2026.3.30)
+- [x] Mid-term summarization: `_summarize_session_async()` triggered at `CONV_SUMMARY_THRESHOLD` (v2026.3.30+5)
+- [x] Long-term compaction: mid→long at `CONV_MID_MAX`; stored in `conversation_summaries` table (v2026.3.30+5)
+- [x] Clearing all memory tiers: `clear_history()` + `profile_btn_clear_all_memory` button (v2026.3.30+5)
+- [x] Memory parameters configurable in Admin panel: `system_settings` table; Admin → Memory Settings (v2026.3.31)
+- [x] Memory context injection togglable per user: `memory_enabled` in `user_prefs`; Profile toggle (v2026.3.31)
+
+---
+
+## 19.4 OpenClaw Pending Items ✅ All done (v2026.3.29+10 / v2026.4.31)
+
+- [x] **Install Ollama** — v0.18.3 on SintAItion; qwen3:14b fully in VRAM (14.8 GB AMD Radeon 890M); `~/.config/systemd/user/ollama.service`; `LLM_PROVIDER=openai`, `LLM_FALLBACK_PROVIDER=ollama` (v2026.3.29+10)
+- [x] **Upgrade faster-whisper model** — `small` model (244M params, WER ~5–8%); `FASTER_WHISPER_THREADS=8`; `setup_voice_openclaw.sh` default updated (v2026.3.29+10)
+- [x] **STT/LLM switch in admin menu** — `STT_PROVIDER` toggle (Vosk/FW) + FW model selector in Admin → Voice Config; LLM per-function switch in Admin → LLM Settings (v2026.3.29+8)
+- [x] `migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL; 316 rows migrated; idempotent (v2026.4.31)
+- [x] pgvector HNSW + full RAG pipeline on PostgreSQL — `search_similar()` + HNSW in `store_postgres.py`; hybrid RRF in `bot_rag.py` (v2026.4.13)
+- [x] Screen DSL: `visible_variants: [openclaw]` — implemented in `screen_loader.py`; used in `admin_menu.yaml` (v2026.4.13)
+
+---
+
+## 25.4 Embedding Service ✅ Implemented (v2026.4.13)
+
+`src/core/bot_embeddings.py` — `EmbeddingService`: fastembed-first, sentence-transformers fallback; `EMBED_MODEL` / `EMBED_KEEP_RESIDENT` / `EMBED_DIMENSION` constants in `bot_config.py`; wired into `bot_documents.py`; `src/setup/install_embedding_model.sh`; `bot.env.example` updated.
+
+## 25.5 Voice Pipeline + NPU Acceleration ✅ Extended (v2026.3.28-openclaw / v2026.4.13)
+
+- `STT_PROVIDER` env var (`vosk` | `faster_whisper` | `whisper_cpp`); auto-defaults to `faster_whisper` when `DEVICE_VARIANT=openclaw`
+- `FASTER_WHISPER_MODEL/DEVICE/COMPUTE` constants; `faster_whisper_stt` voice opt (default True for openclaw)
+- `_stt_faster_whisper()` in `bot_voice.py` — CTranslate2 backend, built-in VAD, language detection
+- `voice_assistant.py` — `record_and_recognize_faster_whisper()` + STT routing by `STT_PROVIDER`
+- `setup_voice_openclaw.sh` — step 6/6 installs faster-whisper + pre-downloads base model
+- `src/tests/benchmark_stt.py` — Vosk vs faster-whisper benchmark (WER, RTF, latency)
+- `VOICE_BACKEND=cpu|cuda|openvino` + whisper-cpp `--device cuda` support (v2026.4.13)
+
+## 25.6 RAG Phases A, B, C, D ✅ Implemented
+
+- [x] **Phase A — Memory System:** Tiered short/mid/long-term memory in `bot_state.py`; `conversation_summaries` DB table; `_summarize_session_async()` + `get_memory_context()`; per-user toggle + Admin panel config (v2026.3.31)
+- [x] **Phase B — Enhanced RAG:** FTS5 BM25 + EmbeddingService (ONNX) + pgvector HNSW + `classify_query()` adaptive routing + RRF fusion (k=60) + hardware-tier detection + RAG monitoring dashboard + sqlite-vec for PicoClaw (v2026.3.30–v2026.4.13)
+- [x] **Phase C — Document Management:** Upload/chunk pipeline + document sharing (`is_shared` flag) + admin sharing controls + `rag_settings` + deduplication + PyMuPDF + per-user rag_settings + admin-only documents (`is_shared=2`) + MCP Remote RAG admin UI (v2026.3.30–v2026.4.38) _(fine-grained per-user ACL tracked in §27.4)_
+- [x] **Phase D — Remote RAG + MCP:** `/mcp/search` endpoint + `bot_mcp_client.py` circuit breaker + RRF merge (v2026.4.1)
+
+---
