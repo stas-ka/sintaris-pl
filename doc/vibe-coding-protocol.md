@@ -1264,3 +1264,16 @@ Every ~3 months, measure baseline health:
 | ~11:00 UTC | Fixed 409 Conflict: replaced dual-poller design with unified update dispatcher (single getUpdates thread, threading.Event mailboxes per token); updated test_bridge.py to auto-skip wait tests when VPS active | 4 | 6 | claude-sonnet-4.6 | telegram_bridge.py, test_bridge.py | done |
 
 **Session 65 total: VPS bridge deployed, /task feature added, 409 Conflict fixed, pushed f63ced2 to master ✅**
+
+### Session 66 — 2026-04-08 (UTC)
+
+**Focus:** MCP bridge architectural fix — singleton bridge pattern + Docker 0.0.0.0 binding
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| ~12:00 UTC | Fixed architectural bug: mcp_server.py created new TelegramBridge per tool call in SSE mode (no dispatcher → 409); replaced with _get_bridge() singleton; SSE __main__ block sets singleton before mcp.run() | 3 | 4 | claude-sonnet-4.6 | mcp_server.py | done |
+| ~12:30 UTC | Fixed Docker binding bug: MCP_HOST=127.0.0.1 inside container rejected tunnel traffic (via 172.17.0.1); changed to 0.0.0.0; deployed to VPS; Test 1 confirmed PASS | 3 | 3 | claude-sonnet-4.6 | docker-compose.yml | done |
+| ~13:00 UTC | Identified mystery 409 source: chat.hooks.PreToolUse in .vscode/settings.json runs telegram_pre_tool_use.py before every VS Code Copilot tool call; each invocation polls getUpdates independently | 2 | 1 | claude-sonnet-4.6 | settings.json | done |
+| ~13:15 UTC | Committed and pushed all fixes to master (commit 40bddbc) | 1 | 1 | claude-sonnet-4.6 | mcp_server.py, docker-compose.yml, test_bridge.py, COPILOT_TELEGRAM_MCP_BRIDGE.md, settings.json | done |
+
+**Session 66 total: singleton fix + Docker 0.0.0.0, mystery poller identified, all committed to master ✅**
