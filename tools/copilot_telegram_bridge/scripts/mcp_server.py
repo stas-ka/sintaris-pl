@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +29,39 @@ mcp = FastMCP("telegramBridge")
 # In SSE mode this is initialised with the dispatcher before mcp.run(transport="sse").
 # In stdio mode it is created lazily (no dispatcher, falls back to polling).
 _bridge_singleton: TelegramBridge | None = None
+
+
+# ---------------------------------------------------------------------------
+# Minimal HTTP task-queue API (SSE mode only)
+# Exposes GET /tasks/pop and GET /tasks/peek so local stdio clients can
+# read the task queue that the VPS dispatcher writes to.
+# ---------------------------------------------------------------------------
+
+class _TaskAPIHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/tasks/pop":
+            task = pop_task()
+            body = json.dumps(task if task is not None else {"status": "none"}).encode()
+        elif self.path == "/tasks/peek":
+            body = json.dumps(peek_task_queue()).encode()
+        else:
+            self.send_response(404)
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args: Any) -> None:  # suppress access logs
+        pass
+
+
+def _start_task_api_server(port: int) -> None:
+    """Start the task HTTP API server in a daemon thread (SSE mode only)."""
+    server = HTTPServer(("0.0.0.0", port), _TaskAPIHandler)
+    threading.Thread(target=server.serve_forever, daemon=True, name="task-api").start()
 
 
 def _missing_config_response() -> dict[str, Any]:
@@ -143,6 +179,25 @@ def send_telegram_notification(message: str) -> dict[str, Any]:
     )
 )
 def get_pending_task() -> dict[str, Any]:
+    # If the VPS is running the dispatcher (stdio mode on local machine),
+    # the task was queued inside the VPS container — fetch it via the task HTTP API.
+    vps_tasks_url = os.environ.get("VPS_TASKS_URL", "").rstrip("/")
+    if vps_tasks_url:
+        try:
+            import urllib.request as _req
+            with _req.urlopen(f"{vps_tasks_url}/tasks/pop", timeout=5) as resp:
+                data = json.loads(resp.read())
+            if data.get("status") == "none" or data is None:
+                return {"status": "none"}
+            return {
+                "status": "task",
+                "text": data.get("text", ""),
+                "from_user": data.get("from_user", "telegram"),
+                "queued_at": data.get("ts", 0),
+            }
+        except Exception as exc:
+            return {"status": "error", "error": f"VPS task API unreachable: {exc}"}
+
     task = pop_task()
     if task is None:
         return {"status": "none"}
@@ -179,6 +234,10 @@ if __name__ == "__main__":
             # share it instead of creating conflicting per-call instances.
             _bridge_singleton = TelegramBridge(config)
             _bridge_singleton.start_task_listener()
+        # Start task HTTP API alongside the SSE server so local stdio clients
+        # can pop tasks queued by the VPS dispatcher (avoids cross-container file mismatch).
+        task_api_port = int(os.environ.get("TASK_API_PORT", "3002"))
+        _start_task_api_server(task_api_port)
         mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
         mcp.settings.port = int(os.environ.get("MCP_PORT", "3001"))
         mcp.run(transport="sse")
