@@ -1251,6 +1251,16 @@ Every ~3 months, measure baseline health:
 |---|---|---|---|---|---|---|
 | 04:49 UTC | Verified telegramBridge MCP server already configured in .vscode/mcp.json as stdio server. Explained VS Code auto-starts it; no manual start needed. Confirmed all prior session todos done (d37e431, 329a8b6, 4a5cda9 all pushed to master). | 1 | 1 | claude-sonnet-4.6 | doc/vibe-coding-protocol.md | done |
 
-**Session 64 total: 1 inquiry, 1 turn — MCP bridge status confirmed, all todos resolved ✅**
-
 ---
+
+### Session 65 — 2026-04-08 (UTC)
+
+**Focus:** VPS MCP bridge — unified dispatcher, /task command, 409 Conflict fix
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| ~10:00 UTC | Deployed Telegram MCP bridge to VPS dev2null.website; Docker container copilot-mcp-bridge running; SSE on :3001 via SSH tunnel | 3 | prior | claude-sonnet-4.6 | docker-compose.yml, Dockerfile, deploy-vps.sh | done |
+| ~10:30 UTC | Implemented /task command + get_pending_task / complete_task MCP tools; file-based task queue | 4 | prior | claude-sonnet-4.6 | mcp_server.py, telegram_bridge.py | done |
+| ~11:00 UTC | Fixed 409 Conflict: replaced dual-poller design with unified update dispatcher (single getUpdates thread, threading.Event mailboxes per token); updated test_bridge.py to auto-skip wait tests when VPS active | 4 | 6 | claude-sonnet-4.6 | telegram_bridge.py, test_bridge.py | done |
+
+**Session 65 total: VPS bridge deployed, /task feature added, 409 Conflict fixed, pushed f63ced2 to master ✅**
