@@ -1277,3 +1277,13 @@ Every ~3 months, measure baseline health:
 | ~13:15 UTC | Committed and pushed all fixes to master (commit 40bddbc) | 1 | 1 | claude-sonnet-4.6 | mcp_server.py, docker-compose.yml, test_bridge.py, COPILOT_TELEGRAM_MCP_BRIDGE.md, settings.json | done |
 
 **Session 66 total: singleton fix + Docker 0.0.0.0, mystery poller identified, all committed to master ✅**
+
+### Session 67 — 2026-04-08 (UTC)
+
+**Focus:** Fix missed call site from Session 66 refactor
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 17:13 UTC | Fixed send_telegram_notification() calling _make_bridge() (deleted in 40bddbc); should be _get_bridge(); caused NameError at runtime | 1 | 2 | claude-sonnet-4.6 | mcp_server.py | done |
+
+**Session 67 total: 1 bugfix (missed call site), 2 turns ✅**
