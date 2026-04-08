@@ -2,12 +2,39 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "MCP Tunnel + Task Watcher",
+            "label": "Task Watcher (auto-start)",
             "type": "shell",
             "command": "powershell",
             "args": [
                 "-ExecutionPolicy", "Bypass",
-                "-File", "${workspaceFolder}/tools/copilot_telegram_bridge/mcp-tunnel.ps1"
+                "-File", "${workspaceFolder}/tools/copilot_telegram_bridge/task-watcher.ps1"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": { "regexp": "^$" },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Taris Task Watcher",
+                    "endsPattern": "Connected|watching for tasks"
+                }
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated",
+                "label": "Task Watcher"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "MCP Tunnel (manual)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}/tools/copilot_telegram_bridge/mcp-tunnel.ps1",
+                "-NoWatch"
             ],
             "isBackground": true,
             "problemMatcher": {
@@ -15,16 +42,13 @@
                 "background": {
                     "activeOnStart": true,
                     "beginsPattern": "Opening SSH tunnel",
-                    "endsPattern": "Tunnel OK|watching for tasks"
+                    "endsPattern": "Tunnel OK"
                 }
             },
             "presentation": {
-                "reveal": "silent",
+                "reveal": "always",
                 "panel": "dedicated",
                 "label": "MCP Tunnel"
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
             }
         }
     ]
