@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -14,6 +15,8 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
+
+_log = logging.getLogger("telegram_bridge")
 
 
 DEFAULT_TIMEOUT_SECONDS = 900
@@ -231,12 +234,14 @@ class TelegramBridge:
 
     def _dispatcher_loop(self) -> None:
         poll_seconds = self.config.long_poll_seconds
+        _log.info("Telegram dispatcher started (poll=%ds)", poll_seconds)
         while True:
             try:
                 updates = self._fetch_updates(timeout_seconds=poll_seconds)
                 for update in updates:
                     self._dispatch(update)
-            except Exception:
+            except Exception as exc:
+                _log.warning("Dispatcher error: %s — retrying in 5s", exc)
                 time.sleep(5)
 
     def _fetch_updates(self, timeout_seconds: int) -> list[dict[str, Any]]:
@@ -298,14 +303,16 @@ class TelegramBridge:
         # --- Task queue: /task <text> ---
         if command == "task":
             task_text = remainder.strip() if remainder.strip() else text[len("/task"):].strip()
+            _log.info("/task received: %r — queuing", task_text[:80])
             if task_text:
                 queue_task(task_text, from_user=str(from_user))
+                _log.info("Task queued to %s", _TASK_QUEUE_FILE)
                 try:
                     self._send_text(
                         f"✅ Task queued for Copilot:\n_{task_text}_\n\nCopilot will pick it up on next session start.",
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    _log.warning("Failed to send task-queued confirmation: %s", exc)
             return
 
         # --- Token-based response routing ---
@@ -637,3 +644,17 @@ class TelegramBridge:
         self.start_dispatcher()
         # Return a dummy thread reference for backward compat
         return threading.current_thread()
+
+    # ------------------------------------------------------------------
+    # Webhook management
+    # ------------------------------------------------------------------
+
+    def set_webhook(self, url: str) -> None:
+        """Register a Telegram webhook URL (disables polling)."""
+        result = self._api("setWebhook", {"url": url, "drop_pending_updates": True})
+        _log.info("Webhook registered at %s: %s", url, result)
+
+    def delete_webhook(self) -> None:
+        """Remove the Telegram webhook (reverts to polling)."""
+        result = self._api("deleteWebhook", {"drop_pending_updates": True})
+        _log.info("Webhook deleted: %s", result)

@@ -135,3 +135,56 @@ else:
     print(f"  Result: answer='{answer}'")
 
 print("\n--- All tests done ---")
+
+# --- Test 4: /task queue (VPS task API) ---
+print("\n[4/4] Testing /task queue via VPS HTTP API...")
+vps_tasks_url = None
+# Check if tunnel is up (port 3002)
+try:
+    import urllib.request as _req
+    with _req.urlopen("http://127.0.0.1:3002/tasks/peek", timeout=3) as r:
+        if r.status == 200:
+            vps_tasks_url = "http://127.0.0.1:3002"
+except Exception:
+    pass
+
+if vps_tasks_url is None:
+    print("  SKIPPED — task API not reachable at localhost:3002 (start mcp-tunnel.ps1 first)")
+else:
+    import json as _json
+    # 1. Confirm queue starts empty (or drain it)
+    with _req.urlopen(f"{vps_tasks_url}/tasks/peek", timeout=5) as r:
+        before = _json.loads(r.read())
+    print(f"  Queue before: {len(before)} item(s)")
+
+    # 2. Send /task via Telegram and wait for it to appear in queue
+    print("  Sending /task test message via Telegram bot API...")
+    _tg_url = f"https://api.telegram.org/bot{cfg.bot_token}/sendMessage"
+    _payload = _json.dumps({"chat_id": cfg.chat_id, "text": "/task [Copilot Test 4/4] verify task queue"}).encode()
+    _req2 = _req.Request(_tg_url, data=_payload, headers={"Content-Type": "application/json"}, method="POST")
+    with _req.urlopen(_req2, timeout=10) as r:
+        _resp = _json.loads(r.read())
+    print(f"  Message sent (id={_resp['result']['message_id']}). Waiting 25s for VPS dispatcher...")
+
+    # 3. Wait up to 25s for VPS dispatcher to process
+    deadline = time.time() + 25
+    queued = None
+    while time.time() < deadline:
+        time.sleep(2)
+        with _req.urlopen(f"{vps_tasks_url}/tasks/peek", timeout=5) as r:
+            tasks = _json.loads(r.read())
+        if tasks:
+            queued = tasks[0]
+            break
+
+    if queued:
+        print(f"  OK — task appeared in queue: {queued['text'][:60]!r}")
+        # Pop it
+        with _req.urlopen(f"{vps_tasks_url}/tasks/pop", timeout=5) as r:
+            popped = _json.loads(r.read())
+        print(f"  OK — popped: status={popped.get('status') or 'task'}, text={str(popped.get('text',''))[:40]!r}")
+    else:
+        print("  FAIL — task did NOT appear in queue within 25s")
+        print("  Check VPS container logs: plink ... 'sudo docker logs copilot-mcp-bridge --tail 20'")
+
+print("\n=== Done ===")

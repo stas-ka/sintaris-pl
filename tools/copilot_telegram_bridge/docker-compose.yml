@@ -19,6 +19,9 @@ services:
       - TASK_API_PORT=3002
       # Persist task queue to a named volume so /task survives container restarts.
       - TASK_QUEUE_FILE=/data/taris_tasks.json
+      # Set to https://<domain>/tgwebhook to enable webhook mode (disables polling, fixes 409).
+      # Leave empty to use long-polling (default).
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
     volumes:
       - task-queue:/data
     # Bind ports only to VPS localhost — accessible via SSH tunnel only

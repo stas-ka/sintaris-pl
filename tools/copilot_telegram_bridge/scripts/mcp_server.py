@@ -54,6 +54,36 @@ class _TaskAPIHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self) -> None:  # noqa: N802
+        """Handle Telegram webhook POST updates at /tgwebhook."""
+        if self.path != "/tgwebhook":
+            self.send_response(404)
+            self.end_headers()
+            return
+        try:
+            raw_len = self.headers.get("Content-Length")
+            length = int(raw_len) if raw_len else 0
+            body = self.rfile.read(length) if length > 0 else self.rfile.read()
+            update = json.loads(body)
+        except Exception:
+            self.send_response(400)
+            self.end_headers()
+            return
+        # Dispatch asynchronously so we return 200 to Telegram immediately
+        if _bridge_singleton is not None:
+            threading.Thread(
+                target=_bridge_singleton._dispatch,
+                args=(update,),
+                daemon=True,
+                name="wh-dispatch",
+            ).start()
+        resp = b'{"ok":true}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(resp)))
+        self.end_headers()
+        self.wfile.write(resp)
+
     def log_message(self, *_args: Any) -> None:  # suppress access logs
         pass
 
@@ -226,16 +256,27 @@ def complete_task(summary: str) -> dict[str, Any]:
     return {"status": "sent", "message_ids": message_ids}
 
 if __name__ == "__main__":
+    import logging as _logging
+    _logging.basicConfig(level=_logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "sse":
         config = BridgeConfig.from_env(cwd=os.getcwd())
+        webhook_url = os.environ.get("TELEGRAM_WEBHOOK_URL", "").strip()
         if config.is_ready():
             # Pre-create the singleton with the dispatcher so all tool calls
             # share it instead of creating conflicting per-call instances.
             _bridge_singleton = TelegramBridge(config)
-            _bridge_singleton.start_task_listener()
+            if webhook_url:
+                # Webhook mode: Telegram pushes updates — no polling, no 409.
+                _bridge_singleton.set_webhook(webhook_url)
+                _logging.getLogger("mcp_server").info(
+                    "Webhook mode active (%s) — polling disabled", webhook_url
+                )
+            else:
+                _bridge_singleton.start_task_listener()
         # Start task HTTP API alongside the SSE server so local stdio clients
         # can pop tasks queued by the VPS dispatcher (avoids cross-container file mismatch).
+        # Also serves POST /tgwebhook when in webhook mode.
         task_api_port = int(os.environ.get("TASK_API_PORT", "3002"))
         _start_task_api_server(task_api_port)
         mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
