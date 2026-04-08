@@ -1,12 +1,14 @@
 # task-watcher.ps1 -- Real-time Telegram task watcher for VS Code Copilot
 #
-# Polls the VPS task queue (via SSH tunnel on port 3002) every few seconds.
+# Polls the VPS task queue directly over HTTPS (primary) or via SSH tunnel
+# (fallback, when mcp-tunnel.ps1 is running on port 3002).
 # When a new /task arrives from Telegram, opens VS Code Copilot Chat with
 # the task text pre-filled and auto-submits it so Copilot starts immediately.
 #
 # Prerequisites:
-#   1. mcp-tunnel.ps1 must be running (port 3002 forwarded)
-#   2. VS Code with github.copilot-chat extension must be open
+#   1. VS Code with github.copilot-chat extension must be open
+#   2. .env file in the same directory (TELEGRAM_BOT_TOKEN, VPS_MCP_HOST)
+#      -- if missing, falls back to tunnel-only mode
 #
 # Run: .\task-watcher.ps1
 # Stop: Ctrl+C
@@ -17,8 +19,29 @@ param(
     [switch]$NoAutoSubmit            # show notification only, don't press Enter
 )
 
-$TASKS_PEEK_URL  = "http://127.0.0.1:3002/tasks/peek"
-$VSCODE_CHAT_URI = "vscode://GitHub.copilot-chat/chat?query="
+# Load .env from same directory (TELEGRAM_BOT_TOKEN, VPS_MCP_HOST)
+$envFile = Join-Path $PSScriptRoot ".env"
+$botToken = ""
+$vpsHost  = "dev2null.website"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*TELEGRAM_BOT_TOKEN\s*=\s*(.+)') { $botToken = $Matches[1].Trim() }
+        if ($_ -match '^\s*VPS_MCP_HOST\s*=\s*(.+)')       { $vpsHost  = $Matches[1].Trim() }
+    }
+}
+
+# Primary URL: HTTPS direct (no tunnel needed); fallback: SSH tunnel
+$TASKS_PEEK_HTTPS   = if ($botToken) { "https://$vpsHost/tasks/peek?token=$botToken" } else { "" }
+$TASKS_PEEK_TUNNEL  = "http://127.0.0.1:3002/tasks/peek"
+$VSCODE_CHAT_URI    = "vscode://GitHub.copilot-chat/chat?query="
+
+# Determine active polling URL at startup
+$TASKS_PEEK_URL = $TASKS_PEEK_HTTPS
+$usingHTTPS     = $true
+if (-not $TASKS_PEEK_HTTPS) {
+    $TASKS_PEEK_URL = $TASKS_PEEK_TUNNEL
+    $usingHTTPS     = $false
+}
 
 $lastTriggeredTs = $null
 $pollOk          = $false
@@ -69,8 +92,14 @@ Write-Host ""
 Write-Host "+---------------------------------------------------+" -ForegroundColor Cyan
 Write-Host "|  Taris Task Watcher - live Copilot task trigger   |" -ForegroundColor Cyan
 Write-Host "+---------------------------------------------------+" -ForegroundColor Cyan
-Write-Host "  Polling http://127.0.0.1:3002 every ${PollInterval}s"
-Write-Host "  Requires: mcp-tunnel.ps1 running + VS Code open"
+if ($usingHTTPS) {
+    Write-Host "  Primary: HTTPS https://$vpsHost (no tunnel needed)" -ForegroundColor Green
+    Write-Host "  Fallback: SSH tunnel http://127.0.0.1:3002"
+} else {
+    Write-Host "  Mode: SSH tunnel only (no TELEGRAM_BOT_TOKEN in .env)" -ForegroundColor Yellow
+    Write-Host "  Requires: mcp-tunnel.ps1 running"
+}
+Write-Host "  Polling every ${PollInterval}s"
 if ($NoAutoSubmit) {
     Write-Host "  Auto-submit: OFF (press Enter in Copilot chat manually)"
 } else {
@@ -80,11 +109,30 @@ Write-Host "  Press Ctrl+C to stop"
 Write-Host ""
 
 while ($true) {
-    try {
-        $resp = Invoke-RestMethod -Uri $TASKS_PEEK_URL -TimeoutSec 3 -ErrorAction Stop
+    # Try primary URL first; if it fails and we have a tunnel fallback, try that
+    $activeUrl = $TASKS_PEEK_URL
+    $resp = $null
+    $fetchOk = $false
 
+    try {
+        $resp    = Invoke-RestMethod -Uri $activeUrl -TimeoutSec 3 -ErrorAction Stop
+        $fetchOk = $true
+    } catch {
+        if ($usingHTTPS -and $TASKS_PEEK_TUNNEL) {
+            # HTTPS failed — try tunnel fallback silently
+            try {
+                $resp    = Invoke-RestMethod -Uri $TASKS_PEEK_TUNNEL -TimeoutSec 2 -ErrorAction Stop
+                $fetchOk = $true
+                if ($pollOk) {
+                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] HTTPS unreachable, using tunnel fallback" -ForegroundColor Yellow
+                }
+            } catch { }
+        }
+    }
+
+    if ($fetchOk) {
         if (-not $pollOk) {
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Tunnel OK -- watching for tasks..." -ForegroundColor Green
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Connected -- watching for tasks..." -ForegroundColor Green
             $pollOk = $true
         }
 
@@ -104,12 +152,12 @@ while ($true) {
             Show-Toast "Copilot Task" "From @${sender}: $taskText"
             Open-CopilotTask $taskText
         }
-    } catch {
+    } else {
         if ($pollOk) {
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Tunnel lost -- waiting..." -ForegroundColor Yellow
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Connection lost -- retrying..." -ForegroundColor Yellow
             $pollOk = $false
         } else {
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Waiting for tunnel (mcp-tunnel.ps1)..." -ForegroundColor DarkGray
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Waiting for connection..." -ForegroundColor DarkGray
         }
     }
 

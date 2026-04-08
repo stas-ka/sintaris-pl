@@ -38,11 +38,41 @@ _bridge_singleton: TelegramBridge | None = None
 # ---------------------------------------------------------------------------
 
 class _TaskAPIHandler(BaseHTTPRequestHandler):
+    # Bot token used to authenticate remote callers (non-localhost requests).
+    # Set once at startup from the bridge config.
+    _auth_token: str | None = None
+
+    def _check_auth(self) -> bool:
+        """Return True if the request is allowed.
+
+        Localhost access is always allowed (tunnel / container-internal).
+        Remote access requires ?token=<BOT_TOKEN> query param.
+        """
+        client_host = self.client_address[0] if self.client_address else ""
+        if client_host in ("127.0.0.1", "::1", "localhost"):
+            return True
+        if not self._auth_token:
+            return False
+        # Parse ?token=... from path
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        provided = qs.get("token", [""])[0]
+        return provided == self._auth_token
+
+    def _clean_path(self) -> str:
+        """Return path without query string."""
+        return self.path.split("?")[0]
+
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/tasks/pop":
+        if not self._check_auth():
+            self.send_response(403)
+            self.end_headers()
+            return
+        path = self._clean_path()
+        if path == "/tasks/pop":
             task = pop_task()
             body = json.dumps(task if task is not None else {"status": "none"}).encode()
-        elif self.path == "/tasks/peek":
+        elif path == "/tasks/peek":
             body = json.dumps(peek_task_queue()).encode()
         else:
             self.send_response(404)
@@ -88,8 +118,9 @@ class _TaskAPIHandler(BaseHTTPRequestHandler):
         pass
 
 
-def _start_task_api_server(port: int) -> None:
+def _start_task_api_server(port: int, auth_token: str | None = None) -> None:
     """Start the task HTTP API server in a daemon thread (SSE mode only)."""
+    _TaskAPIHandler._auth_token = auth_token
     server = HTTPServer(("0.0.0.0", port), _TaskAPIHandler)
     threading.Thread(target=server.serve_forever, daemon=True, name="task-api").start()
 
@@ -277,8 +308,9 @@ if __name__ == "__main__":
         # Start task HTTP API alongside the SSE server so local stdio clients
         # can pop tasks queued by the VPS dispatcher (avoids cross-container file mismatch).
         # Also serves POST /tgwebhook when in webhook mode.
+        # Pass bot token so remote callers (task-watcher over HTTPS) can authenticate.
         task_api_port = int(os.environ.get("TASK_API_PORT", "3002"))
-        _start_task_api_server(task_api_port)
+        _start_task_api_server(task_api_port, auth_token=config.bot_token if config.is_ready() else None)
         mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
         mcp.settings.port = int(os.environ.get("MCP_PORT", "3001"))
         mcp.run(transport="sse")
