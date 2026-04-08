@@ -5,6 +5,9 @@
 # When a new /task arrives from Telegram, opens VS Code Copilot Chat with
 # the task text pre-filled and auto-submits it so Copilot starts immediately.
 #
+# Uses /tasks/pop (consume-once) so each task triggers exactly once.
+# Tasks queued before the watcher started are skipped (stale).
+#
 # Prerequisites:
 #   1. VS Code with github.copilot-chat extension must be open
 #   2. .env file in the same directory (TELEGRAM_BOT_TOKEN, VPS_MCP_HOST)
@@ -16,7 +19,8 @@
 param(
     [int]$PollInterval = 5,          # seconds between queue checks
     [int]$SubmitDelayMs = 1200,      # ms to wait before auto-submitting
-    [switch]$NoAutoSubmit            # show notification only, don't press Enter
+    [switch]$NoAutoSubmit,           # show notification only, don't press Enter
+    [switch]$NoSkipStale             # also fire tasks queued before watcher started
 )
 
 # Load .env from same directory (TELEGRAM_BOT_TOKEN, VPS_MCP_HOST)
@@ -31,20 +35,21 @@ if (Test-Path $envFile) {
 }
 
 # Primary URL: HTTPS direct (no tunnel needed); fallback: SSH tunnel
-$TASKS_PEEK_HTTPS   = if ($botToken) { "https://$vpsHost/tasks/peek?token=$botToken" } else { "" }
-$TASKS_PEEK_TUNNEL  = "http://127.0.0.1:3002/tasks/peek"
-$VSCODE_CHAT_URI    = "vscode://GitHub.copilot-chat/chat?query="
+$TASKS_POP_HTTPS   = if ($botToken) { "https://$vpsHost/tasks/pop?token=$botToken" } else { "" }
+$TASKS_POP_TUNNEL  = "http://127.0.0.1:3002/tasks/pop"
+$VSCODE_CHAT_URI   = "vscode://GitHub.copilot-chat/chat?query="
 
 # Determine active polling URL at startup
-$TASKS_PEEK_URL = $TASKS_PEEK_HTTPS
-$usingHTTPS     = $true
-if (-not $TASKS_PEEK_HTTPS) {
-    $TASKS_PEEK_URL = $TASKS_PEEK_TUNNEL
-    $usingHTTPS     = $false
+$TASKS_POP_URL = $TASKS_POP_HTTPS
+$usingHTTPS    = $true
+if (-not $TASKS_POP_HTTPS) {
+    $TASKS_POP_URL = $TASKS_POP_TUNNEL
+    $usingHTTPS    = $false
 }
 
-$lastTriggeredTs = $null
-$pollOk          = $false
+# Only fire tasks newer than this timestamp (skip stale queue from before startup)
+$startupTs = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$pollOk    = $false
 
 function Show-Toast([string]$title, [string]$body) {
     # Windows 10/11 toast via WScript ballon or fallback console alert
@@ -99,7 +104,12 @@ if ($usingHTTPS) {
     Write-Host "  Mode: SSH tunnel only (no TELEGRAM_BOT_TOKEN in .env)" -ForegroundColor Yellow
     Write-Host "  Requires: mcp-tunnel.ps1 running"
 }
-Write-Host "  Polling every ${PollInterval}s"
+Write-Host "  Polling every ${PollInterval}s (consume-once via /tasks/pop)"
+if ($NoSkipStale) {
+    Write-Host "  Stale tasks: INCLUDED (will fire old queued tasks)"
+} else {
+    Write-Host "  Stale tasks: skipped (only tasks sent after watcher start)"
+}
 if ($NoAutoSubmit) {
     Write-Host "  Auto-submit: OFF (press Enter in Copilot chat manually)"
 } else {
@@ -110,18 +120,17 @@ Write-Host ""
 
 while ($true) {
     # Try primary URL first; if it fails and we have a tunnel fallback, try that
-    $activeUrl = $TASKS_PEEK_URL
-    $resp = $null
+    $resp    = $null
     $fetchOk = $false
 
     try {
-        $resp    = Invoke-RestMethod -Uri $activeUrl -TimeoutSec 3 -ErrorAction Stop
+        $resp    = Invoke-RestMethod -Uri $TASKS_POP_URL -TimeoutSec 3 -ErrorAction Stop
         $fetchOk = $true
     } catch {
-        if ($usingHTTPS -and $TASKS_PEEK_TUNNEL) {
-            # HTTPS failed — try tunnel fallback silently
+        if ($usingHTTPS -and $TASKS_POP_TUNNEL) {
+            # HTTPS failed -- try tunnel fallback silently
             try {
-                $resp    = Invoke-RestMethod -Uri $TASKS_PEEK_TUNNEL -TimeoutSec 2 -ErrorAction Stop
+                $resp    = Invoke-RestMethod -Uri $TASKS_POP_TUNNEL -TimeoutSec 2 -ErrorAction Stop
                 $fetchOk = $true
                 if ($pollOk) {
                     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] HTTPS unreachable, using tunnel fallback" -ForegroundColor Yellow
@@ -136,21 +145,23 @@ while ($true) {
             $pollOk = $true
         }
 
-        # peek returns a list; take the first (newest) item
-        $task = if ($resp -is [array]) { $resp[0] } else { $resp }
+        # pop returns {"status":"none"} when queue is empty, or {text, from_user, ts}
+        if ($resp -and $resp.text -and $resp.status -ne "none") {
+            $taskTs   = [double]$resp.ts
+            $taskText = $resp.text
+            $sender   = $resp.from_user
 
-        # New task if ts differs from last triggered
-        if ($task -and $task.text -and $task.ts -ne $null -and $task.ts -ne $lastTriggeredTs) {
-            $lastTriggeredTs = $task.ts
-            $taskText = $task.text
-            $sender   = $task.from_user
+            # Skip tasks queued before this watcher instance started (stale)
+            if (-not $NoSkipStale -and $taskTs -lt $startupTs) {
+                Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Skipping stale task from @${sender}: '$taskText' (queued before startup)" -ForegroundColor DarkGray
+            } else {
+                Write-Host ""
+                Write-Host "[$(Get-Date -Format 'HH:mm:ss')] *** NEW TASK from @$sender ***" -ForegroundColor Magenta
+                Write-Host "  Task: $taskText" -ForegroundColor White
 
-            Write-Host ""
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] *** NEW TASK from @$sender ***" -ForegroundColor Magenta
-            Write-Host "  Task: $taskText" -ForegroundColor White
-
-            Show-Toast "Copilot Task" "From @${sender}: $taskText"
-            Open-CopilotTask $taskText
+                Show-Toast "Copilot Task" "From @${sender}: $taskText"
+                Open-CopilotTask $taskText
+            }
         }
     } else {
         if ($pollOk) {
