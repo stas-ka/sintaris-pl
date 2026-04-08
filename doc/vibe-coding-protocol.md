@@ -1311,3 +1311,14 @@ Every ~3 months, measure baseline health:
 | ~17:50 UTC | Deploy to VPS: rebuild container, verify port 3002 /tasks/peek returns [] | 2 | 2 | claude-sonnet-4.6 | VPS docker | done |
 
 **Session 69 total: 1 feature (HTTP task API bridge), 8 turns — /task queue now accessible from local stdio ✅**
+
+### Session 70 — 2026-04-08 (UTC)
+
+**Focus:** Fix 409 Conflict root cause permanently + real-time /task trigger for VS Code Copilot
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 19:00 UTC | Webhook mode: replaced getUpdates polling with Telegram webhook (POST /tgwebhook) on dev2null.website HTTPS. Added do_POST handler, set_webhook/delete_webhook, TELEGRAM_WEBHOOK_URL env var. nginx patched. Test PASS. Commit d8f2ca0 | 3 | 8 | claude-sonnet-4.6 | mcp_server.py, telegram_bridge.py, docker-compose.yml, test_bridge.py | done |
+| 18:35 UTC | Real-time task trigger: task-watcher.ps1 polls /tasks/peek every 5s, detects new /task, opens vscode://GitHub.copilot-chat/chat?query=<task> URI + auto-submits via SendKeys. mcp-tunnel.ps1 updated to auto-start watcher. Tested live — task detected + VS Code opened immediately. Commit 4015676 | 3 | 5 | claude-sonnet-4.6 | tools/copilot_telegram_bridge/task-watcher.ps1, mcp-tunnel.ps1 | done |
+
+**Session 70 total: 2 features — 409 eliminated (webhook), /task now triggers VS Code Copilot immediately ✅**
