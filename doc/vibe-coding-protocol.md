@@ -1250,6 +1250,7 @@ Every ~3 months, measure baseline health:
 | Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
 |---|---|---|---|---|---|---|
 | 04:49 UTC | Verified telegramBridge MCP server already configured in .vscode/mcp.json as stdio server. Explained VS Code auto-starts it; no manual start needed. Confirmed all prior session todos done (d37e431, 329a8b6, 4a5cda9 all pushed to master). | 1 | 1 | claude-sonnet-4.6 | doc/vibe-coding-protocol.md | done |
+| 19:00 UTC | fix(mcp-bridge): Telegram webhook mode — eliminate 409 Conflict permanently | Root cause: competing external long-poller using same bot token (likely SintAItion old bridge). Fix: webhook on dev2null.website HTTPS. Added POST /tgwebhook handler to _TaskAPIHandler, set_webhook/delete_webhook to TelegramBridge, TELEGRAM_WEBHOOK_URL env var. nginx patched. Integration test PASSED. Webhook confirmed active at getWebhookInfo. Commit d8f2ca0 | 3 | 12 | claude-sonnet-4.6 | tools/copilot_telegram_bridge/scripts/mcp_server.py, telegram_bridge.py, test_bridge.py, docker-compose.yml | done |
 
 ---
 
