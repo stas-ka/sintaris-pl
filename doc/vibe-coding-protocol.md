@@ -1230,3 +1230,15 @@ Every ~3 months, measure baseline health:
 
 | 20:47 UTC | 19:30 UTC | 20:47 UTC | 77m | PI1 (OpenClawPI) UI tests + performance benchmarks | Fixed 2 issues: (1) HTTP→HTTPS redirect in base.html broke Playwright on plain-HTTP deployments — added https_available Jinja2 global in bot_web.py, conditional redirect in template; (2) conftest.py used removed _load_accounts/_save_accounts API — updated to current bot_auth API; added --no-sandbox browser_type_launch_args fixture. Created testuser on PI1. Result: 61/61 UI tests PASS. Storage+menu benchmarks run (voice skipped — PicoClaw). Tagged deploy/PI1-2026.4.36. | 3 | 3 | claude-sonnet-4.6 | src/bot_web.py, src/web/templates/base.html, src/tests/ui/conftest.py | done |
 | 13:00 UTC | | | | feat: taris-download-logs skill + TODO §6.1 done (v2026.4.40) | 1. Create .github/skills/taris-download-logs/SKILL.md (all 5 log categories, all 4 targets ts1/ts2/pi1/pi2); 2. Register skill in copilot-instructions.md; 3. TODO §6.1 download-logs item marked done; 4. Bump version 2026.4.40 | 2 | 2 | claude-sonnet-4.6 | .github/skills/taris-download-logs/SKILL.md, .github/copilot-instructions.md, TODO.md, src/core/bot_config.py, src/release_notes.json | done |
+
+### Session 63 — 2026-04-07 (UTC)
+
+**Focus:** Move all implemented bugfixes and full topics from TODO.md to DONE.md
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 21:26 UTC | Audited TODO.md for all fully-done sections and [x] bugs. Moved bugs 0.23–0.31 (9 new entries) and sections §4, §4.1, §4.2, §6.1, §10.1, §19.4, §25.4, §25.5, §25.6 (phases A/B/C/D) to DONE.md. Collapsed done sections in TODO.md to single-line references. Committed + pushed to master (329a8b6). | 2 | 3 | claude-sonnet-4.6 | DONE.md, TODO.md | done |
+
+**Session 63 total: 1 doc task, 3 turns — DONE.md and TODO.md fully synchronized ✅**
+
+---
