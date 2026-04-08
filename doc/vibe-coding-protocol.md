@@ -1242,3 +1242,15 @@ Every ~3 months, measure baseline health:
 **Session 63 total: 1 doc task, 3 turns — DONE.md and TODO.md fully synchronized ✅**
 
 ---
+
+### Session 64 — 2026-04-08 (UTC)
+
+**Focus:** MCP bridge server inquiry + session continuation
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 04:49 UTC | Verified telegramBridge MCP server already configured in .vscode/mcp.json as stdio server. Explained VS Code auto-starts it; no manual start needed. Confirmed all prior session todos done (d37e431, 329a8b6, 4a5cda9 all pushed to master). | 1 | 1 | claude-sonnet-4.6 | doc/vibe-coding-protocol.md | done |
+
+**Session 64 total: 1 inquiry, 1 turn — MCP bridge status confirmed, all todos resolved ✅**
+
+---
