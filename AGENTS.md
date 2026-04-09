@@ -70,10 +70,11 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 ## Current LLM Config
 
 ### SintAItion (TariStation1)
-- `LLM_PROVIDER=ollama` ← **primary** (switched 2026-04-09)
-- `OLLAMA_MODEL=gemma4:e2b` — 92% quality RU/DE/EN @ 45 t/s
+- `LLM_PROVIDER=ollama` ← **primary**
+- `OLLAMA_MODEL=qwen3.5:latest` (9B) — **100% quality RU/DE/EN/SL @ ~13 t/s** (restored 2026-04-09; gemma4:e2b was too small → circular answers)
+- `LOCAL_MAX_TOKENS=512` (increased from 256 which caused truncation/circular text)
 - `LLM_FALLBACK_PROVIDER=openai` (gpt-4o-mini fallback if Ollama fails)
-- Also available: `gemma4:e4b` (25 t/s, same quality; swap OLLAMA_MODEL to switch)
+- Admin model picker available: Admin → LLM Settings → 🦙 Ollama model picker
 
 ### TariStation2
 - `LLM_PROVIDER=ollama` ← **primary** (switched 2026-04-09)

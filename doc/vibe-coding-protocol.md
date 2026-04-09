@@ -1378,3 +1378,13 @@ Every ~3 months, measure baseline health:
 | 12:25 UTC | Add runtime Ollama model picker to admin LLM panel. get_ollama_model()/set_ollama_model() in bot_llm.py; _handle_ollama_llm_menu/_handle_ollama_set_model in bot_admin.py; callback dispatch in telegram_menu_bot.py. T121 (11/11 PASS). Deployed to SintAItion. | 3 | 4 | claude-sonnet-4.6 | src/core/bot_llm.py, src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/tests/test_voice_regression.py | done |
 
 **Session 75 total: 1 feature — Ollama model picker live on SintAItion ✅**
+
+## Session 76 — 2026-04-09
+
+**Focus:** Fix wrong/circular LLM answers on SintAItion
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 13:25 UTC | Root cause: LOCAL_MAX_TOKENS=256 (too low, caused truncation/circular text) + gemma4:e2b (2B effective params too weak for RU factual Q&A). Fix: restore OLLAMA_MODEL=qwen3.5:latest (9B, 100% benchmark score) + LOCAL_MAX_TOKENS=512 on SintAItion. Service restarted, polling confirmed. | 2 | 2 | claude-sonnet-4.6 | AGENTS.md, ~/.taris/bot.env (SintAItion) | done |
+
+**Session 76 total: 1 bugfix — LLM answer quality restored on SintAItion ✅**
