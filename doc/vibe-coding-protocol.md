@@ -1368,3 +1368,13 @@ Every ~3 months, measure baseline health:
 | 10:16 UTC | Switch LLM_PROVIDER=ollama on SintAItion (gemma4:e2b, 45 t/s) and TariStation2 (qwen3.5:0.8b). Fallback=openai on SintAItion. Smoke tests pass ("Four"). Updated AGENTS.md LLM config section. | 2 | 3 | claude-sonnet-4.6 | AGENTS.md, ~/.taris/bot.env (both targets) | done |
 
 **Session 74 total: 1 item — both targets now use ollama as primary LLM ✅**
+
+## Session 75 — 2026-04-09
+
+**Focus:** Admin Ollama model picker
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 12:25 UTC | Add runtime Ollama model picker to admin LLM panel. get_ollama_model()/set_ollama_model() in bot_llm.py; _handle_ollama_llm_menu/_handle_ollama_set_model in bot_admin.py; callback dispatch in telegram_menu_bot.py. T121 (11/11 PASS). Deployed to SintAItion. | 3 | 4 | claude-sonnet-4.6 | src/core/bot_llm.py, src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/tests/test_voice_regression.py | done |
+
+**Session 75 total: 1 feature — Ollama model picker live on SintAItion ✅**
