@@ -28,19 +28,39 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ## OpenClaw Targets (master branch)
 
-> ⚠️ **TariStation1 Branch Rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**. TariStation2 (local) may receive any branch for development/testing.
+> ⚠️ **TariStation1 Branch Rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**. TariStation2 may receive any branch for development/testing.
 > ⚠️ **TariStation1 Confirmation Rule**: Deploy to TariStation1 ONLY after explicit user/owner confirmation. Always deploy to TariStation2 first and verify all tests pass.
+
+### TariStation2 — Engineering target (IniCoS-1, remote Lubuntu Linux)
 
 | Key | Value |
 |---|---|
-| `ENG_TARGETHOST` | `TariStation2` (local machine — no SSH, use `cp` + `systemctl --user`) |
-| `ENG_HOSTUSER` | `stas` (local) |
-| Deploy | `cp src/... ~/.taris/...` + `systemctl --user restart taris-telegram taris-web` |
-| `PROD_OPENCLAW_HOST` | `TariStation1` (alias: `SintAItion`) |
+| `ENG_TARGETHOST` | `IniCoS-1` — remote Lubuntu 24.04, i7-2640M, 7.6GB RAM |
+| `ENG_TARGETHOST_IP` | `192.168.178.27` |
+| `ENG_HOSTUSER` | `stas` |
+| `ENG_HOSTPWD` | `buerger` (in `.env`) |
+| `ENG_HOSTKEY` | `SHA256:2Psz9uCmafYyM25q7XAjmdwIV1YhBzX6KfSzn/zqmhE` |
+| SSH | `plink -pw "buerger" -hostkey "%ENG_HOSTKEY%" -batch stas@192.168.178.27 "<cmd>"` |
+| SCP | `pscp -pw "buerger" -hostkey "%ENG_HOSTKEY%" src\file.py stas@192.168.178.27:/home/stas/.taris/` |
+| Deploy path | `/home/stas/.taris/` |
+| Project | `~/projects/sintaris-pl` (on target) |
+| DB | SQLite (`~/.taris/taris.db`) |
+| Ollama | ❌ Not installed — install before LLM/Gemma4 eval |
+
+### TariStation1 — Production target (SintAItion, remote Ubuntu Linux)
+
+| Key | Value |
+|---|---|
+| `PROD_OPENCLAW_HOST` | `SintAItion.local` (`192.168.178.175`) |
 | `PROD_OPENCLAW_USER` | `stas` |
-| SSH | `sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no stas@SintAItion "<cmd>"` |
-| SCP | `sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no src/... stas@SintAItion:~/.taris/` |
-| `.env` vars | `OPENCLAW1_HOST`, `OPENCLAW1_USER`, `OPENCLAW1PWD` (in project `.env`, gitignored) |
+| `OPENCLAW1PWD` | `buerger` (in `.env`) |
+| `OPENCLAW1_HOSTKEY` | `SHA256:QetDJFNpeIuKlHqZI7z/N4YjZy4uTcgCUq0zgExBn74` |
+| SSH | `plink -pw "buerger" -hostkey "%OPENCLAW1_HOSTKEY%" -batch stas@SintAItion.local "<cmd>"` |
+| SCP | `pscp -pw "buerger" -hostkey "%OPENCLAW1_HOSTKEY%" src\file.py stas@SintAItion.local:/home/stas/.taris/` |
+| Deploy path | `/home/stas/.taris/` |
+| Project | `~/projects/sintaris-pl` (on target) |
+| DB | PostgreSQL (migrated 2026-04) |
+| Ollama | ✅ Installed, AMD ROCm 890M GPU, qwen3.5:latest |
 | Skill | `/taris-deploy-openclaw-target` |
 
 ## Current Bot Version
