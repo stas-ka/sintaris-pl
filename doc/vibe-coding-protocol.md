@@ -1358,3 +1358,13 @@ Every ~3 months, measure baseline health:
 | 11:34 UTC | T117-T120 regression tests: deploy benchmark + gemma4 assets to SintAItion, fix filter bug, all 9 checks PASS. | 2 | 4 | claude-sonnet-4.6 | — | done |
 
 **Session 73 total: 4 items — gemma4:e2b adopted on SintAItion (45 t/s, 92%), T117-T120 all PASS ✅**
+
+## Session 74 — 2026-04-09
+
+**Focus:** Switch LLM_PROVIDER=ollama as primary on both targets
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 10:16 UTC | Switch LLM_PROVIDER=ollama on SintAItion (gemma4:e2b, 45 t/s) and TariStation2 (qwen3.5:0.8b). Fallback=openai on SintAItion. Smoke tests pass ("Four"). Updated AGENTS.md LLM config section. | 2 | 3 | claude-sonnet-4.6 | AGENTS.md, ~/.taris/bot.env (both targets) | done |
+
+**Session 74 total: 1 item — both targets now use ollama as primary LLM ✅**

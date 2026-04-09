@@ -67,12 +67,20 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 `BOT_VERSION = "2026.3.48"` — deployed 2026-03-31
 
-## Current LLM Config (SintAItion / TariStation1)
+## Current LLM Config
 
-- `OLLAMA_MODEL=gemma4:e2b` — **92% quality RU/DE/EN/SL @ 45 t/s** (switched 2026-04-09)
-- `LLM_FALLBACK_PROVIDER=openai` (gpt-4o-mini, primary via `LLM_PROVIDER=openai`)
-- Previous: qwen3.5:latest (92% quality, 14 t/s) → replaced by gemma4:e2b (3× faster, same quality)
-- Note: de_reasoning benchmark fails on ALL models (known timezone arithmetic benchmark limitation)
+### SintAItion (TariStation1)
+- `LLM_PROVIDER=ollama` ← **primary** (switched 2026-04-09)
+- `OLLAMA_MODEL=gemma4:e2b` — 92% quality RU/DE/EN @ 45 t/s
+- `LLM_FALLBACK_PROVIDER=openai` (gpt-4o-mini fallback if Ollama fails)
+- Also available: `gemma4:e4b` (25 t/s, same quality; swap OLLAMA_MODEL to switch)
+
+### TariStation2
+- `LLM_PROVIDER=ollama` ← **primary** (switched 2026-04-09)
+- `OLLAMA_MODEL=qwen3.5:0.8b` — best fit for 7.6 GB RAM
+- `LLM_FALLBACK_PROVIDER=ollama` (gemma4 doesn't fit, kept qwen3.5)
+
+> Note: de_reasoning benchmark fails on ALL models (known timezone arithmetic benchmark limitation)
 
 ## Current STT Config (SintAItion)
 
