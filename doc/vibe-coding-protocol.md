@@ -1345,3 +1345,16 @@ Every ~3 months, measure baseline health:
 | 22:14 UTC | Gemma4 evaluation: fix thinking-mode bug in benchmark (gemma4 missing from is_thinking_model), add --host/--target flags, T117-T120 regression tests, Linux eval script, Windows PS eval helper, evaluation report template. Commit 13e9587 | 3 | 4 | claude-sonnet-4.6 | benchmark_ollama_models.py, test_voice_regression.py, doc/test-suite.md, doc/gemma4-evaluation-report.md, tools/run_gemma4_evaluation.sh, tools/eval_gemma4_windows.ps1 | done |
 
 **Session 72 total: 1 item — Gemma4 evaluation infrastructure ready; T117-T120 all PASS ✅**
+
+## Session 73 — 2026-04-09
+
+**Focus:** Gemma4 live evaluation on TariStation2 + SintAItion; adopt gemma4:e2b on SintAItion
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 09:00 UTC | AGENTS.md: correct TariStation2 = IniCoS-1 (remote Lubuntu Linux, not local Windows). Full SSH details, IPs, hostkeys, deploy paths for both targets. Commit 38c9b2d | 2 | 3 | claude-sonnet-4.6 | AGENTS.md | done |
+| 09:30 UTC | TariStation2 gemma4 evaluation: Ollama 0.18.3→0.20.4, pulled gemma4:e2b (7.2GB Q8) — OOM (6.2GB available / 7.6GB total), removed. Benchmark: qwen3.5:0.8b stays. | 3 | 4 | claude-sonnet-4.6 | — | done |
+| 10:00 UTC | SintAItion gemma4 evaluation: Ollama 0.20.4, pulled e2b+e4b. Full 4-model benchmark. gemma4:e2b=45 t/s/92%, gemma4:e4b=25 t/s/92%, qwen3.5=14 t/s/92%. Adopted gemma4:e2b. Smoke test passed. | 4 | 6 | claude-sonnet-4.6 | doc/gemma4-evaluation-report.md, AGENTS.md | done |
+| 11:34 UTC | T117-T120 regression tests: deploy benchmark + gemma4 assets to SintAItion, fix filter bug, all 9 checks PASS. | 2 | 4 | claude-sonnet-4.6 | — | done |
+
+**Session 73 total: 4 items — gemma4:e2b adopted on SintAItion (45 t/s, 92%), T117-T120 all PASS ✅**

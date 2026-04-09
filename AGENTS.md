@@ -69,9 +69,10 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ## Current LLM Config (SintAItion / TariStation1)
 
-- `OLLAMA_MODEL=qwen3.5:latest` (9B) — **100% quality RU/DE/EN/SL @ 13 t/s** (switched 2026-04-01)
-- `LLM_FALLBACK_PROVIDER=openai` (gpt-4o-mini)
-- Previous: qwen3:8b (92% quality, failed DE timezone reasoning)
+- `OLLAMA_MODEL=gemma4:e2b` — **92% quality RU/DE/EN/SL @ 45 t/s** (switched 2026-04-09)
+- `LLM_FALLBACK_PROVIDER=openai` (gpt-4o-mini, primary via `LLM_PROVIDER=openai`)
+- Previous: qwen3.5:latest (92% quality, 14 t/s) → replaced by gemma4:e2b (3× faster, same quality)
+- Note: de_reasoning benchmark fails on ALL models (known timezone arithmetic benchmark limitation)
 
 ## Current STT Config (SintAItion)
 
