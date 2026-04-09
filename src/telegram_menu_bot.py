@@ -75,6 +75,7 @@ from telegram.bot_admin import (
     _handle_admin_llm_per_func, _handle_admin_llm_set,
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
+    _handle_ollama_llm_menu, _handle_ollama_set_model,
     _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
     _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
     _handle_admin_rag_settings, _handle_admin_rag_stats, _handle_admin_doc_stats,
@@ -511,6 +512,18 @@ def callback_handler(call):
     elif data == "openai_llm_menu":
         if _is_admin(cid):
             _handle_openai_llm_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "ollama_llm_menu":
+        if _is_admin(cid):
+            _handle_ollama_llm_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_ollama_set:"):
+        if _is_admin(cid):
+            _handle_ollama_set_model(cid, data[len("admin_ollama_set:"):])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

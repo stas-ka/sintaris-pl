@@ -63,6 +63,24 @@ from core.bot_config import (
 # Empty string or missing key → use global LLM_PROVIDER.
 # Supported use_case values: "system" (admin system chat), "chat" (user free chat).
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Runtime Ollama model override (admin UI — no restart required)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_runtime_ollama_model: str = ""  # "" → use OLLAMA_MODEL from bot_config
+
+
+def get_ollama_model() -> str:
+    """Return the active Ollama model name. Runtime override takes precedence over OLLAMA_MODEL."""
+    return _runtime_ollama_model or OLLAMA_MODEL
+
+
+def set_ollama_model(model: str) -> None:
+    """Override the active Ollama model at runtime. Does not persist across restarts."""
+    global _runtime_ollama_model
+    _runtime_ollama_model = model.strip()
+    log.info(f"[LLM] Ollama model switched at runtime → {_runtime_ollama_model or '(default)'}")
+
 
 def _effective_temperature() -> float:
     """Return runtime LLM temperature from rag_settings; falls back to LOCAL_TEMPERATURE."""
@@ -364,7 +382,7 @@ def _ask_ollama(prompt: str, timeout: int) -> str:
     url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
     headers = {"Content-Type": "application/json"}
     body: dict = {
-        "model": OLLAMA_MODEL,
+        "model": get_ollama_model(),
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "think": OLLAMA_THINK,
@@ -632,7 +650,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
             _url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
             _headers = {"Content-Type": "application/json"}
             _body: dict = {
-                "model": OLLAMA_MODEL,
+                "model": get_ollama_model(),
                 "messages": messages,
                 "stream": False,
                 "think": OLLAMA_THINK,
@@ -763,7 +781,7 @@ def ask_llm_stream(messages: list, timeout: int = 120):
             effective_timeout = max(timeout, OLLAMA_MIN_TIMEOUT)
             url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
             body = {
-                "model": OLLAMA_MODEL,
+                "model": get_ollama_model(),
                 "messages": messages,
                 "stream": True,
                 "think": OLLAMA_THINK,

@@ -7733,6 +7733,68 @@ def t_gemma4_benchmark_report(**_) -> list[TestResult]:
     return results
 
 
+def t_ollama_model_picker(**_) -> list[TestResult]:
+    """T121: Admin Ollama model picker — get_ollama_model/set_ollama_model exist;
+    _handle_ollama_llm_menu and _handle_ollama_set_model exist in bot_admin;
+    callback dispatch for ollama_llm_menu and admin_ollama_set: present in telegram_menu_bot.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # 1. bot_llm.py defines get_ollama_model and set_ollama_model (source inspection)
+    llm_src = SRC_ROOT / "core" / "bot_llm.py"
+    llm_text = llm_src.read_text(encoding="utf-8") if llm_src.exists() else ""
+    for sym in ("def get_ollama_model(", "def set_ollama_model(", "_runtime_ollama_model"):
+        present = sym in llm_text
+        results.append(TestResult(
+            f"ollama_picker_llm_{sym.split('(')[0].lstrip('_')}",
+            "PASS" if present else "FAIL",
+            time.time() - t0,
+            "found in bot_llm.py" if present else f"MISSING: {sym}",
+        ))
+
+    # 2. all three OLLAMA_MODEL usages replaced with get_ollama_model() call
+    old_pattern_count = llm_text.count('"model": OLLAMA_MODEL,')
+    new_pattern_count = llm_text.count('"model": get_ollama_model(),')
+    ok = old_pattern_count == 0 and new_pattern_count >= 3
+    results.append(TestResult(
+        "ollama_picker_model_uses_getter",
+        "PASS" if ok else "FAIL",
+        time.time() - t0,
+        f"get_ollama_model() uses: {new_pattern_count}, old OLLAMA_MODEL direct: {old_pattern_count}",
+    ))
+
+    # 3. bot_admin.py has the two new handler functions
+    admin_src = SRC_ROOT / "telegram" / "bot_admin.py"
+    src_text = admin_src.read_text(encoding="utf-8") if admin_src.exists() else ""
+    for sym in ("_handle_ollama_llm_menu", "_handle_ollama_set_model", "_get_ollama_models_from_api"):
+        present = sym in src_text
+        results.append(TestResult(
+            f"ollama_picker_{sym}",
+            "PASS" if present else "FAIL",
+            time.time() - t0,
+            "found in bot_admin.py" if present else f"MISSING: {sym}",
+        ))
+
+    # 4. telegram_menu_bot.py dispatches both new callbacks
+    menu_src = SRC_ROOT.parent / "src" / "telegram_menu_bot.py"
+    if not menu_src.exists():
+        menu_src = SRC_ROOT / "telegram_menu_bot.py"
+    if not menu_src.exists():
+        menu_src = SRC_ROOT.parent / "telegram_menu_bot.py"
+    menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    for token in ('"ollama_llm_menu"', '"admin_ollama_set:"', "_handle_ollama_llm_menu", "_handle_ollama_set_model"):
+        present = token in menu_text
+        results.append(TestResult(
+            f"ollama_picker_dispatch_{token.strip('\"_')}",
+            "PASS" if present else "FAIL",
+            time.time() - t0,
+            "found in telegram_menu_bot.py" if present else f"MISSING: {token}",
+        ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -7947,6 +8009,8 @@ TEST_FUNCTIONS = [
     t_gemma4_live_availability,
     # Gemma4 evaluation report + scripts present (T120)
     t_gemma4_benchmark_report,
+    # Ollama model picker: get/set model, admin UI handler, callback dispatch (T121)
+    t_ollama_model_picker,
 ]
 
 

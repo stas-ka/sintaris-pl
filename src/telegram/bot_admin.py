@@ -34,7 +34,7 @@ from core.bot_config import (
     CONVERSATION_HISTORY_MAX, CONV_SUMMARY_THRESHOLD, CONV_MID_MAX,
     log,
 )
-from core.bot_llm import get_per_func_provider, set_per_func_provider
+from core.bot_llm import get_per_func_provider, set_per_func_provider, get_ollama_model, set_ollama_model
 from core.bot_logger import tail_log
 from core.bot_instance import bot
 from telegram.bot_access import (
@@ -753,7 +753,7 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
     fallback_p = LLM_FALLBACK_PROVIDER.lower() if LLM_FALLBACK_PROVIDER else "—"
     _MODEL_LABELS = {
         "openai":    f"openai ({OPENAI_MODEL})",
-        "ollama":    f"ollama ({OLLAMA_MODEL})",
+        "ollama":    f"ollama ({get_ollama_model()})",
         "gemini":    f"gemini ({GEMINI_MODEL})",
         "anthropic": f"anthropic ({ANTHROPIC_MODEL})",
         "taris":     "taris",
@@ -805,6 +805,7 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
     ))
 
     kb.add(InlineKeyboardButton("🔵 OpenAI ChatGPT (key + models) ▶", callback_data="openai_llm_menu"))
+    kb.add(InlineKeyboardButton("🦙 Ollama model picker ▶", callback_data="ollama_llm_menu"))
     kb.add(InlineKeyboardButton("🔁  Fallback config ▶", callback_data="admin_llm_fallback_menu"))
     kb.add(InlineKeyboardButton("🔍  Context Trace ▶", callback_data="admin_llm_trace"))
     kb.add(InlineKeyboardButton("🧠  Memory Settings ▶", callback_data="admin_memory_menu"))
@@ -1024,6 +1025,71 @@ def _handle_save_llm_key(chat_id: int, raw_key: str) -> None:
         bot.send_message(chat_id, "❌ Failed to save key — check Pi logs.",
                          parse_mode="Markdown")
     _handle_openai_llm_menu(chat_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ollama model picker sub-menu
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_ollama_models_from_api() -> list:
+    """Query local Ollama /api/tags and return sorted model name list."""
+    import urllib.request as _ureq
+    try:
+        req  = _ureq.urlopen(f"{OLLAMA_URL.rstrip('/')}/api/tags", timeout=3)
+        data = json.loads(req.read().decode())
+        return sorted(m["name"] for m in data.get("models", []))
+    except Exception as exc:
+        log.warning(f"[LLM] Cannot list Ollama models: {exc}")
+        return []
+
+
+def _handle_ollama_llm_menu(chat_id: int) -> None:
+    """Show Ollama model picker populated from /api/tags."""
+    models  = _get_ollama_models_from_api()
+    current = get_ollama_model()
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    if models:
+        for name in models:
+            icon = "✅" if name == current else "◻️"
+            kb.add(InlineKeyboardButton(f"{icon} {name}", callback_data=f"admin_ollama_set:{name}"))
+    else:
+        kb.add(InlineKeyboardButton("⚠️  Ollama not reachable", callback_data="noop"))
+    kb.add(InlineKeyboardButton("🔙  LLM Settings", callback_data="admin_llm_menu"))
+
+    text = (
+        "🦙 *Ollama Model Picker*\n\n"
+        f"*Active:* `{current}`\n"
+        f"*Pulled models:* {len(models)}\n\n"
+        "_Tap a model to switch instantly.\n"
+        "Change is in-memory only — update_ `OLLAMA_MODEL` _in_ `~/.taris/bot.env` "
+        "_and restart for persistence._"
+    )
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception as e:
+        log.warning(f"[LLM] ollama_menu send failed: {e}")
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_ollama_set_model(chat_id: int, model: str) -> None:
+    """Apply an Ollama model switch at runtime and confirm to admin."""
+    model = model.strip()
+    if not model:
+        bot.send_message(chat_id, "❌ Invalid model name.")
+        return
+    set_ollama_model(model)
+    actual = get_ollama_model()
+    log.info(f"[LLM] admin {chat_id} switched Ollama model → {actual}")
+    msg = (
+        f"✅ Ollama model → `{actual}`\n\n"
+        f"_To persist: set_ `OLLAMA_MODEL={actual}` _in_ `~/.taris/bot.env` _and restart._"
+    )
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
+    _handle_ollama_llm_menu(chat_id)
 
 
 def _handle_admin_llm_fallback_menu(chat_id: int) -> None:
