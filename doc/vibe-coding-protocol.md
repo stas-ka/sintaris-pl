@@ -1388,3 +1388,26 @@ Every ~3 months, measure baseline health:
 | 13:25 UTC | Root cause: LOCAL_MAX_TOKENS=256 (too low, caused truncation/circular text) + gemma4:e2b (2B effective params too weak for RU factual Q&A). Fix: restore OLLAMA_MODEL=qwen3.5:latest (9B, 100% benchmark score) + LOCAL_MAX_TOKENS=512 on SintAItion. Service restarted, polling confirmed. | 2 | 2 | claude-sonnet-4.6 | AGENTS.md, ~/.taris/bot.env (SintAItion) | done |
 
 **Session 76 total: 1 bugfix — LLM answer quality restored on SintAItion ✅**
+
+## Session 77 — 2026-04-09
+
+**Focus:** Sintaris + Taris marketing presentation
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 15:27 UTC | Create 2-slide PPTX presentation (Russian): Slide 1 — SINTARIS (Consulting/Solutions/Products, 3-column dark theme, metrics bar); Slide 2 — TARIS (implemented features, architecture diagram, roadmap, screenshot). Content from 5 existing PPTX files + architecture docs. | 2 | 3 | claude-sonnet-4.6 | doc/marketing/Sintaris_Taris_Presentation.pptx | done |
+| 16:30 UTC | Restyle presentation to match Sintaris_Services_Konsalt.pptx: extracted exact palette (F5F0E8 cream, BF995E gold, 1D1F26 dark, 5C5866 gray, 604BA4 purple, FFFBF5 card, F0E9F7 pill), left/right split layout, rounded cards, tag pills, metric blocks. | 2 | 2 | claude-sonnet-4.6 | doc/marketing/Sintaris_Taris_Presentation.pptx | done |
+
+**Session 77 total: 1 artefact — marketing PPTX created (2 slides, dark theme) ✅**
+
+
+## Session 78 — 2026-04-10
+
+**Focus:** Admin Ollama model picker improvement + Admin Restart button
+
+| Time (UTC) | Description | Complexity | Turns | Model | Files | Status |
+|---|---|---|---|---|---|---|
+| 06:30 UTC | Improve Ollama model picker: group by family (Qwen/Gemma/LLaMA/Phi/Mistral/Other) with size labels, add Save-to-bot.env persistence, _update_bot_env_key() helper, warn if LLM_PROVIDER != ollama. Extended T121 to 19 checks. | 3 | 2 | claude-sonnet-4.6 | src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/tests/test_voice_regression.py | done |
+| 06:33 UTC | Add admin Restart Server button: confirmation dialog, 60s countdown, broadcast warning to all users (admins+allowed+guests), flush voice_opts/conv_history/dynamic_users to disk before restart, i18n for ru/en/de. | 3 | 2 | claude-sonnet-4.6 | src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/strings.json | done |
+
+**Session 78 total: 2 features — Ollama picker improved, Admin restart button added ✅**
