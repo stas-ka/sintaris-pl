@@ -1,6 +1,6 @@
 # Taris + N8N + CRM — Integration Architecture Concept
 
-**Version:** 1.0 · **Date:** 2026-04-10  
+**Version:** 1.1 · **Date:** 2026-04-10  
 **Author:** Architecture Proposal · **Status:** Concept  
 **Scope:** Taris as central console for N8N workflow automation + CRM integration  
 **References:** TODO.md §11, §13, §23 · `doc/todo/8.4-crm-platform.md` · `concept/additional/crm_system_requirements_full.md` · `Демонстрашка для работы с базой клиентов.drawio`
@@ -21,6 +21,7 @@ This document proposes an architecture for integrating **Taris** (AI voice/chat 
 | P4 | **LLM = Intelligence** | Ollama/OpenAI classifies user intents, generates scripts, analyzes data |
 | P5 | **Voice-first** | All operations triggerable by voice or text — no mandatory GUI clicks |
 | P6 | **Offline-capable** | Core CRM data in PostgreSQL; N8N on same host; works without internet |
+| P7 | **MCP-ready** | Every service exposes MCP tools → one protocol, many clients (Taris, Copilot, Claude) |
 
 ---
 
@@ -207,6 +208,237 @@ Taris /api/n8n/callback handler:
   → format message
   → send to all admin users via Telegram
   → display on Web UI dashboard
+```
+
+### 4.4 Pattern D: MCP-First Integration (Unified Protocol)
+
+Instead of Taris calling N8N/CRM via bespoke REST adapters, **all services expose and consume tools via MCP** (Model Context Protocol). This creates a uniform, LLM-native integration layer.
+
+```
+User: "Подбери клиентов для мероприятия по AI"
+  │
+  ▼
+Taris LLM (bot_llm.py) — with MCP tool-use capability
+  │
+  ├── MCP call: n8n_list_workflows()           ← N8N MCP Server
+  ├── MCP call: crm_search("AI automation")    ← EspoMCP / built-in MCP
+  ├── MCP call: n8n_trigger("event-matcher")   ← N8N MCP Server Trigger
+  │
+  ▼ (async — N8N workflow runs, calls back)
+  │
+  ├── N8N MCP Client Tool → taris_rag_search() ← Taris MCP Server
+  │   (N8N enriches contacts with Taris knowledge base)
+  │
+  ▼
+Taris: display results, ask user confirmation
+```
+
+**Three MCP integration vectors:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    MCP INTEGRATION TOPOLOGY                             │
+│                                                                         │
+│  ┌─────────────────┐     MCP (SSE/stdio)      ┌───────────────────┐   │
+│  │ Taris LLM       │ ─────────────────────────▶│ N8N MCP Server    │   │
+│  │ (MCP Client)    │                           │ Trigger node      │   │
+│  │                 │ ◀─────────────────────────│ (exposes workflows│   │
+│  │ • bot_llm.py    │     MCP tool responses    │  as MCP tools)    │   │
+│  │ • tool_use mode │                           └───────────────────┘   │
+│  └───────┬─────────┘                                                    │
+│          │                                                              │
+│          │ MCP (SSE)        ┌───────────────────┐                      │
+│          ├─────────────────▶│ EspoMCP Server    │                      │
+│          │                  │ (31★ GitHub)       │                      │
+│          │                  │ CRM CRUD tools     │                      │
+│          │                  └───────────────────┘                      │
+│          │                                                              │
+│          │ MCP (SSE)        ┌───────────────────┐                      │
+│          └─────────────────▶│ Taris MCP Server  │                      │
+│                             │ (sintaris-openclaw)│                      │
+│                             │ RAG, calendar,     │                      │
+│  ┌─────────────────┐       │ notes, status      │                      │
+│  │ N8N Workflows   │ ──────│                    │                      │
+│  │ (MCP Client     │  MCP  └───────────────────┘                      │
+│  │  Tool node)     │                                                    │
+│  └─────────────────┘                                                    │
+│                                                                         │
+│  ┌─────────────────┐       ┌───────────────────┐                      │
+│  │ VS Code Copilot │ ──MCP─│ n8n-mcp-server    │                      │
+│  │ Claude Desktop  │       │ (1598★ GitHub)     │                      │
+│  │ Any MCP client  │       │ manage workflows   │                      │
+│  └─────────────────┘       └───────────────────┘                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key components:**
+
+| Component | Role | Source | Transport |
+|-----------|------|--------|-----------|
+| **N8N MCP Server Trigger** | Exposes N8N workflows as MCP tools | Built-in N8N node | SSE `:5678/mcp/...` |
+| **N8N MCP Client Tool** | N8N consumes external MCP tools | Built-in N8N node | SSE to any MCP server |
+| **n8n-mcp-server** (npm) | External MCP server for N8N management API | [leonardsellem/n8n-mcp-server](https://github.com/leonardsellem/n8n-mcp-server) (1598★) | stdio/SSE |
+| **N8N2MCP** | Converts any N8N workflow into standalone MCP server | [Super-Chain/N8N2MCP](https://github.com/Super-Chain/N8N2MCP) (130★) | SSE |
+| **EspoMCP** | MCP server for EspoCRM CRUD | [zaphod-black/EspoMCP](https://github.com/zaphod-black/EspoMCP) (31★) | stdio/SSE |
+| **Taris MCP Server** | Existing sintaris-openclaw gateway | `~/projects/sintaris-openclaw/` | SSE `:18789` |
+
+### 4.5 How N8N's Built-in MCP Works
+
+**N8N as MCP Server** (MCP Server Trigger node):
+- Attach workflow tools to the MCP Server Trigger node
+- Each workflow becomes a callable MCP tool
+- Clients (Taris LLM, Claude, Copilot) discover and call tools dynamically
+- Auth: Bearer token or Header auth
+- Transport: SSE or Streamable HTTP
+- Limitation: requires single webhook replica (no load balancing for MCP SSE)
+
+**N8N as MCP Client** (MCP Client Tool node):
+- Connect N8N AI Agent to external MCP servers
+- N8N workflows can call Taris RAG search, calendar, CRM tools
+- Auth: Bearer, Header, or OAuth2
+- Selectable tool filtering (all / selected / all-except)
+
+```
+# Example: N8N workflow uses Taris knowledge for contact enrichment
+N8N AI Agent node
+  └── MCP Client Tool → http://localhost:18789/mcp/sse
+       └── taris_rag_search("AI automation consulting")
+       └── taris_calendar_events("next week")
+```
+
+---
+
+## 4A. Comparison: Direct API vs MCP Integration
+
+### Decision Matrix
+
+| Criterion | Direct REST API (Patterns A–C) | MCP-First (Pattern D) |
+|-----------|-------------------------------|----------------------|
+| **Complexity** | Low — simple HTTP calls | Medium — MCP client/server setup |
+| **Coupling** | Tight — Taris knows N8N/CRM API details | Loose — tools discovered dynamically |
+| **Latency** | Low — direct HTTP, ~50ms | Medium — MCP overhead ~100-200ms |
+| **Determinism** | High — code controls exact flow | Medium — LLM decides which tools |
+| **Extensibility** | New service = new adapter code | New service = register MCP server |
+| **Multi-client** | Taris only | Taris + Copilot + Claude + any MCP client |
+| **LLM tool-use required** | No — code-driven routing | Yes — LLM must support tool calling |
+| **Error handling** | Explicit try/catch per endpoint | MCP protocol error + LLM retry |
+| **Offline support** | Full (localhost REST) | Full (localhost SSE) |
+| **Debugging** | Easy — HTTP logs | Harder — MCP protocol traces |
+| **N8N workflow changes** | Update webhook URL in code | N8N auto-exposes new tools |
+| **Setup effort (N8N)** | API key + webhook URL | MCP Server Trigger node + auth |
+| **Setup effort (CRM)** | REST adapter module | EspoMCP server (TypeScript) |
+| **Ecosystem maturity** | Proven, stable | Young but growing fast (2024-2026) |
+
+### When to Use Which
+
+| Scenario | Recommended Pattern | Why |
+|----------|-------------------|-----|
+| Simple trigger (start workflow, get result) | **A: Direct REST** | Minimal overhead, deterministic |
+| Complex multi-tool orchestration | **D: MCP-First** | LLM chains tools intelligently |
+| N8N → Taris notifications (cron, events) | **C: Callback** | N8N pushes, no polling |
+| VS Code / Claude also needs N8N access | **D: MCP-First** | Same tools, multiple clients |
+| MVP / first integration | **A: Direct REST** | Fastest to implement |
+| Production scale with many services | **D: MCP-First** | Uniform protocol, auto-discovery |
+| Offline Pi (PicoClaw) | **A: Direct REST** | No MCP server overhead |
+| OpenClaw with full stack | **D: MCP-First** | Leverages existing gateway |
+
+### Hybrid Strategy (Recommended)
+
+**Don't choose one — use both.** The patterns complement each other:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   HYBRID ARCHITECTURE                    │
+│                                                         │
+│  DETERMINISTIC PATH (Patterns A+C):                     │
+│  ├── Taris bot_n8n.py → N8N webhook (trigger workflows) │
+│  ├── N8N → Taris /api/n8n/callback (push events)        │
+│  └── Taris bot_crm.py → PostgreSQL (direct CRUD)        │
+│                                                         │
+│  INTELLIGENT PATH (Pattern D):                          │
+│  ├── Taris LLM → MCP → N8N MCP Server (complex tasks)   │
+│  ├── Taris LLM → MCP → EspoMCP (smart CRM queries)      │
+│  ├── N8N AI Agent → MCP → Taris (RAG enrichment)         │
+│  └── Copilot/Claude → MCP → all services                │
+│                                                         │
+│  ROUTER LOGIC (bot_llm.py):                             │
+│  if intent is simple_trigger → Pattern A (direct REST)   │
+│  if intent is complex/multi_tool → Pattern D (MCP)       │
+│  if event is push/cron → Pattern C (callback)            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Phase 1 (MVP):** Direct REST (Patterns A+C) — fast, no MCP dependency  
+**Phase 2:** Add MCP Server Trigger in N8N for tool exposure  
+**Phase 3:** Taris LLM gains tool-use → routes complex queries via MCP  
+**Phase 4:** Full MCP ecosystem (EspoMCP, n8n-mcp-server, Taris MCP)
+
+### MCP Ecosystem — Ready-Made Servers
+
+| Server | Stars | Language | What it does | Install |
+|--------|-------|----------|-------------|---------|
+| [n8n-mcp-server](https://github.com/leonardsellem/n8n-mcp-server) | 1598 | TypeScript | Manage N8N workflows/executions/webhooks via MCP | `npm i -g @leonardsellem/n8n-mcp-server` |
+| [N8N2MCP](https://github.com/Super-Chain/N8N2MCP) | 130 | Python | Convert any N8N workflow into standalone MCP server | Docker or pip |
+| [EspoMCP](https://github.com/zaphod-black/EspoMCP) | 31 | TypeScript | Full EspoCRM CRUD via MCP | npm/Docker |
+| N8N built-in MCP Server Trigger | — | N8N node | Expose workflows as MCP tools natively | N8N workflow editor |
+| N8N built-in MCP Client Tool | — | N8N node | Consume external MCP tools in workflows | N8N workflow editor |
+| Taris MCP Server (sintaris-openclaw) | — | Node.js | RAG, calendar, chat, status | Already installed |
+
+### Cost-Benefit per Service
+
+| Service | Direct API effort | MCP effort | MCP benefit |
+|---------|-----------------|-----------|-------------|
+| **N8N trigger** | 1 day (bot_n8n.py) | 0.5 day (MCP Server Trigger in N8N) | Multi-client access, auto-discovery |
+| **N8N management** | 2 days (full API wrapper) | 0.5 day (install n8n-mcp-server) | 17 tools pre-built, maintained by community |
+| **CRM built-in** | 2 days (store_crm.py) | 2 days (same — custom code anyway) | No advantage — already in our stack |
+| **EspoCRM** | 3 days (REST adapter) | 1 day (install EspoMCP) | Pre-built, well-tested CRUD |
+| **RAG knowledge** | Already done | Already done (MCP Phase D) | N8N can query Taris knowledge |
+| **Calendar** | Already done | 0.5 day (expose via MCP) | N8N workflows can read/write calendar |
+
+### Implementation: Adding MCP Client to Taris LLM
+
+For Pattern D, `bot_llm.py` needs MCP tool-use capability:
+
+```python
+# src/core/bot_llm.py — MCP tool-use extension
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
+
+# MCP servers registry (from bot.env)
+_MCP_SERVERS = {
+    "n8n": os.environ.get("MCP_N8N_URL", ""),          # N8N MCP Server Trigger
+    "crm": os.environ.get("MCP_CRM_URL", ""),          # EspoMCP or built-in
+    "n8n_mgmt": os.environ.get("MCP_N8N_MGMT_URL", ""), # n8n-mcp-server
+}
+
+async def _ask_llm_with_tools(prompt: str, chat_id: int) -> str:
+    """LLM call with MCP tool-use. Ollama/OpenAI tool_call → MCP execution."""
+    # 1. Discover available tools from all MCP servers
+    tools = await _discover_mcp_tools()
+    
+    # 2. Ask LLM with tools (Ollama /api/chat with tools parameter)
+    response = await _ask_ollama_with_tools(prompt, tools)
+    
+    # 3. If LLM requests tool calls, execute them via MCP
+    while response.get("tool_calls"):
+        results = await _execute_mcp_calls(response["tool_calls"])
+        response = await _continue_with_results(prompt, results)
+    
+    return response["content"]
+```
+
+### New `bot.env` Variables for MCP Integration
+
+```bash
+# MCP Integration (Pattern D)
+MCP_N8N_URL=http://localhost:5678/mcp/sse        # N8N MCP Server Trigger endpoint
+MCP_N8N_MGMT_URL=                                 # n8n-mcp-server (stdio or SSE)
+MCP_CRM_URL=                                      # EspoMCP SSE endpoint (if using Option B)
+MCP_N8N_BEARER_TOKEN=                             # Auth token for N8N MCP Server Trigger
+MCP_CRM_BEARER_TOKEN=                             # Auth token for EspoMCP
+MCP_TOOL_USE_ENABLED=0                            # Enable LLM tool-use mode (0=off, 1=on)
+MCP_TOOL_USE_THRESHOLD=complex                    # When to use tools: always|complex|never
 ```
 
 ---
@@ -575,6 +807,8 @@ STEP 7: N8N sends invitations, reports back
 
 ## 9. MCP (Model Context Protocol) Integration
 
+> **Full comparison of MCP vs Direct API is in §4A above.** This section focuses on the MCP architecture specific to the Taris+N8N+CRM stack.
+
 ### 9.1 MCP Architecture for Taris+N8N+CRM
 
 MCP provides a standardized protocol for LLM ↔ tool communication. This enables Taris (or any MCP-compatible AI client) to discover and use CRM/N8N tools dynamically.
@@ -660,8 +894,14 @@ With MCP, the same CRM/N8N tools become available to:
 
 | Task | Description |
 |------|-------------|
+| **Install n8n-mcp-server** | `npm i -g @leonardsellem/n8n-mcp-server` — pre-built N8N management tools |
+| **Configure N8N MCP Server Trigger** | Expose key workflows (daily-digest, campaign, event-matcher) as MCP tools |
+| **Configure N8N MCP Client Tool** | Connect N8N AI Agent to Taris MCP Server for RAG enrichment |
 | MCP tools for CRM | `crm_search`, `crm_create_contact`, `crm_create_task` |
 | MCP tools for N8N | `n8n_trigger`, `n8n_status`, `n8n_list_workflows` |
+| **LLM tool-use in bot_llm.py** | Ollama tool_call support → MCP tool execution loop |
+| **MCP_TOOL_USE_THRESHOLD router** | Simple intents → Pattern A, complex → Pattern D |
+| Install EspoMCP (optional) | For customer projects needing full CRM via MCP |
 | EspoCRM adapter (opt.) | For customer projects needing full CRM |
 | Import/export | CSV import contacts, export reports |
 | Multi-user CRM | Role-based access (admin/operator) |
@@ -780,6 +1020,9 @@ Before implementation begins, decide:
 4. **Demo data:** Import real client data or use synthetic test data?
 5. **Campaign channel:** Email only, Telegram only, or both?
 6. **Priority:** Start with CRM module or N8N integration first?
+7. **Integration pattern:** Start with Direct REST only (Pattern A, fastest MVP) or Hybrid from day one?
+8. **MCP for N8N:** Use N8N built-in MCP Server Trigger (zero-code) or external n8n-mcp-server (more tools)?
+9. **LLM tool-use:** Enable Ollama tool_call for MCP integration? (requires qwen3.5+ or gemma4 with tool support)
 
 ---
 
