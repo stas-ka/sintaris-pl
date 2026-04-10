@@ -1,6 +1,6 @@
 # Taris + N8N + CRM — Integration Architecture Concept
 
-**Version:** 1.2 · **Date:** 2026-04-10  
+**Version:** 1.3 · **Date:** 2026-04-10  
 **Author:** Architecture Proposal · **Status:** Concept  
 **Scope:** Taris as central console for N8N workflow automation + CRM integration  
 **References:** TODO.md §11, §13, §23 · `doc/todo/8.4-crm-platform.md` · `concept/additional/crm_system_requirements_full.md` · `Демонстрашка для работы с базой клиентов.drawio`
@@ -717,6 +717,441 @@ User request
 | 10 | **Tool-use level target** | L1 (params only), L2 (single-tool), L3 (multi-chain) |
 | 11 | **Default model for tool-use** | Local Ollama (free, 3–15s) vs Cloud (fast, paid) |
 | 12 | **Tool categories for MVP** | CRM + N8N only, or include calendar/notes/RAG? |
+
+---
+
+## 4C. Self-Learning & Process Optimization — OpenClaw Autonomous Improvement
+
+> **When to read:** When designing feedback loops, automated optimization, or self-improving agent behavior.
+
+### Vision: From Reactive to Autonomous
+
+Today Taris **responds** to user requests. The goal is a system that **learns from every interaction** and autonomously optimizes its processes to achieve the best outcomes for each user's goals.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  TODAY (Reactive)                 TARGET (Self-Learning)               │
+│                                                                        │
+│  User asks → LLM responds         User asks → LLM responds            │
+│  End.                              ↓                                   │
+│                                    Collect feedback (implicit+explicit) │
+│                                    ↓                                   │
+│                                    Analyze: what worked? what didn't?  │
+│                                    ↓                                   │
+│                                    Adapt: switch model, tune params,   │
+│                                    rerank RAG, adjust prompts          │
+│                                    ↓                                   │
+│                                    Next request is better.             │
+│                                    ↓                                   │
+│                                    Repeat forever → converge to optimum│
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### What OpenClaw Already Has (Building Blocks)
+
+| Component | Location | Data Collected | Learning Potential |
+|-----------|----------|----------------|-------------------|
+| **Pipeline logger** | `pipeline_logger.py` | STT/LLM/TTS/RAG latency per request (JSONL) | Optimize provider selection by speed |
+| **RAG activity log** | `rag_log` table | query type, n_chunks, latency, strategy | Learn which retrieval strategy works best |
+| **LLM call trace** | `llm_calls` table | provider, model, response_ok, context size | Track quality per model per use-case |
+| **Tiered memory** | `conversation_summaries` table | Short→mid→long summaries (LLM-generated) | Extract user preferences, recurring topics |
+| **Per-function LLM routing** | `llm_per_func.json` | Manual provider overrides per use-case | Foundation for auto-routing |
+| **Voice opts per user** | `voice_opts` table | 12+ voice pipeline flags | User-specific pipeline tuning |
+| **Error protocols** | `error_protocols/` dir | Structured error reports (text + voice + photo) | Error pattern mining |
+| **Hardware-tier detection** | `bot_rag.py` | FTS5_ONLY / HYBRID / FULL | Adaptive strategy baseline |
+| **Admin model picker** | `bot_admin.py` | Active model, available models list | Runtime model switching |
+| **MCP circuit breaker** | `bot_mcp_client.py` | Failure count, cooldown state | Self-healing remote connections |
+
+**Key insight:** The data infrastructure exists. What's missing is the **closed-loop feedback** that connects observations to actions.
+
+### Four Feedback Loops
+
+The self-learning system is built on four independent feedback loops, each optimizing a different dimension:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    FOUR FEEDBACK LOOPS                               │
+│                                                                     │
+│  Loop 1: RESPONSE QUALITY        Loop 2: RAG RELEVANCE             │
+│  ┌──────────────────────┐        ┌──────────────────────┐          │
+│  │ User rates response  │        │ Track which chunks   │          │
+│  │ (👍/👎 or 1-5 stars) │        │ lead to good answers │          │
+│  │    ↓                 │        │    ↓                 │          │
+│  │ Store in feedback_db │        │ Reweight/rerank docs │          │
+│  │    ↓                 │        │    ↓                 │          │
+│  │ Analyze per model    │        │ Promote useful docs  │          │
+│  │    ↓                 │        │ Demote low-value     │          │
+│  │ Auto-switch provider │        │    ↓                 │          │
+│  │ if quality drops     │        │ Better RAG results   │          │
+│  └──────────────────────┘        └──────────────────────┘          │
+│                                                                     │
+│  Loop 3: PERFORMANCE             Loop 4: WORKFLOW OUTCOMES          │
+│  ┌──────────────────────┐        ┌──────────────────────┐          │
+│  │ Measure latency per  │        │ Track N8N workflow    │          │
+│  │ provider/model/stage │        │ success/failure rates │          │
+│  │    ↓                 │        │    ↓                 │          │
+│  │ Detect degradation   │        │ LLM analyzes results │          │
+│  │ (>2σ from baseline)  │        │    ↓                 │          │
+│  │    ↓                 │        │ Suggest optimizations│          │
+│  │ Auto-downgrade slow  │        │ (params, sequence,   │          │
+│  │ providers, promote   │        │  alternative tools)  │          │
+│  │ fast ones            │        │    ↓                 │          │
+│  │    ↓                 │        │ Apply & measure again│          │
+│  │ Faster responses     │        └──────────────────────┘          │
+│  └──────────────────────┘                                           │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Loop 1: Response Quality Optimization
+
+**Goal:** Automatically select the best LLM model/provider for each type of request.
+
+**Data flow:**
+```
+User message → LLM response → User feedback (👍/👎)
+                                     ↓
+                            response_feedback table
+                            (chat_id, call_id, provider, model,
+                             use_case, rating, created_at)
+                                     ↓
+                            Nightly analysis job
+                            (or after every N feedbacks)
+                                     ↓
+                            quality_score[provider][use_case]
+                                     ↓
+                            Auto-update llm_per_func.json
+                            "chat" → best_provider_for_chat
+                            "system" → best_provider_for_system
+```
+
+**Implementation sketch:**
+```python
+# New: bot_optimizer.py
+def optimize_provider_routing():
+    """Analyze feedback → update per-function provider routing."""
+    feedback = store.get_recent_feedback(days=7)
+    for use_case in ["chat", "system", "rag", "calendar"]:
+        scores = {}
+        for provider in feedback.providers:
+            subset = feedback.filter(use_case=use_case, provider=provider)
+            if len(subset) >= 10:  # minimum sample size
+                scores[provider] = subset.avg_rating
+        if scores:
+            best = max(scores, key=scores.get)
+            current = get_per_func_provider(use_case)
+            if best != current and scores[best] > scores.get(current, 0) + 0.3:
+                set_per_func_provider(use_case, best)
+                log.info(f"[Optimizer] Switched {use_case}: {current} → {best} "
+                         f"(score {scores[best]:.2f} vs {scores.get(current, 0):.2f})")
+```
+
+**Feedback collection (Telegram):**
+```
+🤖 Taris: [response text]
+         [👍] [👎]     ← inline buttons under every LLM response
+```
+
+**Feedback collection (Voice):**
+- Implicit: user repeats question → previous answer was bad
+- Implicit: user says "неправильно" / "wrong" / "falsch" → negative signal
+- Explicit: voice command "оцени ответ на 5" → star rating
+
+### Loop 2: RAG Relevance Learning
+
+**Goal:** Improve document retrieval quality over time.
+
+**Current state:** `rag_log.relevant` column exists but is **never populated**.
+
+**Proposed:**
+```
+User query → RAG retrieves chunks → LLM generates answer
+                                          ↓
+                                    User feedback (👍 = chunks were relevant)
+                                          ↓
+                                    Update chunk_scores table:
+                                    doc_id, chunk_id, relevance_sum, query_count
+                                          ↓
+                                    RRF fusion uses chunk_scores as boost factor:
+                                    final_score = rrf_score * (1 + 0.1 * relevance_ratio)
+                                          ↓
+                                    High-quality docs bubble up in future queries
+                                    Low-quality docs naturally sink
+```
+
+**Self-healing RAG:**
+- If a document consistently gets negative feedback → flag for admin review
+- If a query type always returns 0 useful chunks → suggest uploading new knowledge
+- Track `chars_injected` vs `response_quality` → find optimal context length
+
+### Loop 3: Performance Auto-Optimization
+
+**Goal:** Minimize latency while maintaining quality.
+
+**Already exists:** `pipeline_logger.py` logs every STT/LLM/TTS call with timing.
+
+**What's needed:** Analysis + action layer.
+
+```python
+# New: bot_perf_optimizer.py
+def check_performance_health():
+    """Run every hour. Detect degradation. Auto-switch providers."""
+    stats = get_pipeline_stats(today)
+
+    for stage in ["stt", "llm", "tts"]:
+        baseline = load_baseline(stage)  # from baseline.json
+        current_p95 = stats[stage]["p95_ms"]
+        if current_p95 > baseline * 1.5:  # 50% degradation
+            log.warning(f"[PerfOpt] {stage} p95={current_p95}ms "
+                        f"(baseline={baseline}ms) — degraded")
+            # Auto-action: switch to faster provider
+            if stage == "llm" and current_p95 > 10000:
+                switch_to_faster_model()  # gemma4:e2b instead of qwen3.5
+
+    # Check error rates
+    for provider in stats["providers"]:
+        error_rate = stats["providers"][provider]["error_count"] / max(stats["providers"][provider]["count"], 1)
+        if error_rate > 0.1:  # >10% errors
+            log.warning(f"[PerfOpt] Provider {provider} error_rate={error_rate:.0%}")
+            demote_provider(provider)  # remove from per-func routing
+```
+
+**Adaptive model selection based on load:**
+| Condition | Action |
+|-----------|--------|
+| LLM p95 > 10s, queue > 3 | Switch to lighter model (gemma4:e2b) |
+| LLM error_rate > 10% | Switch to fallback provider |
+| RAM pressure > 90% | Disable FasterWhisper preload, use Vosk |
+| Night hours (00:00–06:00) | Allow heavy models (qwen3.5, gpt-4o) for batch tasks |
+| Peak hours (09:00–18:00) | Prefer fast local models |
+
+### Loop 4: Workflow Outcome Optimization
+
+**Goal:** Optimize N8N workflow parameters based on outcomes.
+
+**Requires:** N8N integration (Phase 1 from §10) + tool-use (§4B).
+
+```
+User goal: "Найди клиентов для AI-мероприятия"
+    ↓
+LLM chains tools: crm_search → n8n_trigger("campaign")
+    ↓
+N8N workflow executes → outcomes:
+  - 47 contacts found
+  - 45 emails sent
+  - 12 opened (26.7% open rate)
+  - 3 replied (6.7% reply rate)
+    ↓
+Store in workflow_outcomes table:
+  (workflow_id, params, outcome_metrics, user_satisfaction)
+    ↓
+Next time similar request:
+  LLM sees past outcomes in context
+  → adjusts: "Last time budget>10k had 6.7% reply rate.
+              Try budget>50k for higher quality leads"
+    ↓
+Continuous improvement: parameters auto-tune toward user's goals
+```
+
+### Self-Learning Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│              TARIS SELF-LEARNING ARCHITECTURE                          │
+│                                                                        │
+│  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐  │
+│  │  DATA COLLECTION │    │  ANALYSIS ENGINE  │    │  ACTION ENGINE  │  │
+│  │  (already exists)│    │  (new component)  │    │  (new component)│  │
+│  │                  │    │                   │    │                 │  │
+│  │ • pipeline_log   │───▶│ • latency trends  │───▶│ • switch model  │  │
+│  │ • rag_log        │    │ • quality scores   │    │ • tune params   │  │
+│  │ • llm_calls      │    │ • error patterns   │    │ • rerank docs   │  │
+│  │ • chat_history   │    │ • user preferences │    │ • adjust prompts│  │
+│  │ • conv_summaries │    │ • workflow outcomes │    │ • heal errors   │  │
+│  │ • error_protocols│    │ • A/B test results  │    │ • notify admin  │  │
+│  │ • response_      │    │                   │    │                 │  │
+│  │   feedback (new) │    │ Runs: hourly +    │    │ Applies changes │  │
+│  │ • workflow_       │    │ on-demand + nightly│    │ immediately or  │  │
+│  │   outcomes (new) │    │ LLM-powered        │    │ after approval  │  │
+│  └─────────────────┘    └──────────────────┘    └─────────────────┘  │
+│           │                       │                       │           │
+│           └───────────────────────┴───────────────────────┘           │
+│                          FEEDBACK LOOP                                │
+│                    (measure → analyze → act → measure)                │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐ │
+│  │                    OPTIMIZATION TARGETS                          │ │
+│  │                                                                  │ │
+│  │  🎯 Response quality  (Loop 1)  — maximize user satisfaction    │ │
+│  │  📚 RAG relevance     (Loop 2)  — maximize chunk usefulness     │ │
+│  │  ⚡ Pipeline speed     (Loop 3)  — minimize latency at quality  │ │
+│  │  🔄 Workflow outcomes  (Loop 4)  — maximize goal achievement    │ │
+│  │  🧠 Prompt quality     (Loop 5)  — optimize system prompts      │ │
+│  │  💰 Cost efficiency    (Loop 6)  — minimize cloud API spend     │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### How OpenClaw Enables Self-Learning (Unique Advantages)
+
+| OpenClaw Feature | Self-Learning Application |
+|-----------------|--------------------------|
+| **Dynamic model picker** (Admin panel) | Auto-switch models based on quality/speed scores |
+| **Session persistence** (`--session-id`) | Maintain optimization context across restarts |
+| **Skill-based routing** (5 skills) | Track per-skill success rates → route to best skill |
+| **MCP protocol** (tool discovery) | Dynamically discover and evaluate new tools |
+| **pgvector RAG** (1665 chunks) | Reweight document embeddings based on relevance feedback |
+| **Pipeline logger** (JSONL) | Rich telemetry for performance optimization |
+| **Per-function LLM routing** | Granular optimization per use-case |
+| **Multi-provider fallback** (8 providers) | Large search space for optimization |
+| **Ollama local inference** (free) | Unlimited experimentation without cost |
+
+### New Database Tables Required
+
+```sql
+-- Loop 1: Response quality feedback
+CREATE TABLE response_feedback (
+    id SERIAL PRIMARY KEY,
+    chat_id BIGINT NOT NULL,
+    call_id TEXT,              -- links to llm_calls
+    provider TEXT,
+    model TEXT,
+    use_case TEXT DEFAULT 'chat',
+    rating SMALLINT CHECK (rating BETWEEN 1 AND 5),
+    implicit BOOLEAN DEFAULT FALSE,  -- true for auto-detected feedback
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Loop 2: RAG chunk relevance
+CREATE TABLE rag_chunk_scores (
+    doc_id TEXT NOT NULL,
+    chunk_hash TEXT NOT NULL,
+    relevance_sum INTEGER DEFAULT 0,
+    query_count INTEGER DEFAULT 0,
+    last_updated TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (doc_id, chunk_hash)
+);
+
+-- Loop 3: Performance baselines
+CREATE TABLE performance_baselines (
+    stage TEXT NOT NULL,       -- stt, llm, tts, rag
+    provider TEXT NOT NULL,
+    p50_ms REAL,
+    p95_ms REAL,
+    error_rate REAL,
+    sample_count INTEGER,
+    measured_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (stage, provider)
+);
+
+-- Loop 4: Workflow outcomes
+CREATE TABLE workflow_outcomes (
+    id SERIAL PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    trigger_params JSONB,
+    outcome_metrics JSONB,     -- {sent: 45, opened: 12, replied: 3, ...}
+    user_satisfaction SMALLINT, -- 1-5
+    chat_id BIGINT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Optimization history (audit trail)
+CREATE TABLE optimization_log (
+    id SERIAL PRIMARY KEY,
+    loop_name TEXT NOT NULL,   -- 'quality', 'rag', 'perf', 'workflow'
+    action TEXT NOT NULL,      -- 'switch_model', 'rerank_doc', 'tune_param'
+    old_value TEXT,
+    new_value TEXT,
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Prompt Self-Optimization (Loop 5)
+
+The LLM can optimize its own system prompts by analyzing patterns in successful vs unsuccessful conversations:
+
+```
+Every 100 conversations:
+    ↓
+Collect: top-10 highest-rated responses + top-10 lowest-rated
+    ↓
+Ask LLM: "Analyze these successful and unsuccessful responses.
+          What patterns make responses good? Suggest improvements
+          to the system prompt."
+    ↓
+LLM proposes new system prompt variant
+    ↓
+A/B test: 50% users get old prompt, 50% get new
+    ↓
+After 50+ ratings per variant:
+    if new_avg_rating > old_avg_rating + 0.2:
+        adopt new prompt
+    else:
+        keep old prompt
+    ↓
+Log decision to optimization_log
+```
+
+### Cost Optimization (Loop 6)
+
+For cloud LLM providers (OpenAI, Anthropic), track spend and optimize:
+
+```
+Per request: estimate token cost (input_chars/4 * price_per_1k_tokens)
+    ↓
+Daily budget tracking in cost_log table
+    ↓
+If daily_spend > budget_threshold:
+    Switch to local Ollama for non-critical use-cases
+    Keep cloud only for complex/tool-use tasks
+    ↓
+Monthly report: cost vs quality tradeoff curve
+    → suggest optimal provider mix
+```
+
+### Implementation Roadmap
+
+| Phase | Scope | Effort | Dependencies |
+|-------|-------|--------|--------------|
+| **S1: Feedback Collection** | Add 👍/👎 buttons, implicit feedback detection, `response_feedback` table | 1 week | None |
+| **S2: Performance Monitor** | Hourly stats aggregation, baseline comparison, degradation alerts, `performance_baselines` table | 1 week | S1 |
+| **S3: Auto-Routing** | `bot_optimizer.py` — analyze feedback → update `llm_per_func.json` automatically | 1 week | S1, S2 |
+| **S4: RAG Learning** | Populate `rag_log.relevant`, chunk score boosting, `rag_chunk_scores` table | 1 week | S1 |
+| **S5: Prompt Optimization** | A/B test system prompts, LLM self-analysis, adopt winning variants | 2 weeks | S1, S3 |
+| **S6: Workflow Learning** | N8N outcome tracking, parameter tuning, `workflow_outcomes` table | 2 weeks | §10 Phase 1, S1 |
+| **S7: Cost Optimizer** | Token cost tracking, budget-aware routing, monthly reports | 1 week | S2, S3 |
+
+### Comparison with Industry Frameworks
+
+| Framework | Approach | Taris Advantage |
+|-----------|----------|-----------------|
+| **AutoGPT** | General-purpose autonomous agents | Taris is domain-focused (voice + CRM + workflows) → faster convergence |
+| **LangGraph** | Stateful agent orchestration | Taris has native voice + Telegram + Web UI → no integration overhead |
+| **LangSmith** | Observability + eval platform | Taris pipeline_logger.py already collects equivalent telemetry |
+| **DSPy** | Prompt optimization via compiler | Taris can implement targeted prompt optimization (Loop 5) without framework dependency |
+
+**Taris unique position:** Unlike general frameworks, Taris combines **voice input + LLM + workflow automation + CRM** in a single stack with local inference (Ollama). Self-learning optimizes the **entire pipeline** (STT→LLM→TTS→N8N), not just the LLM.
+
+### Safety & Guardrails
+
+| Risk | Mitigation |
+|------|-----------|
+| **Optimization drift** (model degrades slowly) | Always keep baseline measurements; revert if quality drops below threshold |
+| **Feedback gaming** | Weight recent feedback higher; require minimum sample size (10+ ratings) |
+| **Runaway costs** (cloud API overuse) | Hard daily budget cap; auto-switch to local when exceeded |
+| **Prompt injection via feedback** | Sanitize all feedback text; never inject raw feedback into prompts |
+| **Model switching instability** | Cool-down period (24h) between automatic model switches |
+| **Data privacy** | All learning data stays local; no user data sent to external services |
+| **Admin override** | Admin can disable any loop: `OPTIMIZER_LOOPS=quality,perf` (skip rag, workflow) |
+
+### Decision Points (extends §16)
+
+| # | Question | Options |
+|---|----------|---------|
+| 13 | **Feedback UI** | Inline 👍/👎 (minimal) vs 1–5 stars (detailed) vs both |
+| 14 | **Optimization autonomy** | Fully automatic vs admin-approval required for changes |
+| 15 | **A/B testing scope** | System prompts only, or also model/provider A/B tests? |
+| 16 | **Learning data retention** | Keep forever vs 90-day rolling window vs configurable |
 
 ---
 
