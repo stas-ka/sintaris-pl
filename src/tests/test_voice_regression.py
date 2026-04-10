@@ -7735,8 +7735,9 @@ def t_gemma4_benchmark_report(**_) -> list[TestResult]:
 
 def t_ollama_model_picker(**_) -> list[TestResult]:
     """T121: Admin Ollama model picker — get_ollama_model/set_ollama_model exist;
-    _handle_ollama_llm_menu and _handle_ollama_set_model exist in bot_admin;
-    callback dispatch for ollama_llm_menu and admin_ollama_set: present in telegram_menu_bot.
+    _handle_ollama_llm_menu, _handle_ollama_set_model, _handle_ollama_persist_model in bot_admin;
+    callback dispatch for ollama_llm_menu, admin_ollama_set:, admin_ollama_persist: in telegram_menu_bot;
+    _update_bot_env_key helper exists in bot_admin; model grouping by family in menu handler.
     """
     t0 = time.time()
     results: list[TestResult] = []
@@ -7764,10 +7765,14 @@ def t_ollama_model_picker(**_) -> list[TestResult]:
         f"get_ollama_model() uses: {new_pattern_count}, old OLLAMA_MODEL direct: {old_pattern_count}",
     ))
 
-    # 3. bot_admin.py has the two new handler functions
+    # 3. bot_admin.py has all handler functions and helpers
     admin_src = SRC_ROOT / "telegram" / "bot_admin.py"
     src_text = admin_src.read_text(encoding="utf-8") if admin_src.exists() else ""
-    for sym in ("_handle_ollama_llm_menu", "_handle_ollama_set_model", "_get_ollama_models_from_api"):
+    for sym in (
+        "_handle_ollama_llm_menu", "_handle_ollama_set_model",
+        "_handle_ollama_persist_model", "_get_ollama_models_from_api",
+        "_update_bot_env_key",
+    ):
         present = sym in src_text
         results.append(TestResult(
             f"ollama_picker_{sym}",
@@ -7776,14 +7781,27 @@ def t_ollama_model_picker(**_) -> list[TestResult]:
             "found in bot_admin.py" if present else f"MISSING: {sym}",
         ))
 
-    # 4. telegram_menu_bot.py dispatches both new callbacks
+    # 4. model grouping by family — family labels present in menu handler
+    for label in ("qwen", "gemma", "llama", "_FAMILY_LABELS"):
+        present = label in src_text
+        results.append(TestResult(
+            f"ollama_picker_family_{label}",
+            "PASS" if present else "FAIL",
+            time.time() - t0,
+            "family grouping found" if present else f"MISSING family grouping: {label}",
+        ))
+
+    # 5. telegram_menu_bot.py dispatches all callbacks including new persist
     menu_src = SRC_ROOT.parent / "src" / "telegram_menu_bot.py"
     if not menu_src.exists():
         menu_src = SRC_ROOT / "telegram_menu_bot.py"
     if not menu_src.exists():
         menu_src = SRC_ROOT.parent / "telegram_menu_bot.py"
     menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
-    for token in ('"ollama_llm_menu"', '"admin_ollama_set:"', "_handle_ollama_llm_menu", "_handle_ollama_set_model"):
+    for token in (
+        '"ollama_llm_menu"', '"admin_ollama_set:"', '"admin_ollama_persist:"',
+        "_handle_ollama_llm_menu", "_handle_ollama_set_model", "_handle_ollama_persist_model",
+    ):
         present = token in menu_text
         results.append(TestResult(
             f"ollama_picker_dispatch_{token.strip('\"_')}",

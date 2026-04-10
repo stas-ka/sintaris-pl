@@ -24,7 +24,7 @@ from core.bot_config import (
     LLM_LOCAL_FALLBACK, LLAMA_CPP_URL, LLAMA_CPP_MODEL, LLM_FALLBACK_FLAG_FILE,
     LLM_PROVIDER, LLM_FALLBACK_PROVIDER,
     OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL,
-    OLLAMA_URL, OLLAMA_MODEL,
+    OLLAMA_URL, OLLAMA_MODEL, TARIS_DIR,
     GEMINI_API_KEY, GEMINI_MODEL,
     ANTHROPIC_API_KEY, ANTHROPIC_MODEL,
     STT_PROVIDER, STT_FALLBACK_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
@@ -1031,28 +1031,88 @@ def _handle_save_llm_key(chat_id: int, raw_key: str) -> None:
 # Ollama model picker sub-menu
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_ollama_models_from_api() -> list:
-    """Query local Ollama /api/tags and return sorted model name list."""
+def _get_ollama_models_from_api() -> list[dict]:
+    """Query local Ollama /api/tags and return list of {name, size_gb, family}."""
     import urllib.request as _ureq
     try:
         req  = _ureq.urlopen(f"{OLLAMA_URL.rstrip('/')}/api/tags", timeout=3)
-        data = json.loads(req.read().decode())
-        return sorted(m["name"] for m in data.get("models", []))
+        raw  = json.loads(req.read().decode())
     except Exception as exc:
         log.warning(f"[LLM] Cannot list Ollama models: {exc}")
         return []
 
+    def _family(name: str) -> str:
+        n = name.lower()
+        if n.startswith("qwen"):   return "qwen"
+        if n.startswith("gemma"):  return "gemma"
+        if n.startswith("llama"):  return "llama"
+        if n.startswith("phi"):    return "phi"
+        if n.startswith("mistral"):return "mistral"
+        return "other"
+
+    result = []
+    for m in raw.get("models", []):
+        name    = m.get("name", "")
+        size_b  = m.get("size", 0)
+        size_gb = round(size_b / 1e9, 1) if size_b else 0.0
+        result.append({"name": name, "size_gb": size_gb, "family": _family(name)})
+    return sorted(result, key=lambda x: (x["family"], x["name"]))
+
+
+def _update_bot_env_key(key: str, value: str) -> bool:
+    """Write or update KEY=value in ~/.taris/bot.env. Returns True on success."""
+    env_path = Path(TARIS_DIR) / "bot.env"
+    try:
+        lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+        key_prefix = f"{key}="
+        updated = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith(key_prefix) and not stripped.startswith("#"):
+                lines[i] = f"{key}={value}"
+                updated = True
+                break
+        if not updated:
+            lines.append(f"{key}={value}")
+        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return True
+    except Exception as exc:
+        log.warning(f"[LLM] Failed to update bot.env: {exc}")
+        return False
+
 
 def _handle_ollama_llm_menu(chat_id: int) -> None:
-    """Show Ollama model picker populated from /api/tags."""
+    """Show Ollama model picker grouped by family, populated from /api/tags."""
     models  = _get_ollama_models_from_api()
     current = get_ollama_model()
 
+    provider_warn = ""
+    if LLM_PROVIDER != "ollama":
+        provider_warn = f"\n⚠️ *Provider is `{LLM_PROVIDER}`* — Ollama not active. Switch provider first."
+
+    # Group by family
+    families: dict[str, list[dict]] = {}
+    for m in models:
+        families.setdefault(m["family"], []).append(m)
+
+    _FAMILY_LABELS = {
+        "qwen": "🧬 Qwen", "gemma": "💎 Gemma",
+        "llama": "🦙 LLaMA", "phi": "🔷 Phi",
+        "mistral": "⭐ Mistral", "other": "📦 Other",
+    }
+
     kb = InlineKeyboardMarkup(row_width=1)
     if models:
-        for name in models:
-            icon = "✅" if name == current else "◻️"
-            kb.add(InlineKeyboardButton(f"{icon} {name}", callback_data=f"admin_ollama_set:{name}"))
+        for fam, fam_models in families.items():
+            label = _FAMILY_LABELS.get(fam, fam.capitalize())
+            kb.add(InlineKeyboardButton(f"── {label} ──", callback_data="noop"))
+            for m in fam_models:
+                icon  = "✅" if m["name"] == current else "◻️"
+                size  = f"  ({m['size_gb']} GB)" if m["size_gb"] else ""
+                kb.add(InlineKeyboardButton(
+                    f"{icon} {m['name']}{size}",
+                    callback_data=f"admin_ollama_set:{m['name']}",
+                ))
     else:
         kb.add(InlineKeyboardButton("⚠️  Ollama not reachable", callback_data="noop"))
     kb.add(InlineKeyboardButton("🔙  LLM Settings", callback_data="admin_llm_menu"))
@@ -1060,10 +1120,9 @@ def _handle_ollama_llm_menu(chat_id: int) -> None:
     text = (
         "🦙 *Ollama Model Picker*\n\n"
         f"*Active:* `{current}`\n"
-        f"*Pulled models:* {len(models)}\n\n"
-        "_Tap a model to switch instantly.\n"
-        "Change is in-memory only — update_ `OLLAMA_MODEL` _in_ `~/.taris/bot.env` "
-        "_and restart for persistence._"
+        f"*Available:* {len(models)} model(s){provider_warn}\n\n"
+        "_Tap a model to switch. Active immediately — no restart needed._\n"
+        "_Use 💾 Save to persist across restarts._"
     )
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
@@ -1073,7 +1132,7 @@ def _handle_ollama_llm_menu(chat_id: int) -> None:
 
 
 def _handle_ollama_set_model(chat_id: int, model: str) -> None:
-    """Apply an Ollama model switch at runtime and confirm to admin."""
+    """Apply an Ollama model switch at runtime and offer persistence."""
     model = model.strip()
     if not model:
         bot.send_message(chat_id, "❌ Invalid model name.")
@@ -1081,15 +1140,53 @@ def _handle_ollama_set_model(chat_id: int, model: str) -> None:
     set_ollama_model(model)
     actual = get_ollama_model()
     log.info(f"[LLM] admin {chat_id} switched Ollama model → {actual}")
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton(
+        f"💾 Save to bot.env (persist across restarts)",
+        callback_data=f"admin_ollama_persist:{actual}",
+    ))
+    kb.add(InlineKeyboardButton("🔙  Model list", callback_data="ollama_llm_menu"))
+
     msg = (
-        f"✅ Ollama model → `{actual}`\n\n"
-        f"_To persist: set_ `OLLAMA_MODEL={actual}` _in_ `~/.taris/bot.env` _and restart._"
+        f"✅ *Switched to* `{actual}`\n\n"
+        f"Model is active now — no restart needed.\n"
+        f"_To keep this after a bot restart, save it to_ `bot.env`_:_"
     )
     try:
-        bot.send_message(chat_id, msg, parse_mode="Markdown")
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=kb)
     except Exception:
-        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg))
-    _handle_ollama_llm_menu(chat_id)
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=kb)
+
+
+def _handle_ollama_persist_model(chat_id: int, model: str) -> None:
+    """Write OLLAMA_MODEL to bot.env so it persists across restarts."""
+    model = model.strip()
+    if not model:
+        bot.send_message(chat_id, "❌ Empty model name — nothing saved.")
+        return
+
+    ok = _update_bot_env_key("OLLAMA_MODEL", model)
+    kb = InlineKeyboardMarkup(row_width=1)
+    if ok:
+        log.info(f"[LLM] admin {chat_id} persisted OLLAMA_MODEL={model} to bot.env")
+        msg = (
+            f"💾 *Saved* `OLLAMA_MODEL={model}` *to* `bot.env`\n\n"
+            f"✅ Active now (in-memory) AND will survive bot restarts.\n"
+            f"_No restart required._"
+        )
+        kb.add(InlineKeyboardButton("🔙  Model list", callback_data="ollama_llm_menu"))
+    else:
+        msg = (
+            f"⚠️ *Could not write to* `bot.env`\n\n"
+            f"Model `{model}` is still active in-memory but will revert after restart.\n"
+            f"_Check file permissions on_ `~/.taris/bot.env`_._"
+        )
+        kb.add(InlineKeyboardButton("🔙  Model list", callback_data="ollama_llm_menu"))
+    try:
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=kb)
 
 
 def _handle_admin_llm_fallback_menu(chat_id: int) -> None:
