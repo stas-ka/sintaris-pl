@@ -1423,3 +1423,8 @@ Every ~3 months, measure baseline health:
 | 19:04 UTC | Added §4C Self-Learning & Process Optimization: 4 feedback loops (quality, RAG, performance, workflow) + prompt optimization + cost optimizer. Research of existing building blocks (pipeline_logger, rag_log, llm_calls, tiered memory). New DB schema (5 tables). 7-phase roadmap (S1-S7). Safety guardrails. Industry comparison (AutoGPT, LangGraph, DSPy). 4 new decision points. | 4 | 2 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
 
 **Session 79 total: 1 concept doc — Taris+N8N+CRM: architecture + MCP + Adaptive LLM + Self-Learning ✅**
+**Session 80** — Auto-Research deep analysis & self-learning architecture variants
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| 07:15 UTC | Deep research: Auto-Research frameworks (19 analyzed: Reflexion, LangGraph, DSPy, Voyager, STORM, Constitutional AI, Karpathy AutoResearch etc.). Created 3 implementation variants (A: Pragmatic Self-Improvement, B: Agentic Orchestration, C: Full Autonomous Research). Comparison matrix, unified telescoping roadmap (6 phases, 2 decision gates), hardware constraints. New doc: concept/taris-auto-research-architecture.md. Updated main concept to v1.4. | 5 | 3 | claude-opus-4.6 | concept/taris-auto-research-architecture.md, concept/taris-n8n-crm-integration.md | done |**Session 80 total: Auto-Research variant architecture — 3 variants, 19 frameworks, unified roadmap ✅**
