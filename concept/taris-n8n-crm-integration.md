@@ -1,9 +1,9 @@
 # Taris + N8N + CRM — Integration Architecture Concept
 
-**Version:** 1.3 · **Date:** 2026-04-10  
+**Version:** 1.4 · **Date:** 2026-04-10  
 **Author:** Architecture Proposal · **Status:** Concept  
-**Scope:** Taris as central console for N8N workflow automation + CRM integration  
-**References:** TODO.md §11, §13, §23 · `doc/todo/8.4-crm-platform.md` · `concept/additional/crm_system_requirements_full.md` · `Демонстрашка для работы с базой клиентов.drawio`
+**Scope:** Taris as central console for N8N workflow automation + CRM integration + Self-Learning  
+**References:** TODO.md §11, §13, §23 · `doc/todo/8.4-crm-platform.md` · `concept/additional/crm_system_requirements_full.md` · `Демонстрашка для работы с базой клиентов.drawio` · **[Self-Learning Variants](taris-auto-research-architecture.md)**
 
 ---
 
@@ -723,6 +723,8 @@ User request
 ## 4C. Self-Learning & Process Optimization — OpenClaw Autonomous Improvement
 
 > **When to read:** When designing feedback loops, automated optimization, or self-improving agent behavior.
+>
+> 📘 **Expanded document:** [taris-auto-research-architecture.md](taris-auto-research-architecture.md) — contains 3 implementation variants (Pragmatic / Agentic / Autonomous), comparison matrix, 19 framework analysis (Reflexion, LangGraph, DSPy, Voyager, STORM, Constitutional AI, AutoResearch/Karpathy, etc.), and a unified telescoping roadmap. This section provides the overview; the linked document provides the full detail.
 
 ### Vision: From Reactive to Autonomous
 
