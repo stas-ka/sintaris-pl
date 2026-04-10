@@ -1419,4 +1419,6 @@ Every ~3 months, measure baseline health:
 | 16:53 UTC | Architecture concept: Taris+N8N+CRM integration. Deep research of existing architecture, CRM requirements, drawio demo flow, OpenClaw skills. Created comprehensive concept document with 4-phase implementation plan, 3 integration patterns, dashboard design, MCP integration, demo scenario. | 4 | 3 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
 | 17:10 UTC | Added Pattern D (MCP-First) to concept: N8N MCP Server Trigger, n8n-mcp-server (1598★), EspoMCP, N8N2MCP. Full comparison matrix (14 criteria), hybrid strategy, cost-benefit per service, MCP ecosystem catalog, bot_llm.py tool-use extension sketch, new bot.env vars. | 3 | 2 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
 
-**Session 79 total: 1 concept doc — Taris+N8N+CRM architecture proposal + MCP variant ✅**
+| 17:30 UTC | Added §4B Adaptive LLM Workflows: agentic loop architecture (ask_llm_with_tools), provider tool-use matrix, adaptive model selection, 5 adaptation levels (L0-L5), tool schema registry, 3 live scenarios, static vs adaptive comparison, hybrid strategy, 3 new decision points. | 3 | 2 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
+
+**Session 79 total: 1 concept doc — Taris+N8N+CRM architecture + MCP variant + Adaptive LLM ✅**
