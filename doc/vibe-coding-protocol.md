@@ -1420,5 +1420,6 @@ Every ~3 months, measure baseline health:
 | 17:10 UTC | Added Pattern D (MCP-First) to concept: N8N MCP Server Trigger, n8n-mcp-server (1598★), EspoMCP, N8N2MCP. Full comparison matrix (14 criteria), hybrid strategy, cost-benefit per service, MCP ecosystem catalog, bot_llm.py tool-use extension sketch, new bot.env vars. | 3 | 2 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
 
 | 17:30 UTC | Added §4B Adaptive LLM Workflows: agentic loop architecture (ask_llm_with_tools), provider tool-use matrix, adaptive model selection, 5 adaptation levels (L0-L5), tool schema registry, 3 live scenarios, static vs adaptive comparison, hybrid strategy, 3 new decision points. | 3 | 2 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
+| 19:04 UTC | Added §4C Self-Learning & Process Optimization: 4 feedback loops (quality, RAG, performance, workflow) + prompt optimization + cost optimizer. Research of existing building blocks (pipeline_logger, rag_log, llm_calls, tiered memory). New DB schema (5 tables). 7-phase roadmap (S1-S7). Safety guardrails. Industry comparison (AutoGPT, LangGraph, DSPy). 4 new decision points. | 4 | 2 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
 
-**Session 79 total: 1 concept doc — Taris+N8N+CRM architecture + MCP variant + Adaptive LLM ✅**
+**Session 79 total: 1 concept doc — Taris+N8N+CRM: architecture + MCP + Adaptive LLM + Self-Learning ✅**
