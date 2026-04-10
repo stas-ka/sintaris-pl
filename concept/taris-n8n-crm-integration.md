@@ -1,0 +1,786 @@
+# Taris + N8N + CRM — Integration Architecture Concept
+
+**Version:** 1.0 · **Date:** 2026-04-10  
+**Author:** Architecture Proposal · **Status:** Concept  
+**Scope:** Taris as central console for N8N workflow automation + CRM integration  
+**References:** TODO.md §11, §13, §23 · `doc/todo/8.4-crm-platform.md` · `concept/additional/crm_system_requirements_full.md` · `Демонстрашка для работы с базой клиентов.drawio`
+
+---
+
+## 1. Executive Summary
+
+This document proposes an architecture for integrating **Taris** (AI voice/chat assistant), **N8N** (workflow automation), and a **CRM** (EspoCRM or lightweight built-in) into a unified platform. The user interacts with Taris via Telegram, Web UI, or voice — and Taris acts as the **central operator console** for launching, monitoring, and controlling automated business processes.
+
+### Key Principles
+
+| # | Principle | Description |
+|---|-----------|-------------|
+| P1 | **Taris = Console** | All process control flows through Taris Dashboard (Telegram + Web UI) |
+| P2 | **N8N = Engine** | N8N executes workflows; Taris triggers and monitors them |
+| P3 | **Skills = Glue** | OpenClaw skills bridge Taris ↔ N8N ↔ CRM via REST/webhook |
+| P4 | **LLM = Intelligence** | Ollama/OpenAI classifies user intents, generates scripts, analyzes data |
+| P5 | **Voice-first** | All operations triggerable by voice or text — no mandatory GUI clicks |
+| P6 | **Offline-capable** | Core CRM data in PostgreSQL; N8N on same host; works without internet |
+
+---
+
+## 2. Current State
+
+### What Already Exists
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Taris Telegram bot | ✅ Running | `src/telegram_menu_bot.py` |
+| Taris Web UI (FastAPI) | ✅ Running | `src/bot_web.py`, port 8080 |
+| Voice assistant | ✅ Running | `src/voice_assistant.py` |
+| LLM backend (Ollama + OpenAI) | ✅ Running | `src/core/bot_llm.py` |
+| PostgreSQL + pgvector | ✅ Running (SintAItion) | `src/core/store_postgres.py` |
+| REST API (`/api/status`, `/api/chat`) | ✅ Running | `src/bot_web.py` |
+| Screen DSL (YAML menus) | ✅ Running | `src/ui/`, `src/screens/` |
+| Contacts module | ✅ Basic CRUD | `src/features/bot_contacts.py` |
+| Calendar + reminders | ✅ Full | `src/features/bot_calendar.py` |
+| Document RAG | ✅ FTS5 + pgvector | `src/features/bot_documents.py` |
+| Admin panel (LLM switch, restart) | ✅ Running | `src/telegram/bot_admin.py` |
+| sintaris-openclaw gateway | ✅ Installed | `~/projects/sintaris-openclaw/` |
+| skill-taris (gateway → Taris API) | ✅ Connected | `skill-taris` in gateway |
+| skill-postgres (pgvector RAG) | ✅ Connected | `skill-postgres` in gateway |
+| **skill-n8n** | 🔲 Defined, not wired | `skill-n8n` in gateway |
+| **skill-espocrm** | 🔲 Defined, not wired | `skill-espocrm` in gateway |
+| **N8N instance** | 🔲 Not installed | — |
+| **EspoCRM instance** | 🔲 Not installed | — |
+
+### What's Missing
+
+1. **N8N instance** running on SintAItion or TariStation2
+2. **CRM** — either EspoCRM or a lightweight built-in module in Taris
+3. **Taris ↔ N8N bridge** — skill to trigger/monitor N8N workflows
+4. **Central Dashboard** — unified view of running processes, CRM data, tasks
+5. **Workflow templates** — pre-built N8N flows for CRM scenarios
+
+---
+
+## 3. Target Architecture
+
+### 3.1 System Overview Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        USER INTERFACES                              │
+│                                                                     │
+│  📱 Telegram         🌐 Web UI (8080)        🎤 Voice Assistant    │
+│  @taris_bot          Dashboard + Chat          Hotword → STT → LLM  │
+│                                                                     │
+└────────────┬──────────────────┬───────────────────────┬─────────────┘
+             │                  │                       │
+             ▼                  ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     TARIS CORE (sintaris-pl)                        │
+│                                                                     │
+│  telegram_menu_bot.py ←→ bot_web.py ←→ voice_assistant.py          │
+│         │                    │                    │                  │
+│         ▼                    ▼                    ▼                  │
+│  ┌─────────────────────────────────────────────────────────┐       │
+│  │  🧠 LLM Intent Classifier (bot_llm.py)                 │       │
+│  │  "запусти обзвон клиентов" → {intent: crm_campaign}    │       │
+│  │  "покажи задачи на сегодня" → {intent: crm_tasks}      │       │
+│  │  "статус рассылки" → {intent: n8n_status}              │       │
+│  └─────────────────────┬───────────────────────────────────┘       │
+│                        │                                            │
+│  ┌─────────────────────▼───────────────────────────────────┐       │
+│  │  📋 Action Router (bot_actions.py / bot_n8n.py)         │       │
+│  │                                                         │       │
+│  │  crm_* intents → CRM Adapter                           │       │
+│  │  n8n_* intents → N8N Adapter                            │       │
+│  │  dashboard_*   → Dashboard Renderer                     │       │
+│  └────────┬──────────────┬──────────────────┬──────────────┘       │
+│           │              │                  │                       │
+└───────────┼──────────────┼──────────────────┼───────────────────────┘
+            │              │                  │
+            ▼              ▼                  ▼
+┌───────────────┐ ┌────────────────┐ ┌────────────────────────────────┐
+│ 🗃️ CRM       │ │ ⚙️ N8N         │ │ 🔗 OpenClaw Gateway            │
+│ Adapter       │ │ Adapter        │ │ (sintaris-openclaw)            │
+│               │ │                │ │                                │
+│ Option A:     │ │ REST API       │ │ skill-n8n → N8N REST           │
+│ Built-in      │ │ :5678          │ │ skill-espocrm → EspoCRM API   │
+│ (PostgreSQL)  │ │                │ │ skill-postgres → pgvector RAG  │
+│               │ │ Webhooks       │ │ skill-taris → Taris /api/chat  │
+│ Option B:     │ │ :5678/webhook/ │ │                                │
+│ EspoCRM API   │ │                │ │ MCP Server (stdio/SSE)         │
+│ :8889         │ │                │ │                                │
+└───────┬───────┘ └───────┬────────┘ └────────────────────────────────┘
+        │                 │
+        ▼                 ▼
+┌─────────────────────────────────────┐
+│  🐘 PostgreSQL (shared)             │
+│                                     │
+│  taris DB    — users, calendar,     │
+│                notes, chat_history, │
+│                documents, vectors   │
+│                                     │
+│  crm DB      — contacts, deals,    │
+│                tasks, history,      │
+│                campaigns            │
+│                                     │
+│  n8n DB      — workflows,          │
+│                executions, creds    │
+└─────────────────────────────────────┘
+```
+
+### 3.2 Component Roles
+
+| Component | Role | Protocol | Port |
+|-----------|------|----------|------|
+| **Taris** (sintaris-pl) | Central console: UI, chat, voice, LLM, dashboard | Telegram API, HTTPS | 8080 |
+| **OpenClaw Gateway** (sintaris-openclaw) | Skills hub, MCP server, agent routing | REST, MCP stdio/SSE | 18789 |
+| **N8N** | Workflow automation engine | REST API + Webhooks | 5678 |
+| **CRM** (EspoCRM or built-in) | Contact/deal/task data store | REST API (or direct SQL) | 8889 (EspoCRM) |
+| **PostgreSQL** | Shared data layer | SQL | 5432 |
+| **Ollama** | Local LLM (intent classification, text generation) | REST API | 11434 |
+
+---
+
+## 4. Integration Patterns
+
+### 4.1 Pattern A: Direct REST (Recommended for MVP)
+
+Taris calls N8N and CRM directly via REST API. No gateway intermediary needed for simple triggers.
+
+```
+User: "Запусти рассылку для клиентов из Москвы"
+  │
+  ▼
+Taris LLM: classify intent → {action: "crm_campaign", filter: "city=Москва"}
+  │
+  ▼
+Taris bot_n8n.py: POST http://localhost:5678/webhook/campaign-trigger
+  Body: {"filter": "city=Москва", "user_id": 12345}
+  │
+  ▼
+N8N workflow "campaign-trigger":
+  1. Query CRM: GET contacts where city=Москва
+  2. LLM: generate personalized message per contact
+  3. Send via email/Telegram
+  4. POST http://localhost:8080/api/n8n/callback
+     Body: {"workflow_id": "abc", "status": "done", "sent": 42}
+  │
+  ▼
+Taris: notify user "✅ Рассылка завершена: 42 контакта обработано"
+```
+
+### 4.2 Pattern B: Via OpenClaw Skills (For Complex Multi-Step)
+
+For complex scenarios requiring tool chaining, RAG context, and multi-step reasoning:
+
+```
+User: "Подбери клиентов для мероприятия по AI-автоматизации"
+  │
+  ▼
+Taris LLM: complex intent → route to OpenClaw agent
+  │
+  ▼
+OpenClaw agent -m "Select clients for AI automation event" --json --session-id taris
+  │
+  ├── skill-postgres: vector search for relevant contacts
+  ├── skill-espocrm: get contact details + history
+  ├── skill-n8n: trigger "ai-client-matcher" workflow
+  │     └── N8N: LLM scores each contact → returns ranked list
+  └── return JSON results to Taris
+  │
+  ▼
+Taris: display results in Dashboard card / Telegram message
+```
+
+### 4.3 Pattern C: N8N → Taris Callback (Event-Driven)
+
+N8N workflows can push notifications back to Taris:
+
+```
+N8N cron job (daily 08:00):
+  1. Query overdue tasks from CRM
+  2. Compile daily summary
+  3. POST http://localhost:8080/api/n8n/callback
+     Body: {"type": "daily_digest", "data": {...}}
+  │
+  ▼
+Taris /api/n8n/callback handler:
+  → format message
+  → send to all admin users via Telegram
+  → display on Web UI dashboard
+```
+
+---
+
+## 5. CRM Strategy: Two Options
+
+### Option A: Built-in CRM (PostgreSQL, Recommended for Sintaris)
+
+Extend existing Taris PostgreSQL with CRM tables. No external dependency.
+
+**Pros:** Single stack, offline-capable, voice-native, full control  
+**Cons:** Must build UI from scratch, limited multi-user
+
+```sql
+-- Extend existing PostgreSQL schema
+CREATE TABLE crm_contacts (
+    id SERIAL PRIMARY KEY,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    telegram TEXT,
+    city TEXT,
+    tags TEXT[],              -- AI-generated tags
+    segment TEXT,             -- AI-classified segment
+    summary TEXT,             -- AI-generated summary
+    lead_source TEXT,
+    status TEXT DEFAULT 'active',  -- active/in_progress/archive
+    owner_user_id BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE crm_interactions (
+    id SERIAL PRIMARY KEY,
+    contact_id INT REFERENCES crm_contacts(id),
+    type TEXT NOT NULL,       -- call/meeting/email/telegram/note
+    content TEXT,
+    result TEXT,
+    author_user_id BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE crm_tasks (
+    id SERIAL PRIMARY KEY,
+    contact_id INT REFERENCES crm_contacts(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    due_date TIMESTAMPTZ,
+    priority TEXT DEFAULT 'medium',  -- low/medium/high
+    status TEXT DEFAULT 'active',    -- active/done/overdue
+    owner_user_id BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE crm_campaigns (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    target_audience TEXT,     -- AI prompt for selection
+    keywords TEXT[],
+    status TEXT DEFAULT 'draft',  -- draft/approved/sending/done
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE crm_campaign_contacts (
+    campaign_id INT REFERENCES crm_campaigns(id),
+    contact_id INT REFERENCES crm_contacts(id),
+    ai_score FLOAT,           -- AI relevance score 0.0-1.0
+    ai_reason TEXT,           -- why recommended
+    invite_status TEXT DEFAULT 'pending',  -- pending/invited/confirmed/declined
+    PRIMARY KEY (campaign_id, contact_id)
+);
+```
+
+**Taris modules to create:**
+
+| Module | File | Purpose |
+|--------|------|---------|
+| `bot_crm.py` | `src/features/bot_crm.py` | CRM CRUD: contacts, tasks, interactions |
+| `bot_n8n.py` | `src/features/bot_n8n.py` | N8N workflow trigger/monitor/callback |
+| `crm_screens.yaml` | `src/screens/crm_*.yaml` | Screen DSL for CRM views |
+| `store_crm.py` | `src/core/store_crm.py` | CRM data adapter (extends store_base) |
+
+### Option B: EspoCRM (External, for Customer Projects)
+
+Deploy EspoCRM as a separate Docker container. Taris connects via REST API.
+
+**Pros:** Full-featured CRM out of the box, multi-user, proven  
+**Cons:** Extra dependency, heavier (PHP+MySQL), online required, separate auth
+
+```yaml
+# docker-compose.yml on SintAItion
+services:
+  espocrm:
+    image: espocrm/espocrm:latest
+    ports: ["8889:80"]
+    volumes:
+      - espocrm_data:/var/www/html/data
+    environment:
+      ESPOCRM_DATABASE_HOST: postgres
+      ESPOCRM_DATABASE_NAME: espocrm
+```
+
+**Integration via skill-espocrm:**
+```
+Taris → OpenClaw gateway → skill-espocrm → EspoCRM REST API
+```
+
+### Recommendation
+
+**Phase 1 (MVP):** Built-in CRM (Option A) — minimal, voice-native, works on all targets  
+**Phase 2 (Customer):** EspoCRM (Option B) — for customer projects needing full CRM features  
+**Both phases** share the same Taris UI and N8N integration
+
+---
+
+## 6. N8N Integration Architecture
+
+### 6.1 Installation on SintAItion
+
+```bash
+# Install N8N via Docker (recommended)
+docker run -d --name n8n \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  -e N8N_BASIC_AUTH_ACTIVE=true \
+  -e N8N_BASIC_AUTH_USER=admin \
+  -e N8N_BASIC_AUTH_PASSWORD=<secret> \
+  -e DB_TYPE=postgresdb \
+  -e DB_POSTGRESDB_HOST=localhost \
+  -e DB_POSTGRESDB_PORT=5432 \
+  -e DB_POSTGRESDB_DATABASE=n8n \
+  -e DB_POSTGRESDB_USER=taris \
+  -e DB_POSTGRESDB_PASSWORD=<secret> \
+  n8nio/n8n:latest
+
+# Or install via npm (lighter, no Docker):
+npm install -g n8n
+N8N_PORT=5678 n8n start
+```
+
+### 6.2 Taris N8N Adapter (`bot_n8n.py`)
+
+```python
+# src/features/bot_n8n.py — N8N workflow adapter
+
+import requests
+from core.bot_config import N8N_URL, N8N_API_KEY
+
+N8N_URL = os.environ.get("N8N_URL", "http://localhost:5678")
+N8N_API_KEY = os.environ.get("N8N_API_KEY", "")
+
+def trigger_workflow(workflow_id: str, payload: dict) -> dict:
+    """Trigger an N8N workflow via webhook."""
+    resp = requests.post(
+        f"{N8N_URL}/webhook/{workflow_id}",
+        json=payload, timeout=30
+    )
+    return resp.json()
+
+def get_workflow_status(execution_id: str) -> dict:
+    """Get execution status from N8N API."""
+    headers = {"X-N8N-API-KEY": N8N_API_KEY}
+    resp = requests.get(
+        f"{N8N_URL}/api/v1/executions/{execution_id}",
+        headers=headers, timeout=10
+    )
+    return resp.json()
+
+def list_workflows() -> list[dict]:
+    """List all active workflows."""
+    headers = {"X-N8N-API-KEY": N8N_API_KEY}
+    resp = requests.get(
+        f"{N8N_URL}/api/v1/workflows?active=true",
+        headers=headers, timeout=10
+    )
+    return resp.json().get("data", [])
+```
+
+### 6.3 N8N Callback Endpoint in Taris
+
+```python
+# In bot_web.py — add callback route
+
+@app.post("/api/n8n/callback")
+async def n8n_callback(request: Request):
+    """Receive completion/status updates from N8N workflows."""
+    data = await request.json()
+    event_type = data.get("type")  # daily_digest, campaign_done, task_alert
+    
+    if event_type == "daily_digest":
+        _broadcast_digest(data["data"])
+    elif event_type == "campaign_done":
+        _notify_campaign_result(data["data"])
+    elif event_type == "task_alert":
+        _notify_task_alert(data["data"])
+    
+    return {"status": "ok"}
+```
+
+### 6.4 Pre-Built N8N Workflow Templates
+
+| Workflow | Trigger | Actions | Taris Integration |
+|----------|---------|---------|-------------------|
+| **Daily Digest** | Cron 08:00 | Query overdue tasks → compile summary | POST `/api/n8n/callback` → Telegram broadcast |
+| **New Contact AI** | Webhook from Taris | Receive contact data → LLM tags/summary → update CRM | Taris sends on contact create |
+| **Campaign Sender** | Webhook from Taris | Get filtered contacts → generate personalized message → send email/TG | Taris triggers, receives report |
+| **Event Matcher** | Webhook from Taris | Get event params → LLM scores contacts → return ranked list | Taris displays results |
+| **Follow-up Reminder** | Cron hourly | Check upcoming follow-ups → notify assigned user | POST `/api/n8n/callback` → personal TG message |
+| **Import Contacts** | Webhook (CSV upload) | Parse CSV → deduplicate → insert into CRM → report | Taris uploads file, receives report |
+
+---
+
+## 7. Central Dashboard (TODO §11)
+
+### 7.1 Dashboard Concept
+
+The Central Dashboard is a unified view accessible via Web UI and Telegram. It shows real-time status of all activities.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🏠 TARIS DASHBOARD                        v2026.4.XX      │
+│                                                             │
+│  ┌──────────────────┐  ┌──────────────────┐                │
+│  │ 📋 TASKS TODAY   │  │ ⚡ WORKFLOWS     │                │
+│  │                  │  │                  │                │
+│  │ 3 active         │  │ 2 running        │                │
+│  │ 1 overdue ⚠️     │  │ 12 completed ✅  │                │
+│  │ 5 completed ✅   │  │ 0 failed         │                │
+│  └──────────────────┘  └──────────────────┘                │
+│                                                             │
+│  ┌──────────────────┐  ┌──────────────────┐                │
+│  │ 👥 CRM           │  │ 📊 CAMPAIGNS     │                │
+│  │                  │  │                  │                │
+│  │ 142 contacts     │  │ "AI Event" 🟢    │                │
+│  │ 8 new this week  │  │  42/50 sent      │                │
+│  │ 3 need follow-up │  │  12 confirmed    │                │
+│  └──────────────────┘  └──────────────────┘                │
+│                                                             │
+│  ┌──────────────────────────────────────────┐              │
+│  │ 💬 QUICK ACTIONS                         │              │
+│  │                                          │              │
+│  │ [📞 New Contact]  [📨 New Campaign]      │              │
+│  │ [▶️ Run Workflow]  [📊 Analytics]        │              │
+│  │ [🎤 Voice Command]                       │              │
+│  └──────────────────────────────────────────┘              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 Dashboard Implementation
+
+| Component | Telegram | Web UI |
+|-----------|----------|--------|
+| Tasks summary | Inline keyboard card | HTMX dashboard widget |
+| Workflow status | Callback buttons | Real-time SSE updates |
+| CRM summary | Inline keyboard card | HTMX dashboard widget |
+| Quick actions | Button grid | Button row + voice input |
+| Analytics | Text report | Chart.js / simple tables |
+
+**Screen DSL definition:**
+
+```yaml
+# src/screens/crm_dashboard.yaml
+screen: crm_dashboard
+title_key: dashboard_title
+layout: grid
+cards:
+  - id: tasks_today
+    type: counter
+    source: crm.tasks_today_count
+    icon: "📋"
+    label_key: dashboard_tasks_today
+    action: navigate:crm_tasks
+    
+  - id: workflows_active
+    type: counter
+    source: n8n.active_executions_count
+    icon: "⚡"
+    label_key: dashboard_workflows
+    action: navigate:n8n_workflows
+    
+  - id: crm_contacts
+    type: counter
+    source: crm.contacts_count
+    icon: "👥"
+    label_key: dashboard_contacts
+    action: navigate:crm_contacts
+    
+  - id: campaigns
+    type: status_card
+    source: crm.active_campaign
+    icon: "📊"
+    action: navigate:crm_campaigns
+
+actions:
+  - id: new_contact
+    label_key: btn_new_contact
+    icon: "📞"
+    action: navigate:crm_contact_new
+    
+  - id: new_campaign
+    label_key: btn_new_campaign
+    icon: "📨"
+    action: navigate:crm_campaign_new
+    
+  - id: run_workflow
+    label_key: btn_run_workflow
+    icon: "▶️"
+    action: navigate:n8n_workflow_list
+    
+  - id: voice_command
+    label_key: btn_voice_command
+    icon: "🎤"
+    action: voice_input
+```
+
+---
+
+## 8. "Демонстрашка" — Demo Scenario
+
+Based on `Демонстрашка для работы с базой клиентов.drawio`:
+
+### Scenario: AI-Powered Client Selection for Event
+
+```
+STEP 1: User (via voice or text in Taris)
+   "Подбери клиентов для мероприятия по AI-автоматизации для малого бизнеса"
+
+STEP 2: Taris LLM classifies intent
+   → {action: "crm_campaign_match", 
+      event: "AI-автоматизация для малого бизнеса",
+      keywords: ["AI", "автоматизация", "малый бизнес"]}
+
+STEP 3: Taris triggers N8N workflow "event-matcher"
+   POST /webhook/event-matcher
+   Body: {event_description, keywords, user_id}
+
+STEP 4: N8N workflow:
+   4a. Query CRM: SELECT * FROM crm_contacts WHERE status='active'
+   4b. Filter: exclude archived, no-contact
+   4c. For each contact batch (10): 
+       → LLM prompt: "Score this contact for the event. Return JSON {score, reason, invite_format}"
+   4d. Rank by score, return top N
+   4e. POST /api/n8n/callback {type: "match_results", contacts: [...]}
+
+STEP 5: Taris receives results, displays:
+   "🎯 Найдено 15 подходящих клиентов:
+    1. Иванов И.И. (0.95) — интересуется автоматизацией, покупал курсы
+    2. Петрова А.С. (0.87) — владелец малого бизнеса, ищет решения
+    ...
+    [✅ Утвердить список] [✏️ Редактировать] [❌ Отмена]"
+
+STEP 6: User approves → Taris triggers "campaign-send" workflow
+   OPTIONS (from drawio):
+   a) Output selection to file (for manual call in Russia)
+   b) Agent generates personalized script per contact
+      → Human approves script
+   c) Automated send via email/Telegram
+
+STEP 7: N8N sends invitations, reports back
+   "✅ Рассылка завершена: 15 приглашений отправлено (12 email, 3 Telegram)"
+```
+
+---
+
+## 9. MCP (Model Context Protocol) Integration
+
+### 9.1 MCP Architecture for Taris+N8N+CRM
+
+MCP provides a standardized protocol for LLM ↔ tool communication. This enables Taris (or any MCP-compatible AI client) to discover and use CRM/N8N tools dynamically.
+
+```
+┌──────────────────────────────────────────────────────┐
+│                   MCP Clients                         │
+│                                                      │
+│  Taris LLM  ←───→  VS Code Copilot  ←───→ Claude    │
+│  (bot_llm.py)       (development)         (web)     │
+└──────────┬──────────────────┬────────────────────────┘
+           │                  │
+           ▼                  ▼
+┌──────────────────────────────────────────────────────┐
+│              MCP Server (sintaris-openclaw)           │
+│                                                      │
+│  Tools exposed:                                      │
+│  ├── taris_chat(message) → LLM response              │
+│  ├── taris_status() → bot version, uptime            │
+│  ├── crm_search(query) → contacts                    │
+│  ├── crm_create_contact(data) → contact_id           │
+│  ├── crm_create_task(data) → task_id                 │
+│  ├── n8n_trigger(workflow, payload) → execution_id   │
+│  ├── n8n_status(execution_id) → status               │
+│  ├── n8n_list_workflows() → [workflows]              │
+│  ├── rag_search(query) → relevant chunks             │
+│  └── calendar_add(event) → event_id                  │
+│                                                      │
+│  Resources:                                          │
+│  ├── crm://contacts → contact list                   │
+│  ├── crm://tasks/today → today's tasks               │
+│  ├── n8n://workflows → active workflows              │
+│  └── taris://dashboard → dashboard data              │
+└──────────────────────────────────────────────────────┘
+```
+
+### 9.2 MCP Benefit
+
+With MCP, the same CRM/N8N tools become available to:
+- **Taris LLM** — for processing voice/chat commands
+- **VS Code Copilot** — for development and debugging
+- **Any MCP client** — future integrations (Claude Desktop, custom agents)
+
+---
+
+## 10. Implementation Phases
+
+### Phase 1: Foundation (MVP) — ~2 weeks
+
+| Task | Description | Files |
+|------|-------------|-------|
+| Install N8N on SintAItion | Docker or npm, PostgreSQL backend | `docker-compose.yml` |
+| Create `bot_n8n.py` | N8N REST adapter: trigger, status, list | `src/features/bot_n8n.py` |
+| Create `/api/n8n/callback` | Webhook receiver in `bot_web.py` | `src/bot_web.py` |
+| Create CRM tables | PostgreSQL schema (§5 above) | `src/core/store_crm.py` |
+| Create `bot_crm.py` | Basic CRUD: contacts, tasks, interactions | `src/features/bot_crm.py` |
+| Add CRM i18n strings | All 3 languages | `src/strings.json` |
+| Add Dashboard screen | Screen DSL YAML | `src/screens/crm_dashboard.yaml` |
+| N8N: Daily Digest workflow | Cron → query tasks → notify via callback | N8N JSON export |
+| Wire `skill-n8n` | Connect OpenClaw gateway to N8N API | `sintaris-openclaw/skills/skill-n8n/` |
+
+### Phase 2: CRM Intelligence — ~2 weeks
+
+| Task | Description |
+|------|-------------|
+| LLM intent classifier for CRM | "new contact" / "search" / "campaign" routing |
+| AI contact tagging | On create: LLM generates tags, summary, segment |
+| Campaign manager | Create campaign → AI match contacts → approve → send |
+| N8N: Campaign Sender workflow | Email/TG send with personalized messages |
+| N8N: Event Matcher workflow | LLM-scored contact selection |
+| Voice CRM commands | "Добавь контакт Иванов, телефон..." via voice |
+
+### Phase 3: Full Dashboard — ~1 week
+
+| Task | Description |
+|------|-------------|
+| Web UI dashboard widgets | HTMX cards with live counters |
+| Telegram dashboard card | Inline keyboard summary |
+| Workflow monitor | Real-time execution status display |
+| Analytics basic | Contact count, task completion rate, campaign stats |
+
+### Phase 4: MCP + Advanced — ~2 weeks
+
+| Task | Description |
+|------|-------------|
+| MCP tools for CRM | `crm_search`, `crm_create_contact`, `crm_create_task` |
+| MCP tools for N8N | `n8n_trigger`, `n8n_status`, `n8n_list_workflows` |
+| EspoCRM adapter (opt.) | For customer projects needing full CRM |
+| Import/export | CSV import contacts, export reports |
+| Multi-user CRM | Role-based access (admin/operator) |
+
+---
+
+## 11. Configuration
+
+### New `bot.env` Variables
+
+```bash
+# N8N Integration
+N8N_URL=http://localhost:5678
+N8N_API_KEY=<generated-api-key>
+N8N_WEBHOOK_SECRET=<shared-secret>
+
+# CRM Mode
+CRM_BACKEND=builtin         # builtin | espocrm
+ESPOCRM_URL=http://localhost:8889
+ESPOCRM_API_KEY=<api-key>
+
+# Dashboard
+DASHBOARD_REFRESH_INTERVAL=60    # seconds
+DASHBOARD_DAILY_DIGEST_TIME=08:00
+```
+
+### New OpenClaw Skills Configuration
+
+```bash
+# ~/.openclaw/skills/skill-n8n/config.json
+{
+  "n8n_url": "http://localhost:5678",
+  "api_key": "<key>",
+  "enabled_workflows": ["daily-digest", "campaign-sender", "event-matcher"]
+}
+
+# ~/.openclaw/skills/skill-espocrm/config.json  (if using Option B)
+{
+  "espocrm_url": "http://localhost:8889",
+  "api_key": "<key>"
+}
+```
+
+---
+
+## 12. Hardware Requirements
+
+### SintAItion (TariStation1) — Production
+
+| Service | RAM | CPU | Disk |
+|---------|-----|-----|------|
+| Taris (Telegram + Web) | ~200 MB | Low | 500 MB |
+| Ollama (qwen3.5:latest) | ~10 GB | Medium | 10 GB |
+| PostgreSQL | ~300 MB | Low | 2 GB |
+| N8N | ~300 MB | Low | 500 MB |
+| EspoCRM (optional) | ~500 MB | Low | 1 GB |
+| **Total** | **~11.3 GB** | | ~14 GB |
+
+SintAItion has 48 GB RAM — **plenty of headroom**.
+
+### TariStation2 (IniCoS-1) — Engineering
+
+| Service | RAM | Constraint |
+|---------|-----|-----------|
+| Taris + PostgreSQL | ~500 MB | OK |
+| Ollama (qwen2:0.5b) | ~1 GB | Tight on 7.6 GB with Copilot |
+| N8N | ~300 MB | OK |
+| **Total** | ~1.8 GB (without heavy LLM) | Feasible |
+
+---
+
+## 13. Security Considerations
+
+| Concern | Mitigation |
+|---------|-----------|
+| N8N webhook abuse | Shared secret in `N8N_WEBHOOK_SECRET`; validate on both sides |
+| CRM data access | Same PostgreSQL auth; Taris RBAC (admin/user roles) |
+| N8N API exposure | Bind to localhost only; no external port |
+| EspoCRM API (if used) | API key auth; localhost only |
+| Personal data in LLM | Obfuscate PII before sending to cloud LLM; local Ollama preferred |
+
+---
+
+## 14. Testing Strategy
+
+| Test | Type | Tool |
+|------|------|------|
+| N8N adapter unit tests | Offline mock | `src/tests/test_n8n_adapter.py` |
+| CRM CRUD tests | DB integration | `src/tests/test_crm.py` |
+| N8N webhook callback | Integration | `src/tests/test_n8n_callback.py` |
+| Dashboard rendering | Screen DSL | `src/tests/screen_loader/` |
+| Demo scenario E2E | Manual + script | `src/tests/test_crm_demo.py` |
+| Regression T-tests | Existing suite | T122+ for CRM/N8N features |
+
+---
+
+## 15. Relationship to Existing TODO Items
+
+| TODO Item | How This Concept Addresses It |
+|-----------|------------------------------|
+| §8.4 CRM Platform Vision | Phase 1–2 implement C1 (contacts) and C2 (deals) |
+| §11 Central Dashboard | Phase 3 implements the unified dashboard |
+| §13 Smart CRM | Phase 2 adds AI tagging, matching, voice control |
+| §23.2 N8N + PostgreSQL clone | Phase 1 installs N8N on SintAItion |
+| §23.5 Clone Worksafety DB + N8N | Future: reuse same N8N integration for Worksafety |
+
+---
+
+## 16. Decision Points for Owner
+
+Before implementation begins, decide:
+
+1. **CRM backend:** Built-in PostgreSQL (lightweight, offline) or EspoCRM (full-featured, Docker)?
+2. **N8N installation:** Docker container or npm global install?
+3. **Target for MVP:** SintAItion only, or both TariStation2 + SintAItion?
+4. **Demo data:** Import real client data or use synthetic test data?
+5. **Campaign channel:** Email only, Telegram only, or both?
+6. **Priority:** Start with CRM module or N8N integration first?
+
+---
+
+→ [Back to TODO.md](../TODO.md) · [CRM spec](../doc/todo/8.4-crm-platform.md) · [OpenClaw integration](../doc/architecture/openclaw-integration.md)

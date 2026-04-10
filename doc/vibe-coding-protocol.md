@@ -1411,3 +1411,11 @@ Every ~3 months, measure baseline health:
 | 06:33 UTC | Add admin Restart Server button: confirmation dialog, 60s countdown, broadcast warning to all users (admins+allowed+guests), flush voice_opts/conv_history/dynamic_users to disk before restart, i18n for ru/en/de. | 3 | 2 | claude-sonnet-4.6 | src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/strings.json | done |
 
 **Session 78 total: 2 features — Ollama picker improved, Admin restart button added ✅**
+
+**Session 79 — 2026-04-10**
+
+| Time | Request | Complexity | Turns | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 16:53 UTC | Architecture concept: Taris+N8N+CRM integration. Deep research of existing architecture, CRM requirements, drawio demo flow, OpenClaw skills. Created comprehensive concept document with 4-phase implementation plan, 3 integration patterns, dashboard design, MCP integration, demo scenario. | 4 | 3 | claude-opus-4.6 | concept/taris-n8n-crm-integration.md | done |
+
+**Session 79 total: 1 concept doc — Taris+N8N+CRM architecture proposal ✅**
