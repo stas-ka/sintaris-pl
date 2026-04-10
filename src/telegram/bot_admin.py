@@ -39,7 +39,7 @@ from core.bot_logger import tail_log
 from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _escape_md, _send_menu,
-    _back_keyboard, _get_active_model,
+    _back_keyboard, _get_active_model, _run_subprocess,
 )
 from telegram.bot_users import (
     _get_pending_registrations, _find_registration, _upsert_registration,
@@ -129,6 +129,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_system"),      callback_data="mode_system"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_restart"),         callback_data="admin_restart"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
     return kb
@@ -144,8 +145,62 @@ def _handle_admin_menu(chat_id: int) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Guest-user management
+# Admin Restart — broadcast warning, flush data, restart in 60 s
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_admin_restart(chat_id: int) -> None:
+    """Show restart confirmation with 60-second warning."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "admin_restart_btn_yes"), callback_data="admin_restart_confirmed"),
+        InlineKeyboardButton(_t(chat_id, "admin_restart_btn_cancel"), callback_data="admin_menu"),
+    )
+    try:
+        bot.send_message(chat_id, _t(chat_id, "admin_restart_confirm_text"), parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", _t(chat_id, "admin_restart_confirm_text")), reply_markup=kb)
+
+
+def _handle_admin_restart_confirmed(chat_id: int) -> None:
+    """Broadcast restart warning to all users, flush data, then restart in 60 s."""
+    # Collect all active user IDs
+    all_ids: set[int] = set(ADMIN_USERS) | set(ALLOWED_USERS) | set(_st._dynamic_users)
+
+    # 1. Broadcast restart notice to every user
+    sent = 0
+    for uid in all_ids:
+        try:
+            bot.send_message(uid, _t(uid, "admin_restart_broadcast"), parse_mode="Markdown")
+            sent += 1
+        except Exception as exc:
+            log.debug(f"[Restart] broadcast skip uid={uid}: {exc}")
+
+    # 2. Flush in-memory data to disk / DB
+    try:
+        _st._save_voice_opts()
+        _st._save_dynamic_users()
+        _st._save_conversation_history()
+        log.info("[Restart] all in-memory data flushed before restart")
+    except Exception as exc:
+        log.warning(f"[Restart] data flush partial: {exc}")
+
+    # 3. Confirm to admin
+    log.info(f"[Restart] admin {chat_id} triggered restart — broadcast to {sent} users, restarts in 60 s")
+    try:
+        bot.send_message(chat_id, _t(chat_id, "admin_restart_scheduled"), parse_mode="Markdown")
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", _t(chat_id, "admin_restart_scheduled")))
+
+    # 4. Schedule restart in background after 60 s
+    def _do_restart():
+        import time as _time
+        _time.sleep(60)
+        log.info("[Restart] executing systemctl restart taris-telegram")
+        _run_subprocess(["systemctl", "--user", "restart", "taris-telegram"], timeout=15)
+
+    threading.Thread(target=_do_restart, daemon=True).start()
+
+
 
 def _handle_admin_list_users(chat_id: int) -> None:
     """Show all users: Telegram users + Web UI accounts (unified view)."""

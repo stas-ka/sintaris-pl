@@ -84,6 +84,7 @@ from telegram.bot_admin import (
     _handle_admin_llm_trace,
     _handle_admin_memory_menu, _handle_admin_mem_set_start,
     _handle_admin_mcp_menu, _start_admin_mcp_set, _finish_admin_mcp_set, _handle_admin_mcp_clear,
+    _handle_admin_restart, _handle_admin_restart_confirmed,
     _admin_keyboard,
 )
 
@@ -463,6 +464,18 @@ def callback_handler(call):
     elif data == "admin_add_user":
         if _is_admin(cid):
             _start_admin_add_user(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_restart":
+        if _is_admin(cid):
+            _handle_admin_restart(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_restart_confirmed":
+        if _is_admin(cid):
+            _handle_admin_restart_confirmed(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

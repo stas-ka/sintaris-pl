@@ -435,7 +435,14 @@
     "profile_btn_rag_settings": "⚙️ Настройки RAG",
     "profile_rag_settings_title": "⚙️ *Настройки RAG*\n\nTopK: *{top_k}* · Размер чанка: *{chunk}*",
     "profile_rag_reset": "↺ Сбросить к системным",
-    "profile_rag_reset_ok": "✅ Настройки RAG сброшены."
+    "profile_rag_reset_ok": "✅ Настройки RAG сброшены.",
+    "admin_btn_restart": "🔄  Перезапустить сервер",
+    "admin_restart_confirm_text": "⚠️ *Перезапуск сервера*\n\nВсем активным пользователям будет отправлено уведомление. Данные сохранятся. Перезапуск произойдёт через 60 секунд.\n\nПродолжить?",
+    "admin_restart_btn_yes": "✅ Да, перезапустить через 60 с",
+    "admin_restart_btn_cancel": "❌ Отмена",
+    "admin_restart_broadcast": "⚠️ *Внимание!* Сервер перезапускается через *60 секунд*.\n\nВаши данные сохранены. Бот будет недоступен около 10–15 секунд.",
+    "admin_restart_scheduled": "✅ Уведомления отправлены, данные сохранены.\n⏳ Перезапуск через 60 секунд…",
+    "admin_restart_cancelled": "❌ Перезапуск отменён."
   },
   "en": {
     "btn_digest": "📧  Mail Digest",
@@ -873,7 +880,14 @@
     "profile_btn_rag_settings": "⚙️ RAG Settings",
     "profile_rag_settings_title": "⚙️ *RAG Settings*\n\nTopK: *{top_k}* · Chunk size: *{chunk}*",
     "profile_rag_reset": "↺ Reset to defaults",
-    "profile_rag_reset_ok": "✅ RAG settings reset to defaults."
+    "profile_rag_reset_ok": "✅ RAG settings reset to defaults.",
+    "admin_btn_restart": "🔄  Restart Server",
+    "admin_restart_confirm_text": "⚠️ *Restart Server*\n\nAll active users will receive a warning. Data will be saved. Server restarts in 60 seconds.\n\nContinue?",
+    "admin_restart_btn_yes": "✅ Yes, restart in 60 s",
+    "admin_restart_btn_cancel": "❌ Cancel",
+    "admin_restart_broadcast": "⚠️ *Notice!* Server is restarting in *60 seconds*.\n\nYour data has been saved. The bot will be unavailable for about 10–15 seconds.",
+    "admin_restart_scheduled": "✅ Notices sent, data saved.\n⏳ Restarting in 60 seconds…",
+    "admin_restart_cancelled": "❌ Restart cancelled."
   },
   "de": {
     "btn_digest": "📧  E-Mail-Zusammenfassung",
@@ -1311,6 +1325,13 @@
     "profile_btn_rag_settings": "⚙️ RAG-Einstellungen",
     "profile_rag_settings_title": "⚙️ *RAG-Einstellungen*\n\nTopK: *{top_k}* · Chunk-Größe: *{chunk}*",
     "profile_rag_reset": "↺ Zurücksetzen",
-    "profile_rag_reset_ok": "✅ RAG-Einstellungen zurückgesetzt."
+    "profile_rag_reset_ok": "✅ RAG-Einstellungen zurückgesetzt.",
+    "admin_btn_restart": "🔄  Server neu starten",
+    "admin_restart_confirm_text": "⚠️ *Server neu starten*\n\nAlle aktiven Benutzer erhalten eine Warnung. Daten werden gespeichert. Neustart in 60 Sekunden.\n\nFortfahren?",
+    "admin_restart_btn_yes": "✅ Ja, in 60 s neu starten",
+    "admin_restart_btn_cancel": "❌ Abbrechen",
+    "admin_restart_broadcast": "⚠️ *Achtung!* Server wird in *60 Sekunden* neu gestartet.\n\nIhre Daten wurden gesichert. Der Bot ist ca. 10–15 Sekunden nicht erreichbar.",
+    "admin_restart_scheduled": "✅ Benachrichtigungen gesendet, Daten gesichert.\n⏳ Neustart in 60 Sekunden…",
+    "admin_restart_cancelled": "❌ Neustart abgebrochen."
   }
 }
