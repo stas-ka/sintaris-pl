@@ -1,6 +1,6 @@
 # Taris + N8N + CRM — Integration Architecture Concept
 
-**Version:** 1.1 · **Date:** 2026-04-10  
+**Version:** 1.2 · **Date:** 2026-04-10  
 **Author:** Architecture Proposal · **Status:** Concept  
 **Scope:** Taris as central console for N8N workflow automation + CRM integration  
 **References:** TODO.md §11, §13, §23 · `doc/todo/8.4-crm-platform.md` · `concept/additional/crm_system_requirements_full.md` · `Демонстрашка для работы с базой клиентов.drawio`
@@ -440,6 +440,283 @@ MCP_CRM_BEARER_TOKEN=                             # Auth token for EspoMCP
 MCP_TOOL_USE_ENABLED=0                            # Enable LLM tool-use mode (0=off, 1=on)
 MCP_TOOL_USE_THRESHOLD=complex                    # When to use tools: always|complex|never
 ```
+
+---
+
+## 4B. Adaptive LLM Workflows — OpenClaw with Flexible LLM
+
+> **When to read:** When designing LLM-driven process automation, agent loops, or dynamic tool selection.
+
+### The Vision: LLM as Workflow Orchestrator
+
+Today Taris routes intents via **static code** (`if intent == "campaign": trigger_n8n()`).
+The goal is **adaptive orchestration**: the LLM **reasons** about what tools to call, in what order, with what parameters — and adjusts its plan based on intermediate results.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  STATIC (today)                 ADAPTIVE (target)                  │
+│                                                                     │
+│  User → regex/keyword           User → LLM + tool-use              │
+│    ↓                              ↓                                │
+│  if "campaign" → n8n_hook       LLM sees tools: [crm_search,       │
+│    ↓                            n8n_trigger, calendar_add, ...]     │
+│  hardcoded workflow               ↓                                │
+│    ↓                            LLM reasons: "need clients first"  │
+│  fixed response                   ↓ calls crm_search(budget>10k)   │
+│                                 LLM: "47 found, now send campaign" │
+│                                   ↓ calls n8n_trigger(...)         │
+│                                 LLM: "track results until Friday"  │
+│                                   ↓ calls calendar_add(...)        │
+│                                 LLM: "✅ Done. 47 clients, 3 tools"│
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### How It Works: Agentic Loop in bot_llm.py
+
+The core change is a new function `ask_llm_with_tools()` that implements a **ReAct-style loop**:
+
+```
+ask_llm_with_tools(messages, tools, max_iterations=10)
+│
+├─ Iteration 1: LLM receives [system + history + user] + tool definitions
+│  └─ LLM returns: tool_call("crm_search", {filter: "budget>10k"})
+│     └─ Execute tool → inject result as {"role": "tool", "content": "47 contacts..."}
+│
+├─ Iteration 2: LLM receives [previous context + tool result]
+│  └─ LLM returns: tool_call("n8n_trigger", {workflow: "campaign", contacts: [...]})
+│     └─ Execute tool → inject result
+│
+├─ Iteration 3: LLM receives [context + all prior results]
+│  └─ LLM returns: text response "✅ Campaign started for 47 clients"
+│     └─ Loop ends (text = final answer)
+│
+└─ Guards: max_iterations, per-tool timeout, total budget, error retry
+```
+
+### Provider Support for Tool-Use
+
+| Provider | Native Tool-Use | Format | Status in Taris |
+|----------|----------------|--------|-----------------|
+| **OpenAI** (gpt-4o, gpt-4o-mini) | ✅ Full | `tools` param + `tool_calls` response | Ready to implement |
+| **Anthropic** (claude-3.5+) | ✅ Full | `tools` param + `tool_use` content block | Ready to implement |
+| **Ollama** (qwen3.5, gemma4) | ✅ Via `/api/chat` | `tools` param + `message.tool_calls` | Ready — qwen3.5 & gemma4 support this |
+| **Gemini** (1.5 pro+) | ✅ Full | `function_declarations` + `function_call` | Ready to implement |
+| **YandexGPT** | ❌ No | — | Text-only fallback |
+| **Local llama.cpp** | ⚠️ Limited | Grammar-constrained JSON | Experimental |
+| **OpenClaw CLI** | ❌ No (text-only) | — | Would need gateway-side tool-use |
+
+**Model Requirements for Reliable Tool-Use:**
+- OpenAI: gpt-4o-mini or better (gpt-3.5 tool-use is unreliable)
+- Ollama: qwen3.5:latest (9B) — tested 100% quality, supports tool_call
+- Ollama: gemma4:e2b / gemma4:e4b — supports tool_call natively
+- Anthropic: claude-3.5-sonnet or better
+
+### What OpenClaw Brings: Flexible Model Switching
+
+OpenClaw's **dynamic model picker** (Admin → LLM → Switch Model) enables a unique advantage: **adapting the LLM to the workflow complexity live**.
+
+| Scenario | Model | Why |
+|----------|-------|-----|
+| Simple Q&A chat | gemma4:e2b (2.3B) | Fast (3–5s), low memory, sufficient |
+| CRM search + single action | qwen3.5:latest (9B) | Good tool-use, 100% quality |
+| Multi-tool chain (3+ tools) | gpt-4o-mini via OpenAI | Best tool-use reliability, handles complex chains |
+| Complex workflow creation | gpt-4o or claude-3.5 | Needed for generating N8N workflow JSON |
+| Voice command → single tool | gemma4:e4b (4.5B) | Audio-native + tool-use in one call |
+
+**Adaptive Model Selection (proposed):**
+
+```python
+def _select_model_for_tools(user_text: str, available_tools: list) -> str:
+    """Choose model based on task complexity."""
+    tool_count = len(available_tools)
+    text_len = len(user_text)
+
+    if tool_count == 0:
+        return OLLAMA_MODEL                    # default chat model
+    elif tool_count <= 3 and text_len < 200:
+        return "gemma4:e4b"                    # local, fast, tool-capable
+    elif tool_count <= 6:
+        return "qwen3.5:latest"                # local, 100% quality
+    else:
+        return "gpt-4o-mini"                   # cloud, best tool-use
+```
+
+### Five Levels of Adaptive Workflow
+
+| Level | Capability | LLM Role | Example |
+|-------|-----------|----------|---------|
+| **L0** (today) | Static routing | Intent classification only | "campaign" → fixed webhook |
+| **L1** | Parameterized triggers | LLM extracts parameters | "send to budget > 10k" → webhook + params |
+| **L2** | Single-tool selection | LLM chooses 1 tool from N | "find clients" → crm_search vs n8n_list |
+| **L3** | Multi-tool chaining | LLM chains 2–5 tools | search → filter → trigger → schedule |
+| **L4** | Workflow generation | LLM creates N8N workflows | "automate weekly report" → new N8N flow |
+| **L5** | Self-improving agent | LLM optimizes workflows based on outcomes | A/B test campaigns, adjust targeting |
+
+**Current state: L0. Realistic near-term target: L2–L3.**
+
+### Implementation Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                    Taris + OpenClaw Adaptive Stack                  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────┐                  │
+│  │  User Interface (Telegram / Web UI / Voice)   │                  │
+│  └───────────────────┬──────────────────────────┘                  │
+│                      │                                              │
+│  ┌───────────────────▼──────────────────────────┐                  │
+│  │  bot_llm.py — ask_llm_with_tools()            │                  │
+│  │  • Tool schema registry                       │                  │
+│  │  • Agentic loop (max 10 iterations)           │                  │
+│  │  • Adaptive model selection                   │                  │
+│  │  • Provider-specific tool-call parsing         │                  │
+│  └───┬────────┬────────┬────────┬───────────────┘                  │
+│      │        │        │        │                                   │
+│  ┌───▼──┐ ┌──▼───┐ ┌──▼───┐ ┌──▼────┐  ← Tool Execution Layer    │
+│  │ CRM  │ │ N8N  │ │ RAG  │ │Calendar│                             │
+│  │search│ │trigger│ │query │ │ add   │                              │
+│  └───┬──┘ └──┬───┘ └──┬───┘ └──┬────┘                             │
+│      │        │        │        │                                   │
+│  ┌───▼────────▼────────▼────────▼───────────┐                      │
+│  │  Tool Registry (MCP or local function)    │                      │
+│  │  • Local tools: calendar, notes, RAG      │                      │
+│  │  • MCP tools: N8N, CRM, Nextcloud         │                      │
+│  │  • Discovery: /tools/list endpoint         │                      │
+│  └──────────────────────────────────────────┘                      │
+│                                                                    │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐       │
+│  │ Ollama (local)  │  │ OpenAI (cloud)  │  │ Anthropic      │       │
+│  │ qwen3.5/gemma4  │  │ gpt-4o-mini     │  │ claude-3.5     │       │
+│  └────────────────┘  └────────────────┘  └────────────────┘       │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Tool Schema Example
+
+Each tool exposed to the LLM follows a standard schema:
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "crm_search_contacts",
+    "description": "Search CRM contacts by criteria. Returns list of matching contacts with name, email, tags, budget.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {"type": "string", "description": "Search text or filter expression"},
+        "segment": {"type": "string", "enum": ["all", "active", "lead", "partner"]},
+        "limit": {"type": "integer", "default": 20}
+      },
+      "required": ["query"]
+    }
+  }
+}
+```
+
+### Proposed Tool Registry (bot.env)
+
+```bash
+# Tool-use configuration
+TOOL_USE_ENABLED=1                    # Master switch (0=disabled, 1=enabled)
+TOOL_USE_MAX_ITERATIONS=10            # Max agentic loop iterations
+TOOL_USE_TIMEOUT=120                  # Total timeout for tool-use chain (seconds)
+TOOL_USE_PROVIDERS=ollama,openai,anthropic  # Providers supporting tool-use
+
+# Tool categories (enable/disable per category)
+TOOL_USE_CATEGORIES=crm,n8n,calendar,rag,notes
+# Per-tool timeout (seconds)
+TOOL_TIMEOUT_CRM=10
+TOOL_TIMEOUT_N8N=30
+TOOL_TIMEOUT_RAG=5
+```
+
+### Live Adaptation Scenarios
+
+**Scenario 1: Voice → Adaptive CRM Action**
+```
+User (voice): "Найди клиентов с бюджетом больше 50 тысяч и отправь им приглашение"
+  ↓ STT (faster-whisper) → text
+  ↓ ask_llm_with_tools(text, tools=[crm_search, n8n_trigger, ...])
+  ↓ LLM (qwen3.5): tool_call("crm_search", {query: "budget>50000"})
+  ↓ Execute → 12 contacts found
+  ↓ LLM: tool_call("n8n_trigger", {workflow: "send-invite", contacts: [...]})
+  ↓ Execute → N8N workflow started
+  ↓ LLM: "Найдено 12 клиентов, приглашения отправлены."
+  ↓ TTS (Piper) → audio response
+```
+
+**Scenario 2: LLM Adjusts Mid-Flow**
+```
+User: "Запусти еженедельный отчет по продажам"
+  ↓ LLM: tool_call("n8n_list_workflows", {tag: "report"})
+  ↓ Execute → 3 workflows found: weekly-sales, monthly-summary, daily-digest
+  ↓ LLM: tool_call("n8n_trigger", {workflow: "weekly-sales"})
+  ↓ Execute → ERROR: "Data source not configured"
+  ↓ LLM (adjusts): "Workflow 'weekly-sales' requires data source configuration.
+                     Available alternative: 'daily-digest' works without setup.
+                     Shall I run the daily digest instead?"
+  ↓ User: "Да, запусти"
+  ↓ LLM: tool_call("n8n_trigger", {workflow: "daily-digest"})
+  ↓ Execute → SUCCESS
+  ↓ LLM: "✅ Daily digest запущен. Результат будет через 2 минуты."
+```
+
+**Scenario 3: Dynamic Workflow via gemma4 Audio**
+```
+User (audio, German): "Erstelle einen neuen Kontakt Hans Müller, Telefon 0172..."
+  ↓ gemma4:e4b (audio-native) → direct text extraction (no separate STT!)
+  ↓ tool_call("crm_create_contact", {name: "Hans Müller", phone: "0172..."})
+  ↓ Execute → contact created, id=42
+  ↓ LLM: "✅ Kontakt Hans Müller erstellt (ID 42)."
+  ↓ TTS → audio response
+```
+
+### Comparison: Static vs Adaptive
+
+| Criterion | Static Routing (L0) | Adaptive LLM (L2–L3) |
+|-----------|--------------------|-----------------------|
+| **Setup effort** | Low (hardcode intents) | Medium (tool schemas + loop) |
+| **Flexibility** | New intent = new code | New intent = LLM figures it out |
+| **Error handling** | Explicit try/catch | LLM retries, suggests alternatives |
+| **Multi-step tasks** | Separate buttons/screens | Single prompt chains tools |
+| **Latency** | Fast (1 API call) | Slower (2–5 LLM calls in loop) |
+| **Determinism** | High (same input → same action) | Medium (LLM may vary) |
+| **Cost (cloud LLM)** | Low (1 call) | Higher (N calls per chain) |
+| **Cost (local Ollama)** | Low | Low (Ollama is free) |
+| **Maintenance** | High (update code per change) | Low (update tool schemas only) |
+| **User experience** | Rigid menus | Natural language, feels intelligent |
+
+### Recommended Hybrid Strategy
+
+```
+User request
+    ↓
+┌─────────────────────────────────┐
+│ Intent Classifier (fast, local)  │
+│ "Is this simple or complex?"     │
+└──────┬──────────┬───────────────┘
+       │          │
+  simple│     complex│
+       ↓          ↓
+  Static Route    ask_llm_with_tools()
+  (Pattern A/B)   (Agentic loop, Pattern D)
+  ~50ms           ~3–15s (depends on tools)
+```
+
+**Rules:**
+- `simple` = single action, deterministic (e.g. "show calendar", "restart service")
+- `complex` = multi-step, parameters needed, or user intent ambiguous
+- Admin toggle: `TOOL_USE_ENABLED=0` disables all tool-use (fallback to static)
+- Per-user opt-in possible via `voice_opts.json` or admin settings
+
+### Decision Points (extends §16)
+
+| # | Question | Options |
+|---|----------|---------|
+| 10 | **Tool-use level target** | L1 (params only), L2 (single-tool), L3 (multi-chain) |
+| 11 | **Default model for tool-use** | Local Ollama (free, 3–15s) vs Cloud (fast, paid) |
+| 12 | **Tool categories for MVP** | CRM + N8N only, or include calendar/notes/RAG? |
 
 ---
 
