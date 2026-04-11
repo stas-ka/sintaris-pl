@@ -119,6 +119,25 @@ MCP_REMOTE_URL     = os.environ.get("MCP_REMOTE_URL", "")        # e.g. https://
 MCP_TIMEOUT        = int(os.environ.get("MCP_TIMEOUT", "15"))
 MCP_REMOTE_TOP_K   = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
 
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Workflow Automation
+# N8N_URL: base URL of the N8N instance (REST API)
+# N8N_API_KEY: API key for N8N REST calls
+# N8N_WEBHOOK_SECRET: shared secret for incoming webhook callbacks
+# ─────────────────────────────────────────────────────────────────────────────
+N8N_URL             = os.environ.get("N8N_URL", "")                # e.g. https://automata.dev2null.de
+N8N_API_KEY         = os.environ.get("N8N_API_KEY", "")
+N8N_WEBHOOK_SECRET  = os.environ.get("N8N_WEBHOOK_SECRET", "")    # verify inbound callbacks
+N8N_TIMEOUT         = int(os.environ.get("N8N_TIMEOUT", "30"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM — built-in contact/task/campaign management
+# CRM_PG_DSN: PostgreSQL DSN for CRM tables (separate from main store)
+# CRM_ENABLED: master switch for CRM features
+# ─────────────────────────────────────────────────────────────────────────────
+CRM_ENABLED         = os.environ.get("CRM_ENABLED", "0") == "1"
+CRM_PG_DSN          = os.environ.get("CRM_PG_DSN", "")            # e.g. postgresql://taris:pw@dev2null.de:5432/taris
+
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           _th("active_model.txt"))
 LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides (system/chat)

@@ -32,6 +32,7 @@ from core.bot_config import (
     _VOICE_OPTS_DEFAULTS, DEVICE_VARIANT,
     _LOG_FILE, _ASSISTANT_LOG_FILE, _SECURITY_LOG_FILE, _VOICE_LOG_FILE, _DATASTORE_LOG_FILE,
     CONVERSATION_HISTORY_MAX, CONV_SUMMARY_THRESHOLD, CONV_MID_MAX,
+    N8N_URL, N8N_API_KEY, CRM_ENABLED,
     log,
 )
 from core.bot_llm import get_per_func_provider, set_per_func_provider, get_ollama_model, set_ollama_model
@@ -129,6 +130,8 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_system"),      callback_data="mode_system"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_n8n"),         callback_data="admin_n8n_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_crm"),         callback_data="admin_crm_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_restart"),         callback_data="admin_restart"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
@@ -1735,3 +1738,192 @@ def _handle_admin_mem_set_start(chat_id: int, setting_key: str) -> None:
     label, _db_key = labels[setting_key]
     _st._user_mode[chat_id] = f"admin_mem_{setting_key}"
     bot.send_message(chat_id, f"Enter new value for {label} (integer):")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin → N8N integration panel
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_admin_n8n_menu(chat_id: int) -> None:
+    """Show N8N integration status and workflow list."""
+    if not N8N_URL or not N8N_API_KEY:
+        bot.send_message(chat_id, _t(chat_id, "admin_n8n_not_configured"),
+                         reply_markup=_back_keyboard(chat_id, "admin_menu"))
+        return
+
+    try:
+        from features.bot_n8n import test_connection, list_workflows
+        ok, info = test_connection()
+        if not ok:
+            text = _t(chat_id, "admin_n8n_status_err", error=info)
+            bot.send_message(chat_id, text,
+                             reply_markup=_back_keyboard(chat_id, "admin_menu"))
+            return
+
+        workflows = list_workflows(active_only=True)
+        lines = [_t(chat_id, "admin_n8n_title"),
+                 _t(chat_id, "admin_n8n_status_ok", workflows=len(workflows)),
+                 ""]
+        if workflows:
+            lines.append(_t(chat_id, "admin_n8n_workflows", count=len(workflows)))
+            for wf in workflows[:15]:
+                name = wf.get("name", "?")
+                wid = wf.get("id", "?")
+                lines.append(f"  • {name} (id: {wid})")
+            if len(workflows) > 15:
+                lines.append(f"  … +{len(workflows) - 15} more")
+        else:
+            lines.append(_t(chat_id, "admin_n8n_no_workflows"))
+
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🔄 Refresh", callback_data="admin_n8n_menu"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
+        bot.send_message(chat_id, "\n".join(lines), reply_markup=kb)
+    except Exception as exc:
+        log.error("[Admin][N8N] %s", exc)
+        bot.send_message(chat_id,
+                         _t(chat_id, "admin_n8n_status_err", error=str(exc)[:80]),
+                         reply_markup=_back_keyboard(chat_id, "admin_menu"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin → CRM panel (overview / stats)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_admin_crm_menu(chat_id: int) -> None:
+    """Show CRM overview with contact/task/campaign stats."""
+    try:
+        from features.bot_crm import is_available, get_stats
+        if not is_available():
+            bot.send_message(chat_id, _t(chat_id, "crm_not_available"),
+                             reply_markup=_back_keyboard(chat_id, "admin_menu"))
+            return
+
+        stats = get_stats()
+        lines = [
+            _t(chat_id, "crm_title"),
+            _t(chat_id, "crm_contacts_count", count=stats.get("contacts", 0)),
+            _t(chat_id, "crm_tasks_count", count=stats.get("active_tasks", 0)),
+            _t(chat_id, "crm_campaigns_count", count=stats.get("campaigns", 0)),
+        ]
+        kb = InlineKeyboardMarkup()
+        kb.add(
+            InlineKeyboardButton(_t(chat_id, "crm_btn_contacts"), callback_data="crm_contacts"),
+            InlineKeyboardButton(_t(chat_id, "crm_btn_add_contact"), callback_data="crm_add_start"),
+        )
+        kb.add(
+            InlineKeyboardButton(_t(chat_id, "crm_btn_search"), callback_data="crm_search_start"),
+            InlineKeyboardButton(_t(chat_id, "crm_btn_tasks"), callback_data="crm_tasks"),
+        )
+        kb.add(
+            InlineKeyboardButton(_t(chat_id, "crm_btn_campaigns"), callback_data="crm_campaigns"),
+            InlineKeyboardButton(_t(chat_id, "crm_btn_stats"), callback_data="crm_stats"),
+        )
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
+        bot.send_message(chat_id, "\n".join(lines), reply_markup=kb)
+    except Exception as exc:
+        log.error("[Admin][CRM] %s", exc)
+        bot.send_message(chat_id, f"CRM Error: {exc}",
+                         reply_markup=_back_keyboard(chat_id, "admin_menu"))
+
+
+def _handle_crm_contacts_list(chat_id: int) -> None:
+    """List active contacts."""
+    from features.bot_crm import list_contacts
+    contacts = list_contacts("active", limit=20)
+    if not contacts:
+        bot.send_message(chat_id, _t(chat_id, "crm_search_empty"),
+                         reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))
+        return
+    lines = [_t(chat_id, "crm_contacts_count", count=len(contacts)), ""]
+    for c in contacts:
+        name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+        seg = c.get("segment", "")
+        lines.append(f"  #{c['id']}  {name}  [{seg}]")
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "crm_btn_add_contact"), callback_data="crm_add_start"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_crm_menu"))
+    bot.send_message(chat_id, "\n".join(lines), reply_markup=kb)
+
+
+def _handle_crm_add_start(chat_id: int) -> None:
+    """Start adding a new contact — ask for name."""
+    _st._user_mode[chat_id] = "crm_add_name"
+    bot.send_message(chat_id, _t(chat_id, "crm_enter_name"))
+
+
+def _handle_crm_search_start(chat_id: int) -> None:
+    """Start contact search — ask for query."""
+    _st._user_mode[chat_id] = "crm_search"
+    bot.send_message(chat_id, _t(chat_id, "crm_enter_search"))
+
+
+def _handle_crm_stats(chat_id: int) -> None:
+    """Show CRM statistics."""
+    from features.bot_crm import get_stats
+    stats = get_stats()
+    text = (
+        f"📊 CRM Statistics\n"
+        f"👤 Contacts: {stats.get('contacts', 0)}\n"
+        f"📋 Active tasks: {stats.get('active_tasks', 0)}\n"
+        f"📢 Campaigns: {stats.get('campaigns', 0)}\n"
+        f"💬 Interactions: {stats.get('interactions', 0)}"
+    )
+    bot.send_message(chat_id, text,
+                     reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))
+
+
+def finish_crm_input(chat_id: int, text: str) -> None:
+    """Handle CRM text input steps (called from telegram_menu_bot)."""
+    mode = _st._user_mode.get(chat_id)
+
+    if mode == "crm_add_name":
+        parts = text.strip().split(None, 1)
+        first = parts[0] if parts else text.strip()
+        last = parts[1] if len(parts) > 1 else ""
+        _st._pending_crm = getattr(_st, "_pending_crm", {})
+        _st._pending_crm[chat_id] = {"first_name": first, "last_name": last}
+        _st._user_mode[chat_id] = "crm_add_email"
+        bot.send_message(chat_id, _t(chat_id, "crm_enter_email"))
+
+    elif mode == "crm_add_email":
+        pending = getattr(_st, "_pending_crm", {}).get(chat_id, {})
+        email = text.strip() if "@" in text else ""
+        pending["email"] = email
+        _st._user_mode[chat_id] = "crm_add_phone"
+        bot.send_message(chat_id, _t(chat_id, "crm_enter_phone"))
+
+    elif mode == "crm_add_phone":
+        pending = getattr(_st, "_pending_crm", {}).pop(chat_id, {})
+        phone = text.strip() if any(c.isdigit() for c in text) else ""
+        pending["phone"] = phone
+        _st._user_mode.pop(chat_id, None)
+
+        from features.bot_crm import add_contact
+        result = add_contact(pending.get("first_name", ""),
+                             pending.get("last_name", ""),
+                             owner_user_id=chat_id,
+                             email=pending.get("email", ""),
+                             phone=phone)
+        if result.get("ok"):
+            name = f"{pending.get('first_name','')} {pending.get('last_name','')}".strip()
+            bot.send_message(chat_id, _t(chat_id, "crm_contact_added", name=name),
+                             reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))
+        else:
+            bot.send_message(chat_id, f"❌ {result.get('error', 'Unknown error')}",
+                             reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))
+
+    elif mode == "crm_search":
+        _st._user_mode.pop(chat_id, None)
+        from features.bot_crm import search
+        results = search(text.strip())
+        if not results:
+            bot.send_message(chat_id, _t(chat_id, "crm_search_empty"),
+                             reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))
+            return
+        lines = [_t(chat_id, "crm_search_results", count=len(results)), ""]
+        for c in results:
+            name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+            lines.append(f"  #{c['id']}  {name}  {c.get('email','')}")
+        bot.send_message(chat_id, "\n".join(lines),
+                         reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))

@@ -85,6 +85,9 @@ from telegram.bot_admin import (
     _handle_admin_memory_menu, _handle_admin_mem_set_start,
     _handle_admin_mcp_menu, _start_admin_mcp_set, _finish_admin_mcp_set, _handle_admin_mcp_clear,
     _handle_admin_restart, _handle_admin_restart_confirmed,
+    _handle_admin_n8n_menu, _handle_admin_crm_menu,
+    _handle_crm_contacts_list, _handle_crm_add_start, _handle_crm_search_start,
+    _handle_crm_stats, finish_crm_input,
     _admin_keyboard,
 )
 
@@ -699,6 +702,44 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── N8N integration ───────────────────────────────────────────────────
+    elif data == "admin_n8n_menu":
+        if _is_admin(cid):
+            _handle_admin_n8n_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── CRM ───────────────────────────────────────────────────────────────
+    elif data == "admin_crm_menu":
+        if _is_admin(cid):
+            _handle_admin_crm_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_contacts":
+        if _is_admin(cid):
+            _handle_crm_contacts_list(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_add_start":
+        if _is_admin(cid):
+            _handle_crm_add_start(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_search_start":
+        if _is_admin(cid):
+            _handle_crm_search_start(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_stats":
+        if _is_admin(cid):
+            _handle_crm_stats(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -1172,6 +1213,15 @@ def text_handler(message):
                 _handle_admin_memory_menu(cid)
             except (ValueError, KeyError):
                 bot.send_message(cid, "❌ Please enter a valid integer.")
+        else:
+            _st._user_mode.pop(cid, None)
+            bot.send_message(cid, _t(cid, "admin_only"))
+        return
+
+    # ── CRM multi-step input ─────────────────────────────────────────────
+    if mode is not None and mode.startswith("crm_"):
+        if _is_admin(cid):
+            finish_crm_input(cid, message.text)
         else:
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "admin_only"))

@@ -66,6 +66,7 @@ from core.bot_config import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL,
     PIPER_BIN, PIPER_MODEL,
     MCP_SERVER_ENABLED, MCP_REMOTE_URL, MCP_TIMEOUT,
+    N8N_URL, N8N_API_KEY, N8N_WEBHOOK_SECRET, CRM_ENABLED,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
 from core.voice_debug import VoiceDebugSession, list_debug_sessions
@@ -3055,6 +3056,84 @@ async def api_chat(request: Request):
     pl = PipelineLog(user_id="api")
     reply = pl.timed_llm(lambda: ask_llm(message, timeout=t), input_text=message)
     return JSONResponse({"reply": reply})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Webhook + CRM API
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/n8n/callback")
+async def api_n8n_callback(request: Request):
+    """Receive N8N workflow execution callbacks.
+
+    N8N sends HTTP POST with JSON payload when a workflow completes.
+    Auth: X-Webhook-Secret header must match N8N_WEBHOOK_SECRET.
+    """
+    secret = request.headers.get("X-Webhook-Secret", "")
+    if N8N_WEBHOOK_SECRET and secret != N8N_WEBHOOK_SECRET:
+        raise HTTPException(403, detail="Invalid webhook secret")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+    try:
+        from features.bot_n8n import process_callback
+        result = process_callback(body)
+        return JSONResponse({"ok": True, "processed": result})
+    except Exception as exc:
+        log.error("[N8N Webhook] %s", exc)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+@app.get("/api/crm/contacts")
+async def api_crm_contacts(request: Request, q: str = "", limit: int = 50):
+    """List or search CRM contacts."""
+    _verify_api_token(request)
+    if not CRM_ENABLED:
+        raise HTTPException(503, detail="CRM not enabled")
+    from features.bot_crm import search, list_contacts
+    if q:
+        contacts = search(q, limit=limit)
+    else:
+        contacts = list_contacts("active", limit=limit)
+    return JSONResponse({"contacts": contacts, "count": len(contacts)})
+
+
+@app.get("/api/crm/stats")
+async def api_crm_stats(request: Request):
+    """Get CRM statistics."""
+    _verify_api_token(request)
+    if not CRM_ENABLED:
+        raise HTTPException(503, detail="CRM not enabled")
+    from features.bot_crm import get_stats
+    return JSONResponse(get_stats())
+
+
+@app.post("/api/crm/contacts")
+async def api_crm_add_contact(request: Request):
+    """Add a new CRM contact.
+
+    Body: {"first_name": "...", "last_name": "...", "email": "...", "phone": "..."}
+    """
+    _verify_api_token(request)
+    if not CRM_ENABLED:
+        raise HTTPException(503, detail="CRM not enabled")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+    from features.bot_crm import add_contact
+    result = add_contact(
+        body.get("first_name", ""),
+        body.get("last_name", ""),
+        email=body.get("email", ""),
+        phone=body.get("phone", ""),
+        city=body.get("city", ""),
+        company=body.get("company", ""),
+    )
+    if result.get("ok"):
+        return JSONResponse(result, status_code=201)
+    return JSONResponse(result, status_code=400)
 
 
 @app.post("/mcp/search")
