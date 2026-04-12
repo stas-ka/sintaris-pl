@@ -85,9 +85,9 @@ CAMPAIGN_SHEET_ID      = os.environ.get("CAMPAIGN_SHEET_ID", "1jQaJZA4cBS2sLtE42
 
 **In `bot.env` on TariStation2:**
 ```
-N8N_CAMPAIGN_SELECT_WH=https://automata.dev2null.de/webhook/taris-campaign-select
-N8N_CAMPAIGN_SEND_WH=https://automata.dev2null.de/webhook/taris-campaign-send
-CAMPAIGN_SHEET_ID=1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA
+N8N_CAMPAIGN_SELECT_WH=${N8N_URL}/webhook/taris-campaign-select
+N8N_CAMPAIGN_SEND_WH=${N8N_URL}/webhook/taris-campaign-send
+CAMPAIGN_SHEET_ID=***  # from .env CAMPAIGN_SHEET_ID
 ```
 
 ---

@@ -530,22 +530,22 @@ Add to `~/.taris/bot.env` on the target (replace `***` with values from `.env`):
 
 ```bash
 # N8N integration
-N8N_URL=https://automata.dev2null.de
+N8N_URL=***                                  # VPS_N8N_URL from .env (e.g. https://<vps>/n8n)
 N8N_API_KEY=***                              # VPS_N8N_API_KEY from .env
 N8N_WEBHOOK_SECRET=***                       # N8N_WEBHOOK_SECRET from .env
 N8N_TIMEOUT=30
 
 # Campaign agent (N8N webhooks — set after workflows are active in N8N)
-N8N_CAMPAIGN_SELECT_WH=https://automata.dev2null.de/webhook/taris-campaign-select
-N8N_CAMPAIGN_SEND_WH=https://automata.dev2null.de/webhook/taris-campaign-send
+N8N_CAMPAIGN_SELECT_WH=***                   # ${N8N_URL}/webhook/taris-campaign-select
+N8N_CAMPAIGN_SEND_WH=***                     # ${N8N_URL}/webhook/taris-campaign-send
 CAMPAIGN_SHEET_ID=***                        # CAMPAIGN_SHEET_ID from .env
 N8N_CAMPAIGN_TIMEOUT=90
 CAMPAIGN_DEMO_MODE=false
-CAMPAIGN_FROM_EMAIL=info@sintaris.net
+CAMPAIGN_FROM_EMAIL=***                      # sender address
 
-# CRM (PostgreSQL on VPS)
+# CRM (PostgreSQL via SSH tunnel on port 15432)
 CRM_ENABLED=1
-CRM_PG_DSN=postgresql://taris:***@dev2null.de:5432/taris   # VPS_POSTGRES_PASSWORD
+CRM_PG_DSN=postgresql://taris:***@127.0.0.1:15432/taris   # VPS_POSTGRES_PASSWORD via tunnel
 ```
 
 ### 2 — Install psycopg3 (if not present)
@@ -636,7 +636,7 @@ Expected: `CRM: True | contacts: N`
 # Check campaign workflows are active in N8N
 source .env
 curl -s -H "X-N8N-API-KEY: $VPS_N8N_API_KEY" \
-  https://automata.dev2null.de/api/v1/workflows \
+  "${VPS_N8N_URL}/api/v1/workflows" \
   | python3 -c "import sys,json; wfs=json.load(sys.stdin)['data']; \
     [print(w['name'], '✅' if w['active'] else '❌') for w in wfs if 'Campaign' in w.get('name','')]"
 ```

@@ -14,6 +14,8 @@ Use this to analyse cost (time, requests) per feature over time.
 | 16:xx | N8N Campaign Select + Send error handling: try/catch jsCode, onError=continueRegularOutput, _error flag propagation, _user_friendly_error(), campaign_partial_send i18n, call_webhook | 4 | 4 | claude-sonnet-4.6 | n8n_admin.py, bot_campaign.py, strings.json | done |
 | 11:xx | Fix LLM + campaign select errors: pull qwen2.5:0.5b (was qwen3.5:0.8b invalid), fix bot.env OLLAMA_MODEL on TariStation2, restart bot; verified N8N select webhook works (5 clients returned) | 2 | 3 | claude-sonnet-4.6 | TariStation2: bot.env (runtime only) | done |
 | 11:xx | Audit + fix campaign tests: WEB_ONLY=1 offline fix, renumber T50-T57→T130-T137, 20/20 pass locally+TariStation2, update doc/test-suite.md | 2 | 4 | claude-sonnet-4.6 | src/tests/test_campaign.py, doc/test-suite.md | done |
+| 22:xx | SintAItion VPS PG migration: add vps_tunnel_key to VPS authorized_keys, deploy taris-pg-tunnel.service, update STORE_PG_DSN+CRM_PG_DSN to VPS via tunnel on port 15432, migrate all data (24 cal/13 notes/150 chat/2 CRM contacts), commit service file to git | 3 | 12 | claude-sonnet-4.6 | src/services/taris-pg-tunnel.service, .github/skills/taris-deploy-openclaw-target/SKILL.md | done |
+| 22:35 | Security sanitization: fix hardcoded N8N URLs in SKILL.md + doc/todo/, verify tools/scripts use .env vars, confirm .env.example complete | 1 | 2 | claude-sonnet-4.6 | .github/skills/taris-deploy-openclaw-target/SKILL.md, doc/todo/2-n8n-campaign-workflow.md | done |
 
 ### Session — 2026-04-12 (UTC)
 
