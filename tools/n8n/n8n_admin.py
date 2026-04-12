@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-n8n_admin.py — CLI tool for managing N8N workflows on automata.dev2null.de
+n8n_admin.py — CLI tool for managing N8N workflows via the N8N API.
 
 Usage:
   python tools/n8n/n8n_admin.py list                       # list all workflows
@@ -54,7 +54,7 @@ for _ in range(6):
 
 _env = _load_env(_root / ".env")
 
-N8N_BASE    = _env.get("VPS_N8N_HOST", "https://automata.dev2null.de").rstrip("/")
+N8N_BASE    = _env.get("VPS_N8N_HOST", "").rstrip("/")
 N8N_API_KEY = _env.get("VPS_N8N_API_KEY", "")
 N8N_API_V1  = f"{N8N_BASE}/api/v1"
 
@@ -496,19 +496,19 @@ def cmd_create_campaign():
     resp = _req("POST", "/workflows", json=wf_select)
     sel_id = resp["id"]
     _req("POST", f"/workflows/{sel_id}/activate")
-    print(f"  ✅ SELECT: id={sel_id}  webhook=https://automata.dev2null.de/webhook/taris-campaign-select")
+    print(f"  ✅ SELECT: id={sel_id}  webhook={N8N_BASE}/webhook/taris-campaign-select")
 
     print("Creating Taris Campaign Send workflow...")
     wf_send = _campaign_send_workflow()
     resp = _req("POST", "/workflows", json=wf_send)
     snd_id = resp["id"]
     _req("POST", f"/workflows/{snd_id}/activate")
-    print(f"  ✅ SEND:   id={snd_id}  webhook=https://automata.dev2null.de/webhook/taris-campaign-send")
+    print(f"  ✅ SEND:   id={snd_id}  webhook={N8N_BASE}/webhook/taris-campaign-send")
 
     print()
     print("Add to ~/.taris/bot.env on TariStation2:")
-    print(f"  N8N_CAMPAIGN_SELECT_WH=https://automata.dev2null.de/webhook/taris-campaign-select")
-    print(f"  N8N_CAMPAIGN_SEND_WH=https://automata.dev2null.de/webhook/taris-campaign-send")
+    print(f"  N8N_CAMPAIGN_SELECT_WH={N8N_BASE}/webhook/taris-campaign-select")
+    print(f"  N8N_CAMPAIGN_SEND_WH={N8N_BASE}/webhook/taris-campaign-send")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

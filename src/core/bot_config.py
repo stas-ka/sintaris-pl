@@ -131,7 +131,7 @@ MCP_REMOTE_TOP_K   = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
 # N8N_API_KEY: API key for N8N REST calls
 # N8N_WEBHOOK_SECRET: shared secret for incoming webhook callbacks
 # ─────────────────────────────────────────────────────────────────────────────
-N8N_URL             = os.environ.get("N8N_URL", "")                # e.g. https://automata.dev2null.de
+N8N_URL             = os.environ.get("N8N_URL", "")                # e.g. https://<your-n8n-host>
 N8N_API_KEY         = os.environ.get("N8N_API_KEY", "")
 N8N_WEBHOOK_SECRET  = os.environ.get("N8N_WEBHOOK_SECRET", "")    # verify inbound callbacks
 N8N_TIMEOUT         = int(os.environ.get("N8N_TIMEOUT", "30"))

@@ -36,7 +36,7 @@ systemd
 
 | Name | Role | SSH (LAN) | Tailscale IP |
 |------|------|-----------|-------------|
-| **OpenClawPI2** | Engineering / dev target | `stas@OpenClawPI2` | 100.81.143.126 |
+| **OpenClawPI2** | Engineering / dev target | `stas@OpenClawPI2` | `$DEV_TAILSCALE_IP` (see `.env`) |
 | **OpenClawPI** | Production target (master branch only) | `stas@OpenClawPI` | — |
 
 > **Deployment rule:** always deploy to **PI2** first, verify, then deploy to **PI1**. PI1 receives only the `master` branch.

@@ -205,10 +205,18 @@ elif command -v docker >/dev/null 2>&1; then
     sleep 5
   else
     info "No docker-compose.yml found — starting pgvector container directly ..."
+    # Resolve PostgreSQL password — read from env or prompt
+    if [[ -z "${TARIS_PG_PASSWORD:-}" ]]; then
+      TARIS_PG_PASSWORD=$(prompt "  PostgreSQL password for 'taris' user (leave blank to generate random)")
+      if [[ -z "$TARIS_PG_PASSWORD" ]]; then
+        TARIS_PG_PASSWORD=$(openssl rand -hex 16)
+        warn "Generated random DB password — save this in .env as TARIS_PG_PASSWORD=${TARIS_PG_PASSWORD}"
+      fi
+    fi
     docker run -d --name local-dev-postgres-1 \
       --restart unless-stopped \
       -e POSTGRES_USER=taris \
-      -e POSTGRES_PASSWORD=taris_openclaw_2026 \
+      -e POSTGRES_PASSWORD="${TARIS_PG_PASSWORD}" \
       -e POSTGRES_DB=taris \
       -p 127.0.0.1:5432:5432 \
       pgvector/pgvector:pg17 2>/dev/null || \
@@ -219,14 +227,14 @@ elif command -v docker >/dev/null 2>&1; then
   python3 -c "
 import psycopg, sys
 try:
-  c = psycopg.connect('postgresql://taris:taris_openclaw_2026@localhost:5432/taris', connect_timeout=10)
+  c = psycopg.connect('postgresql://taris:${TARIS_PG_PASSWORD}@localhost:5432/taris', connect_timeout=10)
   print('PG_OK')
   c.close()
 except Exception as e:
   print(f'PG_FAIL: {e}')
   sys.exit(1)
 " && {
-    PG_DSN="postgresql://taris:taris_openclaw_2026@localhost:5432/taris"
+    PG_DSN="postgresql://taris:${TARIS_PG_PASSWORD}@localhost:5432/taris"
     STORE_BACKEND="postgres"
     ok "PostgreSQL connected via Docker ✓"
   } || {

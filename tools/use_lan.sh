@@ -1,5 +1,8 @@
 #!/bin/bash
 # Source this to deploy to SintAItion via LAN (at home)
-# Usage: source tools/use_lan.sh
-export OPENCLAW1_HOST=SintAItion
-echo "✅ OPENCLAW1_HOST → LAN (SintAItion / 192.168.178.175) — home network active"
+# Usage (from project root): source tools/use_lan.sh
+if [[ -f ".env" ]]; then
+  set -a && source .env && set +a
+fi
+export OPENCLAW1_HOST="${OPENCLAW1_LAN_HOST:-SintAItion}"
+echo "✅ OPENCLAW1_HOST → LAN ($OPENCLAW1_HOST) — home network active"

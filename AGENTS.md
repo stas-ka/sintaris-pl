@@ -17,14 +17,14 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 |---|---|
 | `DEV_TARGETHOST` | `OpenClawPI2` |
 | `DEV_HOSTUSER` | `stas` |
-| `DEV_TAILSCALE_IP` | `100.81.143.126` |
+| `DEV_TAILSCALE_IP` | `$DEV_TAILSCALE_IP` (see `.env`) |
 | SSH | `plink -pw "%DEV_HOSTPWD%" -batch stas@OpenClawPI2 "<cmd>"` (LAN) |
-| SSH remote | `plink -pw "%DEV_HOSTPWD%" -batch stas@XXX.XXX.XXX.XXX "<cmd>"` (Tailscale) |
+| SSH remote | `plink -pw "%DEV_HOSTPWD%" -batch stas@%DEV_TAILSCALE_IP% "<cmd>"` (Tailscale) |
 | `PROD_TARGETHOST` | `OpenClawPI` |
 | `PROD_HOSTUSER` | `stas` |
-| `PROD_TAILSCALE_IP` | `100.81.143.126` |
+| `PROD_TAILSCALE_IP` | `$PROD_TAILSCALE_IP` (see `.env`) |
 | SSH | `plink -pw "PROD_%HOSTPWD%" -batch stas@OpenClawPI "<cmd>"` (LAN) |
-| SSH remote | `plink -pw "%PROD_HOSTPWD%" -batch stas@100.81.143.126 "<cmd>"` (Tailscale) |
+| SSH remote | `plink -pw "%PROD_HOSTPWD%" -batch stas@%PROD_TAILSCALE_IP% "<cmd>"` (Tailscale) |
 
 ## OpenClaw Targets (master branch)
 
@@ -36,12 +36,12 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 | Key | Value |
 |---|---|
 | `ENG_TARGETHOST` | `IniCoS-1` — remote Lubuntu 24.04, i7-2640M, 7.6GB RAM |
-| `ENG_TARGETHOST_IP` | `192.168.178.27` |
+| `ENG_TARGETHOST_IP` | `$ENG_TARGETHOST_IP` (see `.env`) |
 | `ENG_HOSTUSER` | `stas` |
-| `ENG_HOSTPWD` | `buerger` (in `.env`) |
-| `ENG_HOSTKEY` | `SHA256:2Psz9uCmafYyM25q7XAjmdwIV1YhBzX6KfSzn/zqmhE` |
-| SSH | `plink -pw "buerger" -hostkey "%ENG_HOSTKEY%" -batch stas@192.168.178.27 "<cmd>"` |
-| SCP | `pscp -pw "buerger" -hostkey "%ENG_HOSTKEY%" src\file.py stas@192.168.178.27:/home/stas/.taris/` |
+| `ENG_HOSTPWD` | `$ENG_HOSTPWD` (in `.env` — never commit the value) |
+| `ENG_HOSTKEY` | `$ENG_HOSTKEY` (in `.env` — never commit the value) |
+| SSH | `plink -pw "$ENG_HOSTPWD" -hostkey "$ENG_HOSTKEY" -batch stas@$ENG_TARGETHOST_IP "<cmd>"` |
+| SCP | `pscp -pw "$ENG_HOSTPWD" -hostkey "$ENG_HOSTKEY" src\file.py stas@$ENG_TARGETHOST_IP:/home/stas/.taris/` |
 | Deploy path | `/home/stas/.taris/` |
 | Project | `~/projects/sintaris-pl` (on target) |
 | DB | SQLite (`~/.taris/taris.db`) |
@@ -51,12 +51,12 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 | Key | Value |
 |---|---|
-| `PROD_OPENCLAW_HOST` | `SintAItion.local` (`192.168.178.175`) |
+| `PROD_OPENCLAW_HOST` | `SintAItion.local` |
 | `PROD_OPENCLAW_USER` | `stas` |
-| `OPENCLAW1PWD` | `buerger` (in `.env`) |
-| `OPENCLAW1_HOSTKEY` | `SHA256:QetDJFNpeIuKlHqZI7z/N4YjZy4uTcgCUq0zgExBn74` |
-| SSH | `plink -pw "buerger" -hostkey "%OPENCLAW1_HOSTKEY%" -batch stas@SintAItion.local "<cmd>"` |
-| SCP | `pscp -pw "buerger" -hostkey "%OPENCLAW1_HOSTKEY%" src\file.py stas@SintAItion.local:/home/stas/.taris/` |
+| `OPENCLAW1PWD` | `$OPENCLAW1PWD` (in `.env` — never commit the value) |
+| `OPENCLAW1_HOSTKEY` | `$OPENCLAW1_HOSTKEY` (in `.env` — never commit the value) |
+| SSH | `plink -pw "$OPENCLAW1PWD" -hostkey "$OPENCLAW1_HOSTKEY" -batch stas@SintAItion.local "<cmd>"` |
+| SCP | `pscp -pw "$OPENCLAW1PWD" -hostkey "$OPENCLAW1_HOSTKEY" src\file.py stas@SintAItion.local:/home/stas/.taris/` |
 | Deploy path | `/home/stas/.taris/` |
 | Project | `~/projects/sintaris-pl` (on target) |
 | DB | PostgreSQL (migrated 2026-04) |

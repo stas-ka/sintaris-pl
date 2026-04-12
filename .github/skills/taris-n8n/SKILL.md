@@ -1,8 +1,8 @@
 ---
 name: taris-n8n
 description: >
-  Manage N8N workflows on automata.dev2null.de: list, create, activate/deactivate,
-  test webhooks, inspect executions, and create campaign workflows.
+  Manage N8N workflows on the configured VPS (VPS_N8N_HOST from .env): list, create,
+  activate/deactivate, test webhooks, inspect executions, and create campaign workflows.
   Use when: creating/updating N8N workflows, debugging webhook calls, setting up
   campaign automation, testing N8N connectivity, managing workflow lifecycle.
 argument-hint: 'task: status | list | create-campaign | test-webhook | create <file> | executions | activate/deactivate <id>'
@@ -10,8 +10,8 @@ argument-hint: 'task: status | list | create-campaign | test-webhook | create <f
 
 # N8N Admin Skill — taris
 
-Manages N8N workflows on `https://automata.dev2null.de` via the **`tools/n8n/n8n_admin.py`** CLI.  
-Credentials are read from `.env` in the project root automatically.
+Manages N8N workflows via the **`tools/n8n/n8n_admin.py`** CLI.  
+All credentials and URLs are read from `.env` in the project root automatically.
 
 ---
 
@@ -37,7 +37,7 @@ Credentials are read from `.env` in the project root automatically.
 
 | Variable | Purpose |
 |---|---|
-| `VPS_N8N_HOST` | N8N base URL, e.g. `https://automata.dev2null.de` |
+| `VPS_N8N_HOST` | N8N base URL (e.g. `https://<your-vps-hostname>`) |
 | `VPS_N8N_API_KEY` | N8N API key (JWT) |
 | `VPS_N8N_API_BASE` | Legacy — `n8n_admin.py` builds its own from `VPS_N8N_HOST` |
 
@@ -46,7 +46,7 @@ Credentials are read from `.env` in the project root automatically.
 ## N8N Direct API (when using `_api()` in Python code)
 
 ```
-Base: https://automata.dev2null.de/api/v1
+Base: ${VPS_N8N_HOST}/api/v1
 Auth: X-N8N-API-KEY header
 
 GET  /workflows?limit=200          — list workflows
@@ -59,23 +59,26 @@ GET  /executions?limit=N&workflowId=<id>&status=<s>  — list executions
 GET  /executions/<id>              — get execution detail
 
 Webhook trigger (production mode, no auth):
-POST https://automata.dev2null.de/webhook/<path>
+POST ${VPS_N8N_HOST}/webhook/<path>
 
 Test webhook (test mode, no activation needed):
-POST https://automata.dev2null.de/webhook-test/<path>
+POST ${VPS_N8N_HOST}/webhook-test/<path>
 ```
 
 ---
 
 ## Reusable N8N Credential IDs
 
-| Service | ID | Name |
-|---|---|---|
-| Google Sheets | `j36NScu4bpqsYJKT` | Google Sheets account 3 |
-| OpenAI | `MHkmfl85kwu22LT8` | OpenAI SINTARIS |
-| Gmail | `OM7qAUKDjlYrrRsI` | Gmail account devstar |
+> Credential IDs are specific to your N8N instance. Find them via:  
+> `python tools/n8n/n8n_admin.py status` → check N8N UI under Credentials.
 
-Always reference these by ID when creating workflows — do NOT create new credentials.
+| Service | Variable in `.env` | Purpose |
+|---|---|---|
+| Google Sheets | `VPS_N8N_CRED_GSHEETS` | Google Sheets OAuth credential |
+| OpenAI | `VPS_N8N_CRED_OPENAI` | OpenAI API credential |
+| Gmail | `VPS_N8N_CRED_GMAIL` | Gmail OAuth credential |
+
+Always reference these by their N8N-assigned IDs when creating workflows — do NOT create new credentials.
 
 ---
 
@@ -112,15 +115,18 @@ python tools/n8n/n8n_admin.py create-campaign
 
 ### Test Campaign Webhooks
 
+Read webhook URLs from `.env` (`N8N_CAMPAIGN_SELECT_WH`, `N8N_CAMPAIGN_SEND_WH`) or use:
+
 ```bash
+# After create-campaign, the URLs are printed — copy from there
 # Test SELECT (expects clients + template in response)
 python tools/n8n/n8n_admin.py test-webhook \
-  https://automata.dev2null.de/webhook/taris-campaign-select \
+  "${VPS_N8N_HOST}/webhook/taris-campaign-select" \
   '{"session_id":"test-1","topic":"Приглашение на вебинар","filters":""}'
 
 # Test SEND (expects sent_count + sheet_url)
 python tools/n8n/n8n_admin.py test-webhook \
-  https://automata.dev2null.de/webhook/taris-campaign-send \
+  "${VPS_N8N_HOST}/webhook/taris-campaign-send" \
   '{"session_id":"test-1","topic":"Тест","clients":[{"Имя":"Тест","Email":"test@example.com"}],"template":"Привет {name}!"}'
 ```
 

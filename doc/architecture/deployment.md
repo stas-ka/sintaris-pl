@@ -105,33 +105,33 @@ User (Telegram)
 
 | Host | Role | Deploy method | Web UI (local) | Web UI (public) | Telegram bot |
 |---|---|---|---|---|---|
-| **TariStation2** (local, `192.168.178.43`) | Engineering workstation | `cp src/... ~/.taris/...` + `systemctl --user restart taris-web` | `http://localhost:8080/` | `https://agents.sintaris.net/supertaris2/` | `@suppenclaw_bot` |
-| **TariStation1** / SintAItion (`192.168.178.175`) | Production workstation | `scp src/... stas@SintAItion:~/.taris/...` + SSH restart | `http://192.168.178.175:8080/` | `https://agents.sintaris.net/supertaris/` | `@supertaris_bot` |
+| **TariStation2** (local, `$ENG_TARGETHOST_IP`) | Engineering workstation | `cp src/... ~/.taris/...` + `systemctl --user restart taris-web` | `http://localhost:8080/` | `https://agents.sintaris.net/supertaris2/` | `@suppenclaw_bot` |
+| **TariStation1** / SintAItion (`$OPENCLAW1_LAN_IP`) | Production workstation | `scp src/... stas@SintAItion:~/.taris/...` + SSH restart | `http://SintAItion:8080/` | `https://agents.sintaris.net/supertaris/` | `@supertaris_bot` |
 
 **Remote access (SintAItion):**
 
 | Network | Address | How to use |
 |---|---|---|
-| Home LAN | `192.168.178.175` or `SintAItion` | Direct SSH/SCP |
-| Internet (Tailscale) | `100.112.120.3` | `source tools/use_tailscale.sh` → deploy as normal |
+| Home LAN | `$OPENCLAW1_LAN_IP` or `SintAItion` | Direct SSH/SCP |
+| Internet (Tailscale) | `$OPENCLAW1_TAILSCALE_IP` | `source tools/use_tailscale.sh` → deploy as normal |
 
 > See [Admin Guide §13](../../doc/howto_admin.md#13-remote-access-from-internet) for full Tailscale setup and travel-laptop instructions.
 
 ### URL Routing Architecture (all 4 taris instances)
 
-All four instances are accessible via `https://agents.sintaris.net/` via nginx reverse proxy on VPS (`152.53.224.213` = `dev2null.de`):
+All four instances are accessible via `https://agents.sintaris.net/` via nginx reverse proxy on VPS (`$VPS_HOST`):
 
 | Public URL | Bot | Target host | Tunnel / Route | Telegram bot |
 |---|---|---|---|---|
-| `/taris/` | Taris (PI1) | OpenClawPI (`192.168.178.160`) | SSH tunnel → VPS:8082 | `@taris_bot` |
-| `/taris2/` | Taris2 (PI2) | OpenClawPI2 (`192.168.178.165`) | SSH tunnel → VPS:8084 | `@suppenclaw_bot` *(shared)* |
-| `/supertaris/` | SuperTaris (TS1) | SintAItion (`192.168.178.154`) | SSH tunnel → VPS:8086 | `@supertaris_bot` |
-| `/supertaris2/` | SuperTaris2 (TS2) | TariStation2 (local, `192.168.178.43`) | SSH tunnel → VPS:8088 *(via SintAItion relay)* | `@suppenclaw_bot` |
+| `/taris/` | Taris (PI1) | OpenClawPI (`$PI1_LAN_IP`) | SSH tunnel → VPS:8082 | `@taris_bot` |
+| `/taris2/` | Taris2 (PI2) | OpenClawPI2 (`$PI2_LAN_IP`) | SSH tunnel → VPS:8084 | `@suppenclaw_bot` *(shared)* |
+| `/supertaris/` | SuperTaris (TS1) | SintAItion (`$OPENCLAW1_LAN_IP`) | SSH tunnel → VPS:8086 | `@supertaris_bot` |
+| `/supertaris2/` | SuperTaris2 (TS2) | TariStation2 (local, `$ENG_TARGETHOST_IP`) | SSH tunnel → VPS:8088 *(via SintAItion relay)* | `@suppenclaw_bot` |
 
 **Tunnel services:**
 - PI1: `/etc/systemd/system/taris-tunnel.service` → `autossh -R 8082:localhost:8080 picobridge@dev2null.de`
 - PI2: `/etc/systemd/system/taris-tunnel.service` → `autossh -R 8084:localhost:8080 picobridge@dev2null.de`
-- SintAItion: `~/.config/systemd/user/taris-tunnel.service` → `autossh -R 8086:localhost:8080 -R 8088:192.168.178.43:8080 picobridge@dev2null.de`
+- SintAItion: `~/.config/systemd/user/taris-tunnel.service` → `autossh -R 8086:localhost:8080 -R 8088:$ENG_TARGETHOST_IP:8080 picobridge@dev2null.de`
 
 All tunnels use key `/home/stas/.ssh/vps_tunnel_key` with user `picobridge` on VPS. The `picobridge` account is restricted (port-forwarding only, no shell).
 

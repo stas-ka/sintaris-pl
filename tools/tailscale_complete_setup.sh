@@ -1,13 +1,13 @@
 #!/bin/bash
-# Run this after authorizing SintAItion in the browser:
-# https://login.tailscale.com/a/1235f28801ae89
+# Run this after authorizing SintAItion in the Tailscale admin console.
+# The authorization URL is shown by `tailscale up` on SintAItion.
 
 set -e
 cd "$(dirname "$0")/.."
 set -a && source .env && set +a
 
 echo "=== Step 1: Check Tailscale status on SintAItion ==="
-STATUS=$(sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no stas@192.168.178.175 \
+STATUS=$(sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no "${OPENCLAW1_USER:-stas}@${OPENCLAW1_LAN_HOST:-SintAItion}" \
     "echo '$OPENCLAW1PWD' | sudo -S tailscale status 2>&1 | head -3")
 echo "$STATUS"
 
@@ -21,7 +21,7 @@ fi
 
 echo ""
 echo "=== Step 2: Get Tailscale IP ==="
-TS_IP=$(sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no stas@192.168.178.175 \
+TS_IP=$(sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no "${OPENCLAW1_USER:-stas}@${OPENCLAW1_LAN_HOST:-SintAItion}" \
     "echo '$OPENCLAW1PWD' | sudo -S tailscale ip -4 2>&1")
 echo "Tailscale IP: $TS_IP"
 
