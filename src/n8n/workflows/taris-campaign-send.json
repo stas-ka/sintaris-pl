@@ -39,26 +39,28 @@
     },
     {
       "parameters": {
-        "fromEmail": "={{ $json.from_email }}",
-        "toEmail": "={{ $json.email }}",
+        "sendTo": "={{ $json.email }}",
         "subject": "={{ $json.topic || 'Einladung von Taris' }}",
-        "emailType": "text",
-        "text": "={{ $json.body_text }}"
+        "message": "={{ $json.body_text }}",
+        "options": {
+          "senderName": "={{ $json.from_email || 'Taris' }}"
+        }
       },
       "id": "n-gmail",
-      "name": "Send Email SMTP",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
+      "name": "Send Email Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
       "position": [
         704,
         304
       ],
       "credentials": {
-        "smtp": {
-          "id": "vrT9lC7RQLMedLkL",
-          "name": "VPS SMTP (postfix no-tls)"
+        "gmailOAuth2": {
+          "id": "OM7qAUKDjlYrrRsI",
+          "name": "Gmail account devstar"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -121,7 +123,7 @@
       "main": [
         [
           {
-            "node": "Send Email SMTP",
+            "node": "Send Email Gmail",
             "type": "main",
             "index": 0
           }
@@ -150,7 +152,7 @@
         ]
       ]
     },
-    "Send Email SMTP": {
+    "Send Email Gmail": {
       "main": [
         [
           {

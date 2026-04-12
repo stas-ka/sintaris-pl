@@ -1,9 +1,9 @@
 [
   {
-    "version": "2026.4.48",
-    "date": "2026-04-12",
-    "title": "Google Sheets credential fix + campaign e2e working",
-    "notes": "- fix: copied fresh OAuth2 tokens from reconnected Trigger account to Sheets account 3 in N8N DB\n- fix: sheet_url in Campaign Send response now dynamically populated from sheet_id param (was hardcoded empty)\n- fix: native Google Sheets nodes in Campaign Select (replaced HTTP Request nodes)\n- verified: campaign select + send e2e working with real GS data and SMTP delivery"
+    "version": "2026.4.49",
+    "date": "2026-04-13",
+    "title": "Native N8N nodes: OpenAI chat + Gmail for campaign workflows",
+    "notes": "- feat: Campaign Select 'OpenAI Select' node replaced with native n8n-nodes-base.openAi (typeVersion 1.1)\n- feat: Campaign Send 'Send Email SMTP' replaced with native n8n-nodes-base.gmail (typeVersion 2.1)\n- feat: Gmail node uses gmailOAuth2 credential (Gmail account devstar) — credentials visible in N8N UI\n- feat: OpenAI node uses openAiApi credential (OpenAI SINTARIS) — model/temperature configurable in UI\n- fix: removed SMTP hardcoded host/port/auth — all managed via N8N credential store"
   },
   {
     "version": "2026.4.47",

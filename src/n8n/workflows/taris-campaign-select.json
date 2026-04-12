@@ -52,20 +52,26 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: \"gpt-4o-mini\", messages: [{ role: \"user\", content: $json.prompt }], response_format: { type: \"json_object\" }, temperature: 0.3 }) }}",
-        "options": {}
+        "resource": "chat",
+        "operation": "complete",
+        "model": "gpt-4o-mini",
+        "simplifyOutput": false,
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
       },
       "id": "n-openai",
       "name": "OpenAI Select",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.1,
       "position": [
         960,
         304
