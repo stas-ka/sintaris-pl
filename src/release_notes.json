@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.50",
+    "date": "2026-04-13",
+    "title": "N8N Campaign Send: GS status tracking before and after sending",
+    "notes": "- feat: GS Append Queued node writes Status='Gesendet wird...' to 'Status рассылок' sheet BEFORE each email is sent\n- feat: GS Append Status node writes final Status='sent'/'ERROR:...' to 'Status рассылок' sheet AFTER each email\n- fix: both GS nodes use onError=continueRegularOutput so GS failures never block email delivery\n- feat: spreadsheet ID is dynamic from webhook payload (sheet_id param), fallback to default sheet"
+  },
+  {
     "version": "2026.4.49",
     "date": "2026-04-13",
     "title": "Native N8N nodes: OpenAI chat + Gmail for campaign workflows",

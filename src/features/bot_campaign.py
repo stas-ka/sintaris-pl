@@ -80,6 +80,7 @@ _STEP_KEY_MAP = {
     # Google Sheets nodes
     "GS Read Clients":   "campaign_error_input",
     "GS Read Templates": "campaign_error_workflow",
+    "GS Append Queued":  "campaign_error_workflow",
     "GS Append Status":  "campaign_error_workflow",
     "Merge Template":    "campaign_error_workflow",
     # Processing nodes
@@ -89,6 +90,7 @@ _STEP_KEY_MAP = {
     "Expand Clients":    "campaign_error_input",
     # Send nodes
     "Send Gmail":        "campaign_error_email",
+    "Send Email Gmail":  "campaign_error_email",
     "Prepare Sheet Row": "campaign_error_workflow",
     "Build Sheet Row":   "campaign_error_workflow",
     "Summary":           "campaign_error_workflow",

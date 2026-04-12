@@ -51,7 +51,7 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        704,
+        760,
         304
       ],
       "credentials": {
@@ -72,7 +72,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        860,
+        940,
         300
       ]
     },
@@ -105,6 +105,94 @@
         1460,
         300
       ]
+    },
+    {
+      "id": "gs-append-queued-001",
+      "name": "GS Append Queued",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        580,
+        304
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j36NScu4bpqsYJKT",
+          "name": "Google Sheets account 3"
+        }
+      },
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Webhook Send').first().json.body.sheet_id || '1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Status рассылок",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Datum": "={{ new Date().toISOString().replace('T',' ').slice(0,19) }}",
+            "Empfaenger": "={{ $json.email || $json.Email || '' }}",
+            "Name": "={{ $json.name || '' }}",
+            "Firma": "={{ $json.company || '' }}",
+            "Thema": "={{ $json.topic || '' }}",
+            "Status": "Gesendet wird..."
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "gs-append-status-001",
+      "name": "GS Append Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1070,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j36NScu4bpqsYJKT",
+          "name": "Google Sheets account 3"
+        }
+      },
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Webhook Send').first().json.body.sheet_id || '1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Status рассылок",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Datum": "={{ $json.Datum }}",
+            "Empfaenger": "={{ $json.Empfaenger }}",
+            "Name": "={{ $json.Name }}",
+            "Firma": "={{ $json.Firma }}",
+            "Thema": "={{ $json.Thema }}",
+            "Status": "={{ $json.Status }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -123,7 +211,7 @@
       "main": [
         [
           {
-            "node": "Send Email Gmail",
+            "node": "GS Append Queued",
             "type": "main",
             "index": 0
           }
@@ -134,7 +222,7 @@
       "main": [
         [
           {
-            "node": "Summary",
+            "node": "GS Append Status",
             "type": "main",
             "index": 0
           }
@@ -157,6 +245,28 @@
         [
           {
             "node": "Prepare Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Append Queued": {
+      "main": [
+        [
+          {
+            "node": "Send Email Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Append Status": {
+      "main": [
+        [
+          {
+            "node": "Summary",
             "type": "main",
             "index": 0
           }
