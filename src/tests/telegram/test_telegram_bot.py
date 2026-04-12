@@ -15,7 +15,7 @@ Patch strategy:
 import pytest
 import sys
 import os
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch, call, ANY
 
 # ---------------------------------------------------------------------------
 # Make src/ importable (conftest.py already handles this via sys.path; this is
@@ -928,3 +928,275 @@ class TestScreenDSLRoleFiltering:
         assert captured_ctx[0].role == "admin", (
             f"Expected role='admin' in context, got: {captured_ctx[0].role}"
         )
+
+
+# ===========================================================================
+# 9.  Campaign agent — callback routing
+# ===========================================================================
+
+class TestCampaignCallbacks:
+    """Tests for campaign/agents callback routing in callback_handler().
+
+    Covers the five campaign callbacks: agents_menu, campaign_start,
+    campaign_confirm_send, campaign_edit_template, campaign_cancel.
+    All run fully offline — campaign module is mocked.
+    """
+
+    def _run_callback(self, mock_bot, cid, data, make_callback,
+                      is_allowed=True, is_admin=True, is_advanced=False,
+                      campaign_configured=True, campaign_active=False,
+                      campaign_patches=None):
+        """Helper: invoke callback_handler with full patch set."""
+        call = make_callback(cid, data)
+        _reset_state(cid)
+        patches = {
+            "telegram_menu_bot._is_allowed": is_allowed,
+            "telegram_menu_bot._is_admin":   is_admin,
+            "telegram_menu_bot._is_advanced": is_advanced,
+            "telegram_menu_bot._is_guest":   False,
+            "telegram_menu_bot._deny":       MagicMock(),
+            "telegram_menu_bot._set_lang":   MagicMock(),
+            "telegram_menu_bot._t":          lambda cid, k, **kw: f"[{k}]",
+        }
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=is_allowed), \
+             patch("telegram_menu_bot._is_admin",   return_value=is_admin), \
+             patch("telegram_menu_bot._is_advanced", return_value=is_advanced), \
+             patch("telegram_menu_bot._is_guest",   return_value=False), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._t", side_effect=lambda cid, k, **kw: f"[{k}]"), \
+             patch("telegram_menu_bot._campaign") as mock_campaign:
+            mock_campaign.is_configured.return_value = campaign_configured
+            mock_campaign.is_active.return_value = campaign_active
+            if campaign_patches:
+                for attr, val in campaign_patches.items():
+                    setattr(mock_campaign, attr, val)
+            tmb.callback_handler(call)
+        return mock_bot, mock_campaign
+
+    def test_agents_menu_denied_for_stranger(self, mock_bot, make_callback):
+        """agents_menu → stranger (not allowed) receives denied message via answer_callback_query."""
+        cid = 888001
+        bot, _ = self._run_callback(
+            mock_bot, cid, "agents_menu", make_callback,
+            is_allowed=False, is_admin=False, is_advanced=False,
+        )
+        # callback_handler returns early via answer_callback_query for non-allowed users
+        bot.answer_callback_query.assert_called()
+
+    def test_agents_menu_denied_for_regular_user(self, mock_bot, make_callback):
+        """agents_menu → allowed but not admin/advanced → admin_only message."""
+        cid = 888002
+        bot, _ = self._run_callback(
+            mock_bot, cid, "agents_menu", make_callback,
+            is_allowed=True, is_admin=False, is_advanced=False,
+        )
+        calls = [str(c) for c in bot.send_message.call_args_list]
+        assert any("admin_only" in c for c in calls), (
+            "Regular user accessing agents_menu must receive admin_only message"
+        )
+
+    def test_agents_menu_shown_for_admin(self, mock_bot, make_callback):
+        """agents_menu → admin → _handle_agents_menu is called (sends keyboard message)."""
+        cid = 888003
+        bot, _ = self._run_callback(
+            mock_bot, cid, "agents_menu", make_callback,
+            is_allowed=True, is_admin=True, is_advanced=False,
+        )
+        # _handle_agents_menu calls bot.send_message with the agents menu title
+        bot.send_message.assert_called()
+        call_args_text = str(bot.send_message.call_args_list)
+        assert "agents_menu_title" in call_args_text, (
+            "Admin should see agents_menu_title via _handle_agents_menu"
+        )
+
+    def test_agents_menu_shown_for_advanced_user(self, mock_bot, make_callback):
+        """agents_menu → advanced (not admin) → agents menu shown."""
+        cid = 888004
+        bot, _ = self._run_callback(
+            mock_bot, cid, "agents_menu", make_callback,
+            is_allowed=True, is_admin=False, is_advanced=True,
+        )
+        bot.send_message.assert_called()
+        call_args_text = str(bot.send_message.call_args_list)
+        assert "admin_only" not in call_args_text, (
+            "Advanced user must not receive admin_only; should see agents menu"
+        )
+
+    def test_campaign_start_denied_for_regular_user(self, mock_bot, make_callback):
+        """campaign_start → regular user → admin_only message, campaign not started."""
+        cid = 888005
+        bot, mock_campaign = self._run_callback(
+            mock_bot, cid, "campaign_start", make_callback,
+            is_allowed=True, is_admin=False, is_advanced=False,
+        )
+        mock_campaign.start_campaign.assert_not_called()
+        calls = [str(c) for c in bot.send_message.call_args_list]
+        assert any("admin_only" in c for c in calls)
+
+    def test_campaign_start_not_configured(self, mock_bot, make_callback):
+        """campaign_start → admin + campaign not configured → campaign_not_configured message."""
+        cid = 888006
+        bot, mock_campaign = self._run_callback(
+            mock_bot, cid, "campaign_start", make_callback,
+            is_allowed=True, is_admin=True,
+            campaign_configured=False,
+        )
+        mock_campaign.start_campaign.assert_not_called()
+        calls = [str(c) for c in bot.send_message.call_args_list]
+        assert any("campaign_not_configured" in c for c in calls), (
+            "Admin starting unconfigured campaign must see campaign_not_configured"
+        )
+
+    def test_campaign_start_configured_calls_start(self, mock_bot, make_callback):
+        """campaign_start → admin + configured → campaign.start_campaign called."""
+        cid = 888007
+        bot, mock_campaign = self._run_callback(
+            mock_bot, cid, "campaign_start", make_callback,
+            is_allowed=True, is_admin=True,
+            campaign_configured=True,
+        )
+        mock_campaign.start_campaign.assert_called_once_with(cid, mock_bot, ANY)
+
+    def test_campaign_confirm_send_allowed_for_admin(self, mock_bot, make_callback):
+        """campaign_confirm_send → admin → campaign.confirm_send called."""
+        cid = 888008
+        bot, mock_campaign = self._run_callback(
+            mock_bot, cid, "campaign_confirm_send", make_callback,
+            is_allowed=True, is_admin=True,
+        )
+        mock_campaign.confirm_send.assert_called_once()
+
+    def test_campaign_edit_template_allowed_for_admin(self, mock_bot, make_callback):
+        """campaign_edit_template → admin → campaign.start_template_edit called."""
+        cid = 888009
+        bot, mock_campaign = self._run_callback(
+            mock_bot, cid, "campaign_edit_template", make_callback,
+            is_allowed=True, is_admin=True,
+        )
+        mock_campaign.start_template_edit.assert_called_once()
+
+    def test_campaign_cancel_allowed_for_any_user(self, mock_bot, make_callback):
+        """campaign_cancel → any allowed user → campaign.cancel + cancelled message."""
+        cid = 888010
+        bot, mock_campaign = self._run_callback(
+            mock_bot, cid, "campaign_cancel", make_callback,
+            is_allowed=True, is_admin=False,
+        )
+        mock_campaign.cancel.assert_called_once_with(cid)
+        calls = [str(c) for c in bot.send_message.call_args_list]
+        assert any("campaign_cancelled" in c for c in calls)
+
+
+# ===========================================================================
+# 10.  Campaign agent — text message routing
+# ===========================================================================
+
+class TestCampaignTextHandling:
+    """Tests for campaign intercept in text_handler().
+
+    The router must check campaign.is_active() BEFORE falling through to chat/LLM.
+    Tests verify consume-and-return, fall-through, and non-admin cancel paths.
+    """
+
+    def test_campaign_active_message_consumed_for_admin(
+        self, mock_bot, admin_chat_id, make_message
+    ):
+        """is_active=True + is_admin → handle_message called; function returns early."""
+        cid = admin_chat_id
+        _reset_state(cid)
+        msg = make_message(cid, "LR Webinar topic")
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin",   return_value=True), \
+             patch("telegram_menu_bot._is_advanced", return_value=False), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._t", side_effect=lambda c, k, **kw: f"[{k}]"), \
+             patch("telegram_menu_bot._campaign") as mock_campaign:
+            mock_campaign.is_active.return_value = True
+            mock_campaign.handle_message.return_value = True  # consumed
+
+            # Patch chat handler to detect if it's called unexpectedly
+            with patch("telegram_menu_bot._handle_chat_message") as mock_chat:
+                tmb.text_handler(msg)
+
+            mock_campaign.handle_message.assert_called_once_with(
+                cid, "LR Webinar topic", mock_bot, ANY
+            )
+            # Chat handler must NOT have been called — message was consumed
+            mock_chat.assert_not_called()
+
+    def test_campaign_active_not_consumed_falls_through_to_chat(
+        self, mock_bot, admin_chat_id, make_message
+    ):
+        """is_active=True + handle_message returns False → falls through to chat mode."""
+        cid = admin_chat_id
+        _reset_state(cid)
+        import core.bot_state as _st
+        _st._user_mode[cid] = "chat"
+        msg = make_message(cid, "some unrecognised input")
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin",   return_value=True), \
+             patch("telegram_menu_bot._is_advanced", return_value=False), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._t", side_effect=lambda c, k, **kw: f"[{k}]"), \
+             patch("telegram_menu_bot._campaign") as mock_campaign, \
+             patch("telegram_menu_bot._handle_chat_message") as mock_chat:
+            mock_campaign.is_active.return_value = True
+            mock_campaign.handle_message.return_value = False  # NOT consumed
+            mock_chat.return_value = None
+
+            tmb.text_handler(msg)
+
+        # Falls through to chat handler
+        mock_chat.assert_called_once()
+
+    def test_campaign_active_non_admin_cancels_campaign(
+        self, mock_bot, user_chat_id, make_message
+    ):
+        """is_active=True + not admin/advanced → campaign.cancel called."""
+        cid = user_chat_id
+        _reset_state(cid)
+        msg = make_message(cid, "some text")
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin",   return_value=False), \
+             patch("telegram_menu_bot._is_advanced", return_value=False), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._t", side_effect=lambda c, k, **kw: f"[{k}]"), \
+             patch("telegram_menu_bot._campaign") as mock_campaign:
+            mock_campaign.is_active.return_value = True
+
+            tmb.text_handler(msg)
+
+        mock_campaign.cancel.assert_called_once_with(cid)
+        mock_campaign.handle_message.assert_not_called()
+
+    def test_campaign_inactive_not_intercepted(
+        self, mock_bot, admin_chat_id, make_message
+    ):
+        """is_active=False → campaign handler not called; message falls to normal routing."""
+        cid = admin_chat_id
+        _reset_state(cid)
+        import core.bot_state as _st
+        _st._user_mode[cid] = "chat"
+        msg = make_message(cid, "hello bot")
+
+        with patch.object(tmb, "bot", mock_bot), \
+             patch("telegram_menu_bot._is_allowed", return_value=True), \
+             patch("telegram_menu_bot._is_admin",   return_value=True), \
+             patch("telegram_menu_bot._is_advanced", return_value=False), \
+             patch("telegram_menu_bot._set_lang"), \
+             patch("telegram_menu_bot._t", side_effect=lambda c, k, **kw: f"[{k}]"), \
+             patch("telegram_menu_bot._campaign") as mock_campaign, \
+             patch("telegram_menu_bot._handle_chat_message") as mock_chat:
+            mock_campaign.is_active.return_value = False
+            mock_chat.return_value = None
+
+            tmb.text_handler(msg)
+
+        mock_campaign.handle_message.assert_not_called()

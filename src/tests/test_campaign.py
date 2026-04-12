@@ -537,6 +537,205 @@ def test_campaign_handle_message_called_in_router():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T138: E2E campaign flow — full happy path with mocked N8N webhooks
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_campaign_e2e_full_flow_success():
+    """T138: Full campaign flow from start→topic→filter→preview (mocked N8N).
+
+    Simulates the complete Telegram message sequence that a user would send:
+      1. start_campaign()    — bot shows topic prompt
+      2. on_topic(topic)     — bot shows filter prompt
+      3. on_filters(filter)  — N8N called → preview with clients shown
+      4. confirm_send()      — N8N send webhook called → done message shown
+
+    N8N webhooks are mocked to return deterministic data.
+    """
+    import importlib
+    import features.bot_campaign as bc
+    importlib.reload(bc)
+
+    bot = _make_mock_bot()
+    _t = _make_t()
+    cid = 42
+
+    # ── Step 1: Start campaign ─────────────────────────────────────────────
+    bc.start_campaign(cid, bot, _t)
+    assert bc.is_active(cid), "Campaign not active after start"
+    assert bc.get_step(cid) == "topic_input"
+    bot.send_message.assert_called()
+    bot.reset_mock()
+
+    # ── Step 2: User sends campaign topic ──────────────────────────────────
+    bc.on_topic(cid, "Einladung zum LR Webinar", bot, _t)
+    assert bc.get_step(cid) == "filter_input"
+    assert bc._campaigns[cid]["topic"] == "Einladung zum LR Webinar"
+    bot.send_message.assert_called()  # filter prompt sent
+    bot.reset_mock()
+
+    # ── Step 3: User sends filter → N8N select webhook called ─────────────
+    n8n_select_response = {
+        "clients": [
+            {"Имя": "Alice", "Email": "alice@example.com"},
+            {"Имя": "Bob",   "Email": "bob@example.com"},
+        ],
+        "template": "Уважаемый {name}! Приглашаем вас на LR Webinar.",
+    }
+    with patch("features.bot_campaign.call_webhook", return_value=n8n_select_response) as mock_wh:
+        bc.on_filters(cid, "Fitnes", bot, _t)
+        # _run_selection runs in a thread — wait for it
+        import time; time.sleep(0.3)
+
+    # After selection: step should be "preview"
+    assert bc.get_step(cid) == "preview", (
+        f"Expected step=preview after N8N selection, got: {bc.get_step(cid)}"
+    )
+    state = bc._campaigns[cid]
+    assert len(state["clients"]) == 2
+    assert state["template"] == "Уважаемый {name}! Приглашаем вас на LR Webinar."
+
+    # Preview message must have been sent with the client count
+    calls_text = str(bot.send_message.call_args_list)
+    assert "2" in calls_text or "campaign_preview" in calls_text, (
+        "Preview message should mention client count or use campaign_preview key"
+    )
+    bot.reset_mock()
+
+    # ── Step 4: User confirms send → N8N send webhook called ──────────────
+    n8n_send_response = {"sent": 2, "failed": 0}
+    with patch("features.bot_campaign.call_webhook", return_value=n8n_send_response):
+        bc.confirm_send(cid, bot, _t)
+        import time; time.sleep(0.3)
+
+    # After send: campaign should be inactive (state cleaned up)
+    assert not bc.is_active(cid), "Campaign should be inactive after send"
+
+    # Done message must have been shown
+    done_calls = str(bot.send_message.call_args_list)
+    assert "campaign_done" in done_calls or "campaign_partial" in done_calls or "2" in done_calls
+
+
+def test_campaign_e2e_flow_no_clients():
+    """T138b: Flow where N8N returns 0 clients → shows no_clients message, resets state."""
+    import importlib
+    import features.bot_campaign as bc
+    importlib.reload(bc)
+
+    bot = _make_mock_bot()
+    _t = _make_t()
+    cid = 43
+
+    bc.start_campaign(cid, bot, _t)
+    bc.on_topic(cid, "VIP-only event", bot, _t)
+
+    with patch("features.bot_campaign.call_webhook", return_value={"clients": [], "template": ""}):
+        bc.on_filters(cid, "vip", bot, _t)
+        import time; time.sleep(0.3)
+
+    # No clients → campaign should be cancelled (state cleared)
+    assert not bc.is_active(cid), (
+        "Campaign must be inactive when N8N returns 0 clients"
+    )
+    calls_text = str(bot.send_message.call_args_list)
+    assert "campaign_no_clients" in calls_text, (
+        "Must show campaign_no_clients when selection returns empty list"
+    )
+
+
+def test_campaign_e2e_flow_n8n_error():
+    """T138c: Flow where N8N returns error → shows user-friendly error, state cleared."""
+    import importlib
+    import features.bot_campaign as bc
+    importlib.reload(bc)
+
+    bot = _make_mock_bot()
+    _t = _make_t()
+    cid = 44
+
+    bc.start_campaign(cid, bot, _t)
+    bc.on_topic(cid, "Error test campaign", bot, _t)
+
+    with patch("features.bot_campaign.call_webhook",
+               return_value={"error": "API key invalid", "step": "OpenAI Select"}):
+        bc.on_filters(cid, "-", bot, _t)
+        import time; time.sleep(0.3)
+
+    # Error → campaign must be cancelled
+    assert not bc.is_active(cid), "Campaign must be inactive after N8N error"
+
+    calls_text = str(bot.send_message.call_args_list)
+    # Must show a user-friendly error, not a raw Python exception
+    assert "Exception" not in calls_text
+    assert "Traceback" not in calls_text
+    assert "campaign_error" in calls_text, (
+        "Must show a campaign_error_* message on N8N failure"
+    )
+
+
+def test_campaign_e2e_edit_and_resend():
+    """T138d: User edits template after preview then resends."""
+    import importlib
+    import features.bot_campaign as bc
+    importlib.reload(bc)
+
+    bot = _make_mock_bot()
+    _t = _make_t()
+    cid = 45
+
+    # Inject a preview state directly (skip N8N for speed)
+    bc._campaigns[cid] = {
+        "step": "preview",
+        "session_id": "sess_001",
+        "topic": "LR Event",
+        "filters": "",
+        "clients": [{"Имя": "Alice", "Email": "a@a.com"}],
+        "template": "Original template text",
+    }
+
+    # User clicks "Edit template"
+    bc.start_template_edit(cid, bot, _t)
+    assert bc.get_step(cid) == "editing"
+    bot.reset_mock()
+
+    # User sends new template text
+    bc.on_template_edit(cid, "Revised template {name}!", bot, _t)
+    assert bc.get_step(cid) == "preview"
+    assert bc._campaigns[cid]["template"] == "Revised template {name}!"
+    bot.send_message.assert_called()  # preview re-shown
+    bot.reset_mock()
+
+    # User confirms send with updated template
+    with patch("features.bot_campaign.call_webhook", return_value={"sent": 1, "failed": 0}):
+        bc.confirm_send(cid, bot, _t)
+        import time; time.sleep(0.3)
+
+    assert not bc.is_active(cid), "Campaign must be done after confirm_send"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T139: Web API — /api/n8n/callback and /api/crm/* endpoint tests
+# These are offline source-inspection tests (no live server needed).
+# Live tests are in src/tests/ui/test_ui.py::TestN8NCallback and TestCRMApi.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_n8n_callback_endpoint_exists_in_source():
+    """T139a: bot_web.py has /api/n8n/callback POST endpoint with auth guard."""
+    src = (_src / "bot_web.py").read_text(encoding="utf-8")
+    assert "/api/n8n/callback" in src, "Missing /api/n8n/callback endpoint"
+    assert "N8N_WEBHOOK_SECRET" in src, "Missing N8N_WEBHOOK_SECRET auth guard"
+    assert "process_callback" in src, "Missing process_callback call"
+
+
+def test_crm_api_endpoints_exist_in_source():
+    """T139b: bot_web.py has /api/crm/contacts GET/POST and /api/crm/stats."""
+    src = (_src / "bot_web.py").read_text(encoding="utf-8")
+    assert "/api/crm/contacts" in src, "Missing /api/crm/contacts endpoint"
+    assert "/api/crm/stats" in src, "Missing /api/crm/stats endpoint"
+    assert "CRM_ENABLED" in src, "Missing CRM_ENABLED guard"
+    assert "_verify_api_token" in src, "CRM API must verify auth token"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Test runner
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -562,6 +761,12 @@ if __name__ == "__main__":
         ("T136b webhook_url_valid_runtime",         test_n8n_webhook_urls_valid_if_configured),
         ("T137a campaign_callback_routing",         test_campaign_callback_routing_source),
         ("T137b campaign_handle_message_in_router", test_campaign_handle_message_called_in_router),
+        ("T138a e2e_full_flow_success",             test_campaign_e2e_full_flow_success),
+        ("T138b e2e_no_clients",                    test_campaign_e2e_flow_no_clients),
+        ("T138c e2e_n8n_error",                     test_campaign_e2e_flow_n8n_error),
+        ("T138d e2e_edit_and_resend",               test_campaign_e2e_edit_and_resend),
+        ("T139a n8n_callback_endpoint_source",      test_n8n_callback_endpoint_exists_in_source),
+        ("T139b crm_api_endpoints_source",          test_crm_api_endpoints_exist_in_source),
     ]
 
     passed = failed = skipped = 0
