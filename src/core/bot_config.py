@@ -165,6 +165,7 @@ CRM_PG_DSN          = os.environ.get("CRM_PG_DSN", "")            # e.g. postgre
 # CAMPAIGN_SHEET_ID:      Google Sheet ID with клиенты / шаблоны / статус tabs
 # N8N_CAMPAIGN_TIMEOUT:   max seconds to wait for N8N response (selection can be slow)
 # CAMPAIGN_DEMO_MODE:     set to "true" to use demo (hardcoded) clients in N8N instead of Google Sheets
+# CAMPAIGN_FROM_EMAIL:    sender address used in campaign emails (e.g. info@sintaris.net)
 # ─────────────────────────────────────────────────────────────────────────────
 N8N_CAMPAIGN_SELECT_WH = os.environ.get("N8N_CAMPAIGN_SELECT_WH", "")
 N8N_CAMPAIGN_SEND_WH   = os.environ.get("N8N_CAMPAIGN_SEND_WH", "")
@@ -172,6 +173,7 @@ CAMPAIGN_SHEET_ID      = os.environ.get("CAMPAIGN_SHEET_ID",
                              "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA")
 N8N_CAMPAIGN_TIMEOUT   = int(os.environ.get("N8N_CAMPAIGN_TIMEOUT", "90"))
 CAMPAIGN_DEMO_MODE     = os.environ.get("CAMPAIGN_DEMO_MODE", "false").lower() == "true"
+CAMPAIGN_FROM_EMAIL    = os.environ.get("CAMPAIGN_FROM_EMAIL", "info@sintaris.net")
 
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           _th("active_model.txt"))
@@ -306,7 +308,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.46"
+BOT_VERSION        = "2026.4.47"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

@@ -1,6 +1,11 @@
 [
   {
-    "version": "2026.4.46",
+    "version": "2026.4.47",
+    "date": "2026-04-12",
+    "title": "Configurable campaign sender email",
+    "notes": "- feat: CAMPAIGN_FROM_EMAIL config param (default: info@sintaris.net)\n- feat: N8N Campaign Send uses $json.from_email from webhook payload (no longer hardcoded taris@dev2null.de)\n- feat: bot_campaign.py passes from_email in send payload\n- config: set CAMPAIGN_FROM_EMAIL=info@sintaris.net in bot.env on TariStation2"
+  },
+  {
     "date": "2026-04-12",
     "title": "Campaign client name normalization + demo mode fix",
     "notes": "- fix: N8N Parse Response now normalizes 'name' and 'email' fields from any column header (Имя, ФИО, Name, etc.)\n- fix: bot_campaign.py _send_preview uses robust name lookup with fallback to first non-empty string value\n- fix: TariStation2 switched to CAMPAIGN_DEMO_MODE=true while Google Sheets OAuth2 credential is renewed\n- fix: Campaign Select workflow re-uploaded with name normalization"

@@ -39,7 +39,7 @@
     },
     {
       "parameters": {
-        "fromEmail": "taris@dev2null.de",
+        "fromEmail": "={{ $json.from_email }}",
         "toEmail": "={{ $json.email }}",
         "subject": "={{ $json.topic || 'Einladung von Taris' }}",
         "emailType": "text",

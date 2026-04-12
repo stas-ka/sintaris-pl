@@ -25,6 +25,7 @@ from core.bot_config import (
     CAMPAIGN_SHEET_ID,
     N8N_CAMPAIGN_TIMEOUT,
     CAMPAIGN_DEMO_MODE,
+    CAMPAIGN_FROM_EMAIL,
 )
 
 log = logging.getLogger("taris.campaign")
@@ -318,6 +319,7 @@ def _run_send(chat_id: int, bot, _t) -> None:
         "template": state["template"],
         "sheet_id": CAMPAIGN_SHEET_ID,
         "demo_mode": CAMPAIGN_DEMO_MODE,
+        "from_email": CAMPAIGN_FROM_EMAIL,
     }
 
     result = call_webhook(N8N_CAMPAIGN_SEND_WH, payload, timeout=N8N_CAMPAIGN_TIMEOUT)
