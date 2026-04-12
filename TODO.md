@@ -46,36 +46,39 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 [] Add additional fields for contact
 ---
-## 2. N8N Workflow Рассылка по отобранным клиентам.
-- реализовать "Демонстрашка для работы с базой клиентов.drawio"
-- опиши сначала концепцию и алгоритм работы в новом документе.
-- workflow для реализации в n8n (URL в .env как `VPS_N8N_HOST`, workflow ID: w0JKnbBoS5foPqfL)
-- используй подобные принципы, crendentials, как и в этом workflow 
-- интегируй это решение в предусмотренную концепцию и частично реализованную интеграции n8n (Phase 1,2 )
-- исходные данные сохранены в Google Sheets (ссылка в .env как `VPS_GSHEET_CLIENTS_ID`) в закладке "клиенты" и "Шаблоны рассылки"
-- результаты выборки, использлванные шаблоны и рассылки должны быть сохранены здесь же в "Статус рассылок"
-- ПРоверь возможность реализации этого алгоритма, скоректируй его возможно , уппрости если это имеет смысл, сделай так чтобы он органично вписался в идеи реализации и последующей имплементации интеграций с OpenClaw, n8n, CRM. Идеи и детали алгоритма:
--- клиент пользуясь Taris заходит в подменю агенты и выбирает агент рассылка
--- клиент задает тему рассылки , например "Приглашение на вебинар по продукту LR" могут быть указаны определенные типы клиентов , адреса, компании, интересующие темы, интересы, комментарии или какие-то другие параметры клиентов см. гугль таблицу
--- запускается Workflow n8n (campaign-select webhook, URL в bot.env)
--- в n8n переедается тема рассылки и параметры клиентов
---- по теме рассылки и заданным параметрам подбираются подходящие клиенты для рассылки с ииспользованием Chatgpt mini model из google таблицы 
---- проверяется есть ли шаблон рассылки для этой темы в таблице google
---- есть ли есть шаблон то он используется для рассылки . иначе с помощью LLM chatgpt mini model генерируется шаблон рассылки в N8n. В шаблоне могут бытьиспользованы вставка параметров рассылки , например имя клиента, какие-то его параметры и т.д. 
---- в тарис возвращается список клиентов для рассылки и шаблон для подверждения начала рассылки. Пользователь может через Taris задать новый шаблон рассылки. Подготовленные параметры рассылки могут быть внесены в таблицу Статус рассылок и клиенту присылается ссылка на таблицу по возможности с предустановленным фильтром по новой запланированной рассылке или новой таблице.
---- После подверждения рассылки в Taris запускается рассылка по клиентам через n8n (campaign-send webhook, URL в bot.env)
---- Taris оповещается о начале рассылки
---- после окончания рассылки пользователь оповещается о завершении рассылки и статусе проведения рассылки
---- в таблице статуса рассылки вносятся пометки по рассылки по каждому клиенту
+## 2. N8N Workflow — Campaign Email Broadcast ✅ Implemented (v2026.4.50)
 
--- имплементируй новые тесты на уровне n8n и TAris для проверки всей цепочки
--- задокументируй реализацию в документах проекта
--- пометь в Todo что реализовано, а что нет или изменено в концепции реализации
--- Deploy только на Taristation2
-### 2.1 add advanced user to Taris
--- создай новый тип пользователя Advanced user
--- admin может ментять пользователю тип пользователя user, admin, advanced, developer через меню c доступом к списку пользователей
--- advanced user получают расширенные права и могут запускать реализованные и подключенные workflow
+Full spec: [doc/todo/2-n8n-campaign-workflow.md](doc/todo/2-n8n-campaign-workflow.md)
+
+### ✅ Implemented (v2026.4.45 – v2026.4.50)
+- [x] `bot_campaign.py` — campaign state machine (topic → filter → preview → send)
+- [x] Agents menu in Telegram (advanced/admin users only)
+- [x] N8N `Taris - Campaign Select` workflow (ID: `YF9eU2H2N3Nr4j3O`):
+  - `Demo Mode?` IF branch (true → Demo Clients / false → GS Read Clients)
+  - GS Read Clients from "клиенты" tab
+  - OpenAI (native node, gpt-4o-mini) selects matching clients
+  - GS Read Templates from "Шаблоны рассылки" — uses template if found
+  - Merge Template: prefers GS template over AI-generated
+  - Returns `{clients, template, count}` to Taris
+- [x] N8N `Taris - Campaign Send` workflow (ID: `AjIB5izjiCunMcp6`):
+  - **GS Append Queued**: writes `Status="Gesendet wird..."` to "Status рассылок" BEFORE each send
+  - Send Email via Gmail (native Gmail node, OAuth2)
+  - **GS Append Status**: writes `Status="sent"/"ERROR:..."` to "Status рассылок" AFTER each send
+  - Both GS nodes: `onError=continueRegularOutput` (GS failure never blocks send)
+- [x] Configurable `CAMPAIGN_FROM_EMAIL`, `CAMPAIGN_DEMO_MODE` env vars
+- [x] Workflow files: `src/n8n/workflows/Taris - Campaign Select.json`, `Taris - Campaign Send.json`
+- [x] Tests T50–T57: 40 unit tests passing (see `src/tests/test_campaign.py`)
+
+### 🔲 Planned
+- [ ] Status rows written before sending (in campaign-select response, not only in send)
+- [ ] Generic Google Sheets link with filter pre-applied to campaign session
+- [ ] CRM Telegram menu (§2.x)
+- [ ] CRM Web UI (§2.x)
+
+### 2.1 Advanced User Role ✅ Implemented (v2026.4.x)
+- [x] `advanced` user role: can access Agents menu + campaign workflows
+- [x] Admin can set user role (user/advanced/admin/developer) via admin menu
+- [ ] Developer role: additional runtime debug options
 
 
 

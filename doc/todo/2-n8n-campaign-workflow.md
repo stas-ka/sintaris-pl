@@ -119,6 +119,29 @@ State stored in `_campaigns: dict[int, dict]` keyed by chat_id:
 | Template stored back to Google Sheets | Only status rows saved | Reduces complexity, templates are generated each time |
 | Link with filter pre-applied | Generic status sheet URL | Google Sheets filter URLs are complex |
 | Taris tells N8N about new template | Template passed directly in send request | Simpler, avoids two-phase template save |
+| `info@sintaris.net` as From: address | Gmail OAuth2 sends from the OAuth account | Gmail node cannot override From: for OAuth credentials |
+
+## What IS implemented (v2026.4.50)
+
+| Feature | Status |
+|---|---|
+| GS Append Queued (Status="Gesendet wird..." BEFORE send) | ✅ v2026.4.50 |
+| GS Append Status (Status="sent"/"ERROR:..." AFTER send) | ✅ v2026.4.50 |
+| demo_mode IF branch in Campaign Select | ✅ v2026.4.48 |
+| Native N8N nodes: OpenAI, Gmail, Google Sheets | ✅ v2026.4.48 |
+| Parse Response: strip markdown fences before JSON.parse | ✅ v2026.4.47 |
+| Error handling in Parse Response (returns `{_error: true}`) | ✅ v2026.4.47 |
+| CAMPAIGN_FROM_EMAIL + CAMPAIGN_DEMO_MODE env vars | ✅ v2026.4.46 |
+| `_STEP_KEY_MAP` with GS Append Queued + Send Email Gmail | ✅ v2026.4.50 |
+
+## N8N Workflow Files (v2026.4.50)
+
+| File | Workflow Name | Nodes |
+|---|---|---|
+| `src/n8n/workflows/Taris - Campaign Select.json` | Taris - Campaign Select | 10 |
+| `src/n8n/workflows/Taris - Campaign Send.json` | Taris - Campaign Send | 8 |
+
+> **Note:** Old filenames `taris-campaign-select.json` / `taris-campaign-send.json` were renamed by user in v2026.4.50. Webhook URL paths (`/webhook/taris-campaign-select`, `/webhook/taris-campaign-send`) are unchanged.
 
 ---
 
