@@ -198,34 +198,42 @@ def _campaign_select_workflow() -> dict:
     js_demo_clients = r"""
 // DEMO DATA — replace with Google Sheets node when OAuth credential is refreshed
 // Credential to fix: j36NScu4bpqsYJKT "Google Sheets account 3"
-const demoClients = [
-  { "Имя": "Алексей Петров",   "Email": "alex.petrov@example.com",    "Компания": "ТехноСтарт",      "Интересы": "IT-решения, автоматизация" },
-  { "Имя": "Марина Соколова",  "Email": "m.sokolova@example.com",     "Компания": "Медиа Груп",      "Интересы": "маркетинг, контент" },
-  { "Имя": "Дмитрий Кузнецов", "Email": "d.kuznetsov@example.com",   "Компания": "СтройИнвест",     "Интересы": "строительство, инвестиции" },
-  { "Имя": "Анна Иванова",     "Email": "a.ivanova@example.com",      "Компания": "Финтех Решения",  "Интересы": "финансы, стартапы" },
-  { "Имя": "Сергей Новиков",   "Email": "s.novikov@example.com",      "Компания": "АгроПром",        "Интересы": "сельское хозяйство, экспорт" },
-  { "Имя": "Елена Морозова",   "Email": "e.morozova@example.com",     "Компания": "EduTech",         "Интересы": "образование, EdTech" },
-  { "Имя": "Павел Волков",     "Email": "p.volkov@example.com",       "Компания": "КиберЗащита",     "Интересы": "кибербезопасность, IT" },
-  { "Имя": "Ольга Лебедева",   "Email": "o.lebedeva@example.com",     "Компания": "GreenEnergy",     "Интересы": "возобновляемая энергия, ESG" },
-  { "Имя": "Иван Козлов",      "Email": "i.kozlov@example.com",       "Компания": "LogisticsPro",    "Интересы": "логистика, цепочки поставок" },
-  { "Имя": "Татьяна Смирнова", "Email": "t.smirnova@example.com",     "Компания": "HealthAI",        "Интересы": "медицина, AI, данные" }
-];
-
-return demoClients.map((c, i) => ({ json: { ...c, _idx: i } }));
+try {
+  const demoClients = [
+    { "Имя": "Алексей Петров",   "Email": "alex.petrov@example.com",    "Компания": "ТехноСтарт",      "Интересы": "IT-решения, автоматизация" },
+    { "Имя": "Марина Соколова",  "Email": "m.sokolova@example.com",     "Компания": "Медиа Груп",      "Интересы": "маркетинг, контент" },
+    { "Имя": "Дмитрий Кузнецов", "Email": "d.kuznetsov@example.com",    "Компания": "СтройИнвест",     "Интересы": "строительство, инвестиции" },
+    { "Имя": "Анна Иванова",     "Email": "a.ivanova@example.com",      "Компания": "Финтех Решения",  "Интересы": "финансы, стартапы" },
+    { "Имя": "Сергей Новиков",   "Email": "s.novikov@example.com",      "Компания": "АгроПром",        "Интересы": "сельское хозяйство, экспорт" },
+    { "Имя": "Елена Морозова",   "Email": "e.morozova@example.com",     "Компания": "EduTech",         "Интересы": "образование, EdTech" },
+    { "Имя": "Павел Волков",     "Email": "p.volkov@example.com",       "Компания": "КиберЗащита",     "Интересы": "кибербезопасность, IT" },
+    { "Имя": "Ольга Лебедева",   "Email": "o.lebedeva@example.com",     "Компания": "GreenEnergy",     "Интересы": "возобновляемая энергия, ESG" },
+    { "Имя": "Иван Козлов",      "Email": "i.kozlov@example.com",       "Компания": "LogisticsPro",    "Интересы": "логистика, цепочки поставок" },
+    { "Имя": "Татьяна Смирнова", "Email": "t.smirnova@example.com",     "Компания": "HealthAI",        "Интересы": "медицина, AI, данные" }
+  ];
+  return demoClients.map((c, i) => ({ json: { ...c, _idx: i } }));
+} catch(e) {
+  return [{ json: { _error: true, step: "Demo Clients", detail: e.message } }];
+}
 """
 
     js_prepare = r"""
-const allItems = items;
-const body = $('Webhook').first().json.body || $('Webhook').first().json;
-const topic = body.topic || '';
-const filters = body.filters || '';
+try {
+  // Propagate upstream error (e.g. Demo Clients failed)
+  if (items.length === 1 && items[0].json._error === true) {
+    return [{ json: items[0].json }];
+  }
 
-const clients = allItems.map((item, i) => ({ _idx: i, ...item.json }));
-const clientsStr = clients.map(c =>
-  `${c._idx}: Имя=${c['Имя']||c['name']||c['Name']||'?'}, Email=${c['Email']||c['email']||''}, Компания=${c['Компания']||c['company']||''}, Интересы=${c['Интересы']||c['interests']||''}`
-).join('\n');
+  const body = $('Webhook').first().json.body || $('Webhook').first().json;
+  const topic = body.topic || '';
+  const filters = body.filters || '';
 
-const prompt = `Ты маркетинговый ассистент. Выбери клиентов из списка, наиболее подходящих для кампании на тему: "${topic}".
+  const clients = items.map((item, i) => ({ _idx: i, ...item.json }));
+  const clientsStr = clients.map(c =>
+    `${c._idx}: Имя=${c['Имя']||c['name']||c['Name']||'?'}, Email=${c['Email']||c['email']||''}, Компания=${c['Компания']||c['company']||''}, Интересы=${c['Интересы']||c['interests']||''}`
+  ).join('\n');
+
+  const prompt = `Ты маркетинговый ассистент. Выбери клиентов из списка, наиболее подходящих для кампании на тему: "${topic}".
 ${filters ? `Дополнительные критерии: ${filters}` : ''}
 
 Список клиентов:
@@ -239,27 +247,34 @@ ${clientsStr}
 
 Выбери 3-10 наиболее подходящих клиентов. Шаблон письма — на русском языке.`;
 
-return [{ json: { prompt, clients, topic, filters } }];
+  return [{ json: { prompt, clients, topic, filters } }];
+} catch(e) {
+  return [{ json: { _error: true, step: "Prepare Prompt", detail: e.message } }];
+}
 """
 
     js_parse = r"""
-const item = items[0].json;
-const prepareData = $('Prepare Prompt').first().json;
-const allClients = prepareData.clients;
-
-let selected = [];
-let template = '';
-
 try {
-  // HTTP Request node with raw body returns response as string in 'data' or parsed object
-  let parsed;
-  const rawData = item.data || item;
-  if (typeof rawData === 'string') {
-    parsed = JSON.parse(rawData);
-  } else {
-    parsed = rawData;
+  // Check if an upstream jsCode node returned an error (Demo Clients or Prepare Prompt)
+  const prepareData = $('Prepare Prompt').first().json;
+  if (prepareData._error === true) return [{ json: prepareData }];
+
+  const item = items[0].json;
+  const allClients = prepareData.clients || [];
+
+  // Check if OpenAI HTTP node failed (continueOnFail passes error in item.json.error)
+  if (item.error !== undefined && !item.choices) {
+    const errMsg = typeof item.error === 'string'
+      ? item.error
+      : (item.error && (item.error.message || item.error.description)) || 'OpenAI request failed';
+    return [{ json: { _error: true, step: "OpenAI Select", detail: errMsg } }];
   }
-  // OpenAI response structure
+
+  let selected = [];
+  let template = '';
+
+  const rawData = item.data || item;
+  let parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
   const content = (parsed.choices && parsed.choices[0] && parsed.choices[0].message && parsed.choices[0].message.content)
     ? parsed.choices[0].message.content
     : JSON.stringify(parsed);
@@ -267,12 +282,16 @@ try {
   const indices = result.selected_indices || [];
   template = result.template || '';
   selected = indices.map(i => allClients[i]).filter(Boolean);
-} catch(e) {
-  selected = allClients.slice(0, 5);
-  template = `Уважаемый {name}! Приглашаем вас принять участие в нашей кампании: ${prepareData.topic}`;
-}
 
-return [{ json: { clients: selected, template, count: selected.length } }];
+  if (selected.length === 0) {
+    selected = allClients.slice(0, 5);
+    template = template || `Уважаемый {name}! Приглашаем вас принять участие в нашей кампании: ${prepareData.topic}`;
+  }
+
+  return [{ json: { clients: selected, template, count: selected.length } }];
+} catch(e) {
+  return [{ json: { _error: true, step: "Parse Response", detail: e.message } }];
+}
 """
 
     return {
@@ -320,6 +339,7 @@ return [{ json: { clients: selected, template, count: selected.length } }];
                 "type": "n8n-nodes-base.httpRequest",
                 "typeVersion": 4,
                 "position": [950, 300],
+                "onError": "continueRegularOutput",
                 "parameters": {
                     "method": "POST",
                     "url": "https://api.openai.com/v1/chat/completions",
@@ -352,8 +372,8 @@ return [{ json: { clients: selected, template, count: selected.length } }];
                 "position": [1450, 300],
                 "parameters": {
                     "respondWith": "json",
-                    "responseBody": '={{ JSON.stringify({ clients: $json.clients, template: $json.template }) }}',
-                    "options": {}
+                    "responseBody": '={{ $json._error === true ? JSON.stringify({ error: $json.detail || "Workflow error", step: $json.step || "unknown" }) : JSON.stringify({ clients: $json.clients, template: $json.template }) }}',
+                    "options": {"responseCode": 200}
                 }
             }
         ],
@@ -379,43 +399,116 @@ def _campaign_send_workflow() -> dict:
     sheet_url = f"https://docs.google.com/spreadsheets/d/{CAMPAIGN_SHEET_ID}/edit#gid=0"
 
     js_expand = r"""
-const body = $('Webhook Send').first().json.body || $('Webhook Send').first().json;
-const clients = body.clients || [];
-const template = body.template || 'Уважаемый {name}!';
-const topic = body.topic || '';
-const sessionId = body.session_id || '';
+try {
+  const body = $('Webhook Send').first().json.body || $('Webhook Send').first().json;
 
-return clients.map(client => {
-  const name = client['Имя'] || client['name'] || client['Name'] || 'Клиент';
-  const email = client['Email'] || client['email'] || '';
-  const company = client['Компания'] || client['company'] || '';
-  const interests = client['Интересы'] || client['interests'] || '';
-  const body_text = template
-    .replace(/{name}/g, name)
-    .replace(/{company}/g, company)
-    .replace(/{interests}/g, interests);
-  return { json: { email, name, company, interests, body_text, topic, sessionId } };
-}).filter(item => item.json.email);
+  if (!body || !Array.isArray(body.clients) || body.clients.length === 0) {
+    return [{ json: { _error: true, step: "Expand Clients", detail: "No clients provided in request" } }];
+  }
+
+  const clients = body.clients;
+  const template = body.template || 'Уважаемый {name}!';
+  const topic = body.topic || '';
+  const sessionId = body.session_id || '';
+
+  const expanded = clients.map(client => {
+    const name = client['Имя'] || client['name'] || client['Name'] || 'Клиент';
+    const email = client['Email'] || client['email'] || '';
+    const company = client['Компания'] || client['company'] || '';
+    const interests = client['Интересы'] || client['interests'] || '';
+    const body_text = template
+      .replace(/{name}/g, name)
+      .replace(/{company}/g, company)
+      .replace(/{interests}/g, interests);
+    return { json: { email, name, company, interests, body_text, topic, sessionId } };
+  }).filter(item => item.json.email);
+
+  if (expanded.length === 0) {
+    return [{ json: { _error: true, step: "Expand Clients", detail: "No clients with valid email addresses" } }];
+  }
+
+  return expanded;
+} catch(e) {
+  return [{ json: { _error: true, step: "Expand Clients", detail: e.message } }];
+}
 """
 
     js_log_row = r"""
-const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
-return items.map(item => ({
-  json: {
-    Дата: now,
-    Кампания: item.json.topic || '',
-    Получатель: item.json.name || '',
-    Email: item.json.email || '',
-    Статус: 'Отправлено',
-    'Session ID': item.json.sessionId || ''
-  }
-}));
+try {
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  return items.map(item => {
+    // Get original client data from Expand Clients (Gmail output doesn't include it)
+    let clientData = {};
+    try { clientData = $('Expand Clients').item.json || {}; } catch(e2) {}
+
+    // Propagate early error from Expand Clients
+    if (clientData._error === true) return { json: clientData };
+
+    // Detect Gmail send failure (continueRegularOutput adds error field to item)
+    const sendError = item.json.error
+      ? (typeof item.json.error === 'string'
+          ? item.json.error
+          : item.json.error.message || item.json.error.description || 'Email sending failed')
+      : null;
+
+    return {
+      json: {
+        Дата: now,
+        Кампания: clientData.topic || '',
+        Получатель: clientData.name || '',
+        Email: clientData.email || '',
+        Статус: sendError ? 'Ошибка' : 'Отправлено',
+        'Session ID': clientData.sessionId || '',
+        _send_error: sendError
+      }
+    };
+  });
+} catch(e) {
+  return [{ json: { _error: true, step: "Prepare Sheet Row", detail: e.message } }];
+}
 """
 
-    js_summary = r"""
-const sentCount = items.length;
-return [{ json: { sent_count: sentCount, sheet_url: """ + f'"{sheet_url}"' + r""" } }];
+    js_summary = (
+        r"""
+try {
+  // Propagate early error from Expand Clients (single error item that survived log_row)
+  if (items.length === 1 && items[0].json._error === true) {
+    return [{ json: items[0].json }];
+  }
+
+  const sent   = items.filter(i => !i.json._send_error && !i.json._error).length;
+  const failed = items.filter(i =>  i.json._send_error ||  i.json._error).length;
+  const total  = items.length;
+
+  const failedEmails = items
+    .filter(i => i.json._send_error || i.json._error)
+    .map(i => i.json.Email || i.json.email || '?')
+    .slice(0, 5)
+    .join(', ');
+
+  if (sent === 0 && total > 0) {
+    const firstErr = (items[0] && items[0].json._send_error) || 'All emails failed to send';
+    return [{ json: {
+      _error: true, step: "Send Gmail",
+      detail: `${total} email(s) failed. ${firstErr}`,
+      failed_count: total, failed_emails: failedEmails
+    }}];
+  }
+
+  return [{ json: {
+    sent_count:   sent,
+    failed_count: failed,
+    total_count:  total,
+    sheet_url:    """
+        + f'"{sheet_url}"'
+        + r""",
+    failed_emails: failedEmails
+  }}];
+} catch(e) {
+  return [{ json: { _error: true, step: "Summary", detail: e.message } }];
+}
 """
+    )
 
     return {
         "name": "Taris - Campaign Send",
@@ -451,6 +544,7 @@ return [{ json: { sent_count: sentCount, sheet_url: """ + f'"{sheet_url}"' + r""
                 "type": "n8n-nodes-base.gmail",
                 "typeVersion": 2,
                 "position": [700, 300],
+                "onError": "continueRegularOutput",
                 "parameters": {
                     "operation": "send",
                     "toList": "={{ $json.email }}",
@@ -490,8 +584,8 @@ return [{ json: { sent_count: sentCount, sheet_url: """ + f'"{sheet_url}"' + r""
                 "position": [1450, 300],
                 "parameters": {
                     "respondWith": "json",
-                    "responseBody": '={{ JSON.stringify({ sent_count: $json.sent_count, sheet_url: $json.sheet_url }) }}',
-                    "options": {}
+                    "responseBody": '={{ $json._error === true ? JSON.stringify({ error: $json.detail || "Workflow error", step: $json.step || "unknown" }) : JSON.stringify({ sent_count: $json.sent_count, failed_count: $json.failed_count, total_count: $json.total_count, sheet_url: $json.sheet_url, failed_emails: $json.failed_emails }) }}',
+                    "options": {"responseCode": 200}
                 }
             }
         ],
@@ -585,9 +679,15 @@ def cmd_update_campaign(which: str = "send"):
     """Find and update campaign workflow(s) with current node code (unicode-clean).
 
     which: 'send' | 'select' | 'both'
+    Matches workflow names with or without the dash variant (live workflows may
+    be named 'Taris Campaign Send' instead of 'Taris - Campaign Send').
     """
     all_wf = _req("GET", "/workflows?limit=200")
     wf_map = {w["name"]: w for w in all_wf.get("data", [])}
+
+    # Support both dash and no-dash name variants used in live N8N
+    def _find(base_name: str):
+        return wf_map.get(base_name) or wf_map.get(base_name.replace(" - ", " "))
 
     targets = []
     if which in ("send", "both"):
@@ -596,14 +696,15 @@ def cmd_update_campaign(which: str = "send"):
         targets.append(("Taris - Campaign Select", _campaign_select_workflow))
 
     for name, builder in targets:
-        found = wf_map.get(name)
+        found = _find(name)
         if not found:
-            print(f"  ⚠️  Not found: {name}  (run create-campaign first)")
+            print(f"  ⚠️  Not found: {name!r} (or no-dash variant). Run create-campaign first.")
+            print(f"       Available: {[w for w in wf_map if 'ampaign' in w]}")
             continue
 
         wf_id = found["id"]
         was_active = found.get("active", False)
-        print(f"Updating '{name}' (id={wf_id})...")
+        print(f"Updating '{found['name']}' (id={wf_id})...")
 
         if was_active:
             _req("POST", f"/workflows/{wf_id}/deactivate")
@@ -618,7 +719,7 @@ def cmd_update_campaign(which: str = "send"):
             "staticData": existing.get("staticData"),
         }
         _req("PUT", f"/workflows/{wf_id}", json=body)
-        print(f"  ✅ Node code updated (unicode-clean)")
+        print(f"  ✅ Node code updated (error handling + unicode-clean)")
 
         if was_active:
             _req("POST", f"/workflows/{wf_id}/activate")

@@ -17,7 +17,7 @@ import threading
 import uuid
 from typing import Any
 
-import requests
+from features.bot_n8n import call_webhook
 
 from core.bot_config import (
     N8N_CAMPAIGN_SELECT_WH,
@@ -64,24 +64,30 @@ def is_configured() -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# N8N helper
+# N8N helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _post_webhook(url: str, payload: dict, timeout: int = N8N_CAMPAIGN_TIMEOUT) -> dict:
-    """POST synchronously to an N8N webhook and return parsed JSON response."""
-    try:
-        resp = requests.post(url, json=payload, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json()
-    except requests.Timeout:
-        log.warning("[Campaign] webhook timeout (%ds): %s", timeout, url)
-        return {"error": f"N8N timeout after {timeout}s"}
-    except requests.RequestException as e:
-        log.warning("[Campaign] webhook error: %s", e)
-        return {"error": str(e)}
-    except ValueError:
-        log.warning("[Campaign] invalid JSON from N8N")
-        return {"error": "Invalid JSON from N8N"}
+def _truncate(text: str, max_len: int = 200) -> str:
+    return text[:max_len] + "…" if len(text) > max_len else text
+
+
+# Maps N8N step names (returned in {step: "..."} error responses) to i18n keys
+_STEP_KEY_MAP = {
+    "Demo Clients":    "campaign_error_input",
+    "Prepare Prompt":  "campaign_error_input",
+    "OpenAI Select":   "campaign_error_openai",
+    "Parse Response":  "campaign_error_workflow",
+    "Expand Clients":  "campaign_error_input",
+    "Send Gmail":      "campaign_error_email",
+    "Prepare Sheet Row": "campaign_error_workflow",
+    "Summary":         "campaign_error_workflow",
+}
+
+
+def _user_friendly_error(step: str, detail: str, _t, chat_id: int) -> str:
+    """Return a localised, user-readable error string for the given N8N step."""
+    key = _STEP_KEY_MAP.get(step, "campaign_error_workflow")
+    return _t(chat_id, key, step=step, detail=_truncate(detail))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -155,13 +161,18 @@ def _run_selection(chat_id: int, bot, _t) -> None:
         "filters": state["filters"],
     }
 
-    result = _post_webhook(N8N_CAMPAIGN_SELECT_WH, payload)
+    result = call_webhook(N8N_CAMPAIGN_SELECT_WH, payload, timeout=N8N_CAMPAIGN_TIMEOUT)
 
+    # call_webhook returns {"error": "...", "status_code": N} on transport failure
+    # N8N returns {"error": "...", "step": "..."} on workflow error
     if "error" in result:
+        step = result.get("step", "unknown")
+        detail = result.get("error", "Unknown error")
+        log.error("[Campaign] select failed step=%s detail=%s", step, detail)
         _campaigns.pop(chat_id, None)
         bot.send_message(
             chat_id,
-            _t(chat_id, "campaign_select_error", error=result["error"]),
+            _user_friendly_error(step, detail, _t, chat_id),
         )
         return
 
@@ -284,24 +295,43 @@ def _run_send(chat_id: int, bot, _t) -> None:
         "template": state["template"],
     }
 
-    result = _post_webhook(N8N_CAMPAIGN_SEND_WH, payload)
+    result = call_webhook(N8N_CAMPAIGN_SEND_WH, payload, timeout=N8N_CAMPAIGN_TIMEOUT)
 
     if "error" in result:
+        step = result.get("step", "unknown")
+        detail = result.get("error", "Unknown error")
+        failed_emails = result.get("failed_emails", "")
+        log.error("[Campaign] send failed step=%s detail=%s", step, detail)
         bot.send_message(
             chat_id,
-            _t(chat_id, "campaign_send_error", error=result["error"]),
+            _user_friendly_error(step, detail, _t, chat_id),
         )
         return
 
-    sent = result.get("sent_count", len(state["clients"]))
+    sent = result.get("sent_count", 0)
+    failed = result.get("failed_count", 0)
+    total = result.get("total_count", len(state["clients"]))
     sheet_url = result.get("sheet_url", SHEET_STATUS_URL)
+    failed_emails = result.get("failed_emails", "")
 
-    bot.send_message(
-        chat_id,
-        _t(chat_id, "campaign_done", sent=sent, url=sheet_url),
-        parse_mode="Markdown",
-        disable_web_page_preview=True,
-    )
+    if failed > 0:
+        log.warning(
+            "[Campaign] partial send: %d/%d sent, failed: %s", sent, total, failed_emails
+        )
+        bot.send_message(
+            chat_id,
+            _t(chat_id, "campaign_partial_send",
+               sent=sent, total=total, failed_emails=failed_emails, url=sheet_url),
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+        )
+    else:
+        bot.send_message(
+            chat_id,
+            _t(chat_id, "campaign_done", sent=sent, url=sheet_url),
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
