@@ -141,16 +141,25 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA/values/%D0%BA%D0%BB%D0%B8%D0%B5%D0%BD%D1%82%D1%8B!A:I",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleSheetsOAuth2Api",
-        "options": {}
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "клиенты",
+          "mode": "name"
+        },
+        "options": {
+          "valueRenderMode": "UNFORMATTED_VALUE"
+        }
       },
       "id": "n-gs-clients",
       "name": "GS Read Clients",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
       "position": [
         660,
         460
@@ -165,16 +174,25 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA/values/%D0%A8%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D1%8B%20%D1%80%D0%B0%D1%81%D1%81%D1%8B%D0%BB%D0%BA%D0%B8!A:C",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleSheetsOAuth2Api",
-        "options": {}
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Шаблоны рассылки",
+          "mode": "name"
+        },
+        "options": {
+          "valueRenderMode": "UNFORMATTED_VALUE"
+        }
       },
       "id": "n-gs-templates",
       "name": "GS Read Templates",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
       "position": [
         1260,
         300

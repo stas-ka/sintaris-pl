@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.48",
+    "date": "2026-04-12",
+    "title": "Google Sheets credential fix + campaign e2e working",
+    "notes": "- fix: copied fresh OAuth2 tokens from reconnected Trigger account to Sheets account 3 in N8N DB\n- fix: sheet_url in Campaign Send response now dynamically populated from sheet_id param (was hardcoded empty)\n- fix: native Google Sheets nodes in Campaign Select (replaced HTTP Request nodes)\n- verified: campaign select + send e2e working with real GS data and SMTP delivery"
+  },
+  {
     "version": "2026.4.47",
     "date": "2026-04-12",
     "title": "Configurable campaign sender email",
