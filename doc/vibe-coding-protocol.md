@@ -23,6 +23,7 @@ Use this to analyse cost (time, requests) per feature over time.
 | 17:xx | Fix campaign client name "?" bug: N8N Parse Response name normalization, bot_campaign.py _client_name() fallback helper, set CAMPAIGN_DEMO_MODE=true TariStation2, v2026.4.46 | 2 | 4 | claude-sonnet-4.6 | bot_campaign.py, bot_config.py, release_notes.json, taris-campaign-select.json | done |
 | 17:30 | Add CAMPAIGN_FROM_EMAIL config param (info@sintaris.net), N8N Campaign Send dynamic fromEmail, deploy v2026.4.47 | 1 | 3 | claude-sonnet-4.6 | bot_config.py, bot_campaign.py, release_notes.json, taris-campaign-send.json | done |
 | 20:xx | Fix GS credential auth: discovered user reconnected wrong credential (Trigger vs Sheets account 3 in N8N DB); copied fresh OAuth tokens via PostgreSQL UPDATE; replaced HTTP Request with native googleSheets nodes; fixed sheet_url hardcoded empty; campaign e2e verified, v2026.4.48 | 3 | 8 | claude-sonnet-4.6 | bot_config.py, release_notes.json, taris-campaign-select.json, taris-campaign-send.json | done |
+| 21:xx | Replace httpRequest OpenAI + emailSend SMTP with native n8n-nodes-base.openAi (v1.1) + n8n-nodes-base.gmail (v2.1); credentials visible in N8N UI; v2026.4.49 | 2 | 3 | claude-sonnet-4.6 | taris-campaign-select.json, taris-campaign-send.json, bot_config.py, release_notes.json | done |
 
 ## Format
 
