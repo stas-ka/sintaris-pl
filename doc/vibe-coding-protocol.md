@@ -10,6 +10,8 @@ Use this to analyse cost (time, requests) per feature over time.
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
 | 14:xx | §2.1 full 4-role system: user/advanced/admin/developer via admin menu | 3 | 4 | claude-sonnet-4.6 | bot_config.py, bot_state.py, bot_access.py, bot_admin.py, release_notes.json | done |
+| 15:xx | Fix \uXXXX unicode in N8N "Prepare Sheet Row" node + secrets policy in copilot-instructions | 2 | 6 | claude-sonnet-4.6 | n8n_admin.py, .env.example, copilot-instructions.md, bot.env.template, gen_config.sh, .gitignore | done |
+| 16:xx | N8N Campaign Select + Send error handling: try/catch jsCode, onError=continueRegularOutput, _error flag propagation, _user_friendly_error(), campaign_partial_send i18n, call_webhook | 4 | 4 | claude-sonnet-4.6 | n8n_admin.py, bot_campaign.py, strings.json | done |
 
 ## Format
 
