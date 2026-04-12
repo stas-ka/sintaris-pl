@@ -21,6 +21,7 @@ Credentials are read from .env in the project root (auto-detected).
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import uuid
@@ -58,11 +59,20 @@ N8N_BASE    = _env.get("VPS_N8N_HOST", "").rstrip("/")
 N8N_API_KEY = _env.get("VPS_N8N_API_KEY", "")
 N8N_API_V1  = f"{N8N_BASE}/api/v1"
 
-# Google Sheets / credentials reused from existing N8N credentials
-CRED_GSHEETS = {"id": "j36NScu4bpqsYJKT", "name": "Google Sheets account 3"}
-CRED_OPENAI  = {"id": "MHkmfl85kwu22LT8", "name": "OpenAI SINTARIS"}
-CRED_GMAIL   = {"id": "OM7qAUKDjlYrrRsI", "name": "Gmail account devstar"}
-CAMPAIGN_SHEET_ID = "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA"
+# N8N Credential objects — IDs and names read from .env (instance-specific)
+CRED_GSHEETS = {
+    "id":   _env.get("VPS_N8N_CRED_GSHEETS", ""),
+    "name": _env.get("VPS_N8N_CRED_GSHEETS_NAME", "Google Sheets"),
+}
+CRED_OPENAI = {
+    "id":   _env.get("VPS_N8N_CRED_OPENAI", ""),
+    "name": _env.get("VPS_N8N_CRED_OPENAI_NAME", "OpenAI"),
+}
+CRED_GMAIL = {
+    "id":   _env.get("VPS_N8N_CRED_GMAIL", ""),
+    "name": _env.get("VPS_N8N_CRED_GMAIL_NAME", "Gmail"),
+}
+CAMPAIGN_SHEET_ID = _env.get("VPS_GSHEET_CAMPAIGN_ID", "")
 
 
 def _h() -> dict:
@@ -71,7 +81,14 @@ def _h() -> dict:
 
 def _req(method: str, path: str, **kwargs):
     url = f"{N8N_API_V1}{path}"
-    resp = requests.request(method, url, headers=_h(), timeout=30, **kwargs)
+    headers = _h()
+    # Always serialize with ensure_ascii=False so Cyrillic/Unicode chars
+    # are sent as actual UTF-8, not \uXXXX escape sequences.
+    if "json" in kwargs:
+        body = json.dumps(kwargs.pop("json"), ensure_ascii=False)
+        kwargs["data"] = body.encode("utf-8")
+        headers = {**headers, "Content-Type": "application/json; charset=utf-8"}
+    resp = requests.request(method, url, headers=headers, timeout=30, **kwargs)
     resp.raise_for_status()
     try:
         return resp.json()
@@ -445,7 +462,7 @@ return [{ json: { sent_count: sentCount, sheet_url: """ + f'"{sheet_url}"' + r""
             },
             {
                 "id": "n-log-prep",
-                "name": "Prepare Log Row",
+                "name": "Prepare Sheet Row",
                 "type": "n8n-nodes-base.code",
                 "typeVersion": 2,
                 "position": [950, 300],
@@ -479,11 +496,11 @@ return [{ json: { sent_count: sentCount, sheet_url: """ + f'"{sheet_url}"' + r""
             }
         ],
         "connections": {
-            "Webhook Send":    {"main": [[{"node": "Expand Clients",  "type": "main", "index": 0}]]},
-            "Expand Clients":  {"main": [[{"node": "Send Gmail",      "type": "main", "index": 0}]]},
-            "Send Gmail":      {"main": [[{"node": "Prepare Log Row", "type": "main", "index": 0}]]},
-            "Prepare Log Row": {"main": [[{"node": "Summary",         "type": "main", "index": 0}]]},
-            "Summary":         {"main": [[{"node": "Respond Send",    "type": "main", "index": 0}]]},
+            "Webhook Send":      {"main": [[{"node": "Expand Clients",    "type": "main", "index": 0}]]},
+            "Expand Clients":    {"main": [[{"node": "Send Gmail",         "type": "main", "index": 0}]]},
+            "Send Gmail":        {"main": [[{"node": "Prepare Sheet Row",  "type": "main", "index": 0}]]},
+            "Prepare Sheet Row": {"main": [[{"node": "Summary",            "type": "main", "index": 0}]]},
+            "Summary":           {"main": [[{"node": "Respond Send",       "type": "main", "index": 0}]]},
         },
         "settings": {"executionOrder": "v1"}
     }
@@ -509,6 +526,105 @@ def cmd_create_campaign():
     print("Add to ~/.taris/bot.env on TariStation2:")
     print(f"  N8N_CAMPAIGN_SELECT_WH={N8N_BASE}/webhook/taris-campaign-select")
     print(f"  N8N_CAMPAIGN_SEND_WH={N8N_BASE}/webhook/taris-campaign-send")
+
+
+def _decode_unicode_escapes(val: str) -> str:
+    """Replace literal \\uXXXX sequences with actual Unicode characters.
+
+    Needed when N8N stored node code with escape sequences instead of
+    the actual UTF-8 characters (caused by json.dumps ensure_ascii=True).
+    """
+    return re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), val)
+
+
+def _walk_decode(obj):
+    """Recursively decode \\uXXXX sequences in all string values of a nested structure."""
+    if isinstance(obj, str):
+        return _decode_unicode_escapes(obj)
+    if isinstance(obj, dict):
+        return {k: _walk_decode(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_walk_decode(v) for v in obj]
+    return obj
+
+
+def cmd_fix_unicode(wf_id: str):
+    """Fetch workflow, decode literal \\uXXXX in all node code strings, PUT it back.
+
+    Use this to fix a workflow that was created before the ensure_ascii=False fix.
+    """
+    print(f"Fetching workflow {wf_id}...")
+    wf = _req("GET", f"/workflows/{wf_id}")
+    print(f"  Name: {wf.get('name', '?')}")
+
+    was_active = wf.get("active", False)
+    if was_active:
+        _req("POST", f"/workflows/{wf_id}/deactivate")
+        print("  Deactivated (will reactivate after update)")
+
+    fixed = _walk_decode(wf)
+    # N8N PUT /workflows/{id}: only include safe fields (tags/pinData format differs GET vs PUT)
+    body = {
+        "name": fixed["name"],
+        "nodes": fixed["nodes"],
+        "connections": fixed["connections"],
+        "settings": fixed.get("settings", {}),
+        "staticData": fixed.get("staticData"),
+    }
+    _req("PUT", f"/workflows/{wf_id}", json=body)
+    print("  ✅ Updated: \\uXXXX sequences decoded to readable Unicode")
+
+    if was_active:
+        _req("POST", f"/workflows/{wf_id}/activate")
+        print("  ✅ Reactivated")
+
+    print(f"Done: {wf.get('name')}")
+
+
+def cmd_update_campaign(which: str = "send"):
+    """Find and update campaign workflow(s) with current node code (unicode-clean).
+
+    which: 'send' | 'select' | 'both'
+    """
+    all_wf = _req("GET", "/workflows?limit=200")
+    wf_map = {w["name"]: w for w in all_wf.get("data", [])}
+
+    targets = []
+    if which in ("send", "both"):
+        targets.append(("Taris - Campaign Send", _campaign_send_workflow))
+    if which in ("select", "both"):
+        targets.append(("Taris - Campaign Select", _campaign_select_workflow))
+
+    for name, builder in targets:
+        found = wf_map.get(name)
+        if not found:
+            print(f"  ⚠️  Not found: {name}  (run create-campaign first)")
+            continue
+
+        wf_id = found["id"]
+        was_active = found.get("active", False)
+        print(f"Updating '{name}' (id={wf_id})...")
+
+        if was_active:
+            _req("POST", f"/workflows/{wf_id}/deactivate")
+
+        existing = _req("GET", f"/workflows/{wf_id}")
+        new_def = builder()
+        body = {
+            "name": new_def["name"],
+            "nodes": new_def["nodes"],
+            "connections": new_def["connections"],
+            "settings": new_def.get("settings", {}),
+            "staticData": existing.get("staticData"),
+        }
+        _req("PUT", f"/workflows/{wf_id}", json=body)
+        print(f"  ✅ Node code updated (unicode-clean)")
+
+        if was_active:
+            _req("POST", f"/workflows/{wf_id}/activate")
+            print(f"  ✅ Reactivated → {N8N_BASE}/webhook/{new_def['nodes'][0]['parameters']['path']}")
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -552,6 +668,12 @@ def main():
 
     sub.add_parser("create-campaign")
 
+    p_fix = sub.add_parser("fix-unicode", help="Decode \\uXXXX sequences in workflow node code")
+    p_fix.add_argument("id", help="Workflow ID (from 'list')")
+
+    p_upd = sub.add_parser("update-campaign", help="Update campaign workflow(s) with current node code")
+    p_upd.add_argument("--which", choices=["send", "select", "both"], default="send")
+
     args = parser.parse_args()
 
     try:
@@ -564,7 +686,9 @@ def main():
         elif args.cmd == "create":        cmd_create(args.file)
         elif args.cmd == "test-webhook":  cmd_test_webhook(args.url, args.payload)
         elif args.cmd == "executions":    cmd_executions(args.wf, args.limit)
-        elif args.cmd == "create-campaign": cmd_create_campaign()
+        elif args.cmd == "create-campaign":   cmd_create_campaign()
+        elif args.cmd == "fix-unicode":        cmd_fix_unicode(args.id)
+        elif args.cmd == "update-campaign":    cmd_update_campaign(args.which)
         else:
             parser.print_help()
     except requests.HTTPError as e:
