@@ -32,31 +32,42 @@ from core.bot_config import (
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS, fmt_prompt
 from core.bot_state import _user_mode, _user_lang, _voice_opts, _user_audio, _dynamic_users
+import core.bot_state as _st
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Access control
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_allowed(chat_id: int) -> bool:
-    """True for admins, full users, and dynamically added guests."""
+    """True for admins, full users, dynamically added users, and any dynamic role."""
     return (chat_id in ADMIN_USERS
             or chat_id in ALLOWED_USERS
-            or chat_id in _dynamic_users)
+            or chat_id in _dynamic_users
+            or chat_id in _st._dynamic_admins
+            or chat_id in _st._dynamic_devs
+            or chat_id in _st._advanced_users)
 
 
 def _is_admin(chat_id: int) -> bool:
-    return chat_id in ADMIN_USERS
+    """True for static env-var admins and dynamically promoted admins."""
+    return chat_id in ADMIN_USERS or chat_id in _st._dynamic_admins
 
 
 def _is_advanced(chat_id: int) -> bool:
-    """True for advanced users (can access campaign/agents) and admins."""
-    import core.bot_state as _st
-    return chat_id in ADMIN_USERS or chat_id in _st._advanced_users
+    """True for advanced users, dynamic admins/devs, and env-var admins."""
+    return (_is_admin(chat_id)
+            or _is_developer(chat_id)
+            or chat_id in _st._advanced_users)
 
 
 def _is_developer(chat_id: int) -> bool:
-    """True if chat_id is in DEVELOPER_USERS (elevated system-chat access)."""
-    return chat_id in DEVELOPER_USERS
+    """True for env-var developers and dynamically promoted developers."""
+    return chat_id in DEVELOPER_USERS or chat_id in _st._dynamic_devs
+
+
+def _is_superadmin(chat_id: int) -> bool:
+    """True only for original env-var admin/developer — cannot be changed via menu."""
+    return chat_id in ADMIN_USERS or chat_id in DEVELOPER_USERS
 
 
 def _is_guest(chat_id: int) -> bool:

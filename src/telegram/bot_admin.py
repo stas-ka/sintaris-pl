@@ -18,7 +18,7 @@ from pathlib import Path
 
 import core.bot_state as _st
 from core.bot_config import (
-    ADMIN_USERS, ALLOWED_USERS,
+    ADMIN_USERS, ALLOWED_USERS, DEVELOPER_USERS,
     TARIS_CONFIG, ACTIVE_MODEL_FILE,
     RELEASE_NOTES_FILE, LAST_NOTIFIED_FILE, BOT_VERSION,
     LLM_LOCAL_FALLBACK, LLAMA_CPP_URL, LLAMA_CPP_MODEL, LLM_FALLBACK_FLAG_FILE,
@@ -41,7 +41,7 @@ from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _escape_md, _send_menu,
     _back_keyboard, _get_active_model, _run_subprocess,
-    _is_advanced,
+    _is_advanced, _is_superadmin,
 )
 from telegram.bot_users import (
     _get_pending_registrations, _find_registration, _upsert_registration,
@@ -1932,24 +1932,39 @@ def finish_crm_input(chat_id: int, text: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Role Management — admin can promote/demote users to/from "advanced"
+# Role Management — admin can set any of 4 roles: user / advanced / admin / dev
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _role_label(chat_id: int) -> str:
-    """Return a display label for a user's current role."""
-    if chat_id in ADMIN_USERS:
-        return "🔐 admin"
-    if chat_id in _st._advanced_users:
-        return "⚡ advanced"
-    if chat_id in ALLOWED_USERS or chat_id in _st._dynamic_users:
-        return "👤 user"
-    return "❓ unknown"
+_ROLE_ICONS: dict[str, str] = {
+    "user":      "👤",
+    "advanced":  "⚡",
+    "admin":     "🔐",
+    "developer": "🛠",
+}
+
+
+def _get_user_role(uid: int) -> str:
+    """Return the highest effective role for a user id."""
+    if uid in ADMIN_USERS or uid in _st._dynamic_admins:
+        return "admin"
+    if uid in DEVELOPER_USERS or uid in _st._dynamic_devs:
+        return "developer"
+    if uid in _st._advanced_users:
+        return "advanced"
+    return "user"
+
+
+def _role_label(uid: int) -> str:
+    role = _get_user_role(uid)
+    return f"{_ROLE_ICONS.get(role, '❓')} {role}"
 
 
 def _handle_admin_roles_menu(chat_id: int) -> None:
-    """Show all known users with role badges and role-change buttons."""
+    """Show all known users with current role + per-user role-change buttons."""
     all_ids: list[int] = sorted(
-        set(ADMIN_USERS) | set(ALLOWED_USERS) | set(_st._dynamic_users) | set(_st._advanced_users)
+        set(ADMIN_USERS) | set(DEVELOPER_USERS) | set(ALLOWED_USERS)
+        | set(_st._dynamic_users) | set(_st._advanced_users)
+        | set(_st._dynamic_admins) | set(_st._dynamic_devs)
     )
     if not all_ids:
         bot.send_message(chat_id, _t(chat_id, "admin_roles_empty"),
@@ -1960,50 +1975,79 @@ def _handle_admin_roles_menu(chat_id: int) -> None:
     for uid in all_ids:
         reg = _find_registration(uid)
         name = (reg.get("first_name", "") if reg else "") or str(uid)
-        label = _role_label(uid)
-        lines.append(f"`{uid}` {_escape_md(name)} — {label}")
+        badge = _role_label(uid)
+        superadmin = " 🌟" if _is_superadmin(uid) else ""
+        lines.append(f"`{uid}` {_escape_md(name)} — {badge}{superadmin}")
 
-    kb = InlineKeyboardMarkup(row_width=1)
+    kb = InlineKeyboardMarkup(row_width=4)
     for uid in all_ids:
-        if uid in ADMIN_USERS:
-            continue  # admins cannot be demoted via this menu
+        if _is_superadmin(uid):
+            continue  # superadmins (env-var) cannot be changed via menu
         reg = _find_registration(uid)
-        name = (reg.get("first_name", "") if reg else "") or str(uid)
-        current = "advanced" if uid in _st._advanced_users else "user"
-        target  = "user" if current == "advanced" else "advanced"
-        icon    = "👤" if target == "user" else "⚡"
+        name = ((reg.get("first_name", "") if reg else "") or str(uid))[:14]
+        current = _get_user_role(uid)
+        icon = _ROLE_ICONS[current]
+        # Header row for this user (shows name + current role, not clickable)
         kb.add(InlineKeyboardButton(
-            f"{icon} {_escape_md(name[:20])} → {target}",
-            callback_data=f"admin_role_set:{uid}:{target}",
+            f"── {icon} {name} ──",
+            callback_data="noop",
         ))
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
+        # Role-change buttons for each alternative role
+        alternatives = [r for r in ["user", "advanced", "admin", "developer"] if r != current]
+        kb.row(*[
+            InlineKeyboardButton(
+                f"{_ROLE_ICONS[r]} {r}",
+                callback_data=f"admin_role_set:{uid}:{r}",
+            )
+            for r in alternatives
+        ])
 
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
     bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=kb)
 
 
 def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> None:
-    """Set target_uid's role to 'advanced' or 'user', persist, confirm."""
-    if target_uid in ADMIN_USERS:
+    """Set target_uid's role to one of user/advanced/admin/developer and persist."""
+    if _is_superadmin(target_uid):
         bot.send_message(chat_id, _t(chat_id, "admin_roles_cannot_change_admin"),
                          reply_markup=_admin_keyboard(chat_id))
         return
 
+    valid_roles = {"user", "advanced", "admin", "developer"}
+    if role not in valid_roles:
+        return
+
+    # Clear all dynamic role sets for this user first
+    _st._advanced_users.discard(target_uid)
+    _st._dynamic_admins.discard(target_uid)
+    _st._dynamic_devs.discard(target_uid)
+
+    # Ensure the user stays in _dynamic_users (allowed to access bot)
+    _st._dynamic_users.add(target_uid)
+
+    # Apply the new role
     if role == "advanced":
         _st._advanced_users.add(target_uid)
-        _st._dynamic_users.discard(target_uid)  # keep _dynamic_users clean
-    else:
-        _st._advanced_users.discard(target_uid)
+    elif role == "admin":
+        _st._dynamic_admins.add(target_uid)
+    elif role == "developer":
+        _st._dynamic_devs.add(target_uid)
+    # role == "user": only in _dynamic_users, no extra set
 
     _st._save_advanced_users()
+    _st._save_dynamic_admins()
+    _st._save_dynamic_devs()
+    _st._save_dynamic_users()
+
     log.info(f"Admin {chat_id} set role '{role}' for user {target_uid}")
 
     reg = _find_registration(target_uid)
     name = (reg.get("first_name", "") if reg else "") or str(target_uid)
+    icon = _ROLE_ICONS.get(role, "")
     bot.send_message(
         chat_id,
-        _t(chat_id, "admin_roles_changed", name=_escape_md(name), role=role),
+        _t(chat_id, "admin_roles_changed", name=_escape_md(name), role=f"{icon} {role}"),
         parse_mode="Markdown",
         reply_markup=_admin_keyboard(chat_id),
     )
-    # Refresh the roles menu so admin sees the updated list
     _handle_admin_roles_menu(chat_id)

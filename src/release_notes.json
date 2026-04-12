@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.44",
+    "date": "2026-04-14",
+    "title": "Full 4-role system: user / advanced / admin / developer",
+    "notes": "- feat: Admin → Manage Roles now shows per-user role selector with all 4 roles\n- feat: Dynamic admin/developer promotion via menu (stored in dynamic_admins.json, dynamic_developers.json)\n- feat: _is_admin() includes dynamically promoted admins\n- feat: _is_developer() includes dynamically promoted developers\n- feat: _is_allowed() updated to grant access to all dynamic role holders\n- feat: Env-var admins/developers are protected (superadmin, cannot be demoted)\n- fix: Role menu now shows icon-labeled role buttons per user (not just toggle)"
+  },
+  {
     "version": "2026.4.43",
     "date": "2026-04-14",
     "title": "Advanced User role + Role Management admin menu",
