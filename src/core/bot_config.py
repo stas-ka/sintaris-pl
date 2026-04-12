@@ -180,7 +180,7 @@ LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides 
 # Set LLM_PROVIDER in TARIS_DIR/bot.env to switch backends.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local | ollama
+# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local | ollama | copilot
 LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "taris")
 
 # Named fallback provider — analogous to STT_FALLBACK_PROVIDER.
@@ -216,6 +216,14 @@ GEMINI_MODEL        = os.environ.get("GEMINI_MODEL",    "gemini-1.5-flash")
 # Anthropic (Feature 3.1)
 ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL     = os.environ.get("ANTHROPIC_MODEL",   "claude-3-haiku-20240307")
+
+# Copilot Bridge — local proxy to GitHub Copilot / GitHub Models API
+# Start the bridge: python copilot-bridge/server.py
+# See sintaris-srv/copilot-bridge/README.md for setup instructions.
+COPILOT_BRIDGE_URL = os.environ.get("COPILOT_BRIDGE_URL", "http://127.0.0.1:8765")
+COPILOT_BRIDGE_KEY = os.environ.get("COPILOT_BRIDGE_KEY", "")   # bearer token (leave empty if bridge has no auth)
+COPILOT_MODEL      = os.environ.get("COPILOT_MODEL",      "gpt-4o")
+COPILOT_TIMEOUT    = int(os.environ.get("COPILOT_TIMEOUT", "120"))
 
 # Direct OpenAI (bypasses taris, uses own key — Feature 3.1)
 OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
