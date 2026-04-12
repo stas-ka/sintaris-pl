@@ -5,6 +5,12 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-14 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 14:xx | §2.1 full 4-role system: user/advanced/admin/developer via admin menu | 3 | 4 | claude-sonnet-4.6 | bot_config.py, bot_state.py, bot_access.py, bot_admin.py, release_notes.json | done |
+
 ## Format
 
 Each session block contains a table with one row per completed request:
@@ -1428,3 +1434,19 @@ Every ~3 months, measure baseline health:
 | Time | Request | Complexity | Requests | Model | Files changed | Status |
 |------|---------|-----------|----------|-------|--------------|--------|
 | 07:15 UTC | Deep research: Auto-Research frameworks (19 analyzed: Reflexion, LangGraph, DSPy, Voyager, STORM, Constitutional AI, Karpathy AutoResearch etc.). Created 3 implementation variants (A: Pragmatic Self-Improvement, B: Agentic Orchestration, C: Full Autonomous Research). Comparison matrix, unified telescoping roadmap (6 phases, 2 decision gates), hardware constraints. New doc: concept/taris-auto-research-architecture.md. Updated main concept to v1.4. | 5 | 3 | claude-opus-4.6 | concept/taris-auto-research-architecture.md, concept/taris-n8n-crm-integration.md | done |**Session 80 total: Auto-Research variant architecture — 3 variants, 19 frameworks, unified roadmap ✅**
+
+### Session 81 — N8N+CRM P1 Implementation
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| 11:38 UTC | N8N+CRM P1+P1.5: Created N8N REST adapter (bot_n8n.py), CRM store (store_crm.py), CRM business logic (bot_crm.py). Admin menus, Web API endpoints, 39×3 i18n strings, tests T40-T49. SSH tunnel for VPS PG. Deployed+verified on TariStation2 (12/12 tests pass, 435/12/2/24 voice regression). Committed to feature/n8n-crm-demo, pushed to GitHub. | 4 | 8 | claude-opus-4.6 | src/features/bot_n8n.py, src/features/bot_crm.py, src/core/store_crm.py, src/core/bot_config.py, src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/bot_web.py, src/strings.json, src/tests/test_n8n_crm.py | done |
+**Session 81 total: N8N+CRM P1 foundation — 9 files, 1503 lines added, deployed to TS2 ✅**
+
+### Session 82 — N8N Campaign Workflows on VPS
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| UTC | Create 2 N8N workflows via REST API on VPS (Taris Campaign Select + Taris Campaign Send) with Google Sheets, OpenAI gpt-4o-mini, Gmail. Fixed PS nested-array serialization bug. IDs: YF9eU2H2N3Nr4j3O / AjIB5izjiCunMcp6 | 3 | 8 | claude-sonnet-4.6 | — (VPS N8N workflows only) | done |
+
+**Session 82 total: 2 N8N workflows created and activated on VPS ✅**| 12:00 UTC | | 11:00 UTC | | 12:00 UTC | 60 | Campaign Agent: N8N email campaign via Google Sheets | 3 | 2 | claude-sonnet-4.6 | bot_campaign.py, bot_config.py, bot_access.py, telegram_menu_bot.py, strings.json, release_notes.json, main_menu.yaml | done |
+
