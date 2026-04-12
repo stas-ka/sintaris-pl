@@ -94,8 +94,14 @@ _STEP_KEY_MAP = {
 }
 
 
+_OAUTH_PHRASES = ("authorization grant", "refresh token", "invalid, expired, revoked")
+
+
 def _user_friendly_error(step: str, detail: str, _t, chat_id: int) -> str:
     """Return a localised, user-readable error string for the given N8N step."""
+    # Google OAuth credential expired → special message
+    if any(phrase in detail for phrase in _OAUTH_PHRASES):
+        return _t(chat_id, "campaign_error_credential", step=step)
     key = _STEP_KEY_MAP.get(step, "campaign_error_workflow")
     return _t(chat_id, key, step=step, detail=_truncate(detail))
 

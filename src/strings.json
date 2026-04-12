@@ -511,7 +511,8 @@
     "campaign_sending": "📤 Отправляю рассылку… Пожалуйста, подождите.",
     "campaign_send_error": "❌ Ошибка при отправке рассылки: {error}",
     "campaign_done": "✅ *Рассылка завершена!*\n\n📤 Отправлено: *{sent}* писем\n\n📊 [Статус рассылок в Google Sheets]({url})",
-    "campaign_cancelled": "❌ Рассылка отменена."
+    "campaign_cancelled": "❌ Рассылка отменена.",
+    "campaign_error_credential": "❌ Токен Google устарел. Необходимо обновить учётные данные Google Sheets Account 3 в N8N (N8N → Настройки → Учётные данные)."
   },
   "en": {
     "btn_digest": "📧  Mail Digest",
@@ -1025,7 +1026,8 @@
     "campaign_sending": "📤 Sending campaign… Please wait.",
     "campaign_send_error": "❌ Error sending campaign: {error}",
     "campaign_done": "✅ *Campaign completed!*\n\n📤 Sent: *{sent}* emails\n\n📊 [Campaign Status in Google Sheets]({url})",
-    "campaign_cancelled": "❌ Campaign cancelled."
+    "campaign_cancelled": "❌ Campaign cancelled.",
+    "campaign_error_credential": "❌ Google credential expired. Please reconnect Google Sheets Account 3 in N8N (N8N → Settings → Credentials)."
   },
   "de": {
     "btn_digest": "📧  E-Mail-Zusammenfassung",
@@ -1539,6 +1541,7 @@
     "campaign_sending": "📤 Kampagne wird gesendet… Bitte warten.",
     "campaign_send_error": "❌ Fehler beim Senden der Kampagne: {error}",
     "campaign_done": "✅ *Kampagne abgeschlossen!*\n\n📤 Gesendet: *{sent}* E-Mails\n\n📊 [Kampagnenstatus in Google Sheets]({url})",
-    "campaign_cancelled": "❌ Kampagne abgebrochen."
+    "campaign_cancelled": "❌ Kampagne abgebrochen.",
+    "campaign_error_credential": "❌ Google-Zugangsdaten abgelaufen. Bitte Google Sheets Account 3 in N8N erneuern (N8N → Einstellungen → Zugangsdaten)."
   }
 }
