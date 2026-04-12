@@ -1479,3 +1479,5 @@ Every ~3 months, measure baseline health:
 **Session 84 total: all hardcoded secrets removed from committed files; .env.example created; pushed to feature/n8n-crm-demo ✅**
 | 16:18 UTC | | 15:00 UTC | | 16:18 UTC | ~78min | Fix N8N Campaign email delivery - SMTP via VPS postfix, SPF fix, Prepare Sheet Row encoding | Deploy SMTP cred, fix fromEmail domain, fix jsCode encoding, test e2e delivery | 3 | 1 | claude-sonnet-4.6 | taris-campaign-send.json, taris-campaign-select.json | done |
 | 17:05 UTC | | | | | Fix Campaign Send email encoding: Expand Clients garbled Russian strings | 1-fix-encoding, 1-test-send | 2 | 2 | claude-sonnet-4.6 | taris-campaign-send.json, fix_campaign_send_encoding.py | done |
+| 09:30 UTC | | 09:00 UTC | | 09:30 UTC | 30 | GS status tracking in Campaign Send (before+after) | 2 | 3 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py | done |
+| 19:33 UTC | | 19:00 UTC | | 19:33 UTC | 33 | GS status tracking Campaign Send (before+after per client) | 2 | 4 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py, bot_config.py, release_notes.json | done |
