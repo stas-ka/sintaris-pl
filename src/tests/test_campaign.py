@@ -736,6 +736,148 @@ def test_crm_api_endpoints_exist_in_source():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T140: Live N8N integration tests — require real N8N instance and bot.env
+# SKIP automatically if N8N_CAMPAIGN_SELECT_WEBHOOK is not configured.
+# Run explicitly with: pytest src/tests/test_campaign.py -k live -v
+# ─────────────────────────────────────────────────────────────────────────────
+
+import pytest as _pytest
+
+
+def _n8n_webhooks_configured() -> tuple[str, str]:
+    """Return (select_url, send_url) or ('','') if not configured."""
+    try:
+        import importlib
+        import core.bot_config as cfg
+        importlib.reload(cfg)
+        sel = getattr(cfg, "N8N_CAMPAIGN_SELECT_WH", "") or ""
+        snd = getattr(cfg, "N8N_CAMPAIGN_SEND_WH", "") or ""
+        return sel.strip(), snd.strip()
+    except Exception:
+        return "", ""
+
+
+@_pytest.mark.live
+def test_live_n8n_select_webhook():
+    """T140a: Live — POST to Campaign Select webhook with demo_mode=true returns clients list."""
+    import urllib.request
+    sel_url, _ = _n8n_webhooks_configured()
+    if not sel_url:
+        _pytest.skip("N8N_CAMPAIGN_SELECT_WH not configured — SKIP live test")
+
+    payload = json.dumps({
+        "topic": "LR Webinar Test",
+        "criteria": "health",
+        "demo_mode": True,
+        "session_id": "pytest-live-T140a"
+    }).encode()
+
+    req = urllib.request.Request(sel_url, data=payload,
+                                  headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        body = r.read().decode()
+
+    assert body, "Campaign Select returned empty response"
+    data = json.loads(body)
+    assert isinstance(data, dict), f"Expected dict, got {type(data)}"
+    assert "clients" in data, f"Missing 'clients' key — got: {list(data.keys())}"
+    assert isinstance(data["clients"], list), "'clients' must be a list"
+    assert len(data["clients"]) > 0, "Expected at least one client for criteria='health'"
+    assert "template" in data, "Missing 'template' key in response"
+
+
+@_pytest.mark.live
+def test_live_n8n_send_webhook():
+    """T140b: Live — POST to Campaign Send webhook with demo client returns sent_count=1."""
+    import urllib.request
+    _, send_url = _n8n_webhooks_configured()
+    if not send_url:
+        _pytest.skip("N8N_CAMPAIGN_SEND_WH not configured — SKIP live test")
+
+    payload = json.dumps({
+        "clients": [
+            {
+                "Имя": "Test Pytest",
+                "Email": "stas.ulmer@gmail.com",
+                "Компания": "Test Corp"
+            }
+        ],
+        "template": "Hallo {name} von {company},\n\ndies ist ein Test-E-Mail von Taris (pytest T140b).\n\nMit freundlichen Grüßen,\nTaris",
+        "topic": "[pytest T140b] Live send test",
+        "demo_mode": True,
+        "session_id": "pytest-live-T140b"
+    }).encode()
+
+    req = urllib.request.Request(send_url, data=payload,
+                                  headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = r.read().decode()
+
+    assert body, "Campaign Send returned empty response"
+    data = json.loads(body)
+    assert isinstance(data, dict), f"Expected dict, got {type(data)}"
+    assert "sent_count" in data, f"Missing 'sent_count' — got: {list(data.keys())}"
+    assert data.get("sent_count", 0) >= 1, \
+        f"Expected sent_count >= 1, got: {data.get('sent_count')}"
+    assert data.get("failed_count", 0) == 0, \
+        f"Expected failed_count == 0, got: {data.get('failed_count')}"
+
+
+@_pytest.mark.live
+def test_live_n8n_full_campaign_flow():
+    """T140c: Live — Select clients then send to all selected (full E2E via N8N webhooks).
+
+    Simulates the full campaign flow:
+      1. Select clients from N8N (demo_mode=true) with criteria 'LR'
+      2. Send campaign email to all selected clients
+      3. Verify sent_count matches number of selected clients
+    """
+    import urllib.request
+
+    sel_url, send_url = _n8n_webhooks_configured()
+    if not sel_url or not send_url:
+        _pytest.skip("N8N_CAMPAIGN_SELECT_WH / N8N_CAMPAIGN_SEND_WH not configured — SKIP live E2E test")
+
+    # Step 1: Select clients
+    sel_payload = json.dumps({
+        "topic": "[pytest T140c] LR Webinar",
+        "criteria": "LR",
+        "demo_mode": True,
+        "session_id": "pytest-live-T140c"
+    }).encode()
+    req = urllib.request.Request(sel_url, data=sel_payload,
+                                  headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        sel_data = json.loads(r.read().decode())
+
+    assert "clients" in sel_data and len(sel_data["clients"]) > 0, \
+        f"Select returned no clients: {sel_data}"
+    assert "template" in sel_data and sel_data["template"], \
+        "Select must return a non-empty template"
+
+    clients = sel_data["clients"]
+    template = sel_data["template"]
+
+    # Step 2: Send to selected clients
+    send_payload = json.dumps({
+        "clients": clients,
+        "template": template,
+        "topic": "[pytest T140c] LR Webinar",
+        "demo_mode": True,
+        "session_id": "pytest-live-T140c"
+    }).encode()
+    req2 = urllib.request.Request(send_url, data=send_payload,
+                                   headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req2, timeout=60) as r:
+        send_data = json.loads(r.read().decode())
+
+    assert "sent_count" in send_data, f"Missing 'sent_count': {send_data}"
+    assert send_data.get("sent_count", 0) >= 1, f"No emails sent: {send_data}"
+    assert send_data.get("failed_count", 0) == 0, \
+        f"Some emails failed: {send_data}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Test runner
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -768,6 +910,14 @@ if __name__ == "__main__":
         ("T139a n8n_callback_endpoint_source",      test_n8n_callback_endpoint_exists_in_source),
         ("T139b crm_api_endpoints_source",          test_crm_api_endpoints_exist_in_source),
     ]
+    live_tests = [
+        ("T140a live_n8n_select_webhook",           test_live_n8n_select_webhook),
+        ("T140b live_n8n_send_webhook",             test_live_n8n_send_webhook),
+        ("T140c live_n8n_full_campaign_flow",       test_live_n8n_full_campaign_flow),
+    ]
+    run_live = os.environ.get("LIVE_TESTS", "0") == "1"
+    if run_live:
+        tests += live_tests
 
     passed = failed = skipped = 0
     for name, fn in tests:
