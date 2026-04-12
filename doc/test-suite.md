@@ -203,6 +203,33 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T119 | `gemma4_live_availability` | Live Ollama API check: gemma4:e2b/e4b pulled and callable. SKIP if Ollama not running. | After pulling Gemma4 models; before switching `OLLAMA_MODEL` |
 | T120 | `gemma4_benchmark_report` | Research doc, Linux eval script, and Windows PowerShell eval helper all present. | After adding Gemma4 evaluation infrastructure |
 
+### 2.5b Campaign Tests — `src/tests/test_campaign.py`
+
+Run with: `python src/tests/test_campaign.py` (offline) or deploy to target and run with `PYTHONPATH=~/.taris python3 ~/.taris/tests/test_campaign.py`.
+
+| ID | Test | What it checks | When to run |
+|---|---|---|---|
+| T130 | `campaign_i18n_keys` | All 19 campaign_* strings present and non-empty in ru/en/de. Catches missing translations for new campaign messages. | After editing `strings.json` campaign keys |
+| T131 | `campaign_module_structure` | `bot_campaign.py` exports all required public functions; uses `call_webhook` not `requests.post`; has `_STEP_KEY_MAP`, `_user_friendly_error`, `_run_selection`, `_run_send`; checks `"error" in result`; calls `_campaigns.pop`. | After editing `bot_campaign.py` structure or imports |
+| T132a | `campaign_state_start` | `start_campaign()` sets step=`topic_input` and sends topic prompt. | After editing `start_campaign()` |
+| T132b | `campaign_state_topic` | `on_topic()` stores topic in state and advances to `filter_input`. | After editing `on_topic()` |
+| T132c | `campaign_handle_message_routing` | `handle_message()` routes to `on_topic`/`on_filters`/`on_template_edit` by step. | After editing `handle_message()` routing |
+| T132d | `campaign_cancel` | `cancel()` clears state, `is_active()` returns False. Root cause: leftover state caused stuck user sessions. | After editing `cancel()` or state dict management |
+| T132e | `campaign_edit_flow` | `start_template_edit()` + `on_template_edit()` updates template and returns to preview. | After editing template edit flow |
+| T132f | `campaign_filters_skip_variants` | `on_filters()` treats `-`, `no`, `skip`, empty, whitespace as "no filters" (pass-all). | After editing `on_filters()` skip logic |
+| T133a | `webhook_no_url` | `call_webhook("")` returns `{"error": "Webhook URL not configured"}`. | After editing `call_webhook()` |
+| T133b | `webhook_empty_body` | Empty 200 response returns `{"result": "", "status_code": 200}` — NOT an `"error"` key. Root cause of "Expecting value: line 1 column 1" production bug. | After editing `call_webhook()` empty-body handling |
+| T133c | `webhook_http_error` | HTTP 4xx/5xx returns `{"error": ..., "status_code": N}`. | After editing `call_webhook()` error handling |
+| T133d | `webhook_timeout` | Timeout returns `{"error": "Webhook timeout after Ns"}`. | After editing `call_webhook()` timeout handling |
+| T133e | `webhook_n8n_error_passthrough` | N8N `{"_error": true, "step": X, "detail": Y}` response is passed through as dict (no error key) — `_user_friendly_error` handles it. | After editing N8N error response parsing |
+| T133f | `run_selection_no_crash` | `_run_selection()` does not crash when N8N returns empty-body 200 (no clients path). | After editing `_run_selection()` |
+| T134 | `user_friendly_error_steps` | All `_STEP_KEY_MAP` step names resolve to keys in `strings.json`. Prevents KeyError on error display. | After adding steps or i18n keys |
+| T135 | `ollama_model_exists` | If `LLM_PROVIDER=ollama`, configured `OLLAMA_MODEL` exists in Ollama API. Root cause of "No response from LLM" production bug. SKIP if not ollama. | After changing `OLLAMA_MODEL` in bot.env |
+| T136a | `webhook_url_source` | `N8N_CAMPAIGN_SELECT_WH` and `N8N_CAMPAIGN_SEND_WH` constants exist in `bot_config.py` source. | After editing `bot_config.py` N8N constants |
+| T136b | `webhook_url_valid_runtime` | At runtime, webhook URLs start with `http://` or `https://`. SKIP if not configured. | After setting webhook URLs in bot.env |
+| T137a | `campaign_callback_routing` | `telegram_menu_bot.py` routes all campaign callbacks: `campaign_confirm_send`, `campaign_cancel`, `campaign_edit`. | After editing callback routing in `telegram_menu_bot.py` |
+| T137b | `campaign_handle_message_in_router` | Main message handler calls `campaign.handle_message()` or `campaign.is_active()` before LLM routing. | After editing `handle_message()` in `telegram_menu_bot.py` |
+
 ### 2.6 When specific tests are mandatory
 
 | Scenario | Required tests |
@@ -252,6 +279,9 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | After any change to `_stt_faster_whisper()` in `bot_voice.py` | T47 (`--test t_faster_whisper_vad_retry`) |
 | After changing `FASTER_WHISPER_MODEL` or any STT accuracy fix | T49 (`--test t_stt_fast_speech_accuracy`) |
 | After editing any menu YAML (`main_menu.yaml`, `admin_menu.yaml`) or `_menu_keyboard()` | T48 (`--test t_system_chat_admin_menu_only`) |
+| After editing `bot_campaign.py` state machine or `call_webhook()` | T130–T137 (`python src/tests/test_campaign.py`) |
+| After changing `OLLAMA_MODEL` in bot.env on TariStation2 | T135 (`python src/tests/test_campaign.py`) |
+| After editing campaign callbacks or `handle_message()` routing in `telegram_menu_bot.py` | T137a, T137b (`python src/tests/test_campaign.py`) |
 
 ---
 
