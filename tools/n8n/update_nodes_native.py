@@ -18,8 +18,8 @@ for n in sel['nodes']:
             "operation": "complete",
             "model": "gpt-4o-mini",
             "simplifyOutput": False,
-            "messages": {
-                "values": [
+            "prompt": {
+                "messages": [
                     {"role": "user", "content": "={{ $json.prompt }}"}
                 ]
             },

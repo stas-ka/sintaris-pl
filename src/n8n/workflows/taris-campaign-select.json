@@ -56,8 +56,8 @@
         "operation": "complete",
         "model": "gpt-4o-mini",
         "simplifyOutput": false,
-        "messages": {
-          "values": [
+        "prompt": {
+          "messages": [
             {
               "role": "user",
               "content": "={{ $json.prompt }}"
