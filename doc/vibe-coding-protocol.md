@@ -12,6 +12,8 @@ Use this to analyse cost (time, requests) per feature over time.
 | 14:xx | §2.1 full 4-role system: user/advanced/admin/developer via admin menu | 3 | 4 | claude-sonnet-4.6 | bot_config.py, bot_state.py, bot_access.py, bot_admin.py, release_notes.json | done |
 | 15:xx | Fix \uXXXX unicode in N8N "Prepare Sheet Row" node + secrets policy in copilot-instructions | 2 | 6 | claude-sonnet-4.6 | n8n_admin.py, .env.example, copilot-instructions.md, bot.env.template, gen_config.sh, .gitignore | done |
 | 16:xx | N8N Campaign Select + Send error handling: try/catch jsCode, onError=continueRegularOutput, _error flag propagation, _user_friendly_error(), campaign_partial_send i18n, call_webhook | 4 | 4 | claude-sonnet-4.6 | n8n_admin.py, bot_campaign.py, strings.json | done |
+| 11:xx | Fix LLM + campaign select errors: pull qwen2.5:0.5b (was qwen3.5:0.8b invalid), fix bot.env OLLAMA_MODEL on TariStation2, restart bot; verified N8N select webhook works (5 clients returned) | 2 | 3 | claude-sonnet-4.6 | TariStation2: bot.env (runtime only) | done |
+| 11:xx | Audit + fix campaign tests: WEB_ONLY=1 offline fix, renumber T50-T57→T130-T137, 20/20 pass locally+TariStation2, update doc/test-suite.md | 2 | 4 | claude-sonnet-4.6 | src/tests/test_campaign.py, doc/test-suite.md | done |
 
 ## Format
 
