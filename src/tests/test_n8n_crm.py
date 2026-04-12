@@ -66,15 +66,28 @@ def test_crm_config_constants_source():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_n8n_adapter_functions_source():
-    """T42: bot_n8n.py defines required public functions."""
+    """T42: bot_n8n.py defines required public functions (webhook-first design)."""
     src = (_src / "features" / "bot_n8n.py").read_text(encoding="utf-8")
     required = [
-        "def is_configured", "def list_workflows", "def trigger_workflow",
-        "def get_execution", "def list_executions", "def test_connection",
+        # Webhook-first interface (technology-agnostic)
+        "def call_webhook", "def trigger_workflow", "def is_configured",
+        "def _build_auth_headers", "def verify_incoming_signature",
+        # N8N admin API (optional, introspection only)
+        "def list_workflows", "def get_execution", "def list_executions",
+        "def test_connection", "def is_admin_api_configured",
+        # Callback dispatch
         "def register_callback", "def process_callback",
     ]
     for fn in required:
         assert fn in src, f"bot_n8n.py missing: {fn}"
+
+    # Auth types must all be handled
+    for auth_type in ("bearer", "apikey", "hmac", "basic", "none"):
+        assert auth_type in src, f"bot_n8n.py missing auth_type handling: {auth_type}"
+
+    # No N8N-specific SDK imports
+    assert "import n8n" not in src, "bot_n8n.py must not import n8n SDK"
+    assert "from n8n" not in src, "bot_n8n.py must not import from n8n SDK"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

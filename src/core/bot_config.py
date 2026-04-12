@@ -127,14 +127,28 @@ MCP_REMOTE_TOP_K   = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # N8N Workflow Automation
-# N8N_URL: base URL of the N8N instance (REST API)
-# N8N_API_KEY: API key for N8N REST calls
-# N8N_WEBHOOK_SECRET: shared secret for incoming webhook callbacks
+# N8N_URL: base URL of the N8N instance (admin API only — not needed for webhooks)
+# N8N_API_KEY: API key for N8N admin REST API introspection
+# N8N_WEBHOOK_SECRET: shared secret for verifying inbound webhook callbacks
 # ─────────────────────────────────────────────────────────────────────────────
 N8N_URL             = os.environ.get("N8N_URL", "")                # e.g. https://<your-n8n-host>
 N8N_API_KEY         = os.environ.get("N8N_API_KEY", "")
 N8N_WEBHOOK_SECRET  = os.environ.get("N8N_WEBHOOK_SECRET", "")    # verify inbound callbacks
 N8N_TIMEOUT         = int(os.environ.get("N8N_TIMEOUT", "30"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Outbound webhook authentication — applies to all call_webhook() calls
+# Works with any HTTP service (n8n, Make, Zapier, custom REST APIs)
+# WEBHOOK_AUTH_TYPE:   none | bearer | apikey | hmac | basic
+# WEBHOOK_AUTH_TOKEN:  token value (Bearer/ApiKey) or "user:pass" (Basic)
+# WEBHOOK_AUTH_HEADER: custom header name for apikey auth (default: X-Api-Key)
+# WEBHOOK_HMAC_SECRET: shared secret for HMAC-SHA256 signing + inbound verify
+# ⏳ OPEN: OAuth 2.0 client-credentials → See TODO.md §2.2
+# ─────────────────────────────────────────────────────────────────────────────
+WEBHOOK_AUTH_TYPE    = os.environ.get("WEBHOOK_AUTH_TYPE", "none")
+WEBHOOK_AUTH_TOKEN   = os.environ.get("WEBHOOK_AUTH_TOKEN", "")
+WEBHOOK_AUTH_HEADER  = os.environ.get("WEBHOOK_AUTH_HEADER", "")   # e.g. X-Api-Key
+WEBHOOK_HMAC_SECRET  = os.environ.get("WEBHOOK_HMAC_SECRET", "")   # HMAC + inbound verify
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CRM — built-in contact/task/campaign management

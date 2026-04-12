@@ -79,7 +79,31 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 
 
 
-## 4. Content & Knowledge ✅ All done → See DONE.md (v2026.4.41)
+### 2.2 Webhook Authentication — outbound + inbound 🔲
+
+**Context:** `bot_n8n.py` uses `call_webhook()` as the primary trigger mechanism (standard HTTP POST, no SDK dependency). Basic auth schemes are implemented. This section tracks remaining auth work.
+
+#### ✅ Implemented (v2026.4.45)
+- `call_webhook(url, payload, *, auth_type, auth_token, ...)` — standard HTTP POST, no SDK coupling
+- `_build_auth_headers()` — `bearer` / `apikey` / `hmac` / `basic` / `none`
+- `verify_incoming_signature(body, header)` — HMAC-SHA256 inbound verification
+- Config constants: `WEBHOOK_AUTH_TYPE`, `WEBHOOK_AUTH_TOKEN`, `WEBHOOK_AUTH_HEADER`, `WEBHOOK_HMAC_SECRET`
+
+#### 🔲 Planned — Outbound
+- [ ] **OAuth 2.0 client-credentials**: fetch token from `WEBHOOK_OAUTH_TOKEN_URL` using `WEBHOOK_OAUTH_CLIENT_ID` + `WEBHOOK_OAUTH_CLIENT_SECRET`; cache token until expiry; retry on 401
+- [ ] Per-workflow auth override: store `{webhook_url, auth_type, auth_token}` in DB; admin can configure per-workflow credentials without restart
+
+#### 🔲 Planned — Inbound (callbacks from workflow services → Taris)
+- [ ] Bearer token validation on FastAPI `/webhook/callback` endpoint (currently no inbound auth)
+- [ ] IP allowlist for trusted senders (configurable via `WEBHOOK_INBOUND_ALLOW_IPS` env var)
+- [ ] Replay attack prevention: reject requests older than 5 min (timestamp header check)
+- [ ] Rate limiting on inbound `/webhook/callback` endpoint (max N requests/min per IP)
+
+#### 🔲 Planned — Admin UI
+- [ ] Admin panel: list registered webhook URLs with auth status badge (🔒 / ⚠️ open)
+- [ ] Admin panel: configure per-workflow auth type + token without restart
+
+
 
 ---
 
