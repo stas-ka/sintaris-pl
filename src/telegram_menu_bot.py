@@ -1217,6 +1217,15 @@ def text_handler(message):
 
     mode = _st._user_mode.get(cid)
 
+    # ── Campaign agent text input — must be checked BEFORE mode fallback to chat ──
+    if _campaign.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            consumed = _campaign.handle_message(cid, message.text, bot, _t)
+            if consumed:
+                return
+        else:
+            _campaign.cancel(cid)
+
     if mode is None:
         # Default to chat mode — don't force menu on every unrouted text
         _st._user_mode[cid] = "chat"
@@ -1295,15 +1304,6 @@ def text_handler(message):
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "admin_only"))
         return
-
-    # ── Campaign agent text input ─────────────────────────────────────────
-    if _campaign.is_active(cid):
-        if _is_admin(cid) or _is_advanced(cid):
-            consumed = _campaign.handle_message(cid, message.text, bot, _t)
-            if consumed:
-                return
-        else:
-            _campaign.cancel(cid)
 
     # ── Note multi-step creation ───────────────────────────────────────────
     if mode == "note_add_title":
