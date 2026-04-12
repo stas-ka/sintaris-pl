@@ -29,6 +29,9 @@ nul
 %TEMP%*
 d?Temp*
 
+# Generated deployment configs (contain real credentials — never commit)
+deploy/
+
 # IDE / editor settings
 .vscode/
 
