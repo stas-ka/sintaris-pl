@@ -46,9 +46,67 @@ Per-role command allowlists, System Chat branching, Developer role and menu.
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 [] Add additional fields for contact
 ---
+## 2. N8N Workflow — Campaign Email Broadcast ✅ Implemented (v2026.4.50)
+
+Full spec: [doc/todo/2-n8n-campaign-workflow.md](doc/todo/2-n8n-campaign-workflow.md)
+
+### ✅ Implemented (v2026.4.45 – v2026.4.50)
+- [x] `bot_campaign.py` — campaign state machine (topic → filter → preview → send)
+- [x] Agents menu in Telegram (advanced/admin users only)
+- [x] N8N `Taris - Campaign Select` workflow (ID: `YF9eU2H2N3Nr4j3O`):
+  - `Demo Mode?` IF branch (true → Demo Clients / false → GS Read Clients)
+  - GS Read Clients from "клиенты" tab
+  - OpenAI (native node, gpt-4o-mini) selects matching clients
+  - GS Read Templates from "Шаблоны рассылки" — uses template if found
+  - Merge Template: prefers GS template over AI-generated
+  - Returns `{clients, template, count}` to Taris
+- [x] N8N `Taris - Campaign Send` workflow (ID: `AjIB5izjiCunMcp6`):
+  - **GS Append Queued**: writes `Status="Gesendet wird..."` to "Status рассылок" BEFORE each send
+  - Send Email via Gmail (native Gmail node, OAuth2)
+  - **GS Append Status**: writes `Status="sent"/"ERROR:..."` to "Status рассылок" AFTER each send
+  - Both GS nodes: `onError=continueRegularOutput` (GS failure never blocks send)
+- [x] Configurable `CAMPAIGN_FROM_EMAIL`, `CAMPAIGN_DEMO_MODE` env vars
+- [x] Workflow files: `src/n8n/workflows/Taris - Campaign Select.json`, `Taris - Campaign Send.json`
+- [x] Tests T50–T57: 40 unit tests passing (see `src/tests/test_campaign.py`)
+
+### 🔲 Planned
+- [ ] Status rows written before sending (in campaign-select response, not only in send)
+- [ ] Generic Google Sheets link with filter pre-applied to campaign session
+- [ ] CRM Telegram menu (§2.x)
+- [ ] CRM Web UI (§2.x)
+
+### 2.1 Advanced User Role ✅ Implemented (v2026.4.x)
+- [x] `advanced` user role: can access Agents menu + campaign workflows
+- [x] Admin can set user role (user/advanced/admin/developer) via admin menu
+- [ ] Developer role: additional runtime debug options
 
 
-## 4. Content & Knowledge ✅ All done → See DONE.md (v2026.4.41)
+
+### 2.2 Webhook Authentication — outbound + inbound 🔲
+
+**Context:** `bot_n8n.py` uses `call_webhook()` as the primary trigger mechanism (standard HTTP POST, no SDK dependency). Basic auth schemes are implemented. This section tracks remaining auth work.
+
+#### ✅ Implemented (v2026.4.45)
+- `call_webhook(url, payload, *, auth_type, auth_token, ...)` — standard HTTP POST, no SDK coupling
+- `_build_auth_headers()` — `bearer` / `apikey` / `hmac` / `basic` / `none`
+- `verify_incoming_signature(body, header)` — HMAC-SHA256 inbound verification
+- Config constants: `WEBHOOK_AUTH_TYPE`, `WEBHOOK_AUTH_TOKEN`, `WEBHOOK_AUTH_HEADER`, `WEBHOOK_HMAC_SECRET`
+
+#### 🔲 Planned — Outbound
+- [ ] **OAuth 2.0 client-credentials**: fetch token from `WEBHOOK_OAUTH_TOKEN_URL` using `WEBHOOK_OAUTH_CLIENT_ID` + `WEBHOOK_OAUTH_CLIENT_SECRET`; cache token until expiry; retry on 401
+- [ ] Per-workflow auth override: store `{webhook_url, auth_type, auth_token}` in DB; admin can configure per-workflow credentials without restart
+
+#### 🔲 Planned — Inbound (callbacks from workflow services → Taris)
+- [ ] Bearer token validation on FastAPI `/webhook/callback` endpoint (currently no inbound auth)
+- [ ] IP allowlist for trusted senders (configurable via `WEBHOOK_INBOUND_ALLOW_IPS` env var)
+- [ ] Replay attack prevention: reject requests older than 5 min (timestamp header check)
+- [ ] Rate limiting on inbound `/webhook/callback` endpoint (max N requests/min per IP)
+
+#### 🔲 Planned — Admin UI
+- [ ] Admin panel: list registered webhook URLs with auth status badge (🔒 / ⚠️ open)
+- [ ] Admin panel: configure per-workflow auth type + token without restart
+
+
 
 ---
 
@@ -132,12 +190,6 @@ Contacts → Deals → Custom fields → White-label. Core platform C0 done (v20
  [] Intelligent notifation 
 
 
-### 8.5 Not planed : NiceGUI Integration 💡
-
-Replace Jinja2 with NiceGUI for richer interactivity — evaluate RAM footprint on Pi 3 first.
-
-- [ ] Evaluate NiceGUI RAM footprint (~60 MB vs FastAPI ~25 MB); prototype Voice Opts page
-- [ ] If viable: migrate pages incrementally behind feature flag
 
 ---
 

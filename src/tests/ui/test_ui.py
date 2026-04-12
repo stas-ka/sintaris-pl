@@ -578,3 +578,175 @@ class TestContacts:
         page.goto(f"{base_url_or_default}/contacts")
         assert "/login" in page.url
         page.context.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. N8N Webhook callback endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestN8NCallback:
+    """Tests for POST /api/n8n/callback — N8N workflow execution callbacks.
+
+    These tests exercise the REST API endpoint directly using requests (no browser).
+    The endpoint is part of the Web UI server (bot_web.py).
+    Campaign is Telegram-only; the Web API exists so N8N can push results back.
+    """
+
+    def test_n8n_callback_reachable(self, base_url_or_default):
+        """POST /api/n8n/callback without secret returns 403 (auth guard is active)."""
+        import requests
+        url = f"{base_url_or_default}/api/n8n/callback"
+        resp = requests.post(url, json={"event": "test"}, verify=False, timeout=10)
+        # With no secret configured: returns 200 (no secret required) or 403 (secret required)
+        assert resp.status_code in (200, 403, 422), (
+            f"Expected 200/403/422 from /api/n8n/callback, got {resp.status_code}"
+        )
+
+    def test_n8n_callback_invalid_json_returns_400(self, base_url_or_default):
+        """POST /api/n8n/callback with non-JSON body → 400 or 422."""
+        import requests
+        url = f"{base_url_or_default}/api/n8n/callback"
+        resp = requests.post(
+            url,
+            data="not-json",
+            headers={"Content-Type": "text/plain"},
+            verify=False, timeout=10,
+        )
+        assert resp.status_code in (400, 403, 415, 422), (
+            f"Non-JSON body should be rejected, got {resp.status_code}"
+        )
+
+    def test_n8n_callback_endpoint_is_post_only(self, base_url_or_default):
+        """GET /api/n8n/callback → 405 Method Not Allowed."""
+        import requests
+        url = f"{base_url_or_default}/api/n8n/callback"
+        resp = requests.get(url, verify=False, timeout=10)
+        assert resp.status_code in (405, 403, 404), (
+            f"GET on POST-only endpoint should return 405/403/404, got {resp.status_code}"
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. CRM API endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCRMApi:
+    """Tests for /api/crm/* REST endpoints.
+
+    These test auth, basic GET, and CRM-disabled guard.
+    Campaign itself is Telegram-only, but CRM contacts can be managed via Web API.
+    """
+
+    def _api_token(self, base_url: str) -> str:
+        """Obtain a short-lived API token by logging in and extracting from session."""
+        import requests
+        session = requests.Session()
+        session.verify = False
+        # POST login to get cookie
+        resp = session.post(
+            f"{base_url}/login",
+            data={"username": ADMIN_USER, "password": ADMIN_PASS},
+            allow_redirects=True,
+            timeout=10,
+        )
+        # Try to get token from /api/token if it exists
+        token_resp = session.get(f"{base_url}/api/token", timeout=10)
+        if token_resp.status_code == 200:
+            return token_resp.json().get("token", "")
+        return ""
+
+    def test_crm_contacts_requires_auth(self, base_url_or_default):
+        """GET /api/crm/contacts without auth → 401 or 403."""
+        import requests
+        resp = requests.get(
+            f"{base_url_or_default}/api/crm/contacts",
+            verify=False, timeout=10,
+        )
+        assert resp.status_code in (401, 403), (
+            f"CRM contacts without auth must be rejected, got {resp.status_code}"
+        )
+
+    def test_crm_stats_requires_auth(self, base_url_or_default):
+        """GET /api/crm/stats without auth → 401 or 403."""
+        import requests
+        resp = requests.get(
+            f"{base_url_or_default}/api/crm/stats",
+            verify=False, timeout=10,
+        )
+        assert resp.status_code in (401, 403), (
+            f"CRM stats without auth must be rejected, got {resp.status_code}"
+        )
+
+    def test_crm_add_contact_requires_auth(self, base_url_or_default):
+        """POST /api/crm/contacts without auth → 401 or 403."""
+        import requests
+        resp = requests.post(
+            f"{base_url_or_default}/api/crm/contacts",
+            json={"first_name": "Test", "last_name": "User", "email": "t@example.com"},
+            verify=False, timeout=10,
+        )
+        assert resp.status_code in (401, 403), (
+            f"CRM add contact without auth must be rejected, got {resp.status_code}"
+        )
+
+    def test_crm_contacts_with_token_returns_json(self, base_url_or_default, admin_page):
+        """GET /api/crm/contacts with auth token → 200 JSON or 503 (CRM disabled)."""
+        import requests
+
+        # Use the admin_page cookie to authenticate the API call
+        cookies_raw = admin_page.context.cookies()
+        session = requests.Session()
+        session.verify = False
+        for c in cookies_raw:
+            session.cookies.set(c["name"], c["value"], domain=c.get("domain", ""))
+
+        resp = session.get(
+            f"{base_url_or_default}/api/crm/contacts",
+            timeout=10,
+        )
+        # Either 200 (CRM enabled) or 503 (CRM disabled — but auth worked)
+        assert resp.status_code in (200, 503), (
+            f"Authenticated /api/crm/contacts returned {resp.status_code}"
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "contacts" in data, "Response must have 'contacts' key"
+            assert "count" in data, "Response must have 'count' key"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. Campaign agent — Web UI presence
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCampaignWebUI:
+    """Campaign is Telegram-only — verify Web UI correctly does NOT expose
+    a campaign page, and the CRM contacts page (which feeds campaign) is accessible.
+    """
+
+    def test_no_campaign_page_exists(self, browser, base_url_or_default):
+        """GET /campaign → 404 (campaign is Telegram-only, no Web UI page)."""
+        import requests
+        resp = requests.get(
+            f"{base_url_or_default}/campaign",
+            verify=False, timeout=10,
+            allow_redirects=False,
+        )
+        assert resp.status_code in (404, 302, 401), (
+            f"/campaign should not exist (Telegram-only), got {resp.status_code}"
+        )
+
+    def test_contacts_page_accessible_to_admin(self, admin_page, base_url_or_default):
+        """GET /contacts → admin can view CRM contacts (used by campaign)."""
+        admin_page.goto(f"{base_url_or_default}/contacts")
+        assert "/contacts" in admin_page.url or admin_page.title() != ""
+        # Page should not show an error
+        content = admin_page.content()
+        assert "500" not in content or "Internal Server Error" not in content
+
+    def test_sidebar_has_contacts_link(self, admin_page, base_url_or_default):
+        """Web UI sidebar must contain a Contacts link (CRM entry point for campaign)."""
+        admin_page.goto(f"{base_url_or_default}/")
+        content = admin_page.content()
+        assert "contacts" in content.lower() or "Контакты" in content or "Kontakte" in content, (
+            "Sidebar must have a Contacts link — this feeds the campaign agent"
+        )

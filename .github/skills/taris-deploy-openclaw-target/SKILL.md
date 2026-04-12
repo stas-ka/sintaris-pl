@@ -19,7 +19,10 @@ argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and ta
 - You changed a `src/services/*.service` file
 - You changed `src/web/templates/` or `src/web/static/`
 - You changed `src/screens/*.yaml` (Screen DSL menus)
+- You changed `src/n8n/workflows/` (N8N workflow JSON files)
+- You changed `src/core/store_crm.py`, `src/features/bot_crm.py`, `src/features/bot_n8n.py`, `src/features/bot_campaign.py`
 - You need to bump `BOT_VERSION` and push a release
+- You are deploying CRM/N8N features to a target for the first time
 
 ## ⚠️ Target Priority Rule — MANDATORY
 
@@ -216,6 +219,8 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
 | Screen DSL YAML (`src/screens/*.yaml`) | [Screens deploy](#screens-deploy) |
 | Web UI templates / static | [Web UI deploy](#web-ui-deploy) |
 | Schema / data format change | [Safe update with backup](#safe-update-with-backup) |
+| CRM/N8N first deploy on target | [CRM/N8N First-Time Setup](#crm--n8n-first-time-setup-on-new-target) |
+| N8N workflow JSON update | Sync `src/n8n/workflows/*.json` → `~/.taris/n8n/workflows/` |
 
 ---
 
@@ -248,6 +253,10 @@ cp $PROJECT/src/bot_web.py $PROJECT/src/telegram_menu_bot.py \
 
 # Data files
 cp $PROJECT/src/strings.json $PROJECT/src/release_notes.json ~/.taris/
+
+# N8N workflows (if src/n8n/ changed)
+mkdir -p ~/.taris/n8n/workflows
+cp $PROJECT/src/n8n/workflows/*.json ~/.taris/n8n/workflows/ 2>/dev/null || true
 ```
 
 **Verify sync before restart** (prevents stale deployment bugs):
@@ -294,7 +303,7 @@ PROJECT=/home/stas/projects/sintaris-pl
 
 # Create target package dirs (idempotent)
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $USER@$HOST \
-  "mkdir -p ~/.taris/core ~/.taris/telegram ~/.taris/features ~/.taris/ui ~/.taris/security ~/.taris/screens ~/.taris/web/templates ~/.taris/web/static && \
+  "mkdir -p ~/.taris/core ~/.taris/telegram ~/.taris/features ~/.taris/ui ~/.taris/security ~/.taris/screens ~/.taris/web/templates ~/.taris/web/static ~/.taris/n8n/workflows && \
    touch ~/.taris/core/__init__.py ~/.taris/telegram/__init__.py ~/.taris/features/__init__.py ~/.taris/ui/__init__.py ~/.taris/security/__init__.py"
 
 # Deploy Python packages
@@ -317,6 +326,12 @@ sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no \
 # Screens (Screen DSL YAML)
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no \
   $PROJECT/src/screens/*.yaml $PROJECT/src/screens/*.json $USER@$HOST:~/.taris/screens/
+
+# N8N workflows (if changed)
+sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $USER@$HOST \
+  "mkdir -p ~/.taris/n8n/workflows"
+sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/n8n/workflows/*.json $USER@$HOST:~/.taris/n8n/workflows/ 2>/dev/null || true
 
 # Restart
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $USER@$HOST \
@@ -475,6 +490,18 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
 
 T29/T30 must PASS. T27/T28 SKIP if packages not installed (OK).
 
+### N8N / Campaign tests (mandatory if CRM_ENABLED=1)
+
+```bash
+# Local (TariStation2) — unit + integration
+DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
+  python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/test_n8n_crm.py -v
+DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
+  python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/test_campaign.py -v -k "not live"
+```
+
+T130–T140 campaign tests must PASS (live N8N tests SKIP if webhooks not reachable).
+
 ### Screen DSL tests (mandatory if screens changed)
 
 ```bash
@@ -490,6 +517,131 @@ All 64 tests must PASS.
 python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/ui/test_ui.py -v \
   --base-url http://localhost:8080 --browser chromium
 ```
+
+---
+
+## CRM / N8N First-Time Setup on New Target
+
+Run this section **once** when deploying CRM+N8N features to a target that has never had them. Skip if the target already has `CRM_ENABLED=1` in `bot.env`.
+
+### 1 — Required bot.env additions
+
+Add to `~/.taris/bot.env` on the target (replace `***` with values from `.env`):
+
+```bash
+# N8N integration
+N8N_URL=https://automata.dev2null.de
+N8N_API_KEY=***                              # VPS_N8N_API_KEY from .env
+N8N_WEBHOOK_SECRET=***                       # N8N_WEBHOOK_SECRET from .env
+N8N_TIMEOUT=30
+
+# Campaign agent (N8N webhooks — set after workflows are active in N8N)
+N8N_CAMPAIGN_SELECT_WH=https://automata.dev2null.de/webhook/taris-campaign-select
+N8N_CAMPAIGN_SEND_WH=https://automata.dev2null.de/webhook/taris-campaign-send
+CAMPAIGN_SHEET_ID=***                        # CAMPAIGN_SHEET_ID from .env
+N8N_CAMPAIGN_TIMEOUT=90
+CAMPAIGN_DEMO_MODE=false
+CAMPAIGN_FROM_EMAIL=info@sintaris.net
+
+# CRM (PostgreSQL on VPS)
+CRM_ENABLED=1
+CRM_PG_DSN=postgresql://taris:***@dev2null.de:5432/taris   # VPS_POSTGRES_PASSWORD
+```
+
+### 2 — Install psycopg3 (if not present)
+
+```bash
+# TariStation2
+pip3 install "psycopg[binary,pool]" --quiet
+
+# TariStation1 (via SSH)
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
+  "pip3 install 'psycopg[binary,pool]' --quiet && python3 -c 'import psycopg; print(psycopg.__version__)'"
+```
+
+Expected: psycopg version printed (e.g. `3.3.3`).
+
+### 3 — Initialize CRM schema on VPS PostgreSQL
+
+```bash
+# From project root — creates crm_contacts, crm_interactions, crm_tasks,
+# crm_campaigns, crm_campaign_contacts tables on VPS PostgreSQL
+source .env
+PGPASSWORD=$VPS_POSTGRES_PASSWORD psql \
+  -h $VPS_HOST -U $VPS_POSTGRES_USER -d taris -p ${VPS_SSH_PORT:-5432} \
+  -f src/setup/crm_schema.sql && echo "CRM_SCHEMA_OK"
+```
+
+> If `crm_schema.sql` does not exist, init via Python (auto-creates on first use):
+> ```bash
+> DEVICE_VARIANT=openclaw CRM_ENABLED=1 CRM_PG_DSN="postgresql://..." \
+>   python3 -c "from core.store_crm import is_available; print('CRM:', is_available())"
+> ```
+
+### 4 — Migrate existing SQLite contacts to CRM (optional, run once)
+
+Only needed if the target has contacts in `taris.db` (check: `contacts` table > 0 rows in Step 0.6).
+
+```bash
+# On TariStation2 (local):
+DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris \
+  python3 -c "
+import sqlite3, os, sys
+sys.path.insert(0, os.path.expanduser('~/.taris'))
+from core import store_crm as crm
+conn = sqlite3.connect(os.path.expanduser('~/.taris/taris.db'))
+rows = conn.execute('SELECT first_name, last_name, phone, email, telegram FROM contacts').fetchall()
+print(f'Migrating {len(rows)} contacts...')
+for r in rows:
+    crm.create_contact(r[0], r[1] or '', phone=r[2] or '', email=r[3] or '', telegram=r[4] or '')
+print('MIGRATION_OK')
+"
+
+# On TariStation1 (via SSH):
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
+  "DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 -c \"
+import sqlite3, os, sys
+sys.path.insert(0, os.path.expanduser('~/.taris'))
+from core import store_crm as crm
+conn = sqlite3.connect(os.path.expanduser('~/.taris/taris.db'))
+rows = conn.execute('SELECT first_name, last_name, phone, email, telegram FROM contacts').fetchall()
+print(f'Migrating {len(rows)} contacts...')
+for r in rows:
+    crm.create_contact(r[0], r[1] or '', phone=r[2] or '', email=r[3] or '', telegram=r[4] or '')
+print('MIGRATION_OK')
+\""
+```
+
+### 5 — Verify CRM is reachable
+
+```bash
+# TariStation2
+DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 -c \
+  "from core.store_crm import is_available, count_contacts; print('CRM:', is_available(), '| contacts:', count_contacts())"
+
+# TariStation1
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
+  "DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 -c \
+  'from core.store_crm import is_available, count_contacts; print(\"CRM:\", is_available(), \"| contacts:\", count_contacts())'"
+```
+
+Expected: `CRM: True | contacts: N`
+
+### 6 — Verify N8N webhooks are active
+
+```bash
+# Check campaign workflows are active in N8N
+source .env
+curl -s -H "X-N8N-API-KEY: $VPS_N8N_API_KEY" \
+  https://automata.dev2null.de/api/v1/workflows \
+  | python3 -c "import sys,json; wfs=json.load(sys.stdin)['data']; \
+    [print(w['name'], '✅' if w['active'] else '❌') for w in wfs if 'Campaign' in w.get('name','')]"
+```
+
+Expected: `Taris - Campaign Select ✅` and `Taris - Campaign Send ✅`
 
 ---
 
@@ -543,6 +695,8 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
 | `voice_assistant.py`, `features/bot_voice.py` | `taris-voice` |
 | `src/services/*.service` | the changed service (+ `daemon-reload`) |
 | `strings.json`, `release_notes.json` | `taris-telegram` |
+| `core/store_crm.py`, `features/bot_crm.py`, `features/bot_n8n.py`, `features/bot_campaign.py` | `taris-telegram taris-web` |
+| `n8n/workflows/*.json` | no restart needed (read at webhook call time) |
 
 ---
 

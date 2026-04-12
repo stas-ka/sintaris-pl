@@ -35,7 +35,7 @@ from core.bot_embeddings import EmbeddingService
 
 # ─── Shared utilities ─────────────────────────────────────────────────────────
 from telegram.bot_access import (
-    _is_allowed, _is_admin, _is_guest,
+    _is_allowed, _is_admin, _is_guest, _is_advanced,
     _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
@@ -85,8 +85,15 @@ from telegram.bot_admin import (
     _handle_admin_memory_menu, _handle_admin_mem_set_start,
     _handle_admin_mcp_menu, _start_admin_mcp_set, _finish_admin_mcp_set, _handle_admin_mcp_clear,
     _handle_admin_restart, _handle_admin_restart_confirmed,
+    _handle_admin_n8n_menu, _handle_admin_crm_menu,
+    _handle_crm_contacts_list, _handle_crm_add_start, _handle_crm_search_start,
+    _handle_crm_stats, finish_crm_input,
+    _handle_admin_roles_menu, _handle_admin_user_set_role,
     _admin_keyboard,
 )
+
+# ─── Campaign Agent ───────────────────────────────────────────────────────────
+import features.bot_campaign as _campaign
 
 # ─── User handlers ────────────────────────────────────────────────────────────
 from telegram.bot_handlers import (
@@ -699,6 +706,87 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── N8N integration ───────────────────────────────────────────────────
+    elif data == "admin_n8n_menu":
+        if _is_admin(cid):
+            _handle_admin_n8n_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── CRM ───────────────────────────────────────────────────────────────
+    elif data == "admin_crm_menu":
+        if _is_admin(cid):
+            _handle_admin_crm_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_contacts":
+        if _is_admin(cid):
+            _handle_crm_contacts_list(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_add_start":
+        if _is_admin(cid):
+            _handle_crm_add_start(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_search_start":
+        if _is_admin(cid):
+            _handle_crm_search_start(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "crm_stats":
+        if _is_admin(cid):
+            _handle_crm_stats(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Role management ────────────────────────────────────────────────────────
+    elif data == "admin_roles_menu":
+        if _is_admin(cid):
+            _handle_admin_roles_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_role_set:"):
+        if _is_admin(cid):
+            parts = data.split(":", 2)
+            if len(parts) == 3:
+                _handle_admin_user_set_role(cid, int(parts[1]), parts[2])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Agents menu ───────────────────────────────────────────────────────────
+    elif data == "agents_menu":
+        if _is_admin(cid) or _is_advanced(cid):
+            _handle_agents_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "campaign_start":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _campaign.is_configured():
+                bot.send_message(cid, _t(cid, "campaign_not_configured"))
+            else:
+                _campaign.start_campaign(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "campaign_confirm_send":
+        if _is_admin(cid) or _is_advanced(cid):
+            _campaign.confirm_send(cid, bot, _t)
+
+    elif data == "campaign_edit_template":
+        if _is_admin(cid) or _is_advanced(cid):
+            _campaign.start_template_edit(cid, bot, _t)
+
+    elif data == "campaign_cancel":
+        _campaign.cancel(cid)
+        bot.send_message(cid, _t(cid, "campaign_cancelled"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -1081,6 +1169,28 @@ def callback_handler(call):
 # Text message router
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Agents menu ──────────────────────────────────────────────────────────────
+
+def _handle_agents_menu(chat_id: int) -> None:
+    """Show the Agents submenu."""
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(
+            _t(chat_id, "agents_btn_campaign"), callback_data="campaign_start"
+        ),
+        InlineKeyboardButton(
+            _t(chat_id, "agents_btn_back"), callback_data="menu"
+        ),
+    )
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "agents_menu_title"),
+        reply_markup=kb,
+        parse_mode="Markdown",
+    )
+
+
 @bot.message_handler(content_types=["text"])
 def text_handler(message):
     cid = message.chat.id
@@ -1106,6 +1216,15 @@ def text_handler(message):
         return
 
     mode = _st._user_mode.get(cid)
+
+    # ── Campaign agent text input — must be checked BEFORE mode fallback to chat ──
+    if _campaign.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            consumed = _campaign.handle_message(cid, message.text, bot, _t)
+            if consumed:
+                return
+        else:
+            _campaign.cancel(cid)
 
     if mode is None:
         # Default to chat mode — don't force menu on every unrouted text
@@ -1172,6 +1291,15 @@ def text_handler(message):
                 _handle_admin_memory_menu(cid)
             except (ValueError, KeyError):
                 bot.send_message(cid, "❌ Please enter a valid integer.")
+        else:
+            _st._user_mode.pop(cid, None)
+            bot.send_message(cid, _t(cid, "admin_only"))
+        return
+
+    # ── CRM multi-step input ─────────────────────────────────────────────
+    if mode is not None and mode.startswith("crm_"):
+        if _is_admin(cid):
+            finish_crm_input(cid, message.text)
         else:
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "admin_only"))

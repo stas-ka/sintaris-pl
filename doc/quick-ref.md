@@ -134,7 +134,7 @@ Full data map → `doc/install-new-target.md §User Data: Storage, Backup & Migr
 | Target | Host | Purpose |
 |---|---|---|
 | Engineering (PI2) | `OpenClawPI2` | Always deploy here first |
-| Production (PI1) | `OpenClawPI` / `100.81.143.126` | After PI2 confirmed |
+| Production (PI1) | `OpenClawPI` / `$PROD_TAILSCALE_IP` (see `.env`) | After PI2 confirmed |
 
 - SSH: `plink -pw "%HOSTPWD%" -batch stas@<HOST> "<cmd>"`
 - SCP: `pscp -pw "%HOSTPWD%" <file> stas@<HOST>:<remote-path>`

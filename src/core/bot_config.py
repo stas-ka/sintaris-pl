@@ -80,6 +80,12 @@ BOT_NAME = os.environ.get("BOT_NAME", "Taris")
 
 USERS_FILE          = os.environ.get("USERS_FILE",
                           _th("users.json"))
+ADVANCED_USERS_FILE = os.environ.get("ADVANCED_USERS_FILE",
+                          _th("advanced_users.json"))
+DYNAMIC_ADMINS_FILE = os.environ.get("DYNAMIC_ADMINS_FILE",
+                          _th("dynamic_admins.json"))
+DYNAMIC_DEVS_FILE   = os.environ.get("DYNAMIC_DEVS_FILE",
+                          _th("dynamic_developers.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
                           _th("registrations.json"))
 TARIS_BIN        = os.environ.get("TARIS_BIN") or (
@@ -119,6 +125,56 @@ MCP_REMOTE_URL     = os.environ.get("MCP_REMOTE_URL", "")        # e.g. https://
 MCP_TIMEOUT        = int(os.environ.get("MCP_TIMEOUT", "15"))
 MCP_REMOTE_TOP_K   = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
 
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Workflow Automation
+# N8N_URL: base URL of the N8N instance (admin API only — not needed for webhooks)
+# N8N_API_KEY: API key for N8N admin REST API introspection
+# N8N_WEBHOOK_SECRET: shared secret for verifying inbound webhook callbacks
+# ─────────────────────────────────────────────────────────────────────────────
+N8N_URL             = os.environ.get("N8N_URL", "")                # e.g. https://<your-n8n-host>
+N8N_API_KEY         = os.environ.get("N8N_API_KEY", "")
+N8N_WEBHOOK_SECRET  = os.environ.get("N8N_WEBHOOK_SECRET", "")    # verify inbound callbacks
+N8N_TIMEOUT         = int(os.environ.get("N8N_TIMEOUT", "30"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Outbound webhook authentication — applies to all call_webhook() calls
+# Works with any HTTP service (n8n, Make, Zapier, custom REST APIs)
+# WEBHOOK_AUTH_TYPE:   none | bearer | apikey | hmac | basic
+# WEBHOOK_AUTH_TOKEN:  token value (Bearer/ApiKey) or "user:pass" (Basic)
+# WEBHOOK_AUTH_HEADER: custom header name for apikey auth (default: X-Api-Key)
+# WEBHOOK_HMAC_SECRET: shared secret for HMAC-SHA256 signing + inbound verify
+# ⏳ OPEN: OAuth 2.0 client-credentials → See TODO.md §2.2
+# ─────────────────────────────────────────────────────────────────────────────
+WEBHOOK_AUTH_TYPE    = os.environ.get("WEBHOOK_AUTH_TYPE", "none")
+WEBHOOK_AUTH_TOKEN   = os.environ.get("WEBHOOK_AUTH_TOKEN", "")
+WEBHOOK_AUTH_HEADER  = os.environ.get("WEBHOOK_AUTH_HEADER", "")   # e.g. X-Api-Key
+WEBHOOK_HMAC_SECRET  = os.environ.get("WEBHOOK_HMAC_SECRET", "")   # HMAC + inbound verify
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM — built-in contact/task/campaign management
+# CRM_PG_DSN: PostgreSQL DSN for CRM tables (separate from main store)
+# CRM_ENABLED: master switch for CRM features
+# ─────────────────────────────────────────────────────────────────────────────
+CRM_ENABLED         = os.environ.get("CRM_ENABLED", "0") == "1"
+CRM_PG_DSN          = os.environ.get("CRM_PG_DSN", "")            # e.g. postgresql://taris:pw@dev2null.de:5432/taris
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Campaign Agent — Google Sheets client campaign workflow
+# N8N_CAMPAIGN_SELECT_WH: webhook URL for client selection + template generation
+# N8N_CAMPAIGN_SEND_WH:   webhook URL for email send + status logging
+# CAMPAIGN_SHEET_ID:      Google Sheet ID with клиенты / шаблоны / статус tabs
+# N8N_CAMPAIGN_TIMEOUT:   max seconds to wait for N8N response (selection can be slow)
+# CAMPAIGN_DEMO_MODE:     set to "true" to use demo (hardcoded) clients in N8N instead of Google Sheets
+# CAMPAIGN_FROM_EMAIL:    sender address used in campaign emails (e.g. info@sintaris.net)
+# ─────────────────────────────────────────────────────────────────────────────
+N8N_CAMPAIGN_SELECT_WH = os.environ.get("N8N_CAMPAIGN_SELECT_WH", "")
+N8N_CAMPAIGN_SEND_WH   = os.environ.get("N8N_CAMPAIGN_SEND_WH", "")
+CAMPAIGN_SHEET_ID      = os.environ.get("CAMPAIGN_SHEET_ID",
+                             "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA")
+N8N_CAMPAIGN_TIMEOUT   = int(os.environ.get("N8N_CAMPAIGN_TIMEOUT", "90"))
+CAMPAIGN_DEMO_MODE     = os.environ.get("CAMPAIGN_DEMO_MODE", "false").lower() == "true"
+CAMPAIGN_FROM_EMAIL    = os.environ.get("CAMPAIGN_FROM_EMAIL", "info@sintaris.net")
+
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           _th("active_model.txt"))
 LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides (system/chat)
@@ -128,7 +184,7 @@ LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides 
 # Set LLM_PROVIDER in TARIS_DIR/bot.env to switch backends.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local | ollama
+# Primary provider: taris | openai | yandexgpt | gemini | anthropic | local | ollama | copilot
 LLM_PROVIDER        = os.environ.get("LLM_PROVIDER", "taris")
 
 # Named fallback provider — analogous to STT_FALLBACK_PROVIDER.
@@ -164,6 +220,14 @@ GEMINI_MODEL        = os.environ.get("GEMINI_MODEL",    "gemini-1.5-flash")
 # Anthropic (Feature 3.1)
 ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL     = os.environ.get("ANTHROPIC_MODEL",   "claude-3-haiku-20240307")
+
+# Copilot Bridge — local proxy to GitHub Copilot / GitHub Models API
+# Start the bridge: python copilot-bridge/server.py
+# See sintaris-srv/copilot-bridge/README.md for setup instructions.
+COPILOT_BRIDGE_URL = os.environ.get("COPILOT_BRIDGE_URL", "http://127.0.0.1:8765")
+COPILOT_BRIDGE_KEY = os.environ.get("COPILOT_BRIDGE_KEY", "")   # bearer token (leave empty if bridge has no auth)
+COPILOT_MODEL      = os.environ.get("COPILOT_MODEL",      "gpt-4o")
+COPILOT_TIMEOUT    = int(os.environ.get("COPILOT_TIMEOUT", "120"))
 
 # Direct OpenAI (bypasses taris, uses own key — Feature 3.1)
 OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY",  "")
@@ -244,7 +308,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.41"
+BOT_VERSION        = "2026.4.50"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

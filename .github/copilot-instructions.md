@@ -18,6 +18,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/taris-test-ui` | Run Web UI Playwright + Telegram smoke tests; detect and fill coverage gaps via playwright-mcp |
 | `/taris-openclaw-setup` | Setup, configure, troubleshoot, and extend the OpenClaw variant (STT, LLM, sync, tests) |
 | `/taris-download-logs` | Download or tail log files (main, assistant, security, voice, datastore) from any target |
+| `/taris-n8n` | Manage N8N workflows: list, create, activate, test webhooks, create campaign workflows |
 
 📖 Full usage guide: [`doc/copilot-skills-guide.md`](../doc/copilot-skills-guide.md)
 
@@ -84,8 +85,10 @@ taris/
     tests/        ← hardware & regression tests
   backup/device/  ← sanitized Pi config snapshot
   doc/            ← architecture, code map, dev patterns
-  .credentials/   ← secrets ONLY (never scripts or code)
-  .env            ← remote host vars (gitignored)
+  .credentials/   ← secrets ONLY (never scripts or code) [gitignored]
+  .env            ← all sensitive values for local use [gitignored]
+  .env.example    ← variable names with placeholder values ONLY [committed]
+  deploy/         ← generated deployment configs (gitignored; never commit)
 ```
 
 ## Skills — Use These for Specific Tasks
@@ -109,6 +112,44 @@ taris/
 - **TODO.md:** keep current; collapse completed items to `✅ Implemented (vX.Y.Z)`.
 - **Deployment pipeline:** ALL changes MUST be deployed and tested on the engineering target **PI2** (`OpenClawPI2`) first. Only after tests pass and the change is committed and pushed to git may it be deployed to the production target **PI1** (`OpenClawPI`). Never deploy directly to PI1 without prior PI2 validation.
 - **Continuous test improvement:** Every bug fix MUST add a regression test that would have caught the bug. Every new feature MUST add tests covering the happy path and the main failure modes. Tests live in `src/tests/test_voice_regression.py` (T-numbered) for voice/config/LLM; add new test IDs sequentially. Update `doc/test-suite.md` with the new test IDs in the same commit. No exceptions.
+
+## Secrets & Configuration Security — MANDATORY
+
+> **All sensitive data MUST live exclusively in `.env` (gitignored). This includes credentials, passwords, API keys, SSH keys/hostkeys, IP addresses of real hosts, usernames, database DSNs, OAuth secrets, webhook tokens, and any value that differs between environments or identifies real infrastructure.**
+
+### Rules — enforced for every file, script, skill, prompt, and agent
+
+1. **`.env` is the single source of truth** for all sensitive values. It is gitignored and never committed.
+2. **`.env.example` documents variable names only** — placeholder values like `<your-password>` only. Safe to commit. Keep it current whenever you add a new sensitive constant.
+3. **Skills, prompts, agents, and test scripts** must reference `${VAR_NAME}` or instruct the operator to source `.env` — never embed real values.
+4. **Deployment scripts** (`src/setup/*.sh`, `tools/*.sh`, `tools/*.py`) must source `.env` at startup and use variables throughout. No hardcoded credentials, IPs, or passwords anywhere in committed scripts.
+5. **Generated config files** (e.g. `bot.env`, `docker-compose.yml` with credentials, filled `.service` files) are produced by deployment scripts at deploy time, using `.env` as input. Save generated files to `deploy/<target>/` or a temp path — **never commit them**.
+6. **Before committing any file**, verify it contains no sensitive data. Use the scan pattern:
+   ```powershell
+   git diff --cached | Select-String -Pattern '192\.168\.|100\.\d{2,3}\.|buerger|SHA256:|@[a-z0-9.-]+\.[a-z]{2,}|password\s*=\s*\S|token\s*=\s*\S'
+   ```
+7. **If a secret is accidentally committed**: immediately revoke/rotate it, then remove it from git history with `git filter-repo` or BFG.
+8. **Config constants in `bot_config.py`** must always use `os.environ.get("VAR", "")` — never a real default value.
+
+### Deployment config generation pattern
+
+```bash
+# 1. Source secrets from .env
+source .env
+
+# 2. Generate target config from template (envsubst fills ${VAR} placeholders)
+mkdir -p deploy/ts2
+envsubst < src/setup/templates/bot.env.template > deploy/ts2/bot.env
+
+# 3. Copy generated config to target (never commit deploy/)
+cp deploy/ts2/bot.env ~/.taris/bot.env           # TariStation2 (local)
+# or via scp for remote targets
+
+# 4. Verify no real secrets in committed templates
+grep -r '\${\|{{' src/setup/templates/   # should show only placeholders
+```
+
+Template files (`src/setup/templates/*.template`) contain `${VAR_NAME}` placeholders only — safe to commit. The `deploy/` directory is gitignored.
 
 ## Post-Deploy Rule
 

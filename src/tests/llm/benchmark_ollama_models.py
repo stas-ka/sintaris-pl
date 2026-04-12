@@ -486,7 +486,7 @@ def main():
     parser.add_argument("--prompt", help="Run only these prompts (comma-separated keys)")
     parser.add_argument("--host",   metavar="URL",
                         help="Ollama API base URL (overrides OLLAMA_URL env var), "
-                             "e.g. http://192.168.178.175:11434")
+                             "e.g. http://<sintaition-ip>:11434")
     parser.add_argument("--target", metavar="NAME",
                         help="Human-readable target label for reports, e.g. TariStation2 or SintAItion")
     args = parser.parse_args()

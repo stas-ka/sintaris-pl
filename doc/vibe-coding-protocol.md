@@ -5,6 +5,26 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-14 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 14:xx | §2.1 full 4-role system: user/advanced/admin/developer via admin menu | 3 | 4 | claude-sonnet-4.6 | bot_config.py, bot_state.py, bot_access.py, bot_admin.py, release_notes.json | done |
+| 15:xx | Fix \uXXXX unicode in N8N "Prepare Sheet Row" node + secrets policy in copilot-instructions | 2 | 6 | claude-sonnet-4.6 | n8n_admin.py, .env.example, copilot-instructions.md, bot.env.template, gen_config.sh, .gitignore | done |
+| 16:xx | N8N Campaign Select + Send error handling: try/catch jsCode, onError=continueRegularOutput, _error flag propagation, _user_friendly_error(), campaign_partial_send i18n, call_webhook | 4 | 4 | claude-sonnet-4.6 | n8n_admin.py, bot_campaign.py, strings.json | done |
+| 11:xx | Fix LLM + campaign select errors: pull qwen2.5:0.5b (was qwen3.5:0.8b invalid), fix bot.env OLLAMA_MODEL on TariStation2, restart bot; verified N8N select webhook works (5 clients returned) | 2 | 3 | claude-sonnet-4.6 | TariStation2: bot.env (runtime only) | done |
+| 11:xx | Audit + fix campaign tests: WEB_ONLY=1 offline fix, renumber T50-T57→T130-T137, 20/20 pass locally+TariStation2, update doc/test-suite.md | 2 | 4 | claude-sonnet-4.6 | src/tests/test_campaign.py, doc/test-suite.md | done |
+
+### Session — 2026-04-12 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 15:xx | Google Sheets N8N integration: demo_mode IF branch, GS Read Clients/Templates, Merge Template, GS Append Status, CAMPAIGN_DEMO_MODE constant, put-workflow CLI, TariStation2 deploy v2026.4.45 | 4 | 8 | claude-sonnet-4.6 | bot_config.py, bot_campaign.py, release_notes.json, n8n_admin.py, taris-campaign-select.json, taris-campaign-send.json | done |
+| 17:xx | Fix campaign client name "?" bug: N8N Parse Response name normalization, bot_campaign.py _client_name() fallback helper, set CAMPAIGN_DEMO_MODE=true TariStation2, v2026.4.46 | 2 | 4 | claude-sonnet-4.6 | bot_campaign.py, bot_config.py, release_notes.json, taris-campaign-select.json | done |
+| 17:30 | Add CAMPAIGN_FROM_EMAIL config param (info@sintaris.net), N8N Campaign Send dynamic fromEmail, deploy v2026.4.47 | 1 | 3 | claude-sonnet-4.6 | bot_config.py, bot_campaign.py, release_notes.json, taris-campaign-send.json | done |
+| 20:xx | Fix GS credential auth: discovered user reconnected wrong credential (Trigger vs Sheets account 3 in N8N DB); copied fresh OAuth tokens via PostgreSQL UPDATE; replaced HTTP Request with native googleSheets nodes; fixed sheet_url hardcoded empty; campaign e2e verified, v2026.4.48 | 3 | 8 | claude-sonnet-4.6 | bot_config.py, release_notes.json, taris-campaign-select.json, taris-campaign-send.json | done |
+| 21:xx | Replace httpRequest OpenAI + emailSend SMTP with native n8n-nodes-base.openAi (v1.1) + n8n-nodes-base.gmail (v2.1); credentials visible in N8N UI; v2026.4.49 | 2 | 3 | claude-sonnet-4.6 | taris-campaign-select.json, taris-campaign-send.json, bot_config.py, release_notes.json | done |
+
 ## Format
 
 Each session block contains a table with one row per completed request:
@@ -1193,7 +1213,7 @@ Every ~3 months, measure baseline health:
 
 | 23:54 UTC | 21:49 UTC | 23:57 UTC | 128m | config: TariStation2 hardware-matched performance config | Profile HW (i7-2640M, 4 threads, 7.8GB RAM, no ML GPU). Add: FASTER_WHISPER_THREADS=4, DEVICE=cpu, COMPUTE=int8, STT_LANG=ru, OLLAMA_NUM_CTX=4096, OLLAMA_KEEP_ALIVE=10m, OLLAMA_THINK=false, OLLAMA_MIN_TIMEOUT=60, CONVERSATION_HISTORY_MAX=6. Fixed inline comments breaking int() parse. vm.swappiness=10 manual step. Tests: 424 PASS 0 FAIL 1 WARN | 1 | 1 | claude-sonnet-4.6 | ~/.taris/bot.env | done |
 
-| 00:15 UTC | 22:04 UTC | 00:15 UTC | 131m | infra: Tailscale installed on SintAItion + remote access setup | Installed tailscale on SintAItion (Ubuntu 24.04). IP: 100.112.120.3. Created use_tailscale.sh / use_lan.sh switch scripts. Sent instructions to Telegram. .gitignore fixed for backup/snapshots | 1 | 2 | claude-sonnet-4.6 | .env, tools/use_tailscale.sh, tools/use_lan.sh, .gitignore | done |
+| 00:15 UTC | 22:04 UTC | 00:15 UTC | 131m | infra: Tailscale installed on SintAItion + remote access setup | Installed tailscale on SintAItion (Ubuntu 24.04). IP stored in .env as OPENCLAW1_TAILSCALE_IP. Created use_tailscale.sh / use_lan.sh switch scripts. Sent instructions to Telegram. .gitignore fixed for backup/snapshots | 1 | 2 | claude-sonnet-4.6 | .env, tools/use_tailscale.sh, tools/use_lan.sh, .gitignore | done |
 
 | 09:49 UTC | 09:49 UTC | 11:59 UTC | 130m | feat: /documents Web UI + architecture doc sync | Audit Web vs Telegram feature gap. Added /documents page to Web UI (list, upload PDF/TXT/MD/DOCX, rename inline, share toggle, delete). Added nav link in base.html. Disabled FastAPI /docs Swagger (route conflict). Updated doc/architecture/web-ui.md (route inventory 30→70 routes, templates table, PWA data, version). Updated doc/architecture.md version. Deployed + verified on TariStation2. | 3 | 1 | claude-sonnet-4.6 | src/bot_web.py, src/web/templates/docs.html, src/web/templates/base.html, doc/architecture/web-ui.md, doc/architecture.md | done |
 
@@ -1428,3 +1448,37 @@ Every ~3 months, measure baseline health:
 | Time | Request | Complexity | Requests | Model | Files changed | Status |
 |------|---------|-----------|----------|-------|--------------|--------|
 | 07:15 UTC | Deep research: Auto-Research frameworks (19 analyzed: Reflexion, LangGraph, DSPy, Voyager, STORM, Constitutional AI, Karpathy AutoResearch etc.). Created 3 implementation variants (A: Pragmatic Self-Improvement, B: Agentic Orchestration, C: Full Autonomous Research). Comparison matrix, unified telescoping roadmap (6 phases, 2 decision gates), hardware constraints. New doc: concept/taris-auto-research-architecture.md. Updated main concept to v1.4. | 5 | 3 | claude-opus-4.6 | concept/taris-auto-research-architecture.md, concept/taris-n8n-crm-integration.md | done |**Session 80 total: Auto-Research variant architecture — 3 variants, 19 frameworks, unified roadmap ✅**
+
+### Session 81 — N8N+CRM P1 Implementation
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| 11:38 UTC | N8N+CRM P1+P1.5: Created N8N REST adapter (bot_n8n.py), CRM store (store_crm.py), CRM business logic (bot_crm.py). Admin menus, Web API endpoints, 39×3 i18n strings, tests T40-T49. SSH tunnel for VPS PG. Deployed+verified on TariStation2 (12/12 tests pass, 435/12/2/24 voice regression). Committed to feature/n8n-crm-demo, pushed to GitHub. | 4 | 8 | claude-opus-4.6 | src/features/bot_n8n.py, src/features/bot_crm.py, src/core/store_crm.py, src/core/bot_config.py, src/telegram/bot_admin.py, src/telegram_menu_bot.py, src/bot_web.py, src/strings.json, src/tests/test_n8n_crm.py | done |
+**Session 81 total: N8N+CRM P1 foundation — 9 files, 1503 lines added, deployed to TS2 ✅**
+
+### Session 82 — N8N Campaign Workflows on VPS
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| UTC | Create 2 N8N workflows via REST API on VPS (Taris Campaign Select + Taris Campaign Send) with Google Sheets, OpenAI gpt-4o-mini, Gmail. Fixed PS nested-array serialization bug. IDs: YF9eU2H2N3Nr4j3O / AjIB5izjiCunMcp6 | 3 | 8 | claude-sonnet-4.6 | — (VPS N8N workflows only) | done |
+
+**Session 82 total: 2 N8N workflows created and activated on VPS ✅**
+
+### Session 83 — Advanced User Role §2.1
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| UTC | Implement §2.1 Advanced User Role from TODO.md | 3 | partial | claude-sonnet-4.6 | (partial, compacted) | partial |
+
+### Session 84 — Security: Remove hardcoded credentials from committed files
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| UTC | Full repo security audit: remove all hardcoded IPs, SSH passwords, host keys, PG passwords, domain URLs from committed files. | 4 | 8 | claude-sonnet-4.6 | AGENTS.md, tools/use_tailscale.sh, tools/use_lan.sh, tools/tailscale_complete_setup.sh, src/setup/install_openclaw.sh, .github/skills/taris-n8n/SKILL.md, tools/n8n/n8n_admin.py, src/core/bot_config.py, doc/architecture/deployment.md, doc/architecture/picoclaw.md, doc/howto_admin.md, doc/quick-ref.md, doc/install-new-target.md, doc/vibe-coding-protocol.md, src/tests/llm/benchmark_ollama_models.py, TODO.md, .env.example (new) | done |
+
+**Session 84 total: all hardcoded secrets removed from committed files; .env.example created; pushed to feature/n8n-crm-demo ✅**
+| 16:18 UTC | | 15:00 UTC | | 16:18 UTC | ~78min | Fix N8N Campaign email delivery - SMTP via VPS postfix, SPF fix, Prepare Sheet Row encoding | Deploy SMTP cred, fix fromEmail domain, fix jsCode encoding, test e2e delivery | 3 | 1 | claude-sonnet-4.6 | taris-campaign-send.json, taris-campaign-select.json | done |
+| 17:05 UTC | | | | | Fix Campaign Send email encoding: Expand Clients garbled Russian strings | 1-fix-encoding, 1-test-send | 2 | 2 | claude-sonnet-4.6 | taris-campaign-send.json, fix_campaign_send_encoding.py | done |
+| 09:30 UTC | | 09:00 UTC | | 09:30 UTC | 30 | GS status tracking in Campaign Send (before+after) | 2 | 3 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py | done |
+| 19:33 UTC | | 19:00 UTC | | 19:33 UTC | 33 | GS status tracking Campaign Send (before+after per client) | 2 | 4 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py, bot_config.py, release_notes.json | done |
+| 23:30 UTC | | 21:00 UTC | | 23:30 UTC | 150 | Doc update + workflow file rename + backup SintAItion + git tag v2026.4.50 | 8 | 2 | 2 | claude-sonnet-4.6 | TODO.md, doc/architecture/features.md, doc/todo/2-n8n-campaign-workflow.md, Taris - Campaign Select.json, Taris - Campaign Send.json | done |

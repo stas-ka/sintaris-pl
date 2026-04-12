@@ -371,8 +371,8 @@ After setup, access the Pi from anywhere: `plink -pw "..." -batch stas@<TAILSCAL
 | Web UI (`taris-web.service`) | ❌ not installed | ✅ running |
 | Voice service | ❌ not installed | — |
 | taris gateway | ✅ | — |
-| Tailscale IP | `100.81.143.126` | — |
-| LAN IP | `192.168.178.163` | `192.168.178.165/166` |
+| Tailscale IP | `$DEV_TAILSCALE_IP` (see `.env`) | — |
+| LAN IP | `$PI1_LAN_IP` (see `.env`) | `$PI2_LAN_IP` (see `.env`) |
 
 ---
 

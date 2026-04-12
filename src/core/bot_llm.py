@@ -22,6 +22,10 @@ from core.bot_config import (
     ANTHROPIC_API_KEY,
     ANTHROPIC_MAX_TOKENS,
     ANTHROPIC_MODEL,
+    COPILOT_BRIDGE_URL,
+    COPILOT_BRIDGE_KEY,
+    COPILOT_MODEL,
+    COPILOT_TIMEOUT,
     GEMINI_API_KEY,
     GEMINI_MODEL,
     LLAMA_CPP_MODEL,
@@ -432,6 +436,54 @@ def _ask_openclaw(prompt: str, timeout: int) -> str:
         return _clean_output(raw)
 
 
+def _ask_copilot(prompt: str, timeout: int) -> str:
+    """Call Copilot Bridge — local proxy to GitHub Copilot / GitHub Models API.
+
+    The bridge must be running: python copilot-bridge/server.py
+    Config: COPILOT_BRIDGE_URL, COPILOT_BRIDGE_KEY, COPILOT_MODEL, COPILOT_TIMEOUT.
+    """
+    url = f"{COPILOT_BRIDGE_URL.rstrip('/')}/v1/chat/completions"
+    headers: dict = {"Content-Type": "application/json"}
+    if COPILOT_BRIDGE_KEY:
+        headers["Authorization"] = f"Bearer {COPILOT_BRIDGE_KEY}"
+    body = {
+        "model": COPILOT_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": LOCAL_MAX_TOKENS,
+        "temperature": _effective_temperature(),
+    }
+    try:
+        result = _http_post_json(url, headers, body, timeout)
+        return result["choices"][0]["message"]["content"].strip()
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"Copilot Bridge not reachable at {COPILOT_BRIDGE_URL} — "
+            "start it with: python copilot-bridge/server.py"
+        ) from exc
+
+
+def _ask_copilot_with_history(messages: list, timeout: int) -> str:
+    """Call Copilot Bridge with full conversation history."""
+    url = f"{COPILOT_BRIDGE_URL.rstrip('/')}/v1/chat/completions"
+    headers: dict = {"Content-Type": "application/json"}
+    if COPILOT_BRIDGE_KEY:
+        headers["Authorization"] = f"Bearer {COPILOT_BRIDGE_KEY}"
+    body = {
+        "model": COPILOT_MODEL,
+        "messages": messages,
+        "max_tokens": LOCAL_MAX_TOKENS,
+        "temperature": _effective_temperature(),
+    }
+    try:
+        result = _http_post_json(url, headers, body, timeout)
+        return result["choices"][0]["message"]["content"].strip()
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"Copilot Bridge not reachable at {COPILOT_BRIDGE_URL} — "
+            "start it with: python copilot-bridge/server.py"
+        ) from exc
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main entry point — ask LLM
 # ─────────────────────────────────────────────────────────────────────────────
@@ -439,6 +491,7 @@ def _ask_openclaw(prompt: str, timeout: int) -> str:
 _DISPATCH = {
     "taris":     _ask_taris,
     "openclaw":  _ask_openclaw,
+    "copilot":   _ask_copilot,
     "openai":    _ask_openai,
     "yandexgpt": _ask_yandexgpt,
     "gemini":    _ask_gemini,
@@ -565,7 +618,10 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
     primary_error: Exception = RuntimeError("unknown")
 
     try:
-        if provider == "openai":
+        if provider == "copilot":
+            return _ask_copilot_with_history(messages, COPILOT_TIMEOUT)
+
+        elif provider == "openai":
             if not OPENAI_API_KEY:
                 raise RuntimeError("OPENAI_API_KEY not set")
             url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"

@@ -1,6 +1,6 @@
 # Taris — Feature Domains
 
-**Version:** `2026.3.30+3`  
+**Version:** `2026.4.50`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -270,3 +270,99 @@ Personal user notes stored as Markdown files under `~/.taris/notes/<chat_id>/`.
 
 Notes use `_note_cb_id(slug) → short_hex` to stay within Telegram's 64-byte callback_data limit.
 A per-session dict `_note_cb_map` maps short IDs back to full slugs.
+
+---
+
+## 13. Campaign Email Agent (`bot_campaign.py`) ✅ v2026.4.50
+
+**When to read:** When modifying the campaign workflow, N8N webhook integration, client selection, or email sending.
+
+Taris provides an AI-assisted email broadcast agent accessible via the Agents menu (advanced/admin users only).
+
+### 13.1 Trigger Flow
+
+```
+Agents menu → 📧 Campaign
+  → Enter topic ("LR Webinar am 15.04")
+  → Enter filters (e.g. "Interessen: Fitness") or "-" for all
+  → Taris → POST /webhook/taris-campaign-select → N8N (sync)
+  ← N8N returns {clients: [...], template: "...", count: N}
+  → Taris shows preview: N clients + email template
+  → Buttons: [✅ Send] [✏️ Edit template] [❌ Cancel]
+  → User confirms → Taris → POST /webhook/taris-campaign-send → N8N (sync)
+  ← N8N returns {sent_count: N, errors: [...], sheet_url: "..."}
+  → Taris shows summary + Google Sheets status link
+```
+
+### 13.2 N8N Workflows
+
+| Workflow | File | Webhook Path | ID |
+|---|---|---|---|
+| Campaign Select | `src/n8n/workflows/Taris - Campaign Select.json` | `/webhook/taris-campaign-select` | `YF9eU2H2N3Nr4j3O` |
+| Campaign Send | `src/n8n/workflows/Taris - Campaign Send.json` | `/webhook/taris-campaign-send` | `AjIB5izjiCunMcp6` |
+
+#### Campaign Select — 10 nodes
+
+| Node | Type | What it does |
+|---|---|---|
+| Webhook | webhook | Receives `{session_id, topic, filters, sheet_id, demo_mode}` |
+| Demo Mode? | if | Routes to Demo Clients (true) or GS Read Clients (false) |
+| Demo Clients | code | Returns hardcoded demo client list |
+| GS Read Clients | googleSheets | Reads "клиенты" tab from CAMPAIGN_SHEET_ID |
+| Prepare Prompt | code | Builds GPT prompt: topic + filters + client list |
+| OpenAI Select | openAi | gpt-4o-mini selects matching clients → JSON list |
+| Parse Response | code | Strips markdown fences; parses JSON; checks `_error` |
+| GS Read Templates | googleSheets | Reads "Шаблоны рассылки" tab; `onError=continueRegularOutput` |
+| Merge Template | code | Prefers GS template over AI-generated when topic matches |
+| Respond | respondToWebhook | Returns `{clients, template, count}` |
+
+#### Campaign Send — 8 nodes
+
+| Node | Type | What it does |
+|---|---|---|
+| Webhook Send | webhook | Receives `{session_id, topic, clients, template, sheet_id}` |
+| Expand Clients | code | Creates one item per client; injects topic/template |
+| GS Append Queued | googleSheets | Writes `Status="Gesendet wird..."` to "Status рассылок" **before** send; `onError=continueRegularOutput` |
+| Send Email Gmail | gmail | Sends personalized email per client via Gmail OAuth2 |
+| Prepare Sheet Row | code | Builds `{Datum, Empfaenger, Name, Firma, Thema, Status}` row |
+| GS Append Status | googleSheets | Writes `Status="sent"/"ERROR:..."` to "Status рассылок" **after** send; `onError=continueRegularOutput` |
+| Summary | code | Aggregates sent_count, errors, sheet_url |
+| Respond Send | respondToWebhook | Returns summary to Taris |
+
+### 13.3 Google Sheets Structure
+
+**Spreadsheet ID:** `CAMPAIGN_SHEET_ID` env var (default: `1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA`)
+
+| Tab | Columns | Purpose |
+|---|---|---|
+| `клиенты` | Имя, Email, Компания, Тип, Интересы, Теги, Комментарии | Source client data |
+| `Шаблоны рассылки` | Тема, Шаблон | Pre-written email templates |
+| `Status рассылок` | Datum, Empfaenger, Name, Firma, Thema, Status | Execution log (written by GS Append Queued + GS Append Status) |
+
+> ⚠️ The "Status рассылок" tab must exist with headers: `Datum | Empfaenger | Name | Firma | Thema | Status`
+
+### 13.4 Key Files
+
+| File | Role |
+|---|---|
+| `src/features/bot_campaign.py` | Campaign state machine, `call_webhook()`, `_user_friendly_error()`, `_STEP_KEY_MAP` |
+| `src/telegram_menu_bot.py` | `agents_menu`, `campaign_start`, `campaign_confirm_send`, `campaign_edit_template`, `campaign_cancel` callbacks |
+| `src/strings.json` | 29 `campaign_*` i18n keys (ru/en/de) |
+| `src/n8n/workflows/Taris - Campaign Select.json` | Campaign Select N8N workflow |
+| `src/n8n/workflows/Taris - Campaign Send.json` | Campaign Send N8N workflow |
+| `src/tests/test_campaign.py` | 40 unit tests (T50–T57 + runtime/e2e) |
+
+### 13.5 Config Constants (`bot_config.py`)
+
+```python
+N8N_CAMPAIGN_SELECT_WH = os.environ.get("N8N_CAMPAIGN_SELECT_WH", "")
+N8N_CAMPAIGN_SEND_WH   = os.environ.get("N8N_CAMPAIGN_SEND_WH", "")
+CAMPAIGN_SHEET_ID      = os.environ.get("CAMPAIGN_SHEET_ID", "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA")
+CAMPAIGN_FROM_EMAIL    = os.environ.get("CAMPAIGN_FROM_EMAIL", "info@sintaris.net")
+CAMPAIGN_DEMO_MODE     = os.environ.get("CAMPAIGN_DEMO_MODE", "false").lower() == "true"
+```
+
+### 13.6 Access Control
+
+Only `advanced` and `admin` users can access the Agents menu and campaign workflows.  
+Role set by admin via Admin Panel → Users → Set Role.

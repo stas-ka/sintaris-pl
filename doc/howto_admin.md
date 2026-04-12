@@ -18,8 +18,8 @@
 | Check swap | `swapon -s` |
 | Bot version | `grep BOT_VERSION ~/.taris/core/bot_config.py` |
 | Sync source → deploy | See §5 Deployment |
-| SSH to SintAItion (home) | `ssh stas@192.168.178.175` or `ssh stas@SintAItion` |
-| SSH to SintAItion (internet) | `ssh stas@100.112.120.3` (Tailscale) |
+| SSH to SintAItion (home) | `ssh stas@SintAItion` |
+| SSH to SintAItion (internet) | `ssh stas@$OPENCLAW1_TAILSCALE_IP` (Tailscale — see `.env`) |
 | Switch to remote deploy mode | `source tools/use_tailscale.sh` |
 | Switch to LAN deploy mode | `source tools/use_lan.sh` |
 
@@ -42,7 +42,7 @@ Both targets run `DEVICE_VARIANT=openclaw` (`taris-openclaw` branch) but differ 
 | **GPU driver** | — | ROCm (via Ollama libs) |
 | **Storage** | SSD | SSD |
 | **Hostname** | `TariStation2` / `IniCoS-1` | `SintAItion` / `SintAItion.local` |
-| **Network** | LAN (home) | LAN + Tailscale (`100.112.120.3`) |
+| **Network** | LAN (home) | LAN + Tailscale (`$OPENCLAW1_TAILSCALE_IP` from `.env`) |
 | **Services sharing host** | Ollama, Copilot CLI, Telegram Desktop, Firefox, n8n | Ollama only |
 
 ### Software Configuration Summary
@@ -117,7 +117,7 @@ PIPER_MODEL_DE=~/.taris/de_DE-thorsten-medium.onnx  # Optional: German TTS
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 STORE_BACKEND=postgres
-STORE_PG_DSN=postgresql://taris:taris_openclaw_2026@localhost:5432/taris
+STORE_PG_DSN=postgresql://taris:${TARIS_PG_PASSWORD}@localhost:5432/taris
 
 # ── Web UI ────────────────────────────────────────────────────────────────────
 WEB_HOST=0.0.0.0
@@ -344,7 +344,7 @@ Both targets use PostgreSQL as the storage backend (`STORE_BACKEND=postgres`).
 ### Connection
 
 ```bash
-psql postgresql://taris:taris_openclaw_2026@localhost:5432/taris
+psql postgresql://taris:${TARIS_PG_PASSWORD}@localhost:5432/taris
 ```
 
 ### Schema Overview
@@ -364,7 +364,7 @@ psql postgresql://taris:taris_openclaw_2026@localhost:5432/taris
 ### Backup
 
 ```bash
-pg_dump postgresql://taris:taris_openclaw_2026@localhost:5432/taris > taris_backup_$(date +%Y%m%d).sql
+pg_dump postgresql://taris:${TARIS_PG_PASSWORD}@localhost:5432/taris > taris_backup_$(date +%Y%m%d).sql
 ```
 
 ---
@@ -448,9 +448,9 @@ See [howto_bot.md — Voice Settings](howto_bot.md) for the full list of toggles
 
 | Target | Home (LAN) | Internet (Tailscale) |
 |---|---|---|
-| **SintAItion** | `ssh stas@192.168.178.175` or `ssh stas@SintAItion` | `ssh stas@100.112.120.3` |
+| **SintAItion** | `ssh stas@SintAItion` | `ssh stas@$OPENCLAW1_TAILSCALE_IP` (see `.env`) |
 | **TariStation2** | local machine (`cp`, `systemctl --user`) | — (home-only machine) |
-| SSH password | `buerger` | `buerger` |
+| SSH password | `$OPENCLAW1PWD` (see `.env` — never commit the value) | same |
 
 > **Tailscale** creates an encrypted point-to-point tunnel. No port forwarding or VPN configuration needed. Works from any network including mobile hotspot.
 
@@ -458,16 +458,16 @@ See [howto_bot.md — Voice Settings](howto_bot.md) for the full list of toggles
 
 ### SintAItion — Tailscale Setup (done 2026-04-03)
 
-- **Tailscale IP:** `100.112.120.3`
+- **Tailscale IP:** `$OPENCLAW1_TAILSCALE_IP` (see `.env`)
 - **Tailscale hostname:** `sintaition`
-- **Account:** `stanislav.ulmer@`
+- **Account:** stored in `.env`
 - `tailscaled` service: enabled + auto-starts on boot
 
 Verify connectivity:
 ```bash
-ssh stas@100.112.120.3
+ssh stas@$OPENCLAW1_TAILSCALE_IP
 # or
-echo 'buerger' | sudo -S tailscale status
+echo "$OPENCLAW1PWD" | sudo -S tailscale status
 ```
 
 ---
@@ -485,14 +485,14 @@ sudo tailscale up
 
 After authorization, verify:
 ```bash
-ssh stas@100.112.120.3   # SintAItion reachable from anywhere
+ssh stas@$OPENCLAW1_TAILSCALE_IP   # SintAItion reachable from anywhere
 ```
 
 ---
 
 ### Deploying to SintAItion from Internet
 
-**Switch to Tailscale mode** (sets `OPENCLAW1_HOST=100.112.120.3`):
+**Switch to Tailscale mode** (sets `OPENCLAW1_HOST=$OPENCLAW1_TAILSCALE_IP` from `.env`):
 
 ```bash
 cd /path/to/sintaris-pl
@@ -523,10 +523,10 @@ source tools/use_lan.sh
 
 | Variable | Value | Purpose |
 |---|---|---|
-| `OPENCLAW1_HOST` | `SintAItion` (home) or `100.112.120.3` (travel) | Used by all deploy commands |
-| `OPENCLAW1_TAILSCALE_IP` | `100.112.120.3` | Permanent record of Tailscale IP |
-| `OPENCLAW1_LAN_IP` | `192.168.178.175` | Permanent record of LAN IP |
-| `OPENCLAW1PWD` | `buerger` | SSH password |
+| `OPENCLAW1_HOST` | `SintAItion` (home) or `$OPENCLAW1_TAILSCALE_IP` (travel) | Used by all deploy commands |
+| `OPENCLAW1_TAILSCALE_IP` | see `.env` | Permanent record of Tailscale IP |
+| `OPENCLAW1_LAN_IP` | see `.env` | Permanent record of LAN IP |
+| `OPENCLAW1PWD` | see `.env` | SSH password — never commit the value |
 
 > **Never commit `.env`** — it contains credentials. It is gitignored.
 
@@ -536,9 +536,9 @@ source tools/use_lan.sh
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ssh: connect to host 100.112.120.3 port 22: No route to host` | Tailscale not running on laptop | `sudo tailscale up` on laptop |
-| `ssh: connect to host 100.112.120.3 port 22: Connection refused` | `tailscaled` stopped on SintAItion | `ssh stas@192.168.178.175 "sudo systemctl restart tailscaled"` (from home) |
-| `Permission denied (publickey,password)` | Wrong password | password is `buerger` |
+| `ssh: connect to host $OPENCLAW1_TAILSCALE_IP port 22: No route to host` | Tailscale not running on laptop | `sudo tailscale up` on laptop |
+| `ssh: connect to host $OPENCLAW1_TAILSCALE_IP port 22: Connection refused` | `tailscaled` stopped on SintAItion | `ssh stas@SintAItion "sudo systemctl restart tailscaled"` (from home) |
+| `Permission denied (publickey,password)` | Wrong password | check `OPENCLAW1PWD` in `.env` |
 | SSH hangs (no output) | Network issue / Tailscale relay | Wait 10s; retry; check `tailscale status` on both machines |
 | `OPENCLAW1_HOST` not updated | `use_tailscale.sh` not sourced | Run `source tools/use_tailscale.sh` |
 

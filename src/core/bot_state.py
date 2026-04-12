@@ -18,6 +18,9 @@ from core.bot_config import (
     CONV_SUMMARY_THRESHOLD,
     CONV_MID_MAX,
     USERS_FILE,
+    ADVANCED_USERS_FILE,
+    DYNAMIC_ADMINS_FILE,
+    DYNAMIC_DEVS_FILE,
     _VOICE_OPTS_FILE,
     _VOICE_OPTS_DEFAULTS,
     _WEB_LINK_CODES_FILE,
@@ -222,8 +225,79 @@ def _save_dynamic_users() -> None:
 _dynamic_users: set[int] = _load_dynamic_users()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Conversation history  (Feature 2.1 — sliding window, optional persistence)
+# Advanced users — elevated role (can access campaign/agents menu), set by admin
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _load_advanced_users() -> set[int]:
+    try:
+        data = json.loads(Path(ADVANCED_USERS_FILE).read_text(encoding="utf-8"))
+        return {int(x) for x in data.get("users", [])}
+    except Exception:
+        return set()
+
+
+def _save_advanced_users() -> None:
+    try:
+        Path(ADVANCED_USERS_FILE).write_text(
+            json.dumps({"users": sorted(_advanced_users)}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning(f"[State] save advanced_users failed: {e}")
+
+
+_advanced_users: set[int] = _load_advanced_users()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dynamic admins — users promoted to admin role via menu (not in env-var)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_dynamic_admins() -> set[int]:
+    try:
+        data = json.loads(Path(DYNAMIC_ADMINS_FILE).read_text(encoding="utf-8"))
+        return {int(x) for x in data.get("users", [])}
+    except Exception:
+        return set()
+
+
+def _save_dynamic_admins() -> None:
+    try:
+        Path(DYNAMIC_ADMINS_FILE).write_text(
+            json.dumps({"users": sorted(_dynamic_admins)}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning(f"[State] save dynamic_admins failed: {e}")
+
+
+_dynamic_admins: set[int] = _load_dynamic_admins()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dynamic developers — users promoted to developer role via menu
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_dynamic_devs() -> set[int]:
+    try:
+        data = json.loads(Path(DYNAMIC_DEVS_FILE).read_text(encoding="utf-8"))
+        return {int(x) for x in data.get("users", [])}
+    except Exception:
+        return set()
+
+
+def _save_dynamic_devs() -> None:
+    try:
+        Path(DYNAMIC_DEVS_FILE).write_text(
+            json.dumps({"users": sorted(_dynamic_devs)}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning(f"[State] save dynamic_devs failed: {e}")
+
+
+_dynamic_devs: set[int] = _load_dynamic_devs()
+
 
 # Per-user history.  Format: [{"role": "user"|"assistant", "content": str}]
 _conversation_history: dict[int, list] = {}
