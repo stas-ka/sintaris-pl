@@ -1,0 +1,608 @@
+{
+  "updatedAt": "2026-04-12T09:27:28.515Z",
+  "createdAt": "2026-04-12T08:21:43.604Z",
+  "id": "YF9eU2H2N3Nr4j3O",
+  "name": "Taris - Campaign Select",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taris-campaign-select",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        304
+      ],
+      "webhookId": "taris-campaign-select-wh"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// DEMO DATA — replace with Google Sheets node when OAuth credential is refreshed\n// Credential to fix: j36NScu4bpqsYJKT \"Google Sheets account 3\"\ntry {\n  const demoClients = [\n    { \"Имя\": \"Алексей Петров\",   \"Email\": \"alex.petrov@example.com\",    \"Компания\": \"ТехноСтарт\",      \"Интересы\": \"IT-решения, автоматизация\" },\n    { \"Имя\": \"Марина Соколова\",  \"Email\": \"m.sokolova@example.com\",     \"Компания\": \"Медиа Груп\",      \"Интересы\": \"маркетинг, контент\" },\n    { \"Имя\": \"Дмитрий Кузнецов\", \"Email\": \"d.kuznetsov@example.com\",    \"Компания\": \"СтройИнвест\",     \"Интересы\": \"строительство, инвестиции\" },\n    { \"Имя\": \"Анна Иванова\",     \"Email\": \"a.ivanova@example.com\",      \"Компания\": \"Финтех Решения\",  \"Интересы\": \"финансы, стартапы\" },\n    { \"Имя\": \"Сергей Новиков\",   \"Email\": \"s.novikov@example.com\",      \"Компания\": \"АгроПром\",        \"Интересы\": \"сельское хозяйство, экспорт\" },\n    { \"Имя\": \"Елена Морозова\",   \"Email\": \"e.morozova@example.com\",     \"Компания\": \"EduTech\",         \"Интересы\": \"образование, EdTech\" },\n    { \"Имя\": \"Павел Волков\",     \"Email\": \"p.volkov@example.com\",       \"Компания\": \"КиберЗащита\",     \"Интересы\": \"кибербезопасность, IT\" },\n    { \"Имя\": \"Ольга Лебедева\",   \"Email\": \"o.lebedeva@example.com\",     \"Компания\": \"GreenEnergy\",     \"Интересы\": \"возобновляемая энергия, ESG\" },\n    { \"Имя\": \"Иван Козлов\",      \"Email\": \"i.kozlov@example.com\",       \"Компания\": \"LogisticsPro\",    \"Интересы\": \"логистика, цепочки поставок\" },\n    { \"Имя\": \"Татьяна Смирнова\", \"Email\": \"t.smirnova@example.com\",     \"Компания\": \"HealthAI\",        \"Интересы\": \"медицина, AI, данные\" }\n  ];\n  return demoClients.map((c, i) => ({ json: { ...c, _idx: i } }));\n} catch(e) {\n  return [{ json: { _error: true, step: \"Demo Clients\", detail: e.message } }];\n}\n"
+      },
+      "id": "n-demo-clients",
+      "name": "Demo Clients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\ntry {\n  // Propagate upstream error (e.g. Demo Clients failed)\n  if (items.length === 1 && items[0].json._error === true) {\n    return [{ json: items[0].json }];\n  }\n\n  const body = $('Webhook').first().json.body || $('Webhook').first().json;\n  const topic = body.topic || '';\n  const filters = body.filters || '';\n\n  const clients = items.map((item, i) => ({ _idx: i, ...item.json }));\n  const clientsStr = clients.map(c =>\n    `${c._idx}: Имя=${c['Имя']||c['name']||c['Name']||'?'}, Email=${c['Email']||c['email']||''}, Компания=${c['Компания']||c['company']||''}, Интересы=${c['Интересы']||c['interests']||''}`\n  ).join('\\n');\n\n  const prompt = `Ты маркетинговый ассистент. Выбери клиентов из списка, наиболее подходящих для кампании на тему: \"${topic}\".\n${filters ? `Дополнительные критерии: ${filters}` : ''}\n\nСписок клиентов:\n${clientsStr}\n\nВерни ТОЛЬКО валидный JSON (без комментариев):\n{\n  \"selected_indices\": [0, 2, 5],\n  \"template\": \"Уважаемый {name}!\\\\n\\\\nМы рады предложить вам...\"\n}\n\nВыбери 3-10 наиболее подходящих клиентов. Шаблон письма — на русском языке.`;\n\n  return [{ json: { prompt, clients, topic, filters } }];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Prepare Prompt\", detail: e.message } }];\n}\n"
+      },
+      "id": "n-prepare",
+      "name": "Prepare Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: \"gpt-4o-mini\", messages: [{ role: \"user\", content: $json.prompt }], response_format: { type: \"json_object\" }, temperature: 0.3 }) }}",
+        "options": {}
+      },
+      "id": "n-openai",
+      "name": "OpenAI Select",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "MHkmfl85kwu22LT8",
+          "name": "OpenAI SINTARIS"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\ntry {\n  // Check if an upstream jsCode node returned an error (Demo Clients or Prepare Prompt)\n  const prepareData = $('Prepare Prompt').first().json;\n  if (prepareData._error === true) return [{ json: prepareData }];\n\n  const item = items[0].json;\n  const allClients = prepareData.clients || [];\n\n  // Check if OpenAI HTTP node failed (continueOnFail passes error in item.json.error)\n  if (item.error !== undefined && !item.choices) {\n    const errMsg = typeof item.error === 'string'\n      ? item.error\n      : (item.error && (item.error.message || item.error.description)) || 'OpenAI request failed';\n    return [{ json: { _error: true, step: \"OpenAI Select\", detail: errMsg } }];\n  }\n\n  let selected = [];\n  let template = '';\n\n  const rawData = item.data || item;\n  let parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;\n  const content = (parsed.choices && parsed.choices[0] && parsed.choices[0].message && parsed.choices[0].message.content)\n    ? parsed.choices[0].message.content\n    : JSON.stringify(parsed);\n  const result = JSON.parse(content);\n  const indices = result.selected_indices || [];\n  template = result.template || '';\n  selected = indices.map(i => allClients[i]).filter(Boolean);\n\n  if (selected.length === 0) {\n    selected = allClients.slice(0, 5);\n    template = template || `Уважаемый {name}! Приглашаем вас принять участие в нашей кампании: ${prepareData.topic}`;\n  }\n\n  return [{ json: { clients: selected, template, count: selected.length } }];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Parse Response\", detail: e.message } }];\n}\n"
+      },
+      "id": "n-parse",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json._error === true ? JSON.stringify({ error: $json.detail || \"Workflow error\", step: $json.step || \"unknown\" }) : JSON.stringify({ clients: $json.clients, template: $json.template }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "n-respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "id": "n-if-demo",
+      "name": "Demo Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.0,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "demo-check",
+              "leftValue": "={{ $('Webhook').first().json.body?.demo_mode || $('Webhook').first().json?.demo_mode }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "n-gs-clients",
+      "name": "GS Read Clients",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        460
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j36NScu4bpqsYJKT",
+          "name": "Google Sheets account 3"
+        }
+      },
+      "parameters": {
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Webhook').first().json.body?.sheet_id || $('Webhook').first().json?.sheet_id || '1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=клиенты",
+          "mode": "name"
+        },
+        "dataLocationOnSheet": {
+          "values": {
+            "rangeDefinition": "specifyRangeA1",
+            "range": "A:I"
+          }
+        },
+        "options": {
+          "returnFirstRowAsHeaders": {
+            "headerRow": "firstRow"
+          }
+        }
+      }
+    },
+    {
+      "id": "n-gs-templates",
+      "name": "GS Read Templates",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1260,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j36NScu4bpqsYJKT",
+          "name": "Google Sheets account 3"
+        }
+      },
+      "parameters": {
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Webhook').first().json.body?.sheet_id || $('Webhook').first().json?.sheet_id || '1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=Шаблоны рассылки",
+          "mode": "name"
+        },
+        "dataLocationOnSheet": {
+          "values": {
+            "rangeDefinition": "specifyRangeA1",
+            "range": "A:C"
+          }
+        },
+        "options": {
+          "returnFirstRowAsHeaders": {
+            "headerRow": "firstRow"
+          }
+        }
+      }
+    },
+    {
+      "id": "n-merge-template",
+      "name": "Merge Template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        300
+      ],
+      "parameters": {
+        "jsCode": "try {\n  // Try to find an existing template for the topic\n  const parseData = $('Parse Response').first().json;\n  if (parseData._error) return [{ json: parseData }];\n\n  const topic = ($('Webhook').first().json.body || $('Webhook').first().json).topic || '';\n  let template = parseData.template || '';\n\n  // Look for matching template in Google Sheets \"Шаблоны рассылки\"\n  let templateRows = [];\n  try { templateRows = $('GS Read Templates').all().map(i => i.json); } catch(e) {}\n\n  const found = templateRows.find(row => {\n    const sheetTopic = row['Тема'] || row['тема'] || '';\n    return sheetTopic && topic && sheetTopic.toLowerCase().includes(topic.toLowerCase().slice(0, 20));\n  });\n\n  if (found) {\n    template = found['Шаблон'] || found['шаблон'] || template;\n  }\n\n  return [{ json: { ...parseData, template } }];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Merge Template\", detail: e.message } }];\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Demo Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo Mode?": {
+      "main": [
+        [
+          {
+            "node": "Demo Clients",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GS Read Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo Clients": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Read Clients": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Select",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Select": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "GS Read Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Read Clients": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Read Templates": {
+      "main": [
+        [
+          {
+            "node": "Merge Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Template": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "f1e772f4-2807-44d5-8361-624c30454b83",
+  "activeVersionId": "f1e772f4-2807-44d5-8361-624c30454b83",
+  "versionCounter": 11,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-04-12T08:21:43.604Z",
+      "createdAt": "2026-04-12T08:21:43.604Z",
+      "role": "workflow:owner",
+      "workflowId": "YF9eU2H2N3Nr4j3O",
+      "projectId": "O9XbC3IbtLXuzUQJ",
+      "project": {
+        "updatedAt": "2025-07-06T14:50:27.538Z",
+        "createdAt": "2025-07-06T14:49:22.006Z",
+        "id": "O9XbC3IbtLXuzUQJ",
+        "name": "Stanislav Ulmer <stas.ulmer@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d2b35160-20b8-4774-a219-6c677a1b292b",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-07-06T14:49:22.006Z",
+            "createdAt": "2025-07-06T14:49:22.006Z",
+            "userId": "d2b35160-20b8-4774-a219-6c677a1b292b",
+            "projectId": "O9XbC3IbtLXuzUQJ",
+            "user": {
+              "updatedAt": "2026-04-12T06:09:11.740Z",
+              "createdAt": "2025-07-06T14:49:21.240Z",
+              "id": "d2b35160-20b8-4774-a219-6c677a1b292b",
+              "email": "stas.ulmer@gmail.com",
+              "firstName": "Stanislav",
+              "lastName": "Ulmer",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-07-06T14:50:49.162Z",
+                "personalization_survey_n8n_version": "1.98.2",
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "business-owner",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "WoyBWgHRfFN3XuNj",
+                "userActivatedAt": 1752252363756,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1768324711199
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-04-11",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-04-12T09:27:30.601Z",
+    "createdAt": "2026-04-12T09:27:28.518Z",
+    "versionId": "f1e772f4-2807-44d5-8361-624c30454b83",
+    "workflowId": "YF9eU2H2N3Nr4j3O",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "taris-campaign-select",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "n-webhook",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          208,
+          304
+        ],
+        "webhookId": "taris-campaign-select-wh"
+      },
+      {
+        "parameters": {
+          "jsCode": "\n// DEMO DATA — replace with Google Sheets node when OAuth credential is refreshed\n// Credential to fix: j36NScu4bpqsYJKT \"Google Sheets account 3\"\ntry {\n  const demoClients = [\n    { \"Имя\": \"Алексей Петров\",   \"Email\": \"alex.petrov@example.com\",    \"Компания\": \"ТехноСтарт\",      \"Интересы\": \"IT-решения, автоматизация\" },\n    { \"Имя\": \"Марина Соколова\",  \"Email\": \"m.sokolova@example.com\",     \"Компания\": \"Медиа Груп\",      \"Интересы\": \"маркетинг, контент\" },\n    { \"Имя\": \"Дмитрий Кузнецов\", \"Email\": \"d.kuznetsov@example.com\",    \"Компания\": \"СтройИнвест\",     \"Интересы\": \"строительство, инвестиции\" },\n    { \"Имя\": \"Анна Иванова\",     \"Email\": \"a.ivanova@example.com\",      \"Компания\": \"Финтех Решения\",  \"Интересы\": \"финансы, стартапы\" },\n    { \"Имя\": \"Сергей Новиков\",   \"Email\": \"s.novikov@example.com\",      \"Компания\": \"АгроПром\",        \"Интересы\": \"сельское хозяйство, экспорт\" },\n    { \"Имя\": \"Елена Морозова\",   \"Email\": \"e.morozova@example.com\",     \"Компания\": \"EduTech\",         \"Интересы\": \"образование, EdTech\" },\n    { \"Имя\": \"Павел Волков\",     \"Email\": \"p.volkov@example.com\",       \"Компания\": \"КиберЗащита\",     \"Интересы\": \"кибербезопасность, IT\" },\n    { \"Имя\": \"Ольга Лебедева\",   \"Email\": \"o.lebedeva@example.com\",     \"Компания\": \"GreenEnergy\",     \"Интересы\": \"возобновляемая энергия, ESG\" },\n    { \"Имя\": \"Иван Козлов\",      \"Email\": \"i.kozlov@example.com\",       \"Компания\": \"LogisticsPro\",    \"Интересы\": \"логистика, цепочки поставок\" },\n    { \"Имя\": \"Татьяна Смирнова\", \"Email\": \"t.smirnova@example.com\",     \"Компания\": \"HealthAI\",        \"Интересы\": \"медицина, AI, данные\" }\n  ];\n  return demoClients.map((c, i) => ({ json: { ...c, _idx: i } }));\n} catch(e) {\n  return [{ json: { _error: true, step: \"Demo Clients\", detail: e.message } }];\n}\n"
+        },
+        "id": "n-demo-clients",
+        "name": "Demo Clients",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          464,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\ntry {\n  // Propagate upstream error (e.g. Demo Clients failed)\n  if (items.length === 1 && items[0].json._error === true) {\n    return [{ json: items[0].json }];\n  }\n\n  const body = $('Webhook').first().json.body || $('Webhook').first().json;\n  const topic = body.topic || '';\n  const filters = body.filters || '';\n\n  const clients = items.map((item, i) => ({ _idx: i, ...item.json }));\n  const clientsStr = clients.map(c =>\n    `${c._idx}: Имя=${c['Имя']||c['name']||c['Name']||'?'}, Email=${c['Email']||c['email']||''}, Компания=${c['Компания']||c['company']||''}, Интересы=${c['Интересы']||c['interests']||''}`\n  ).join('\\n');\n\n  const prompt = `Ты маркетинговый ассистент. Выбери клиентов из списка, наиболее подходящих для кампании на тему: \"${topic}\".\n${filters ? `Дополнительные критерии: ${filters}` : ''}\n\nСписок клиентов:\n${clientsStr}\n\nВерни ТОЛЬКО валидный JSON (без комментариев):\n{\n  \"selected_indices\": [0, 2, 5],\n  \"template\": \"Уважаемый {name}!\\\\n\\\\nМы рады предложить вам...\"\n}\n\nВыбери 3-10 наиболее подходящих клиентов. Шаблон письма — на русском языке.`;\n\n  return [{ json: { prompt, clients, topic, filters } }];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Prepare Prompt\", detail: e.message } }];\n}\n"
+        },
+        "id": "n-prepare",
+        "name": "Prepare Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          704,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.openai.com/v1/chat/completions",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "openAiApi",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify({ model: \"gpt-4o-mini\", messages: [{ role: \"user\", content: $json.prompt }], response_format: { type: \"json_object\" }, temperature: 0.3 }) }}",
+          "options": {}
+        },
+        "id": "n-openai",
+        "name": "OpenAI Select",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          960,
+          304
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "MHkmfl85kwu22LT8",
+            "name": "OpenAI SINTARIS"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "\ntry {\n  // Check if an upstream jsCode node returned an error (Demo Clients or Prepare Prompt)\n  const prepareData = $('Prepare Prompt').first().json;\n  if (prepareData._error === true) return [{ json: prepareData }];\n\n  const item = items[0].json;\n  const allClients = prepareData.clients || [];\n\n  // Check if OpenAI HTTP node failed (continueOnFail passes error in item.json.error)\n  if (item.error !== undefined && !item.choices) {\n    const errMsg = typeof item.error === 'string'\n      ? item.error\n      : (item.error && (item.error.message || item.error.description)) || 'OpenAI request failed';\n    return [{ json: { _error: true, step: \"OpenAI Select\", detail: errMsg } }];\n  }\n\n  let selected = [];\n  let template = '';\n\n  const rawData = item.data || item;\n  let parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;\n  const content = (parsed.choices && parsed.choices[0] && parsed.choices[0].message && parsed.choices[0].message.content)\n    ? parsed.choices[0].message.content\n    : JSON.stringify(parsed);\n  const result = JSON.parse(content);\n  const indices = result.selected_indices || [];\n  template = result.template || '';\n  selected = indices.map(i => allClients[i]).filter(Boolean);\n\n  if (selected.length === 0) {\n    selected = allClients.slice(0, 5);\n    template = template || `Уважаемый {name}! Приглашаем вас принять участие в нашей кампании: ${prepareData.topic}`;\n  }\n\n  return [{ json: { clients: selected, template, count: selected.length } }];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Parse Response\", detail: e.message } }];\n}\n"
+        },
+        "id": "n-parse",
+        "name": "Parse Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json._error === true ? JSON.stringify({ error: $json.detail || \"Workflow error\", step: $json.step || \"unknown\" }) : JSON.stringify({ clients: $json.clients, template: $json.template }) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "n-respond",
+        "name": "Respond",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1456,
+          304
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Demo Clients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Demo Clients": {
+        "main": [
+          [
+            {
+              "node": "Prepare Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Prompt": {
+        "main": [
+          [
+            {
+              "node": "OpenAI Select",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Select": {
+        "main": [
+          [
+            {
+              "node": "Parse Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Response": {
+        "main": [
+          [
+            {
+              "node": "Respond",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Stanislav Ulmer",
+    "name": "Version f1e772f4",
+    "description": "",
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-04-12T09:27:30.595Z",
+        "id": 463,
+        "workflowId": "YF9eU2H2N3Nr4j3O",
+        "versionId": "f1e772f4-2807-44d5-8361-624c30454b83",
+        "event": "activated",
+        "userId": "d2b35160-20b8-4774-a219-6c677a1b292b"
+      }
+    ]
+  }
+}

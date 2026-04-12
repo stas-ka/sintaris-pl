@@ -24,6 +24,7 @@ from core.bot_config import (
     N8N_CAMPAIGN_SEND_WH,
     CAMPAIGN_SHEET_ID,
     N8N_CAMPAIGN_TIMEOUT,
+    CAMPAIGN_DEMO_MODE,
 )
 
 log = logging.getLogger("taris.campaign")
@@ -73,14 +74,23 @@ def _truncate(text: str, max_len: int = 200) -> str:
 
 # Maps N8N step names (returned in {step: "..."} error responses) to i18n keys
 _STEP_KEY_MAP = {
-    "Demo Clients":    "campaign_error_input",
-    "Prepare Prompt":  "campaign_error_input",
-    "OpenAI Select":   "campaign_error_openai",
-    "Parse Response":  "campaign_error_workflow",
-    "Expand Clients":  "campaign_error_input",
-    "Send Gmail":      "campaign_error_email",
+    # Demo path
+    "Demo Clients":      "campaign_error_input",
+    # Google Sheets nodes
+    "GS Read Clients":   "campaign_error_input",
+    "GS Read Templates": "campaign_error_workflow",
+    "GS Append Status":  "campaign_error_workflow",
+    "Merge Template":    "campaign_error_workflow",
+    # Processing nodes
+    "Prepare Prompt":    "campaign_error_input",
+    "OpenAI Select":     "campaign_error_openai",
+    "Parse Response":    "campaign_error_workflow",
+    "Expand Clients":    "campaign_error_input",
+    # Send nodes
+    "Send Gmail":        "campaign_error_email",
     "Prepare Sheet Row": "campaign_error_workflow",
-    "Summary":         "campaign_error_workflow",
+    "Build Sheet Row":   "campaign_error_workflow",
+    "Summary":           "campaign_error_workflow",
 }
 
 
@@ -159,6 +169,8 @@ def _run_selection(chat_id: int, bot, _t) -> None:
         "session_id": state["session_id"],
         "topic": state["topic"],
         "filters": state["filters"],
+        "sheet_id": CAMPAIGN_SHEET_ID,
+        "demo_mode": CAMPAIGN_DEMO_MODE,
     }
 
     result = call_webhook(N8N_CAMPAIGN_SELECT_WH, payload, timeout=N8N_CAMPAIGN_TIMEOUT)
@@ -293,6 +305,8 @@ def _run_send(chat_id: int, bot, _t) -> None:
         "topic": state["topic"],
         "clients": state["clients"],
         "template": state["template"],
+        "sheet_id": CAMPAIGN_SHEET_ID,
+        "demo_mode": CAMPAIGN_DEMO_MODE,
     }
 
     result = call_webhook(N8N_CAMPAIGN_SEND_WH, payload, timeout=N8N_CAMPAIGN_TIMEOUT)

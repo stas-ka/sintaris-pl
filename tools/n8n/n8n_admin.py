@@ -600,6 +600,49 @@ try {
     }
 
 
+def cmd_put_workflow(wf_id: str, file_path: str, activate: bool = True):
+    """Replace an existing workflow with a definition from a JSON file.
+
+    Steps:
+    1. Deactivate the workflow (required before PUT in N8N).
+    2. PUT the new definition (nodes + connections + settings).
+    3. Re-activate if it was active before (or --activate flag).
+    """
+    wf_file = Path(file_path)
+    if not wf_file.exists():
+        print(f"ERROR: file not found: {wf_file}", file=sys.stderr)
+        sys.exit(1)
+
+    raw = wf_file.read_text(encoding="utf-8")
+    new_def = json.loads(raw)
+
+    existing = _req("GET", f"/workflows/{wf_id}")
+    was_active = existing.get("active", False)
+
+    if was_active:
+        _req("POST", f"/workflows/{wf_id}/deactivate")
+        print(f"  ⏸  Deactivated {wf_id}")
+
+    body = {
+        "name": new_def.get("name", existing["name"]),
+        "nodes": new_def["nodes"],
+        "connections": new_def["connections"],
+        "settings": new_def.get("settings", existing.get("settings", {})),
+        "staticData": existing.get("staticData"),
+    }
+    _req("PUT", f"/workflows/{wf_id}", json=body)
+    print(f"  ✅ Updated workflow {wf_id} from {wf_file.name}")
+
+    if was_active or activate:
+        _req("POST", f"/workflows/{wf_id}/activate")
+        webhook_nodes = [n for n in new_def["nodes"] if "webhook" in n.get("type", "").lower() and n.get("parameters", {}).get("path")]
+        if webhook_nodes:
+            path = webhook_nodes[0]["parameters"]["path"]
+            print(f"  ✅ Activated → {N8N_BASE}/webhook/{path}")
+        else:
+            print(f"  ✅ Activated")
+
+
 def cmd_create_campaign():
     """Create and activate both campaign workflows."""
     print("Creating Taris Campaign Select workflow...")
@@ -772,6 +815,11 @@ def main():
     p_fix = sub.add_parser("fix-unicode", help="Decode \\uXXXX sequences in workflow node code")
     p_fix.add_argument("id", help="Workflow ID (from 'list')")
 
+    p_put = sub.add_parser("put-workflow", help="Replace an existing workflow with a JSON file")
+    p_put.add_argument("id", help="Workflow ID")
+    p_put.add_argument("file", help="Path to workflow JSON file")
+    p_put.add_argument("--no-activate", action="store_true", help="Leave deactivated after update")
+
     p_upd = sub.add_parser("update-campaign", help="Update campaign workflow(s) with current node code")
     p_upd.add_argument("--which", choices=["send", "select", "both"], default="send")
 
@@ -787,6 +835,7 @@ def main():
         elif args.cmd == "create":        cmd_create(args.file)
         elif args.cmd == "test-webhook":  cmd_test_webhook(args.url, args.payload)
         elif args.cmd == "executions":    cmd_executions(args.wf, args.limit)
+        elif args.cmd == "put-workflow":       cmd_put_workflow(args.id, args.file, activate=not args.no_activate)
         elif args.cmd == "create-campaign":   cmd_create_campaign()
         elif args.cmd == "fix-unicode":        cmd_fix_unicode(args.id)
         elif args.cmd == "update-campaign":    cmd_update_campaign(args.which)

@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.45",
+    "date": "2026-04-12",
+    "title": "Google Sheets integration for N8N campaign workflows",
+    "notes": "- feat: N8N Campaign Select workflow: added demo_mode IF branch (true=demo clients, false=GS Read Clients)\n- feat: N8N Campaign Select: GS Read Templates after Parse Response (with onError fallback for expired credentials)\n- feat: N8N Campaign Select: Merge Template prefers GS template over AI-generated when found\n- feat: N8N Campaign Send: GS Append Status node writes send results to 'Status rассылок' sheet\n- feat: CAMPAIGN_DEMO_MODE env var (default: false for production, use true for dev/test)\n- feat: bot_campaign.py passes demo_mode and sheet_id in both webhook payloads\n- feat: n8n_admin.py: new put-workflow command to replace workflow from JSON file\n- fix: _STEP_KEY_MAP updated with GS node names for proper error reporting"
+  },
+  {
     "version": "2026.4.44",
     "date": "2026-04-14",
     "title": "Full 4-role system: user / advanced / admin / developer",

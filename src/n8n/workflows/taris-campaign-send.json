@@ -1,0 +1,457 @@
+{
+  "updatedAt": "2026-04-12T09:41:56.926Z",
+  "createdAt": "2026-04-12T08:21:43.767Z",
+  "id": "AjIB5izjiCunMcp6",
+  "name": "Taris - Campaign Send",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taris-campaign-send",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n-webhook-send",
+      "name": "Webhook Send",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        304
+      ],
+      "webhookId": "taris-campaign-send-wh"
+    },
+    {
+      "parameters": {
+        "jsCode": "\ntry {\n  const body = $('Webhook Send').first().json.body || $('Webhook Send').first().json;\n\n  if (!body || !Array.isArray(body.clients) || body.clients.length === 0) {\n    return [{ json: { _error: true, step: \"Expand Clients\", detail: \"No clients provided in request\" } }];\n  }\n\n  const clients = body.clients;\n  const template = body.template || 'ðúð▓ð░ðÂð░ðÁð╝Ðïð╣ {name}!';\n  const topic = body.topic || '';\n  const sessionId = body.session_id || '';\n\n  const expanded = clients.map(client => {\n    const name = client['ðÿð╝ÐÅ'] || client['name'] || client['Name'] || 'ðÜð╗ð©ðÁð¢Ðé';\n    const email = client['Email'] || client['email'] || '';\n    const company = client['ðÜð¥ð╝ð┐ð░ð¢ð©ÐÅ'] || client['company'] || '';\n    const interests = client['ðÿð¢ÐéðÁÐÇðÁÐüÐï'] || client['interests'] || '';\n    const body_text = template\n      .replace(/{name}/g, name)\n      .replace(/{company}/g, company)\n      .replace(/{interests}/g, interests);\n    return { json: { email, name, company, interests, body_text, topic, sessionId } };\n  }).filter(item => item.json.email);\n\n  if (expanded.length === 0) {\n    return [{ json: { _error: true, step: \"Expand Clients\", detail: \"No clients with valid email addresses\" } }];\n  }\n\n  return expanded;\n} catch(e) {\n  return [{ json: { _error: true, step: \"Expand Clients\", detail: e.message } }];\n}\n"
+      },
+      "id": "n-expand",
+      "name": "Expand Clients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "={{ $json.topic || 'ðƒð©ÐüÐîð╝ð¥ ð¥Ðé Sintaris' }}",
+        "message": "={{ $json.body_text }}",
+        "options": {}
+      },
+      "id": "n-gmail",
+      "name": "Send Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        704,
+        304
+      ],
+      "webhookId": "3b5ff1e8-4aad-4796-b2a6-7d6e601d3ed6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OM7qAUKDjlYrrRsI",
+          "name": "Gmail account devstar"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\ntry {\n  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);\n  return items.map(item => {\n    // Get original client data from Expand Clients (Gmail output doesn't include it)\n    let clientData = {};\n    try { clientData = $('Expand Clients').item.json || {}; } catch(e2) {}\n\n    // Propagate early error from Expand Clients\n    if (clientData._error === true) return { json: clientData };\n\n    // Detect Gmail send failure (continueRegularOutput adds error field to item)\n    const sendError = item.json.error\n      ? (typeof item.json.error === 'string'\n          ? item.json.error\n          : item.json.error.message || item.json.error.description || 'Email sending failed')\n      : null;\n\n    return {\n      json: {\n        ðöð░Ðéð░: now,\n        ðÜð░ð╝ð┐ð░ð¢ð©ÐÅ: clientData.topic || '',\n        ðƒð¥ð╗ÐâÐçð░ÐéðÁð╗Ðî: clientData.name || '',\n        Email: clientData.email || '',\n        ðíÐéð░ÐéÐâÐü: sendError ? 'ð×Ðêð©ð▒ð║ð░' : 'ð×Ðéð┐ÐÇð░ð▓ð╗ðÁð¢ð¥',\n        'Session ID': clientData.sessionId || '',\n        _send_error: sendError\n      }\n    };\n  });\n} catch(e) {\n  return [{ json: { _error: true, step: \"Prepare Sheet Row\", detail: e.message } }];\n}\n"
+      },
+      "id": "n-log-prep",
+      "name": "Prepare Sheet Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\ntry {\n  // Propagate early error from Expand Clients (single error item that survived log_row)\n  if (items.length === 1 && items[0].json._error === true) {\n    return [{ json: items[0].json }];\n  }\n\n  const sent   = items.filter(i => !i.json._send_error && !i.json._error).length;\n  const failed = items.filter(i =>  i.json._send_error ||  i.json._error).length;\n  const total  = items.length;\n\n  const failedEmails = items\n    .filter(i => i.json._send_error || i.json._error)\n    .map(i => i.json.Email || i.json.email || '?')\n    .slice(0, 5)\n    .join(', ');\n\n  if (sent === 0 && total > 0) {\n    const firstErr = (items[0] && items[0].json._send_error) || 'All emails failed to send';\n    return [{ json: {\n      _error: true, step: \"Send Gmail\",\n      detail: `${total} email(s) failed. ${firstErr}`,\n      failed_count: total, failed_emails: failedEmails\n    }}];\n  }\n\n  return [{ json: {\n    sent_count:   sent,\n    failed_count: failed,\n    total_count:  total,\n    sheet_url:    \"https://docs.google.com/spreadsheets/d//edit#gid=0\",\n    failed_emails: failedEmails\n  }}];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Summary\", detail: e.message } }];\n}\n"
+      },
+      "id": "n-summary",
+      "name": "Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json._error === true ? JSON.stringify({ error: $json.detail || \"Workflow error\", step: $json.step || \"unknown\" }) : JSON.stringify({ sent_count: $json.sent_count, failed_count: $json.failed_count, total_count: $json.total_count, sheet_url: $json.sheet_url, failed_emails: $json.failed_emails }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "n-respond-send",
+      "name": "Respond Send",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        300
+      ]
+    },
+    {
+      "id": "n-gs-status",
+      "name": "GS Append Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1060,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j36NScu4bpqsYJKT",
+          "name": "Google Sheets account 3"
+        }
+      },
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Webhook').first().json.body?.sheet_id || $('Webhook').first().json?.sheet_id || '1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA' }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=Статус рассылок",
+          "mode": "name"
+        },
+        "dataMode": "autoMapInputData",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Send": {
+      "main": [
+        [
+          {
+            "node": "Expand Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Clients": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail": {
+      "main": [
+        [
+          {
+            "node": "Prepare Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Sheet Row": {
+      "main": [
+        [
+          {
+            "node": "GS Append Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Append Status": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "000efeab-545d-42a2-81c3-495f02585515",
+  "activeVersionId": "8081cee9-8d47-4f05-9fd2-328353ce542b",
+  "versionCounter": 12,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-04-12T08:21:43.767Z",
+      "createdAt": "2026-04-12T08:21:43.767Z",
+      "role": "workflow:owner",
+      "workflowId": "AjIB5izjiCunMcp6",
+      "projectId": "O9XbC3IbtLXuzUQJ",
+      "project": {
+        "updatedAt": "2025-07-06T14:50:27.538Z",
+        "createdAt": "2025-07-06T14:49:22.006Z",
+        "id": "O9XbC3IbtLXuzUQJ",
+        "name": "Stanislav Ulmer <stas.ulmer@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d2b35160-20b8-4774-a219-6c677a1b292b",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-07-06T14:49:22.006Z",
+            "createdAt": "2025-07-06T14:49:22.006Z",
+            "userId": "d2b35160-20b8-4774-a219-6c677a1b292b",
+            "projectId": "O9XbC3IbtLXuzUQJ",
+            "user": {
+              "updatedAt": "2026-04-12T06:09:11.740Z",
+              "createdAt": "2025-07-06T14:49:21.240Z",
+              "id": "d2b35160-20b8-4774-a219-6c677a1b292b",
+              "email": "stas.ulmer@gmail.com",
+              "firstName": "Stanislav",
+              "lastName": "Ulmer",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-07-06T14:50:49.162Z",
+                "personalization_survey_n8n_version": "1.98.2",
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "business-owner",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "WoyBWgHRfFN3XuNj",
+                "userActivatedAt": 1752252363756,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1768324711199
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-04-11",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-04-12T09:21:02.461Z",
+    "createdAt": "2026-04-12T09:21:02.461Z",
+    "versionId": "8081cee9-8d47-4f05-9fd2-328353ce542b",
+    "workflowId": "AjIB5izjiCunMcp6",
+    "nodes": [
+      {
+        "id": "n-webhook-send",
+        "name": "Webhook Send",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "webhookId": "taris-campaign-send-wh",
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "taris-campaign-send",
+          "responseMode": "responseNode",
+          "options": {}
+        }
+      },
+      {
+        "id": "n-expand",
+        "name": "Expand Clients",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          450,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\ntry {\n  const body = $('Webhook Send').first().json.body || $('Webhook Send').first().json;\n\n  if (!body || !Array.isArray(body.clients) || body.clients.length === 0) {\n    return [{ json: { _error: true, step: \"Expand Clients\", detail: \"No clients provided in request\" } }];\n  }\n\n  const clients = body.clients;\n  const template = body.template || 'ðúð▓ð░ðÂð░ðÁð╝Ðïð╣ {name}!';\n  const topic = body.topic || '';\n  const sessionId = body.session_id || '';\n\n  const expanded = clients.map(client => {\n    const name = client['ðÿð╝ÐÅ'] || client['name'] || client['Name'] || 'ðÜð╗ð©ðÁð¢Ðé';\n    const email = client['Email'] || client['email'] || '';\n    const company = client['ðÜð¥ð╝ð┐ð░ð¢ð©ÐÅ'] || client['company'] || '';\n    const interests = client['ðÿð¢ÐéðÁÐÇðÁÐüÐï'] || client['interests'] || '';\n    const body_text = template\n      .replace(/{name}/g, name)\n      .replace(/{company}/g, company)\n      .replace(/{interests}/g, interests);\n    return { json: { email, name, company, interests, body_text, topic, sessionId } };\n  }).filter(item => item.json.email);\n\n  if (expanded.length === 0) {\n    return [{ json: { _error: true, step: \"Expand Clients\", detail: \"No clients with valid email addresses\" } }];\n  }\n\n  return expanded;\n} catch(e) {\n  return [{ json: { _error: true, step: \"Expand Clients\", detail: e.message } }];\n}\n"
+        }
+      },
+      {
+        "id": "n-gmail",
+        "name": "Send Gmail",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          700,
+          300
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "operation": "send",
+          "toList": "={{ $json.email }}",
+          "subject": "={{ $json.topic || 'ðƒð©ÐüÐîð╝ð¥ ð¥Ðé Sintaris' }}",
+          "message": "={{ $json.body_text }}",
+          "options": {}
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "",
+            "name": "Gmail"
+          }
+        }
+      },
+      {
+        "id": "n-log-prep",
+        "name": "Prepare Sheet Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          950,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "\ntry {\n  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);\n  return items.map(item => {\n    // Get original client data from Expand Clients (Gmail output doesn't include it)\n    let clientData = {};\n    try { clientData = $('Expand Clients').item.json || {}; } catch(e2) {}\n\n    // Propagate early error from Expand Clients\n    if (clientData._error === true) return { json: clientData };\n\n    // Detect Gmail send failure (continueRegularOutput adds error field to item)\n    const sendError = item.json.error\n      ? (typeof item.json.error === 'string'\n          ? item.json.error\n          : item.json.error.message || item.json.error.description || 'Email sending failed')\n      : null;\n\n    return {\n      json: {\n        ðöð░Ðéð░: now,\n        ðÜð░ð╝ð┐ð░ð¢ð©ÐÅ: clientData.topic || '',\n        ðƒð¥ð╗ÐâÐçð░ÐéðÁð╗Ðî: clientData.name || '',\n        Email: clientData.email || '',\n        ðíÐéð░ÐéÐâÐü: sendError ? 'ð×Ðêð©ð▒ð║ð░' : 'ð×Ðéð┐ÐÇð░ð▓ð╗ðÁð¢ð¥',\n        'Session ID': clientData.sessionId || '',\n        _send_error: sendError\n      }\n    };\n  });\n} catch(e) {\n  return [{ json: { _error: true, step: \"Prepare Sheet Row\", detail: e.message } }];\n}\n"
+        }
+      },
+      {
+        "id": "n-summary",
+        "name": "Summary",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\ntry {\n  // Propagate early error from Expand Clients (single error item that survived log_row)\n  if (items.length === 1 && items[0].json._error === true) {\n    return [{ json: items[0].json }];\n  }\n\n  const sent   = items.filter(i => !i.json._send_error && !i.json._error).length;\n  const failed = items.filter(i =>  i.json._send_error ||  i.json._error).length;\n  const total  = items.length;\n\n  const failedEmails = items\n    .filter(i => i.json._send_error || i.json._error)\n    .map(i => i.json.Email || i.json.email || '?')\n    .slice(0, 5)\n    .join(', ');\n\n  if (sent === 0 && total > 0) {\n    const firstErr = (items[0] && items[0].json._send_error) || 'All emails failed to send';\n    return [{ json: {\n      _error: true, step: \"Send Gmail\",\n      detail: `${total} email(s) failed. ${firstErr}`,\n      failed_count: total, failed_emails: failedEmails\n    }}];\n  }\n\n  return [{ json: {\n    sent_count:   sent,\n    failed_count: failed,\n    total_count:  total,\n    sheet_url:    \"https://docs.google.com/spreadsheets/d//edit#gid=0\",\n    failed_emails: failedEmails\n  }}];\n} catch(e) {\n  return [{ json: { _error: true, step: \"Summary\", detail: e.message } }];\n}\n"
+        }
+      },
+      {
+        "id": "n-respond-send",
+        "name": "Respond Send",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1450,
+          300
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json._error === true ? JSON.stringify({ error: $json.detail || \"Workflow error\", step: $json.step || \"unknown\" }) : JSON.stringify({ sent_count: $json.sent_count, failed_count: $json.failed_count, total_count: $json.total_count, sheet_url: $json.sheet_url, failed_emails: $json.failed_emails }) }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook Send": {
+        "main": [
+          [
+            {
+              "node": "Expand Clients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Expand Clients": {
+        "main": [
+          [
+            {
+              "node": "Send Gmail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Gmail": {
+        "main": [
+          [
+            {
+              "node": "Prepare Sheet Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Sheet Row": {
+        "main": [
+          [
+            {
+              "node": "Summary",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Summary": {
+        "main": [
+          [
+            {
+              "node": "Respond Send",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Stanislav Ulmer",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-04-12T09:21:24.960Z",
+        "id": 462,
+        "workflowId": "AjIB5izjiCunMcp6",
+        "versionId": "8081cee9-8d47-4f05-9fd2-328353ce542b",
+        "event": "activated",
+        "userId": "d2b35160-20b8-4774-a219-6c677a1b292b"
+      }
+    ]
+  }
+}
