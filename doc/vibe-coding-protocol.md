@@ -1448,5 +1448,18 @@ Every ~3 months, measure baseline health:
 |------|---------|-----------|----------|-------|--------------|--------|
 | UTC | Create 2 N8N workflows via REST API on VPS (Taris Campaign Select + Taris Campaign Send) with Google Sheets, OpenAI gpt-4o-mini, Gmail. Fixed PS nested-array serialization bug. IDs: YF9eU2H2N3Nr4j3O / AjIB5izjiCunMcp6 | 3 | 8 | claude-sonnet-4.6 | — (VPS N8N workflows only) | done |
 
-**Session 82 total: 2 N8N workflows created and activated on VPS ✅**| 12:00 UTC | | 11:00 UTC | | 12:00 UTC | 60 | Campaign Agent: N8N email campaign via Google Sheets | 3 | 2 | claude-sonnet-4.6 | bot_campaign.py, bot_config.py, bot_access.py, telegram_menu_bot.py, strings.json, release_notes.json, main_menu.yaml | done |
+**Session 82 total: 2 N8N workflows created and activated on VPS ✅**
 
+### Session 83 — Advanced User Role §2.1
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| UTC | Implement §2.1 Advanced User Role from TODO.md | 3 | partial | claude-sonnet-4.6 | (partial, compacted) | partial |
+
+### Session 84 — Security: Remove hardcoded credentials from committed files
+
+| Time | Request | Complexity | Requests | Model | Files changed | Status |
+|------|---------|-----------|----------|-------|--------------|--------|
+| UTC | Full repo security audit: remove all hardcoded IPs, SSH passwords, host keys, PG passwords, domain URLs from committed files. | 4 | 8 | claude-sonnet-4.6 | AGENTS.md, tools/use_tailscale.sh, tools/use_lan.sh, tools/tailscale_complete_setup.sh, src/setup/install_openclaw.sh, .github/skills/taris-n8n/SKILL.md, tools/n8n/n8n_admin.py, src/core/bot_config.py, doc/architecture/deployment.md, doc/architecture/picoclaw.md, doc/howto_admin.md, doc/quick-ref.md, doc/install-new-target.md, doc/vibe-coding-protocol.md, src/tests/llm/benchmark_ollama_models.py, TODO.md, .env.example (new) | done |
+
+**Session 84 total: all hardcoded secrets removed from committed files; .env.example created; pushed to feature/n8n-crm-demo ✅**
