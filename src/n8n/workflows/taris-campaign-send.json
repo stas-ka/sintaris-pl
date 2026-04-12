@@ -39,31 +39,31 @@
     },
     {
       "parameters": {
-        "subject": "={{ $json.topic || 'ðƒð©ÐüÐîð╝ð¥ ð¥Ðé Sintaris' }}",
-        "message": "={{ $json.body_text }}",
-        "options": {}
+        "fromEmail": "taris@dev2null.de",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.topic || 'Einladung von Taris' }}",
+        "emailType": "text",
+        "text": "={{ $json.body_text }}"
       },
       "id": "n-gmail",
-      "name": "Send Gmail",
-      "type": "n8n-nodes-base.gmail",
+      "name": "Send Email SMTP",
+      "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
         704,
         304
       ],
-      "webhookId": "3b5ff1e8-4aad-4796-b2a6-7d6e601d3ed6",
       "credentials": {
-        "gmailOAuth2": {
-          "id": "OM7qAUKDjlYrrRsI",
-          "name": "Gmail account devstar"
+        "smtp": {
+          "id": "vrT9lC7RQLMedLkL",
+          "name": "VPS SMTP (postfix no-tls)"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "\ntry {\n  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);\n  return items.map(item => {\n    // Get original client data from Expand Clients (Gmail output doesn't include it)\n    let clientData = {};\n    try { clientData = $('Expand Clients').item.json || {}; } catch(e2) {}\n\n    // Propagate early error from Expand Clients\n    if (clientData._error === true) return { json: clientData };\n\n    // Detect Gmail send failure (continueRegularOutput adds error field to item)\n    const sendError = item.json.error\n      ? (typeof item.json.error === 'string'\n          ? item.json.error\n          : item.json.error.message || item.json.error.description || 'Email sending failed')\n      : null;\n\n    return {\n      json: {\n        ðöð░Ðéð░: now,\n        ðÜð░ð╝ð┐ð░ð¢ð©ÐÅ: clientData.topic || '',\n        ðƒð¥ð╗ÐâÐçð░ÐéðÁð╗Ðî: clientData.name || '',\n        Email: clientData.email || '',\n        ðíÐéð░ÐéÐâÐü: sendError ? 'ð×Ðêð©ð▒ð║ð░' : 'ð×Ðéð┐ÐÇð░ð▓ð╗ðÁð¢ð¥',\n        'Session ID': clientData.sessionId || '',\n        _send_error: sendError\n      }\n    };\n  });\n} catch(e) {\n  return [{ json: { _error: true, step: \"Prepare Sheet Row\", detail: e.message } }];\n}\n"
+        "jsCode": "try {\n  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);\n  let clientData = {};\n  try { clientData = $('Expand Clients').item.json || {}; } catch(e2) {}\n  if (clientData._error === true) return { json: clientData };\n  const sendError = item.json._error || item.json.error;\n  const status = sendError ? \"ERROR: \" + JSON.stringify(sendError) : \"sent\";\n  return { json: {\n    Datum: now,\n    Empfaenger: clientData.email || clientData.Email || '',\n    Name: clientData.name || '',\n    Firma: clientData.company || '',\n    Thema: clientData.topic || clientData.sessionId || '',\n    Status: status\n  }};\n} catch(err) {\n  return { json: { _error: true, step: \"Prepare Sheet Row\", detail: err.message } };\n}"
       },
       "id": "n-log-prep",
       "name": "Prepare Sheet Row",
@@ -103,37 +103,6 @@
         1460,
         300
       ]
-    },
-    {
-      "id": "n-gs-status",
-      "name": "GS Append Status",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        1060,
-        300
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "j36NScu4bpqsYJKT",
-          "name": "Google Sheets account 3"
-        }
-      },
-      "parameters": {
-        "operation": "appendOrUpdate",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $('Webhook').first().json.body?.sheet_id || $('Webhook').first().json?.sheet_id || '1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA' }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "=Статус рассылок",
-          "mode": "name"
-        },
-        "dataMode": "autoMapInputData",
-        "options": {}
-      }
     }
   ],
   "connections": {
@@ -152,18 +121,7 @@
       "main": [
         [
           {
-            "node": "Send Gmail",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Gmail": {
-      "main": [
-        [
-          {
-            "node": "Prepare Sheet Row",
+            "node": "Send Email SMTP",
             "type": "main",
             "index": 0
           }
@@ -171,17 +129,6 @@
       ]
     },
     "Prepare Sheet Row": {
-      "main": [
-        [
-          {
-            "node": "GS Append Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GS Append Status": {
       "main": [
         [
           {
@@ -197,6 +144,17 @@
         [
           {
             "node": "Respond Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email SMTP": {
+      "main": [
+        [
+          {
+            "node": "Prepare Sheet Row",
             "type": "main",
             "index": 0
           }
