@@ -48,6 +48,12 @@ def _is_admin(chat_id: int) -> bool:
     return chat_id in ADMIN_USERS
 
 
+def _is_advanced(chat_id: int) -> bool:
+    """True for advanced users (can access campaign/agents) and admins."""
+    import core.bot_state as _st
+    return chat_id in ADMIN_USERS or chat_id in _st._advanced_users
+
+
 def _is_developer(chat_id: int) -> bool:
     """True if chat_id is in DEVELOPER_USERS (elevated system-chat access)."""
     return chat_id in DEVELOPER_USERS
@@ -620,6 +626,8 @@ def _menu_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_error_protocol"), callback_data="errp_start"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_agents"), callback_data="agents_menu"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_admin"),  callback_data="admin_menu"))
+    elif _is_advanced(chat_id):
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_agents"), callback_data="agents_menu"))
     return kb
 
 

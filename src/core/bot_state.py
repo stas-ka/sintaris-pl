@@ -18,6 +18,7 @@ from core.bot_config import (
     CONV_SUMMARY_THRESHOLD,
     CONV_MID_MAX,
     USERS_FILE,
+    ADVANCED_USERS_FILE,
     _VOICE_OPTS_FILE,
     _VOICE_OPTS_DEFAULTS,
     _WEB_LINK_CODES_FILE,
@@ -222,8 +223,29 @@ def _save_dynamic_users() -> None:
 _dynamic_users: set[int] = _load_dynamic_users()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Conversation history  (Feature 2.1 — sliding window, optional persistence)
+# Advanced users — elevated role (can access campaign/agents menu), set by admin
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _load_advanced_users() -> set[int]:
+    try:
+        data = json.loads(Path(ADVANCED_USERS_FILE).read_text(encoding="utf-8"))
+        return {int(x) for x in data.get("users", [])}
+    except Exception:
+        return set()
+
+
+def _save_advanced_users() -> None:
+    try:
+        Path(ADVANCED_USERS_FILE).write_text(
+            json.dumps({"users": sorted(_advanced_users)}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning(f"[State] save advanced_users failed: {e}")
+
+
+_advanced_users: set[int] = _load_advanced_users()
+
 
 # Per-user history.  Format: [{"role": "user"|"assistant", "content": str}]
 _conversation_history: dict[int, list] = {}

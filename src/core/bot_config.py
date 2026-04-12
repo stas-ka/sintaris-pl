@@ -80,6 +80,8 @@ BOT_NAME = os.environ.get("BOT_NAME", "Taris")
 
 USERS_FILE          = os.environ.get("USERS_FILE",
                           _th("users.json"))
+ADVANCED_USERS_FILE = os.environ.get("ADVANCED_USERS_FILE",
+                          _th("advanced_users.json"))
 REGISTRATIONS_FILE  = os.environ.get("REGISTRATIONS_FILE",
                           _th("registrations.json"))
 TARIS_BIN        = os.environ.get("TARIS_BIN") or (
@@ -276,7 +278,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.42"
+BOT_VERSION        = "2026.4.43"
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),

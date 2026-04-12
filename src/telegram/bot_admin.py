@@ -41,6 +41,7 @@ from core.bot_instance import bot
 from telegram.bot_access import (
     _t, _escape_md, _send_menu,
     _back_keyboard, _get_active_model, _run_subprocess,
+    _is_advanced,
 )
 from telegram.bot_users import (
     _get_pending_registrations, _find_registration, _upsert_registration,
@@ -132,6 +133,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_n8n"),         callback_data="admin_n8n_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_crm"),         callback_data="admin_crm_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_roles"),       callback_data="admin_roles_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_restart"),         callback_data="admin_restart"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
@@ -1927,3 +1929,81 @@ def finish_crm_input(chat_id: int, text: str) -> None:
             lines.append(f"  #{c['id']}  {name}  {c.get('email','')}")
         bot.send_message(chat_id, "\n".join(lines),
                          reply_markup=_back_keyboard(chat_id, "admin_crm_menu"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Role Management — admin can promote/demote users to/from "advanced"
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _role_label(chat_id: int) -> str:
+    """Return a display label for a user's current role."""
+    if chat_id in ADMIN_USERS:
+        return "🔐 admin"
+    if chat_id in _st._advanced_users:
+        return "⚡ advanced"
+    if chat_id in ALLOWED_USERS or chat_id in _st._dynamic_users:
+        return "👤 user"
+    return "❓ unknown"
+
+
+def _handle_admin_roles_menu(chat_id: int) -> None:
+    """Show all known users with role badges and role-change buttons."""
+    all_ids: list[int] = sorted(
+        set(ADMIN_USERS) | set(ALLOWED_USERS) | set(_st._dynamic_users) | set(_st._advanced_users)
+    )
+    if not all_ids:
+        bot.send_message(chat_id, _t(chat_id, "admin_roles_empty"),
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+        return
+
+    lines = [_t(chat_id, "admin_roles_title"), ""]
+    for uid in all_ids:
+        reg = _find_registration(uid)
+        name = (reg.get("first_name", "") if reg else "") or str(uid)
+        label = _role_label(uid)
+        lines.append(f"`{uid}` {_escape_md(name)} — {label}")
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    for uid in all_ids:
+        if uid in ADMIN_USERS:
+            continue  # admins cannot be demoted via this menu
+        reg = _find_registration(uid)
+        name = (reg.get("first_name", "") if reg else "") or str(uid)
+        current = "advanced" if uid in _st._advanced_users else "user"
+        target  = "user" if current == "advanced" else "advanced"
+        icon    = "👤" if target == "user" else "⚡"
+        kb.add(InlineKeyboardButton(
+            f"{icon} {_escape_md(name[:20])} → {target}",
+            callback_data=f"admin_role_set:{uid}:{target}",
+        ))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
+
+    bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=kb)
+
+
+def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> None:
+    """Set target_uid's role to 'advanced' or 'user', persist, confirm."""
+    if target_uid in ADMIN_USERS:
+        bot.send_message(chat_id, _t(chat_id, "admin_roles_cannot_change_admin"),
+                         reply_markup=_admin_keyboard(chat_id))
+        return
+
+    if role == "advanced":
+        _st._advanced_users.add(target_uid)
+        _st._dynamic_users.discard(target_uid)  # keep _dynamic_users clean
+    else:
+        _st._advanced_users.discard(target_uid)
+
+    _st._save_advanced_users()
+    log.info(f"Admin {chat_id} set role '{role}' for user {target_uid}")
+
+    reg = _find_registration(target_uid)
+    name = (reg.get("first_name", "") if reg else "") or str(target_uid)
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "admin_roles_changed", name=_escape_md(name), role=role),
+        parse_mode="Markdown",
+        reply_markup=_admin_keyboard(chat_id),
+    )
+    # Refresh the roles menu so admin sees the updated list
+    _handle_admin_roles_menu(chat_id)

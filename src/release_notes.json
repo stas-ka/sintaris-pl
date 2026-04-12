@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.43",
+    "date": "2026-04-14",
+    "title": "Advanced User role + Role Management admin menu",
+    "notes": "- feat: Advanced User role — admin can grant any user access to campaign/agents menu without full admin rights\n- feat: Admin → 👑 Manage Roles — lists all users with role badges, one-tap toggle user ↔ advanced\n- feat: Agents menu (🤖) and Campaign (📧) accessible to advanced users\n- feat: _is_advanced() helper persisted to advanced_users.json\n- i18n: admin_btn_roles, admin_roles_* keys added (ru/en/de)"
+  },
+  {
     "version": "2026.4.42",
     "date": "2026-04-12",
     "title": "Campaign Agent: N8N email campaign via Google Sheets",

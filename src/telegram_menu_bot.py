@@ -35,7 +35,7 @@ from core.bot_embeddings import EmbeddingService
 
 # ─── Shared utilities ─────────────────────────────────────────────────────────
 from telegram.bot_access import (
-    _is_allowed, _is_admin, _is_guest,
+    _is_allowed, _is_admin, _is_guest, _is_advanced,
     _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
@@ -88,6 +88,7 @@ from telegram.bot_admin import (
     _handle_admin_n8n_menu, _handle_admin_crm_menu,
     _handle_crm_contacts_list, _handle_crm_add_start, _handle_crm_search_start,
     _handle_crm_stats, finish_crm_input,
+    _handle_admin_roles_menu, _handle_admin_user_set_role,
     _admin_keyboard,
 )
 
@@ -743,15 +744,30 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── Role management ────────────────────────────────────────────────────────
+    elif data == "admin_roles_menu":
+        if _is_admin(cid):
+            _handle_admin_roles_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_role_set:"):
+        if _is_admin(cid):
+            parts = data.split(":", 2)
+            if len(parts) == 3:
+                _handle_admin_user_set_role(cid, int(parts[1]), parts[2])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Agents menu ───────────────────────────────────────────────────────────
     elif data == "agents_menu":
-        if _is_admin(cid):
+        if _is_admin(cid) or _is_advanced(cid):
             _handle_agents_menu(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data == "campaign_start":
-        if _is_admin(cid):
+        if _is_admin(cid) or _is_advanced(cid):
             if not _campaign.is_configured():
                 bot.send_message(cid, _t(cid, "campaign_not_configured"))
             else:
@@ -760,11 +776,11 @@ def callback_handler(call):
             bot.send_message(cid, _t(cid, "admin_only"))
 
     elif data == "campaign_confirm_send":
-        if _is_admin(cid):
+        if _is_admin(cid) or _is_advanced(cid):
             _campaign.confirm_send(cid, bot, _t)
 
     elif data == "campaign_edit_template":
-        if _is_admin(cid):
+        if _is_admin(cid) or _is_advanced(cid):
             _campaign.start_template_edit(cid, bot, _t)
 
     elif data == "campaign_cancel":
@@ -1282,7 +1298,7 @@ def text_handler(message):
 
     # ── Campaign agent text input ─────────────────────────────────────────
     if _campaign.is_active(cid):
-        if _is_admin(cid):
+        if _is_admin(cid) or _is_advanced(cid):
             consumed = _campaign.handle_message(cid, message.text, bot, _t)
             if consumed:
                 return
