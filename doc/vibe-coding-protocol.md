@@ -15,6 +15,12 @@ Use this to analyse cost (time, requests) per feature over time.
 | 11:xx | Fix LLM + campaign select errors: pull qwen2.5:0.5b (was qwen3.5:0.8b invalid), fix bot.env OLLAMA_MODEL on TariStation2, restart bot; verified N8N select webhook works (5 clients returned) | 2 | 3 | claude-sonnet-4.6 | TariStation2: bot.env (runtime only) | done |
 | 11:xx | Audit + fix campaign tests: WEB_ONLY=1 offline fix, renumber T50-T57→T130-T137, 20/20 pass locally+TariStation2, update doc/test-suite.md | 2 | 4 | claude-sonnet-4.6 | src/tests/test_campaign.py, doc/test-suite.md | done |
 
+### Session — 2026-04-12 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 15:xx | Google Sheets N8N integration: demo_mode IF branch, GS Read Clients/Templates, Merge Template, GS Append Status, CAMPAIGN_DEMO_MODE constant, put-workflow CLI, TariStation2 deploy v2026.4.45 | 4 | 8 | claude-sonnet-4.6 | bot_config.py, bot_campaign.py, release_notes.json, n8n_admin.py, taris-campaign-select.json, taris-campaign-send.json | done |
+
 ## Format
 
 Each session block contains a table with one row per completed request:
