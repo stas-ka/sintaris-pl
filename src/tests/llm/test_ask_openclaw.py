@@ -203,7 +203,7 @@ class TestDispatch:
 
     def test_all_providers_present(self):
         llm = _import_llm()
-        expected = {"taris", "openclaw", "openai", "yandexgpt", "gemini", "anthropic", "local", "ollama"}
+        expected = {"taris", "openclaw", "openai", "yandexgpt", "gemini", "anthropic", "local", "ollama", "copilot"}
         assert expected == set(llm._DISPATCH.keys())
 
 

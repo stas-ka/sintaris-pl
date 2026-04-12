@@ -190,12 +190,6 @@ Contacts → Deals → Custom fields → White-label. Core platform C0 done (v20
  [] Intelligent notifation 
 
 
-### 8.5 Not planed : NiceGUI Integration 💡
-
-Replace Jinja2 with NiceGUI for richer interactivity — evaluate RAM footprint on Pi 3 first.
-
-- [ ] Evaluate NiceGUI RAM footprint (~60 MB vs FastAPI ~25 MB); prototype Voice Opts page
-- [ ] If viable: migrate pages incrementally behind feature flag
 
 ---
 
