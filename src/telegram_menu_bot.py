@@ -91,6 +91,9 @@ from telegram.bot_admin import (
     _admin_keyboard,
 )
 
+# ─── Campaign Agent ───────────────────────────────────────────────────────────
+import features.bot_campaign as _campaign
+
 # ─── User handlers ────────────────────────────────────────────────────────────
 from telegram.bot_handlers import (
     _handle_digest, _refresh_digest,
@@ -740,6 +743,34 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── Agents menu ───────────────────────────────────────────────────────────
+    elif data == "agents_menu":
+        if _is_admin(cid):
+            _handle_agents_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "campaign_start":
+        if _is_admin(cid):
+            if not _campaign.is_configured():
+                bot.send_message(cid, _t(cid, "campaign_not_configured"))
+            else:
+                _campaign.start_campaign(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "campaign_confirm_send":
+        if _is_admin(cid):
+            _campaign.confirm_send(cid, bot, _t)
+
+    elif data == "campaign_edit_template":
+        if _is_admin(cid):
+            _campaign.start_template_edit(cid, bot, _t)
+
+    elif data == "campaign_cancel":
+        _campaign.cancel(cid)
+        bot.send_message(cid, _t(cid, "campaign_cancelled"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -1122,6 +1153,28 @@ def callback_handler(call):
 # Text message router
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Agents menu ──────────────────────────────────────────────────────────────
+
+def _handle_agents_menu(chat_id: int) -> None:
+    """Show the Agents submenu."""
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(
+            _t(chat_id, "agents_btn_campaign"), callback_data="campaign_start"
+        ),
+        InlineKeyboardButton(
+            _t(chat_id, "agents_btn_back"), callback_data="menu"
+        ),
+    )
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "agents_menu_title"),
+        reply_markup=kb,
+        parse_mode="Markdown",
+    )
+
+
 @bot.message_handler(content_types=["text"])
 def text_handler(message):
     cid = message.chat.id
@@ -1226,6 +1279,15 @@ def text_handler(message):
             _st._user_mode.pop(cid, None)
             bot.send_message(cid, _t(cid, "admin_only"))
         return
+
+    # ── Campaign agent text input ─────────────────────────────────────────
+    if _campaign.is_active(cid):
+        if _is_admin(cid):
+            consumed = _campaign.handle_message(cid, message.text, bot, _t)
+            if consumed:
+                return
+        else:
+            _campaign.cancel(cid)
 
     # ── Note multi-step creation ───────────────────────────────────────────
     if mode == "note_add_title":

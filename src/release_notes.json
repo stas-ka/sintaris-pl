@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.42",
+    "date": "2026-04-12",
+    "title": "Campaign Agent: N8N email campaign via Google Sheets",
+    "notes": "- feat: bot_campaign.py — multi-step campaign agent (topic → filters → N8N select → preview → confirm → N8N send)\n- feat: Agents menu (admin only) accessible from main menu — 🤖 Агенты\n- feat: N8N_CAMPAIGN_SELECT_WH, N8N_CAMPAIGN_SEND_WH, CAMPAIGN_SHEET_ID, N8N_CAMPAIGN_TIMEOUT constants\n- i18n: 20 campaign keys added (ru/en/de)\n- feat: main_menu.yaml updated with agents_menu button"
+  },
+  {
     "version": "2026.4.41",
     "date": "2026-04-07",
     "title": "Admin: per-document upload stats panel + TODO §4 audit",

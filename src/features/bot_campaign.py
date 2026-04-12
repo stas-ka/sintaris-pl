@@ -1,0 +1,329 @@
+"""
+bot_campaign.py — Campaign Agent: AI-assisted client email campaign via N8N.
+
+Flow:
+  1. User starts campaign from Agents menu
+  2. Enters topic + optional filters
+  3. Taris calls N8N "taris-campaign-select" webhook (synchronous)
+  4. N8N reads Google Sheets clients, GPT-4o-mini selects audience + generates template
+  5. User reviews preview, optionally edits template
+  6. User confirms → Taris calls N8N "taris-campaign-send" webhook (synchronous)
+  7. N8N sends Gmail, logs to Google Sheets "Статус рассылок"
+  8. User gets sent count + sheet link
+"""
+
+import logging
+import threading
+import uuid
+from typing import Any
+
+import requests
+
+from core.bot_config import (
+    N8N_CAMPAIGN_SELECT_WH,
+    N8N_CAMPAIGN_SEND_WH,
+    CAMPAIGN_SHEET_ID,
+    N8N_CAMPAIGN_TIMEOUT,
+)
+
+log = logging.getLogger("taris.campaign")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# State — keyed by chat_id
+# Steps: idle → topic_input → filter_input → selecting → preview → editing → sending
+# ─────────────────────────────────────────────────────────────────────────────
+_campaigns: dict[int, dict] = {}
+
+SHEET_STATUS_URL = (
+    f"https://docs.google.com/spreadsheets/d/{CAMPAIGN_SHEET_ID}"
+    "/edit#gid=0"
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API: state accessors
+# ─────────────────────────────────────────────────────────────────────────────
+
+def is_active(chat_id: int) -> bool:
+    """Return True if chat_id is currently in a campaign flow."""
+    return chat_id in _campaigns
+
+
+def get_step(chat_id: int) -> str:
+    """Return current step for chat_id, or 'idle'."""
+    return _campaigns.get(chat_id, {}).get("step", "idle")
+
+
+def cancel(chat_id: int) -> None:
+    """Cancel and clean up any active campaign for chat_id."""
+    _campaigns.pop(chat_id, None)
+
+
+def is_configured() -> bool:
+    """Return True if N8N campaign webhooks are configured."""
+    return bool(N8N_CAMPAIGN_SELECT_WH and N8N_CAMPAIGN_SEND_WH)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _post_webhook(url: str, payload: dict, timeout: int = N8N_CAMPAIGN_TIMEOUT) -> dict:
+    """POST synchronously to an N8N webhook and return parsed JSON response."""
+    try:
+        resp = requests.post(url, json=payload, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.Timeout:
+        log.warning("[Campaign] webhook timeout (%ds): %s", timeout, url)
+        return {"error": f"N8N timeout after {timeout}s"}
+    except requests.RequestException as e:
+        log.warning("[Campaign] webhook error: %s", e)
+        return {"error": str(e)}
+    except ValueError:
+        log.warning("[Campaign] invalid JSON from N8N")
+        return {"error": "Invalid JSON from N8N"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 1 — Start campaign
+# ─────────────────────────────────────────────────────────────────────────────
+
+def start_campaign(chat_id: int, bot, _t) -> None:
+    """Begin campaign flow: ask for topic."""
+    _campaigns[chat_id] = {
+        "step": "topic_input",
+        "session_id": str(uuid.uuid4()),
+        "topic": "",
+        "filters": "",
+        "clients": [],
+        "template": "",
+    }
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "campaign_enter_topic"),
+        parse_mode="Markdown",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 2 — Receive topic
+# ─────────────────────────────────────────────────────────────────────────────
+
+def on_topic(chat_id: int, text: str, bot, _t) -> None:
+    """Store topic, ask for optional filters."""
+    state = _campaigns.get(chat_id)
+    if not state or state["step"] != "topic_input":
+        return
+    state["topic"] = text.strip()
+    state["step"] = "filter_input"
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "campaign_enter_filters"),
+        parse_mode="Markdown",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 3 — Receive filters (or skip) → trigger N8N select
+# ─────────────────────────────────────────────────────────────────────────────
+
+def on_filters(chat_id: int, text: str, bot, _t) -> None:
+    """Store filters, trigger N8N selection in background thread."""
+    state = _campaigns.get(chat_id)
+    if not state or state["step"] != "filter_input":
+        return
+    filters = text.strip()
+    if filters.lower() in ("-", "нет", "no", "skip", ""):
+        filters = ""
+    state["filters"] = filters
+    state["step"] = "selecting"
+    bot.send_message(chat_id, _t(chat_id, "campaign_selecting"), parse_mode="Markdown")
+    threading.Thread(
+        target=_run_selection, args=(chat_id, bot, _t), daemon=True
+    ).start()
+
+
+def _run_selection(chat_id: int, bot, _t) -> None:
+    """Call N8N select webhook synchronously; deliver preview to user."""
+    state = _campaigns.get(chat_id)
+    if not state:
+        return
+
+    payload = {
+        "session_id": state["session_id"],
+        "topic": state["topic"],
+        "filters": state["filters"],
+    }
+
+    result = _post_webhook(N8N_CAMPAIGN_SELECT_WH, payload)
+
+    if "error" in result:
+        _campaigns.pop(chat_id, None)
+        bot.send_message(
+            chat_id,
+            _t(chat_id, "campaign_select_error", error=result["error"]),
+        )
+        return
+
+    clients = result.get("clients", [])
+    template = result.get("template", "")
+
+    if not clients:
+        _campaigns.pop(chat_id, None)
+        bot.send_message(chat_id, _t(chat_id, "campaign_no_clients"))
+        return
+
+    state["clients"] = clients
+    state["template"] = template
+    state["step"] = "preview"
+
+    _send_preview(chat_id, bot, _t)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Preview UI
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _send_preview(chat_id: int, bot, _t) -> None:
+    """Send the campaign preview with approve/edit/cancel buttons."""
+    try:
+        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    except ImportError:
+        from telebot import types
+        InlineKeyboardMarkup = types.InlineKeyboardMarkup
+        InlineKeyboardButton = types.InlineKeyboardButton
+
+    state = _campaigns[chat_id]
+    clients = state["clients"]
+    template = state["template"]
+
+    # Build client summary (first 5 names)
+    names = [c.get("name", c.get("Имя", "?")) for c in clients[:5]]
+    names_str = ", ".join(names)
+    if len(clients) > 5:
+        names_str += f", … (+{len(clients) - 5})"
+
+    # Truncate template preview
+    tpl_preview = template[:300] + ("…" if len(template) > 300 else "")
+
+    text = _t(
+        chat_id,
+        "campaign_preview",
+        count=len(clients),
+        names=names_str,
+        template=tpl_preview,
+    )
+
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "campaign_btn_send"), callback_data="campaign_confirm_send"),
+        InlineKeyboardButton(_t(chat_id, "campaign_btn_edit"), callback_data="campaign_edit_template"),
+    )
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "campaign_btn_cancel"), callback_data="campaign_cancel"),
+    )
+
+    bot.send_message(chat_id, text, reply_markup=kb, parse_mode="Markdown")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Template editing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def start_template_edit(chat_id: int, bot, _t) -> None:
+    """Ask user to send new template text."""
+    state = _campaigns.get(chat_id)
+    if not state or state["step"] != "preview":
+        return
+    state["step"] = "editing"
+    current = state.get("template", "")
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "campaign_edit_prompt", template=current),
+        parse_mode="Markdown",
+    )
+
+
+def on_template_edit(chat_id: int, text: str, bot, _t) -> None:
+    """Save edited template, return to preview."""
+    state = _campaigns.get(chat_id)
+    if not state or state["step"] != "editing":
+        return
+    state["template"] = text.strip()
+    state["step"] = "preview"
+    bot.send_message(chat_id, _t(chat_id, "campaign_template_saved"))
+    _send_preview(chat_id, bot, _t)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 4 — Confirm send → trigger N8N send
+# ─────────────────────────────────────────────────────────────────────────────
+
+def confirm_send(chat_id: int, bot, _t) -> None:
+    """User confirmed: trigger N8N send workflow in background."""
+    state = _campaigns.get(chat_id)
+    if not state or state["step"] not in ("preview", "editing"):
+        return
+    state["step"] = "sending"
+    bot.send_message(chat_id, _t(chat_id, "campaign_sending"), parse_mode="Markdown")
+    threading.Thread(
+        target=_run_send, args=(chat_id, bot, _t), daemon=True
+    ).start()
+
+
+def _run_send(chat_id: int, bot, _t) -> None:
+    """Call N8N send webhook; notify user of result."""
+    state = _campaigns.pop(chat_id, None)
+    if not state:
+        return
+
+    payload = {
+        "session_id": state["session_id"],
+        "topic": state["topic"],
+        "clients": state["clients"],
+        "template": state["template"],
+    }
+
+    result = _post_webhook(N8N_CAMPAIGN_SEND_WH, payload)
+
+    if "error" in result:
+        bot.send_message(
+            chat_id,
+            _t(chat_id, "campaign_send_error", error=result["error"]),
+        )
+        return
+
+    sent = result.get("sent_count", len(state["clients"]))
+    sheet_url = result.get("sheet_url", SHEET_STATUS_URL)
+
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "campaign_done", sent=sent, url=sheet_url),
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Message dispatcher — call from handle_message for text input
+# ─────────────────────────────────────────────────────────────────────────────
+
+def handle_message(chat_id: int, text: str, bot, _t) -> bool:
+    """Handle text input for any active campaign step.
+
+    Returns True if the message was consumed by the campaign flow.
+    """
+    state = _campaigns.get(chat_id)
+    if not state:
+        return False
+    step = state.get("step")
+    if step == "topic_input":
+        on_topic(chat_id, text, bot, _t)
+        return True
+    if step == "filter_input":
+        on_filters(chat_id, text, bot, _t)
+        return True
+    if step == "editing":
+        on_template_edit(chat_id, text, bot, _t)
+        return True
+    return False

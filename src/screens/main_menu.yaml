@@ -57,6 +57,12 @@ widgets:
   - type: button_row
     visible_roles: [admin]
     buttons:
+      - label_key: btn_agents
+        action: agents_menu
+
+  - type: button_row
+    visible_roles: [admin]
+    buttons:
       - label_key: btn_admin
         action: admin_menu
 
