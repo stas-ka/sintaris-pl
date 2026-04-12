@@ -227,7 +227,12 @@ def _send_preview(chat_id: int, bot, _t) -> None:
     template = state["template"]
 
     # Build client summary (first 5 names)
-    names = [c.get("name", c.get("Имя", "?")) for c in clients[:5]]
+    # Try multiple key variants: normalised "name", Russian "Имя", "ФИО", English fallbacks
+    def _client_name(c: dict) -> str:
+        return (c.get("name") or c.get("Имя") or c.get("ФИО") or
+                c.get("Name") or c.get("Имя клиента") or
+                next((v for v in c.values() if isinstance(v, str) and v and not v.startswith("http")), "?"))
+    names = [_client_name(c) for c in clients[:5]]
     names_str = ", ".join(names)
     if len(clients) > 5:
         names_str += f", … (+{len(clients) - 5})"
