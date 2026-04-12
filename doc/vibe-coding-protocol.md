@@ -20,6 +20,8 @@ Use this to analyse cost (time, requests) per feature over time.
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
 | 15:xx | Google Sheets N8N integration: demo_mode IF branch, GS Read Clients/Templates, Merge Template, GS Append Status, CAMPAIGN_DEMO_MODE constant, put-workflow CLI, TariStation2 deploy v2026.4.45 | 4 | 8 | claude-sonnet-4.6 | bot_config.py, bot_campaign.py, release_notes.json, n8n_admin.py, taris-campaign-select.json, taris-campaign-send.json | done |
+| 17:xx | Fix campaign client name "?" bug: N8N Parse Response name normalization, bot_campaign.py _client_name() fallback helper, set CAMPAIGN_DEMO_MODE=true TariStation2, v2026.4.46 | 2 | 4 | claude-sonnet-4.6 | bot_campaign.py, bot_config.py, release_notes.json, taris-campaign-select.json | done |
+| 17:30 | Add CAMPAIGN_FROM_EMAIL config param (info@sintaris.net), N8N Campaign Send dynamic fromEmail, deploy v2026.4.47 | 1 | 3 | claude-sonnet-4.6 | bot_config.py, bot_campaign.py, release_notes.json, taris-campaign-send.json | done |
 
 ## Format
 
@@ -1474,3 +1476,4 @@ Every ~3 months, measure baseline health:
 
 **Session 84 total: all hardcoded secrets removed from committed files; .env.example created; pushed to feature/n8n-crm-demo ✅**
 | 16:18 UTC | | 15:00 UTC | | 16:18 UTC | ~78min | Fix N8N Campaign email delivery - SMTP via VPS postfix, SPF fix, Prepare Sheet Row encoding | Deploy SMTP cred, fix fromEmail domain, fix jsCode encoding, test e2e delivery | 3 | 1 | claude-sonnet-4.6 | taris-campaign-send.json, taris-campaign-select.json | done |
+| 17:05 UTC | | | | | Fix Campaign Send email encoding: Expand Clients garbled Russian strings | 1-fix-encoding, 1-test-send | 2 | 2 | claude-sonnet-4.6 | taris-campaign-send.json, fix_campaign_send_encoding.py | done |
