@@ -16,6 +16,7 @@ Use this to analyse cost (time, requests) per feature over time.
 | 11:xx | Audit + fix campaign tests: WEB_ONLY=1 offline fix, renumber T50-T57→T130-T137, 20/20 pass locally+TariStation2, update doc/test-suite.md | 2 | 4 | claude-sonnet-4.6 | src/tests/test_campaign.py, doc/test-suite.md | done |
 | 22:xx | SintAItion VPS PG migration: add vps_tunnel_key to VPS authorized_keys, deploy taris-pg-tunnel.service, update STORE_PG_DSN+CRM_PG_DSN to VPS via tunnel on port 15432, migrate all data (24 cal/13 notes/150 chat/2 CRM contacts), commit service file to git | 3 | 12 | claude-sonnet-4.6 | src/services/taris-pg-tunnel.service, .github/skills/taris-deploy-openclaw-target/SKILL.md | done |
 | 22:35 | Security sanitization: fix hardcoded N8N URLs in SKILL.md + doc/todo/, verify tools/scripts use .env vars, confirm .env.example complete | 1 | 2 | claude-sonnet-4.6 | .github/skills/taris-deploy-openclaw-target/SKILL.md, doc/todo/2-n8n-campaign-workflow.md | done |
+| 00:xx | SintAItion: switch to local PG + install pgvector, keep CRM on VPS; deploy test+load_system_docs.py; 538 PASS 0 FAIL; tag deploy/2026.4.50-sintaition | 2 | 8 | claude-sonnet-4.6 | SintAItion: bot.env (runtime), test_voice_regression.py, load_system_docs.py deployed | done |
 
 ### Session — 2026-04-12 (UTC)
 
