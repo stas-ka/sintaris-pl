@@ -169,8 +169,8 @@ CRM_PG_DSN          = os.environ.get("CRM_PG_DSN", "")            # e.g. postgre
 # ─────────────────────────────────────────────────────────────────────────────
 N8N_CAMPAIGN_SELECT_WH = os.environ.get("N8N_CAMPAIGN_SELECT_WH", "")
 N8N_CAMPAIGN_SEND_WH   = os.environ.get("N8N_CAMPAIGN_SEND_WH", "")
-CAMPAIGN_SHEET_ID      = os.environ.get("CAMPAIGN_SHEET_ID",
-                             "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA")
+CAMPAIGN_SHEET_ID      = (os.environ.get("CAMPAIGN_SHEET_ID") or
+                          "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA")
 N8N_CAMPAIGN_TIMEOUT   = int(os.environ.get("N8N_CAMPAIGN_TIMEOUT", "90"))
 CAMPAIGN_DEMO_MODE     = os.environ.get("CAMPAIGN_DEMO_MODE", "false").lower() == "true"
 CAMPAIGN_FROM_EMAIL    = os.environ.get("CAMPAIGN_FROM_EMAIL", "info@sintaris.net")
