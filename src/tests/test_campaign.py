@@ -713,6 +713,130 @@ def test_campaign_e2e_edit_and_resend():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T138e: CAMPAIGN_SHEET_ID never empty — or-pattern fallback
+# T138f: _run_send completion message contains valid sheet URL
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_campaign_sheet_id_not_empty():
+    """T138e: CAMPAIGN_SHEET_ID is never empty — or-pattern handles unset/empty env var.
+
+    Regression for bug 2026-04-13: os.environ.get("KEY", "default") returns ""
+    when KEY= (empty) is set in bot.env, producing URL .../d//edit#gid=0.
+    The fix uses (os.environ.get("KEY") or "default") instead.
+    """
+    import importlib
+
+    DEFAULT_SHEET = "1jQaJZA4cBS2sLtE42zpwDHMn6grvDBAqoK_8Sp6PmXA"
+
+    # Case 1: env var absent — must use hardcoded default
+    env_backup = os.environ.pop("CAMPAIGN_SHEET_ID", None)
+    try:
+        import core.bot_config as cfg
+        importlib.reload(cfg)
+        assert cfg.CAMPAIGN_SHEET_ID, "CAMPAIGN_SHEET_ID must not be empty when env var is absent"
+        assert "/" not in cfg.CAMPAIGN_SHEET_ID, (
+            "CAMPAIGN_SHEET_ID must be a bare ID, not a URL"
+        )
+        assert cfg.CAMPAIGN_SHEET_ID == DEFAULT_SHEET, (
+            f"Expected default sheet ID, got: {cfg.CAMPAIGN_SHEET_ID}"
+        )
+    finally:
+        if env_backup is not None:
+            os.environ["CAMPAIGN_SHEET_ID"] = env_backup
+
+    # Case 2: env var set to empty string — must still use hardcoded default
+    os.environ["CAMPAIGN_SHEET_ID"] = ""
+    try:
+        importlib.reload(cfg)
+        assert cfg.CAMPAIGN_SHEET_ID, (
+            "CAMPAIGN_SHEET_ID must not be empty when env var is set to empty string. "
+            "Use (os.environ.get('KEY') or 'default') not os.environ.get('KEY', 'default')."
+        )
+        assert cfg.CAMPAIGN_SHEET_ID == DEFAULT_SHEET, (
+            f"Expected default sheet ID when env='', got: {cfg.CAMPAIGN_SHEET_ID}"
+        )
+    finally:
+        os.environ.pop("CAMPAIGN_SHEET_ID", None)
+        if env_backup is not None:
+            os.environ["CAMPAIGN_SHEET_ID"] = env_backup
+
+    # Case 3: env var set to a real value — must use that value
+    os.environ["CAMPAIGN_SHEET_ID"] = "MY_CUSTOM_SHEET_ID"
+    try:
+        importlib.reload(cfg)
+        assert cfg.CAMPAIGN_SHEET_ID == "MY_CUSTOM_SHEET_ID", (
+            "CAMPAIGN_SHEET_ID must use env var value when it is non-empty"
+        )
+    finally:
+        os.environ.pop("CAMPAIGN_SHEET_ID", None)
+        if env_backup is not None:
+            os.environ["CAMPAIGN_SHEET_ID"] = env_backup
+        importlib.reload(cfg)
+
+
+def test_campaign_done_message_contains_sheet_url():
+    """T138f: _run_send sends a completion message that contains a valid Google Sheets URL.
+
+    Regression for bug 2026-04-13: CAMPAIGN_SHEET_ID was empty → URL was
+    '.../d//edit#gid=0'. Verifies that the bot.send_message call in the
+    success path includes a non-empty, well-formed spreadsheet URL.
+    """
+    import importlib
+    import features.bot_campaign as bc
+    importlib.reload(bc)
+
+    bot = _make_mock_bot()
+    # Use a _t that expands kwargs so URL appears in the message text
+    def _t_expand(chat_id, key, **kwargs):
+        parts = [f"[{key}]"]
+        parts.extend(f"{k}={v}" for k, v in kwargs.items())
+        return " ".join(parts)
+    cid = 46
+
+    # Inject a preview state directly (skip N8N selection for speed)
+    bc._campaigns[cid] = {
+        "step": "preview",
+        "session_id": "sess_t138f",
+        "topic": "Sheet URL test",
+        "filters": "",
+        "clients": [{"Имя": "Anna", "Email": "anna@test.com"}],
+        "template": "Hallo {name}!",
+    }
+
+    # Call confirm_send — N8N returns success without sheet_url
+    # (simulates SintAItion where N8N doesn't return sheet_url in response)
+    n8n_success = {"sent_count": 1, "failed_count": 0, "total_count": 1}
+    with patch("features.bot_campaign.call_webhook", return_value=n8n_success):
+        bc.confirm_send(cid, bot, _t_expand)
+        import time; time.sleep(0.3)
+
+    assert not bc.is_active(cid), "Campaign must be inactive after send"
+
+    # Find the final send_message call (done message)
+    assert bot.send_message.called, "_run_send must call bot.send_message"
+    all_calls_str = str(bot.send_message.call_args_list)
+
+    # Must contain a Google Sheets URL with a non-empty sheet ID
+    assert "docs.google.com/spreadsheets/d/" in all_calls_str, (
+        "Done message must contain a Google Sheets URL"
+    )
+    # URL must NOT have empty sheet ID (the regression: '/d//edit')
+    assert "/d//edit" not in all_calls_str, (
+        "Sheet URL must not have empty sheet ID (got '.../d//edit#gid=0'). "
+        "Check CAMPAIGN_SHEET_ID or-pattern in bot_config.py."
+    )
+
+    # Verify the URL contains a non-trivial ID (not just whitespace)
+    import re
+    urls = re.findall(r'https://docs\.google\.com/spreadsheets/d/([^/\s"\']+)', all_calls_str)
+    assert urls, "No sheet URL found in done message"
+    for sheet_id in urls:
+        assert len(sheet_id) > 5, (
+            f"Sheet ID looks too short/empty: '{sheet_id}'"
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # T139: Web API — /api/n8n/callback and /api/crm/* endpoint tests
 # These are offline source-inspection tests (no live server needed).
 # Live tests are in src/tests/ui/test_ui.py::TestN8NCallback and TestCRMApi.
