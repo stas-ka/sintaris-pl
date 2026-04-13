@@ -1,0 +1,348 @@
+<mxfile host="app.diagrams.net" agent="Taris Campaign Documentation" version="29.5.2">
+  <diagram name="Campaign Architecture" id="campaign-arch">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="1">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TITLE                                                            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="title" value="Taris Campaign Agent — Architecture &amp; Flow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="120" y="20" width="930" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="How Taris, N8N, Google Sheets, and Gmail work together to run an AI-powered email campaign" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="120" y="58" width="930" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- SECTION A: ARCHITECTURE OVERVIEW                                -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="section-arch-label" value="A  SYSTEM COMPONENTS" style="text;html=1;strokeColor=none;fillColor=#e8f4fd;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#1565c0;" vertex="1" parent="1">
+          <mxGeometry x="120" y="94" width="930" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- USER -->
+        <mxCell id="user-box" value="👤 Campaign Manager&lt;br/&gt;&lt;i&gt;(You)&lt;/i&gt;&lt;br/&gt;&lt;br/&gt;Uses Telegram app&lt;br/&gt;to start &amp; approve&lt;br/&gt;campaigns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;verticalAlign=top;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="120" y="126" width="140" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- TARIS BOT -->
+        <mxCell id="taris-box" value="🤖 Taris Bot&lt;br/&gt;&lt;i&gt;(Telegram + Web UI)&lt;/i&gt;&lt;br/&gt;&lt;br/&gt;Manages conversation flow,&lt;br/&gt;collects topic &amp; filters,&lt;br/&gt;shows preview &amp; results" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;verticalAlign=top;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="320" y="126" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- N8N -->
+        <mxCell id="n8n-box" value="⚙️ N8N&lt;br/&gt;&lt;i&gt;(Workflow Automation)&lt;/i&gt;&lt;br/&gt;&lt;br/&gt;Orchestrates the full process:&lt;br/&gt;reads sheet, calls AI,&lt;br/&gt;sends emails, logs results" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;verticalAlign=top;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="126" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- GOOGLE SHEETS -->
+        <mxCell id="sheets-box" value="📊 Google Sheets&lt;br/&gt;&lt;i&gt;(Client Database)&lt;/i&gt;&lt;br/&gt;&lt;br/&gt;Tab: Клиенты (clients)&lt;br/&gt;Tab: Шаблоны (templates)&lt;br/&gt;Tab: Статус рассылок (log)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;verticalAlign=top;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="800" y="126" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- OPENAI (below N8N) -->
+        <mxCell id="openai-box" value="🧠 OpenAI GPT-4o-mini&lt;br/&gt;&lt;i&gt;(AI Intelligence)&lt;/i&gt;&lt;br/&gt;&lt;br/&gt;Selects matching clients,&lt;br/&gt;generates personalised&lt;br/&gt;email template" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;verticalAlign=top;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="290" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- GMAIL (below Sheets) -->
+        <mxCell id="gmail-box" value="📧 Gmail&lt;br/&gt;&lt;i&gt;(Email Delivery)&lt;/i&gt;&lt;br/&gt;&lt;br/&gt;Sends personalised emails&lt;br/&gt;to each selected client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;verticalAlign=top;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="800" y="290" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ARROWS — Architecture -->
+        <!-- User ↔ Taris -->
+        <mxCell id="edge-user-taris" value="Telegram chat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;startArrow=block;startFill=0;endFill=1;" edge="1" parent="1" source="user-box" target="taris-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Taris → N8N -->
+        <mxCell id="edge-taris-n8n" value="Webhook calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;startArrow=block;startFill=0;endFill=1;" edge="1" parent="1" source="taris-box" target="n8n-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- N8N → Sheets -->
+        <mxCell id="edge-n8n-sheets" value="Read/Write" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;startArrow=block;startFill=0;endFill=1;" edge="1" parent="1" source="n8n-box" target="sheets-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- N8N → OpenAI -->
+        <mxCell id="edge-n8n-openai" value="AI request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;startArrow=block;startFill=0;endFill=1;" edge="1" parent="1" source="n8n-box" target="openai-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- N8N → Gmail -->
+        <mxCell id="edge-n8n-gmail" value="Send emails" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;startArrow=block;startFill=0;endFill=1;" edge="1" parent="1" source="n8n-box" target="gmail-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Gmail → Sheets (log) -->
+        <mxCell id="edge-n8n-sheets-log" value="Log results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="gmail-box" target="sheets-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- You → Sheets (manage) -->
+        <mxCell id="edge-user-sheets" value="Manage clients" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;endArrow=block;endFill=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="user-box" target="sheets-box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="190" y="470" />
+              <mxPoint x="880" y="470" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- SECTION B: CAMPAIGN FLOW (SEQUENCE)                             -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="section-flow-label" value="B  CAMPAIGN FLOW — Step-by-Step Sequence" style="text;html=1;strokeColor=none;fillColor=#e8f4fd;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#1565c0;" vertex="1" parent="1">
+          <mxGeometry x="120" y="450" width="930" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- FLOW LANE HEADERS -->
+        <mxCell id="lane-user" value="👤 You&lt;br/&gt;(Telegram)" style="text;html=1;strokeColor=#d6b656;fillColor=#fff2cc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="480" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lane-taris" value="🤖 Taris Bot" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="290" y="480" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lane-n8n" value="⚙️ N8N" style="text;html=1;strokeColor=#82b366;fillColor=#d5e8d4;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="480" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lane-ai" value="🧠 OpenAI" style="text;html=1;strokeColor=#d79b00;fillColor=#ffe6cc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="480" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lane-sheets" value="📊 Google Sheets" style="text;html=1;strokeColor=#9673a6;fillColor=#e1d5e7;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="480" width="130" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- LIFELINES -->
+        <mxCell id="life-user" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="185" y="530" as="sourcePoint" />
+            <mxPoint x="185" y="790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="life-taris" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="355" y="530" as="sourcePoint" />
+            <mxPoint x="355" y="790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="life-n8n" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="575" y="530" as="sourcePoint" />
+            <mxPoint x="575" y="790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="life-ai" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="755" y="530" as="sourcePoint" />
+            <mxPoint x="755" y="790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="life-sheets" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="935" y="530" as="sourcePoint" />
+            <mxPoint x="935" y="790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- STEP 1: Open Agents menu -->
+        <mxCell id="s1-user" value="1. Open Agents menu → Campaign" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="122" y="548" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-arrow" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="248" y="563" as="sourcePoint" />
+            <mxPoint x="292" y="563" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s1-taris" value="Ask: Enter topic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="292" y="548" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-back" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="292" y="570" as="sourcePoint" />
+            <mxPoint x="248" y="570" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- STEP 2: Enter topic -->
+        <mxCell id="s2-user" value="2. Type campaign topic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="122" y="598" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-arrow" value="topic text" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="248" y="613" as="sourcePoint" />
+            <mxPoint x="292" y="613" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s2-taris" value="Ask: filters?" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="292" y="598" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-back" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="292" y="620" as="sourcePoint" />
+            <mxPoint x="248" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- STEP 3: Enter filters -->
+        <mxCell id="s3-user" value="3. Enter filters (or -)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="122" y="648" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-arrow" value="filters" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="248" y="663" as="sourcePoint" />
+            <mxPoint x="292" y="663" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <!-- Taris → N8N Select webhook -->
+        <mxCell id="s3-taris-n8n" value="POST /webhook/select" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="418" y="663" as="sourcePoint" />
+            <mxPoint x="512" y="663" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s3-taris" value="Trigger N8N select" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="292" y="648" width="126" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- N8N → Sheets Read -->
+        <mxCell id="s4-n8n" value="Read Клиенты tab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="512" y="648" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s4-n8n-sheets" value="GET clients" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="638" y="663" as="sourcePoint" />
+            <mxPoint x="872" y="663" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s4-sheets-back" value="rows" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="872" y="670" as="sourcePoint" />
+            <mxPoint x="638" y="670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- N8N → OpenAI -->
+        <mxCell id="s5-n8n-ai" value="AI selection + template" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="512" y="698" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s5-arrow" value="prompt + clients" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="638" y="713" as="sourcePoint" />
+            <mxPoint x="692" y="713" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s5-ai" value="Select + generate template" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="692" y="698" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s5-ai-back" value="selected + template" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="692" y="720" as="sourcePoint" />
+            <mxPoint x="638" y="720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- N8N → Taris preview -->
+        <mxCell id="s6-n8n-taris" value="preview" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="512" y="740" as="sourcePoint" />
+            <mxPoint x="418" y="740" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <!-- Taris → User preview -->
+        <mxCell id="s6-taris-user" value="📋 Show preview" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="292" y="728" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s6-taris-user-arrow" value="preview card" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="292" y="743" as="sourcePoint" />
+            <mxPoint x="248" y="743" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s6-user" value="Review / edit / cancel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="122" y="728" width="126" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- STEP 7: Confirm send -->
+        <mxCell id="s7-user" value="✅ Confirm send" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="122" y="768" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s7-arrow" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="248" y="783" as="sourcePoint" />
+            <mxPoint x="292" y="783" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s7-taris" value="POST /webhook/send" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="292" y="768" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s7-taris-n8n" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="418" y="783" as="sourcePoint" />
+            <mxPoint x="512" y="783" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s7-n8n" value="Send Gmail + Log Sheet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="512" y="768" width="126" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s7-n8n-sheets" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=1;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="638" y="783" as="sourcePoint" />
+            <mxPoint x="872" y="783" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s7-sheets" value="Write Статус рассылок" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="872" y="768" width="126" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Final result back to user -->
+        <mxCell id="s8-result" value="✅ Result: sent count + sheet link" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="122" y="810" width="876" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- LEGEND                                                           -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <mxCell id="legend-label" value="LEGEND" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="120" y="856" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" value="" style="endArrow=open;endFill=1;html=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="200" y="866" as="sourcePoint" />
+            <mxPoint x="250" y="866" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg1-label" value="Request / Trigger" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="255" y="858" width="130" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" value="" style="endArrow=open;endFill=1;html=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="420" y="866" as="sourcePoint" />
+            <mxPoint x="470" y="866" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg2-label" value="Response / Data Return" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="475" y="858" width="160" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="650" y="858" width="30" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3-label" value="User action" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="685" y="858" width="90" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="790" y="858" width="30" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4-label" value="Automated action" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="858" width="120" height="18" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
