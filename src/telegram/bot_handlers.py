@@ -1119,7 +1119,7 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
                 call_id, chat_id, LLM_PROVIDER,
                 history_ids,
                 sum(len(m["content"]) for m in messages),
-                bool(response),
+                bool(reply),
                 model=get_active_model() or OLLAMA_MODEL,
                 temperature=_effective_temperature(),
                 system_chars=len(system_content),
