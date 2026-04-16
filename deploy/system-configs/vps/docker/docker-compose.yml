@@ -3,10 +3,11 @@
 # Deploy path:  /opt/taris-docker/
 # Source:       /opt/taris-docker/app/  (copy of sintaris-pl/src/)
 # Data:         /opt/taris-docker/data/ (whisper cache, piper models)
+# Userdata:     /opt/taris-docker/userdata/ (notes, docs, mail_creds — persisted)
 # Config:       /opt/taris-docker/bot.env
 #
 # Web UI port:  8090 (nginx proxies /supertaris-vps/ → 127.0.0.1:8090)
-# Update flow:  rsync src/ → /opt/taris-docker/app/ && docker restart taris-vps-telegram taris-vps-web
+# Update flow:  rsync src/ → /opt/taris-docker/app/ && docker compose up -d
 
 services:
 
@@ -17,9 +18,12 @@ services:
     network_mode: host            # direct access to 127.0.0.1:5432 (PostgreSQL)
     env_file: /opt/taris-docker/bot.env
     volumes:
-      - /opt/taris-docker/app/src:/app:ro          # source code (update via rsync)
-      - /opt/taris-docker/data/whisper:/root/.cache/huggingface  # model cache
-      - /opt/taris-docker/data/piper:/opt/piper:ro              # TTS binary + model
+      - /opt/taris-docker/app/src:/app:ro                          # source code
+      - /opt/taris-docker/data/whisper:/root/.cache/huggingface    # model cache
+      - /opt/taris-docker/data/piper:/opt/piper:ro                 # TTS binary + model
+      - /opt/taris-docker/userdata/notes:/root/.taris/notes        # user notes (persisted)
+      - /opt/taris-docker/userdata/docs:/root/.taris/docs          # user documents (persisted)
+      - /opt/taris-docker/userdata/mail_creds:/root/.taris/mail_creds  # mail credentials
     command: python3 telegram_menu_bot.py
     working_dir: /app
     restart: unless-stopped
@@ -36,9 +40,12 @@ services:
     network_mode: host            # listens on 0.0.0.0:8090 (set via --port in command)
     env_file: /opt/taris-docker/bot.env
     volumes:
-      - /opt/taris-docker/app/src:/app:ro          # source code (update via rsync)
-      - /opt/taris-docker/data/whisper:/root/.cache/huggingface  # model cache
-      - /opt/taris-docker/data/piper:/opt/piper:ro              # TTS binary + model
+      - /opt/taris-docker/app/src:/app:ro                          # source code
+      - /opt/taris-docker/data/whisper:/root/.cache/huggingface    # model cache
+      - /opt/taris-docker/data/piper:/opt/piper:ro                 # TTS binary + model
+      - /opt/taris-docker/userdata/notes:/root/.taris/notes        # user notes (persisted)
+      - /opt/taris-docker/userdata/docs:/root/.taris/docs          # user documents (persisted)
+      - /opt/taris-docker/userdata/mail_creds:/root/.taris/mail_creds  # mail credentials
     command: >
       python3 -m uvicorn bot_web:app
       --host 0.0.0.0
