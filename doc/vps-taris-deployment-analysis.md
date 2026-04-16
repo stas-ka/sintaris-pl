@@ -1,7 +1,7 @@
 # VPS Taris Deployment Analysis
 
 **When to read:** Before deciding whether to deploy a Taris instance on dev2null.de VPS.  
-**Date:** 2026-04-16  
+**Date:** 2026-04-16 (updated: gemma4 analysis added)  
 **VPS host:** dev2null.de (agents.sintaris.net)
 
 ---
@@ -12,11 +12,12 @@
 |----------|-------|
 | **CPU** | 6 vCPU — ARM Neoverse-N1 (aarch64), 1 thread/core |
 | **Architecture** | aarch64 (ARM64) — no x86, no GPU |
-| **RAM** | 7.7 GB total, **3.6 GB available** |
-| **Swap** | 8 GB (only 494 MB used) |
+| **RAM** | 7.7 GB total, **3.5 GB available** |
+| **Swap** | 8 GB file-based on SSD (~494 MB used, 391 MB/s I/O) |
 | **Disk** | 504 GB total, 263 GB free (46% used) |
 | **OS** | Ubuntu, kernel 6.8.0-106-generic |
 | **Python** | 3.12.3 (system) |
+| **Ollama** | ✅ `ollama-linux-arm64.tar.zst` v0.20.7 — installable |
 
 ---
 
@@ -117,14 +118,33 @@ LLM_FALLBACK_PROVIDER=openai
 | Extra RAM | ~350–650 MB (model + Ollama server) |
 | Response time | ~2–5s (ARM CPU-only) |
 | Speed estimate | ~25–40 t/s on 6-core ARM Neoverse |
-| Quality (RU/DE/EN) | Limited (0.5B model) |
+| Quality (RU/DE/EN) | Limited (0.5B model, 50% quality) |
 | After install | RAM free: ~2.9 GB (acceptable) |
 
 **Use case:** Offline fallback when OpenAI is unavailable.
 
 ---
 
-### Option C: Ollama with qwen2.5:3b (Better quality local LLM)
+### Option C: Ollama with qwen3.5:0.8b (Better offline fallback)
+
+```env
+OLLAMA_MODEL=qwen3.5:0.8b
+OLLAMA_THINK=false
+```
+
+| Aspect | Value |
+|--------|-------|
+| Extra RAM | ~1.0 GB |
+| Response time | ~8–15s (ARM CPU) |
+| Speed estimate | ~12–18 t/s on ARM |
+| Quality (RU/DE/EN) | Good for 0.8B model (~70%) |
+| RAM after install | ~2.5 GB free (comfortable) |
+
+**Best local LLM** if offline capability is needed — verified on TariStation2 (i7-2640M: 5 t/s, ARM Neoverse-N1 would be similar or faster).
+
+---
+
+### Option D: Ollama with qwen2.5:3b (Maximum local quality)
 
 ```env
 OLLAMA_MODEL=qwen2.5:3b
@@ -134,29 +154,52 @@ OLLAMA_MODEL=qwen2.5:3b
 |--------|-------|
 | Extra RAM | ~2.0–2.2 GB |
 | Response time | ~20–40s per response (ARM CPU) |
-| Speed estimate | ~5–8 t/s on ARM (very slow for interactive use) |
-| Quality | Good (significantly better than 0.5b) |
-| RAM after install | ~1.4 GB free — **tight under load** |
+| Speed estimate | ~5–8 t/s on ARM |
+| Quality | Good (~80%) |
+| RAM after install | ~1.3 GB free — **tight under load** |
 
-**Not recommended** — response time too slow (20–40s) for interactive Telegram chat.
+**Not recommended for interactive chat** — 20–40s response is too slow for Telegram use.
 
 ---
 
-### Option D: Ollama with llama3.2:1b (Balance)
+## Gemma4 on VPS — Assessment
 
-```env
-OLLAMA_MODEL=llama3.2:1b
-```
+> **TL;DR: Gemma4 is NOT feasible on the VPS — not enough RAM for any variant.**
 
-| Aspect | Value |
-|--------|-------|
-| Extra RAM | ~800 MB–1.1 GB |
-| Response time | ~8–15s (ARM CPU) |
-| Speed estimate | ~12–18 t/s on ARM |
-| Quality | Reasonable for simple tasks |
-| RAM after install | ~2.4 GB free (safe) |
+### Why Gemma4 cannot run on VPS
 
-**Acceptable** if local LLM is needed — fits in RAM, response within ~10s.
+| Model | Ollama actual size | VPS available RAM | Verdict |
+|-------|-------------------|-------------------|---------|
+| gemma4:e2b | **7.2 GB Q8** | 3.5 GB | ❌ Needs 2× available RAM |
+| gemma4:e4b | **9.6 GB Q8** | 3.5 GB | ❌ Needs 2.7× available RAM |
+| gemma4:31b | ~17 GB | 3.5 GB | ❌ Impossible |
+| gemma4:26b | ~15 GB | 3.5 GB | ❌ Impossible |
+
+> ⚠️ **Important:** The Ollama Q8 format of gemma4:e2b is **7.2 GB** — not 3.2 GB as the 4-bit paper estimate suggests.  
+> The overhead comes from: text model (~4.5 GB) + vision encoder (~150M params, ~0.7 GB Q8) + audio encoder (~300M params, ~1.4 GB Q8) = 6.6–7.2 GB total.  
+> Source: `doc/gemma4-evaluation-report.md` §3 (measured on TariStation2 2026-04-09)
+
+### Even TariStation2 (7.6 GB RAM) could not run gemma4:e2b
+
+TariStation2 has 7.6 GB total RAM with only 4.5 GB free (6.2 GB with all services stopped) — still not enough for 7.2 GB gemma4:e2b. The VPS with only 3.5 GB available has even less.
+
+### Minimum hardware required for gemma4:e2b
+
+| Requirement | Value |
+|-------------|-------|
+| RAM | ≥ 10 GB total (8 GB+ free for model + KV cache) |
+| GPU VRAM (for fast inference) | ≥ 8 GB (SintAItion's 16 GB is ideal) |
+| CPU-only speed (if RAM fits) | ~3–6 t/s on ARM (too slow: 15–25s/response) |
+| Recommended target | **SintAItion** (adopted ✅, 45 t/s on AMD Radeon 890M) |
+
+### Custom Q4 quantization (theoretical)
+
+A custom `gemma4:e2b` build with Q4_K_M quantization (text weights only, no encoders) might reach ~2.5–3 GB. This is not available in the standard Ollama library and would require:
+1. Manual GGUF conversion from Hugging Face weights
+2. Disabling vision/audio encoders (losing multimodal capability)
+3. Testing stability — not production-ready
+
+**Conclusion: Not worth the effort for the VPS use case. Use external OpenAI instead.**
 
 ---
 
