@@ -15,7 +15,7 @@
     <span class="material-icons-round" style="font-size:18px">volume_up</span>
   </button>
   <button class="btn btn-ghost btn-icon"
-          hx-delete="/chat/clear" hx-target="#chat-thread" hx-swap="innerHTML"
+          hx-delete="{{ root_path }}/chat/clear" hx-target="#chat-thread" hx-swap="innerHTML"
           title="Clear conversation">
     <span class="material-icons-round" style="font-size:18px">delete_outline</span>
   </button>
@@ -127,7 +127,7 @@
 
     <!-- Text mode -->
     <form id="chat-form" class="text-row"
-          hx-post="/chat/send"
+          hx-post="{{ root_path }}/chat/send"
           hx-target="#chat-thread"
           hx-swap="beforeend scroll:#chat-thread:bottom"
           hx-on::before-request="_appendBubble('user', document.getElementById('chat-input').value); _setTextBusy(true)"

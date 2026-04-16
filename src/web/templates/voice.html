@@ -287,7 +287,7 @@ async function vcSendChat(blob) {
     fd.append('audio', blob, 'recording.webm');
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 300_000);  // 5 min hard limit
-    const r = await fetch('{{ root_path }}/', { method: 'POST', body: fd, signal: controller.signal });
+    const r = await fetch('{{ root_path }}/voice/chat', { method: 'POST', body: fd, signal: controller.signal });
     clearTimeout(tid);
     const j = await r.json();
 
@@ -339,7 +339,7 @@ function vcAddBubble(role, text, time, audio_b64, debug_session_id) {
       // Download button — uses blob URL for TTS audio
       const dlTs = new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
       const dlHref = debug_session_id
-        ? '/voice/debug/' + encodeURIComponent(debug_session_id) + '/tts_output.ogg'
+        ? '{{ root_path }}/voice/debug/' + encodeURIComponent(debug_session_id) + '/tts_output.ogg'
         : url;
       const dlAttr = debug_session_id ? '' : ' download="tts_' + dlTs + '.ogg"';
       audioHtml = '<div class="mt-sm" style="display:flex;align-items:center;gap:8px">'
@@ -434,10 +434,7 @@ async function vcSendTextMsg() {
   fd.append('message', text);
 
   try {
-    const r = await fetch('{{ root_path }}/', { method: 'POST', body: fd });
-    if (!r.ok) {
-      const err = await r.text();
-      vcAddBubble('bot', '❌ Error: ' + err, vcNow(), null);
+    const r = await fetch('{{ root_path }}/voice/chat_text', { method: 'POST', body: fd });
       return;
     }
     const data = await r.json();
@@ -465,8 +462,7 @@ async function testTTS() {
   status.textContent = '⏳ Synthesising with Piper…';
   try {
     const fd = new FormData(); fd.append('text', text);
-    const r = await fetch('{{ root_path }}/', { method: 'POST', body: fd });
-    if (!r.ok) { status.textContent = '❌ TTS failed: ' + await r.text(); return; }
+    const r = await fetch('{{ root_path }}/voice/tts', { method: 'POST', body: fd });
     const blob = await r.blob();
     if (player.src) URL.revokeObjectURL(player.src);
     player.src = URL.createObjectURL(blob);

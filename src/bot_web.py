@@ -270,6 +270,34 @@ def _redir(path: str, status_code: int = 302) -> RedirectResponse:
     return RedirectResponse(f"{root}{path}", status_code=status_code)
 
 
+@app.get("/manifest.json")
+async def manifest_json():
+    """Serve PWA manifest dynamically so icon/URL paths include ROOT_PATH."""
+    from fastapi.responses import JSONResponse
+    rp = _ROOT_PATH
+    return JSONResponse({
+        "name": "Taris Bot",
+        "short_name": "Taris",
+        "description": "Personal AI assistant — chat, voice, notes, calendar",
+        "display": "standalone",
+        "orientation": "portrait",
+        "start_url": f"{rp}/",
+        "scope": f"{rp}/",
+        "background_color": "#121212",
+        "theme_color": "#7c4dff",
+        "lang": "en",
+        "icons": [
+            {"src": f"{rp}/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": f"{rp}/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+        "shortcuts": [
+            {"name": "Chat",  "url": f"{rp}/chat",  "icons": [{"src": f"{rp}/static/icon-192.png", "sizes": "192x192"}]},
+            {"name": "Voice", "url": f"{rp}/voice", "icons": [{"src": f"{rp}/static/icon-192.png", "sizes": "192x192"}]},
+            {"name": "Notes", "url": f"{rp}/notes", "icons": [{"src": f"{rp}/static/icon-192.png", "sizes": "192x192"}]},
+        ],
+    }, headers={"Cache-Control": "max-age=3600"})
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Auth helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -908,10 +936,10 @@ async def dashboard(request: Request):
             continue
 
     quick_actions = [
-        {"icon": "💬", "title": "Free Chat",   "sub": "Ask anything",            "href": "/chat"},
-        {"icon": "📝", "title": "New Note",    "sub": f"{len(notes)} notes",     "href": "/notes"},
-        {"icon": "🗓",  "title": "Calendar",   "sub": f"{len(today_events)} today", "href": "/calendar"},
-        {"icon": "📧", "title": "Mail Digest", "sub": "View digest",             "href": "/mail"},
+        {"icon": "💬", "title": "Free Chat",   "sub": "Ask anything",            "href": f"{_ROOT_PATH}/chat"},
+        {"icon": "📝", "title": "New Note",    "sub": f"{len(notes)} notes",     "href": f"{_ROOT_PATH}/notes"},
+        {"icon": "🗓",  "title": "Calendar",   "sub": f"{len(today_events)} today", "href": f"{_ROOT_PATH}/calendar"},
+        {"icon": "📧", "title": "Mail Digest", "sub": "View digest",             "href": f"{_ROOT_PATH}/mail"},
     ]
 
     recent_notes = [
@@ -989,7 +1017,7 @@ async def chat_clear(request: Request):
     if not user:
         raise HTTPException(401)
     _chat_history.pop(user["sub"], None)
-    return Response(headers={"HX-Redirect": "/chat"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/chat"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1054,7 +1082,7 @@ async def note_create(request: Request):
     if not slug:
         slug = "untitled"
     _save_note(user["sub"], slug, "")
-    return Response(headers={"HX-Redirect": "/notes"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/notes"})
 
 
 @app.get("/notes/list", response_class=HTMLResponse)
@@ -1092,7 +1120,7 @@ async def note_save(request: Request, slug: str, content: str = Form(...), title
     _save_note(uid, new_slug, content)
     # Slug changed → redirect so the sidebar re-renders with the new slug/title
     if slug_changed:
-        return Response(headers={"HX-Redirect": "/notes"})
+        return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/notes"})
     display_title = title or new_slug.replace("_", " ").title()
     resp = templates.TemplateResponse(request, "_note_editor.html", {
         "request": request,
@@ -1112,7 +1140,7 @@ async def note_delete(request: Request, slug: str):
     if not user:
         raise HTTPException(401)
     _delete_note(user["sub"], slug)
-    return Response(headers={"HX-Redirect": "/notes"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/notes"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1571,7 +1599,7 @@ async def contacts_update(
                     email=email.strip() or None,
                     address=address.strip() or None,
                     notes=notes.strip() or None)
-    return RedirectResponse(f"/contacts/{cid}", status_code=303)
+    return _redir(f"/contacts/{cid}", status_code=303)
 
 
 @app.post("/contacts/{cid}/delete")
@@ -1635,7 +1663,7 @@ async def docs_upload(request: Request, file: UploadFile = File(...)):
     from features.bot_documents import _SUPPORTED_EXTS, _process_doc_file
     if ext not in _SUPPORTED_EXTS:
         supported = ", ".join(sorted(_SUPPORTED_EXTS))
-        return RedirectResponse(f"/documents?error=Unsupported+file+type.+Supported:+{supported}", status_code=303)
+        return _redir(f"/documents?error=Unsupported+file+type.+Supported:+{supported}", status_code=303)
 
     data = await file.read()
     if len(data) > 20 * 1024 * 1024:
@@ -1649,7 +1677,7 @@ async def docs_upload(request: Request, file: UploadFile = File(...)):
     except Exception as e:
         log.error("[Docs/Web] upload failed: %s", e)
         return _redir("/documents?error=Upload+failed", status_code=303)
-    return RedirectResponse(f"/documents?msg=Uploaded+{orig_name}", status_code=303)
+    return _redir(f"/documents?msg=Uploaded+{orig_name}", status_code=303)
 
 
 @app.post("/documents/{doc_id}/rename")
@@ -1856,10 +1884,10 @@ async def mail_settings_save(request: Request):
             conn.login(email_addr, app_password)
     except imaplib.IMAP4.error as e:
         err = _imap_err_str(e).replace(" ", "+").replace("&", "and")
-        return RedirectResponse(f"/mail?show_settings=1&error={err}", status_code=302)
+        return _redir(f"/mail?show_settings=1&error={err}", status_code=302)
     except Exception as e:
         err = _imap_err_str(e).replace(" ", "+").replace("&", "and")
-        return RedirectResponse(f"/mail?show_settings=1&error=Connection+failed:+{err}", status_code=302)
+        return _redir(f"/mail?show_settings=1&error=Connection+failed:+{err}", status_code=302)
 
     mail_dir = Path(_TARIS_DIR) / "mail_creds"
     mail_dir.mkdir(parents=True, exist_ok=True)
@@ -2762,7 +2790,7 @@ async def admin_set_llm(request: Request, model_name: str):
     if not user or user.get("role") != "admin":
         raise HTTPException(403)
     set_active_model(model_name)
-    return Response(headers={"HX-Redirect": "/admin"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin"})
 
 
 @app.post("/admin/voice-opt/{key}")
@@ -2773,7 +2801,7 @@ async def admin_toggle_voice_opt(request: Request, key: str):
     opts = _load_voice_opts()
     opts[key] = not opts.get(key, False)
     _save_voice_opts(opts)
-    return Response(headers={"HX-Redirect": "/admin"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin"})
 
 
 @app.delete("/admin/user/{user_id}")
@@ -2786,7 +2814,7 @@ async def admin_delete_user(request: Request, user_id: str):
     accounts = _load_accounts()
     accounts = [a for a in accounts if a.get("user_id") != user_id]
     _save_accounts(accounts)
-    return Response(headers={"HX-Redirect": "/admin"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin"})
 
 
 @app.post("/admin/user/{user_id}/approve")
@@ -2796,7 +2824,7 @@ async def admin_approve_user(request: Request, user_id: str):
         raise HTTPException(403)
     update_account(user_id, status="active")
     log.info(f"[Admin] User {user_id} approved by {user.get('username')}")
-    return Response(headers={"HX-Redirect": "/admin"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin"})
 
 
 @app.post("/admin/user/{user_id}/block")
@@ -2806,7 +2834,7 @@ async def admin_block_user(request: Request, user_id: str):
         raise HTTPException(403)
     update_account(user_id, status="blocked")
     log.info(f"[Admin] User {user_id} blocked by {user.get('username')}")
-    return Response(headers={"HX-Redirect": "/admin"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin"})
 
 
 @app.post("/admin/user/{user_id}/reset-password")
@@ -2819,14 +2847,14 @@ async def admin_reset_password(
     if not user or user.get("role") != "admin":
         raise HTTPException(403)
     if len(new_password) < 4:
-        return Response(headers={"HX-Redirect": "/admin?error=Password+must+be+at+least+4+characters"})
+        return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin?error=Password+must+be+at+least+4+characters"})
     ok = change_password(user_id, new_password)
     if not ok:
-        return Response(headers={"HX-Redirect": "/admin?error=User+not+found"})
+        return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin?error=User+not+found"})
     account = find_account_by_id(user_id)
     uname = account.get("username", user_id) if account else user_id
     log.info(f"[Admin] Password reset for user '{uname}' by admin '{user.get('username')}'")
-    return Response(headers={"HX-Redirect": f"/admin?msg=Password+reset+for+{uname}"})
+    return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin?msg=Password+reset+for+{uname}"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

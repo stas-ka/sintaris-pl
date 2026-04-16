@@ -15,13 +15,13 @@
       <span class="material-icons-round" style="font-size:16px">volume_up</span>
     </button>
     <button class="btn btn-accent btn-sm"
-            hx-post="/notes/{{ slug }}/save"
+            hx-post="{{ root_path }}/notes/{{ slug }}/save"
             hx-include="#note-title, #note-body"
             hx-target="#note-editor" hx-swap="innerHTML">
       <span class="material-icons-round" style="font-size:16px">save</span> Save
     </button>
     <button class="btn btn-ghost btn-sm btn-danger"
-            hx-delete="/notes/{{ slug }}"
+            hx-delete="{{ root_path }}/notes/{{ slug }}"
             hx-target="#note-list" hx-swap="innerHTML"
             hx-confirm="Delete this note?">
       <span class="material-icons-round" style="font-size:16px">delete</span>

@@ -4,7 +4,7 @@
 
 {% block topbar_extra %}
 <button class="btn btn-accent btn-sm"
-        hx-post="/notes/create" hx-target="#note-list" hx-swap="innerHTML">
+        hx-post="{{ root_path }}/notes/create" hx-target="#note-list" hx-swap="innerHTML">
   <span class="material-icons-round" style="font-size:16px">add</span> New Note
 </button>
 {% endblock %}
@@ -15,7 +15,7 @@
   <!-- ── Note list (left panel) ──── -->
   <div class="notes-sidebar">
     <div id="note-list"
-         hx-get="/notes/list" hx-trigger="noteListRefresh from:body" hx-swap="innerHTML">
+         hx-get="{{ root_path }}/notes/list" hx-trigger="noteListRefresh from:body" hx-swap="innerHTML">
       {% set active_slug = active_note.slug if active_note else '' %}
       {% include "_note_list.html" %}
     </div>

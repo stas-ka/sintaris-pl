@@ -1,6 +1,6 @@
 {% for n in notes %}
 <div class="note-item{{ ' active' if (active_slug is defined and active_slug == n.slug) else '' }}"
-     hx-get="/notes/{{ n.slug }}" hx-target="#note-editor" hx-swap="innerHTML">
+     hx-get="{{ root_path }}/notes/{{ n.slug }}" hx-target="#note-editor" hx-swap="innerHTML">
   <div class="note-title">{{ n.title }}</div>
   <div class="note-meta">{{ n.date }}</div>
 </div>
