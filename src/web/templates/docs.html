@@ -102,7 +102,7 @@
 
       <!-- Created date -->
       <td style="padding:0.6rem 0.75rem; font-size:0.82rem; color:var(--pico-muted-color); white-space:nowrap">
-        {{ d.created_at[:10] if d.created_at else '—' }}
+        {{ (d.created_at.strftime('%Y-%m-%d') if d.created_at.__class__.__name__ == 'datetime' else d.created_at[:10]) if d.created_at else '—' }}
       </td>
 
       <!-- Delete -->
