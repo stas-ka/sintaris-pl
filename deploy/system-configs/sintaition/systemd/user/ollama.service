@@ -1,0 +1,16 @@
+[Unit]
+Description=Ollama AI LLM Server (GPU-accelerated)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=HSA_OVERRIDE_GFX_VERSION=11.0.3
+Environment=OLLAMA_FLASH_ATTENTION=1
+Environment=LD_LIBRARY_PATH=/usr/local/lib/ollama/rocm
+SupplementaryGroups=render video
+
+[Install]
+WantedBy=default.target

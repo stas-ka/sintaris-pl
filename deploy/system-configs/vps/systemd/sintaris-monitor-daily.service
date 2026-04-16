@@ -1,0 +1,11 @@
+[Unit]
+Description=Sintaris VPS Monitor — daily summary report
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/sintaris-monitor/monitor.py daily
+WorkingDirectory=/opt/sintaris-monitor
+User=root
+StandardOutput=journal
+StandardError=journal

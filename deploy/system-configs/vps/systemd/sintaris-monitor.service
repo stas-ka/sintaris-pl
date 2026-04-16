@@ -1,0 +1,12 @@
+[Unit]
+Description=Sintaris VPS Monitor — health check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/sintaris-monitor/monitor.py check
+WorkingDirectory=/opt/sintaris-monitor
+User=root
+StandardOutput=journal
+StandardError=journal

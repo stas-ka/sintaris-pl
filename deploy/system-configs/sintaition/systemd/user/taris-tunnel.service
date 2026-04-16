@@ -1,0 +1,12 @@
+[Unit]
+Description=Taris SSH reverse tunnel to VPS (supertaris+supertaris2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/autossh -M 0 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o BatchMode=yes -i /home/stas/.ssh/vps_tunnel_key -R 8086:localhost:8080 -R 8088:192.168.178.43:8080 -N stas@dev2null.de
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target

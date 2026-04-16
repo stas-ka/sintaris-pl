@@ -1,0 +1,16 @@
+[Unit]
+Description=Taris Russian Voice Assistant
+After=network.target sound.target
+Wants=pipewire.service pipewire-pulse.service
+
+[Service]
+Type=simple
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PIPEWIRE_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+ExecStart=/usr/bin/python3 /home/stas/.taris/voice_assistant.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

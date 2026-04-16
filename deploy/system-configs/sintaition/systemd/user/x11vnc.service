@@ -1,0 +1,12 @@
+[Unit]
+Description=x11vnc VNC server (share X11 session)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/x11vnc -display :0 -auth guess -forever -noxdamage -repeat -rfbauth %h/.x11vnc/passwd -rfbport 5900 -shared
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

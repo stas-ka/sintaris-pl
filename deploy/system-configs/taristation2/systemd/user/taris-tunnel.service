@@ -1,0 +1,20 @@
+[Unit]
+Description=Taris SSH reverse tunnel to VPS (supertaris2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Expose TariStation2:8080 as VPS:8088 → /supertaris2/ in nginx
+ExecStart=/usr/bin/autossh -M 0 \
+    -o StrictHostKeyChecking=no \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -o BatchMode=yes \
+    -i /home/stas/.ssh/vps_tunnel_key \
+    -R 8088:localhost:8080 \
+    -N stas@dev2null.de
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target

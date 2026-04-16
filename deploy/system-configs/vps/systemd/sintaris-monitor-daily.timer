@@ -1,0 +1,10 @@
+[Unit]
+Description=Sintaris VPS Monitor — daily summary at 08:00
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+Unit=sintaris-monitor-daily.service
+
+[Install]
+WantedBy=timers.target

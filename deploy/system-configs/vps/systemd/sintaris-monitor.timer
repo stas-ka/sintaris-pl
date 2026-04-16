@@ -1,0 +1,10 @@
+[Unit]
+Description=Sintaris VPS Monitor — run every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=sintaris-monitor.service
+
+[Install]
+WantedBy=timers.target

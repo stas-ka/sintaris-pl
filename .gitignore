@@ -30,7 +30,10 @@ nul
 d?Temp*
 
 # Generated deployment configs (contain real credentials — never commit)
-deploy/
+# system-configs/ is allowed — it contains only templates and sanitized live configs
+deploy/ts*/
+deploy/pi*/
+deploy/ocpi*/
 
 # IDE / editor settings
 .vscode/

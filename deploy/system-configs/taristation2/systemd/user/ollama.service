@@ -1,0 +1,15 @@
+[Unit]
+Description=Ollama AI LLM Server (CPU-only — TariStation2)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=OLLAMA_FLASH_ATTENTION=1
+# NOTE: no HSA_OVERRIDE_GFX_VERSION here — TariStation2 is CPU-only
+# NOTE: if TariStation2 gets a GPU, copy from sintaition/systemd/system/ollama.service
+
+[Install]
+WantedBy=default.target

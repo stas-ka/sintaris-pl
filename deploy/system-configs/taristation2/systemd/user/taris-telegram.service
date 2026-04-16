@@ -1,0 +1,21 @@
+[Unit]
+Description=Taris Telegram Menu Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/stas/.taris
+ExecStart=/usr/bin/python3 /home/stas/.taris/telegram_menu_bot.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+MemoryMax=400M
+MemoryHigh=350M
+KillMode=mixed
+KillSignal=SIGTERM
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/stas/.taris/bot.env
+
+[Install]
+WantedBy=default.target
