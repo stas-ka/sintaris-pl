@@ -1,6 +1,9 @@
 # VPS PostgreSQL configuration notes
-# Server: Ubuntu 24.04 LTS (mail.dev2null.de)
-# PostgreSQL version: installed from Ubuntu packages
+# Server: Ubuntu, aarch64, dev2null.de (mail.dev2null.de)
+# PostgreSQL version: 17 (system install, not Docker)
+#
+# pg_hba.conf location: /etc/postgresql/17/main/pg_hba.conf
+# postgresql.conf location: /etc/postgresql/17/main/postgresql.conf
 #
 # Key postgresql.conf settings:
 #   listen_addresses = '*'
@@ -8,21 +11,23 @@
 #   max_connections = 100
 #   shared_buffers = 128MB
 #
-# pg_hba.conf — connections allowed:
-#   local all all peer
-#   host  all all 127.0.0.1/32 md5
-#   host  all all ::1/128 md5
-#
 # Users and databases (taris-related):
-#   User: taris_user  DB: taris_db  (local 5432 — SintAItion CRM via SSH tunnel)
-#   User: taris       DB: taris      (local 5432 — CRM/EspoCRM backend)
+#   User: taris   DB: taris      (CRM/EspoCRM backend)
+#   User: taris   DB: taris_vps  (Docker instance — Supertariss bot)
+#
+# pgvector: INSTALLED (v0.8.0) — enable per-database with:
+#   sudo -u postgres psql -d taris_vps -c "CREATE EXTENSION IF NOT EXISTS vector;"
 #
 # SSH tunnel from SintAItion → VPS:
-#   SintAItion taris-pg-tunnel.service binds local 15432 → VPS 5432
+#   taris-pg-tunnel.service binds SintAItion local 15432 → VPS 5432
 #   CRM_PG_DSN=postgresql://taris:PASSWORD@127.0.0.1:15432/taris
 #
-# Initial setup:
-#   sudo apt install postgresql postgresql-contrib pgvector
-#   sudo -u postgres psql -c "CREATE USER taris_user WITH PASSWORD 'PASSWORD';"
-#   sudo -u postgres psql -c "CREATE DATABASE taris_db OWNER taris_user;"
-#   sudo -u postgres psql taris_db -c "CREATE EXTENSION IF NOT EXISTS vector;"
+# Initial setup on new VPS:
+#   sudo apt install postgresql postgresql-contrib
+#   sudo apt install postgresql-17-pgvector   # or build from source
+#   sudo -u postgres psql -c "CREATE USER taris WITH PASSWORD 'PASSWORD';"
+#   sudo -u postgres psql -c "CREATE DATABASE taris OWNER taris;"
+#   sudo -u postgres psql -c "CREATE DATABASE taris_vps OWNER taris;"
+#   sudo -u postgres psql -d taris_vps -c "CREATE EXTENSION IF NOT EXISTS vector;"
+#   sudo -u postgres psql -d taris -c "CREATE EXTENSION IF NOT EXISTS vector;"
+#   # Update pg_hba.conf to allow Docker bridge networks (see pg_hba.conf in this dir)

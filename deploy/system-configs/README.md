@@ -11,19 +11,32 @@ deploy/system-configs/
 │
 ├── vps/                           ← dev2null.de VPS (agents.sintaris.net)
 │   ├── install.sh                 ← full VPS setup script
+│   ├── install_voice.sh           ← voice STT/TTS setup on VPS
 │   ├── nginx/
 │   │   └── agents.sintaris.net.conf   ← nginx reverse proxy (live config)
+│   ├── docker/                    ← VPS Docker instance (Supertariss bot)
+│   │   ├── Dockerfile             ← ARM64 python:3.12-slim image
+│   │   ├── docker-compose.yml     ← taris-telegram + taris-web services
+│   │   ├── bot.env.template       ← bot.env template (fill CHANGE_ME values)
+│   │   ├── requirements.docker.txt ← lighter deps (no sounddevice/webrtcvad)
+│   │   ├── deploy.sh              ← end-to-end first deploy automation
+│   │   └── update.sh              ← update source + restart containers
+│   ├── cron/
+│   │   └── backup-taris-vps.sh   ← daily pg_dump of taris_vps DB
 │   ├── systemd/
 │   │   ├── sintaris-monitor.service   ← health check (every 5 min)
 │   │   ├── sintaris-monitor.timer
 │   │   ├── sintaris-monitor-daily.service  ← daily summary at 08:00
 │   │   └── sintaris-monitor-daily.timer
 │   └── postgresql/
-│       └── README.md              ← PostgreSQL setup notes
+│       ├── README.md              ← PostgreSQL setup notes
+│       ├── pg_hba.conf            ← sanitized live config (replace <VPS_PUBLIC_IP>)
+│       └── postgresql.conf.snippet ← key settings (non-default only)
 │
 ├── sintaition/                    ← SintAItion (TariStation1 production)
 │   ├── install.sh                 ← full SintAItion setup script
 │   ├── bot.env.template           ← bot.env with CHANGE_ME placeholders
+│   ├── ssh-admin-access.md        ← SSH admin tunnel setup guide
 │   ├── systemd/
 │   │   ├── user/                  ← systemctl --user services
 │   │   │   ├── taris-telegram.service
@@ -31,7 +44,7 @@ deploy/system-configs/
 │   │   │   ├── taris-voice.service
 │   │   │   ├── taris-tunnel.service    ← autossh VPS:8086 → :8080 (/supertaris/)
 │   │   │   ├── taris-pg-tunnel.service ← SSH local:15432 → VPS:5432 (CRM DB)
-│   │   │   ├── ollama.service          ← user-level Ollama (systemctl --user)
+│   │   │   ├── ollama.service          ← user-level Ollama (legacy, disabled)
 │   │   │   └── x11vnc.service          ← VNC for remote desktop
 │   │   └── system/               ← sudo systemctl services
 │   │       └── ollama.service    ← system-level Ollama with AMD ROCm GPU

@@ -1,0 +1,16 @@
+# postgresql.conf key settings — VPS PostgreSQL 17 (dev2null.de)
+# Location: /etc/postgresql/17/main/postgresql.conf
+# Only non-default values relevant for taris deployment are listed here.
+
+listen_addresses = '*'
+port = 5432
+max_connections = 100
+shared_buffers = 128MB
+log_line_prefix = '%m [%p] %q%u@%d '
+log_timezone = 'Europe/Berlin'
+
+# Recommended tuning for 7.7 GB RAM VPS with taris + n8n + PostgreSQL:
+# shared_buffers = 512MB        # 25% of RAM
+# work_mem = 16MB
+# maintenance_work_mem = 128MB
+# effective_cache_size = 2GB
