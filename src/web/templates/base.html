@@ -24,7 +24,7 @@
   <!-- Material Icons -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
   <!-- Custom dark theme -->
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="{{ root_path }}/static/style.css">
 
   <!-- HTMX -->
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
@@ -32,7 +32,7 @@
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
 
   <!-- PWA -->
-  <link rel="manifest" href="/static/manifest.json">
+  <link rel="manifest" href="{{ root_path }}/static/manifest.json">
   <meta name="theme-color" content="#7c4dff">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -62,32 +62,32 @@
     <hr>
     <p class="sidebar-section-label">Main</p>
     <ul class="sidebar-nav">
-      <li><a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}">
+      <li><a href="{{ root_path }}/" class="{% if active_page == 'dashboard' %}active{% endif %}">
         <span class="nav-icon">🏠</span> Dashboard</a></li>
-      <li><a href="/chat" class="{% if active_page == 'chat' %}active{% endif %}">
+      <li><a href="{{ root_path }}/chat" class="{% if active_page == 'chat' %}active{% endif %}">
         <span class="nav-icon">🤖</span> Assistant</a></li>
-      <li><a href="/notes" class="{% if active_page == 'notes' %}active{% endif %}">
+      <li><a href="{{ root_path }}/notes" class="{% if active_page == 'notes' %}active{% endif %}">
         <span class="nav-icon">📝</span> Notes</a></li>
-      <li><a href="/calendar" class="{% if active_page == 'calendar' %}active{% endif %}">
+      <li><a href="{{ root_path }}/calendar" class="{% if active_page == 'calendar' %}active{% endif %}">
         <span class="nav-icon">🗓</span> Calendar</a></li>
-      <li><a href="/contacts" class="{% if active_page == 'contacts' %}active{% endif %}">
+      <li><a href="{{ root_path }}/contacts" class="{% if active_page == 'contacts' %}active{% endif %}">
         <span class="nav-icon">📇</span> Contacts</a></li>
-      <li><a href="/documents" class="{% if active_page == 'docs' %}active{% endif %}">
+      <li><a href="{{ root_path }}/documents" class="{% if active_page == 'docs' %}active{% endif %}">
         <span class="nav-icon">📄</span> Documents</a></li>
-      <li><a href="/mail" class="{% if active_page == 'mail' %}active{% endif %}">
+      <li><a href="{{ root_path }}/mail" class="{% if active_page == 'mail' %}active{% endif %}">
         <span class="nav-icon">📧</span> Mail Digest</a></li>
-      <li><a href="/voice" class="{% if active_page == 'voice' %}active{% endif %}">
+      <li><a href="{{ root_path }}/voice" class="{% if active_page == 'voice' %}active{% endif %}">
         <span class="nav-icon">🎤</span> Voice</a></li>
     </ul>
 
     <hr>
     <p class="sidebar-section-label">Account</p>
     <ul class="sidebar-nav">
-      <li><a href="/profile" class="{% if active_page == 'profile' %}active{% endif %}">
+      <li><a href="{{ root_path }}/profile" class="{% if active_page == 'profile' %}active{% endif %}">
         <span class="nav-icon">👤</span> Profile</a></li>
-      <li><a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}">
+      <li><a href="{{ root_path }}/settings" class="{% if active_page == 'settings' %}active{% endif %}">
         <span class="nav-icon">⚙️</span> Settings</a></li>
-      <li><a href="/logout">
+      <li><a href="{{ root_path }}/logout">
         <span class="nav-icon">🚪</span> Logout</a></li>
     </ul>
 
@@ -95,7 +95,7 @@
     <hr>
     <p class="sidebar-section-label">System</p>
     <ul class="sidebar-nav">
-      <li><a href="/admin" class="{% if active_page == 'admin' %}active{% endif %}">
+      <li><a href="{{ root_path }}/admin" class="{% if active_page == 'admin' %}active{% endif %}">
         <span class="nav-icon">🔐</span> Admin Panel</a></li>
     </ul>
     {% endif %}
@@ -128,15 +128,15 @@
 
   <!-- ── Mobile bottom navigation ────────────────────────── -->
   <nav class="mobile-nav" aria-label="Mobile navigation">
-    <a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}">
+    <a href="{{ root_path }}/" class="{% if active_page == 'dashboard' %}active{% endif %}">
       <span class="nav-icon">🏠</span><span>Home</span></a>
-    <a href="/chat" class="{% if active_page == 'chat' %}active{% endif %}">
+    <a href="{{ root_path }}/chat" class="{% if active_page == 'chat' %}active{% endif %}">
       <span class="nav-icon">🤖</span><span>Chat</span></a>
-    <a href="/notes" class="{% if active_page == 'notes' %}active{% endif %}">
+    <a href="{{ root_path }}/notes" class="{% if active_page == 'notes' %}active{% endif %}">
       <span class="nav-icon">📝</span><span>Notes</span></a>
-    <a href="/calendar" class="{% if active_page == 'calendar' %}active{% endif %}">
+    <a href="{{ root_path }}/calendar" class="{% if active_page == 'calendar' %}active{% endif %}">
       <span class="nav-icon">🗓</span><span>Calendar</span></a>
-    <a href="/voice" class="{% if active_page == 'voice' %}active{% endif %}">
+    <a href="{{ root_path }}/voice" class="{% if active_page == 'voice' %}active{% endif %}">
       <span class="nav-icon">🎤</span><span>Voice</span></a>
   </nav>
 

@@ -15,14 +15,14 @@
         <header><strong>{{ widget.title }}</strong></header>
         <p>{{ widget.body }}</p>
         {% if widget.action %}
-          <footer><a href="/screen/{{ widget.action }}" role="button" class="outline">Open</a></footer>
+          <footer><a href="{{ root_path }}/screen/{{ widget.action }}" role="button" class="outline">Open</a></footer>
         {% endif %}
       </article>
 
     {% elif wtype == 'ButtonRow' %}
       <div class="grid">
         {% for btn in widget.buttons %}
-          <a href="/screen/{{ btn.action }}" role="button"
+          <a href="{{ root_path }}/screen/{{ btn.action }}" role="button"
              class="{% if btn.style == 'danger' %}secondary{% elif btn.style == 'ghost' %}outline{% endif %}">
             {{ btn.label }}
           </a>
@@ -37,7 +37,7 @@
       </label>
 
     {% elif wtype == 'TextInput' %}
-      <form action="/screen/{{ widget.action }}" method="post">
+      <form action="{{ root_path }}/screen/{{ widget.action }}" method="post">
         <input type="text" name="value" placeholder="{{ widget.placeholder }}">
         <button type="submit">Submit</button>
       </form>
@@ -50,8 +50,8 @@
         <p>{{ widget.text }}</p>
         <footer>
           <div class="grid">
-            <a href="/screen/{{ widget.action_yes }}" role="button">Yes</a>
-            <a href="/screen/{{ widget.action_no }}" role="button" class="secondary">No</a>
+            <a href="{{ root_path }}/screen/{{ widget.action_yes }}" role="button">Yes</a>
+            <a href="{{ root_path }}/screen/{{ widget.action_no }}" role="button" class="secondary">No</a>
           </div>
         </footer>
       </article>

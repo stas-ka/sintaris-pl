@@ -69,7 +69,7 @@
 <!-- ── Change username ───────────────────────────────────── -->
 <p class="section-label mt-md">Change Username</p>
 <div class="card mb-md">
-  <form method="post" action="/profile/change-username">
+  <form method="post" action="{{ root_path }}/profile/change-username">
     <div style="display:grid; gap:12px; max-width:420px">
       <div>
         <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
@@ -97,7 +97,7 @@
 <!-- ── Edit display name card ────────────────────────────── -->
 <p class="section-label mt-md">Display Name</p>
 <div class="card mb-md">
-  <form method="post" action="/profile/name">
+  <form method="post" action="{{ root_path }}/profile/name">
     <div style="display:grid; gap:12px; max-width:420px">
       <div>
         <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
@@ -140,7 +140,7 @@
     <li>Paste it below and click Link</li>
   </ol>
   {% endif %}
-  <form method="post" action="/profile/link-telegram" style="margin-top:{% if account.get('telegram_chat_id') %}16{% else %}0{% endif %}px">
+  <form method="post" action="{{ root_path }}/profile/link-telegram" style="margin-top:{% if account.get('telegram_chat_id') %}16{% else %}0{% endif %}px">
     <div style="display:flex; gap:8px; align-items:flex-end; max-width:360px; flex-wrap:wrap">
       <div style="flex:1; min-width:120px">
         <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:4px">
@@ -170,7 +170,7 @@
   <p style="color:var(--text-muted); font-size:13px; margin:0 0 14px">
     Choose the TTS voice gender for voice replies in Telegram and the bot.
   </p>
-  <form method="post" action="/profile/voice-gender">
+  <form method="post" action="{{ root_path }}/profile/voice-gender">
     <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:14px">
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--text-primary)">
         <input type="radio" name="voice_male" value="off"
@@ -207,7 +207,7 @@
 <div class="card mb-md">
   <p style="color:var(--text-muted); margin:0 0 12px">
     To change your password, go to
-    <a href="/settings" style="color:var(--accent)">Settings</a>.
+    <a href="{{ root_path }}/settings" style="color:var(--accent)">Settings</a>.
   </p>
 </div>
 

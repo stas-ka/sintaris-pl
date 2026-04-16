@@ -6,7 +6,7 @@
 <div class="flex items-center gap-sm">
   <span class="llm-badge" title="LLM provider">🤖 {{ llm_label }}</span>
   <select id="model-select" class="select-sm" style="max-width:190px"
-          onchange="fetch('/chat/model',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'model='+encodeURIComponent(this.value)})">
+          onchange="fetch('{{ root_path }}/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'model='+encodeURIComponent(this.value)})">
     {% for m in models %}
     <option value="{{ m }}" {% if m == active_model %}selected{% endif %}>{{ m }}</option>
     {% endfor %}
@@ -319,7 +319,7 @@ async function _sendVoice(blob) {
     fd.append('audio', blob, 'recording.webm');
     const ctrl = new AbortController();
     const tid  = setTimeout(() => ctrl.abort(), 300_000);
-    const r    = await fetch('/voice/chat', { method: 'POST', body: fd, signal: ctrl.signal });
+    const r    = await fetch('{{ root_path }}/', { method: 'POST', body: fd, signal: ctrl.signal });
     clearTimeout(tid);
     const j    = await r.json();
 

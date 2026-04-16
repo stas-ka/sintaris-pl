@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Register — Taris @ {{ hostname }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="{{ root_path }}/static/style.css">
 </head>
 <body>
 <div class="login-page">
@@ -24,7 +24,7 @@
     <div class="login-info">{{ info }}</div>
     {% endif %}
 
-    <form method="post" action="/register">
+    <form method="post" action="{{ root_path }}/register">
       <label>
         <span class="text-sm text-muted">Username</span>
         <input type="text" name="username" required minlength="3"
@@ -55,7 +55,7 @@
     </form>
 
     <p class="text-center text-sm text-dim" style="margin-top:16px">
-      Already have an account? <a href="/login">Sign in</a>
+      Already have an account? <a href="{{ root_path }}/login">Sign in</a>
     </p>
   </div>
 </div>

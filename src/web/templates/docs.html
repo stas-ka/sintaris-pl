@@ -6,7 +6,7 @@
 {% if rag_available and not no_telegram %}
 <label class="btn btn-accent btn-sm" style="cursor:pointer" title="Upload document (PDF, TXT, MD, DOCX)">
   <span class="material-icons-round" style="font-size:16px">upload_file</span> Upload
-  <form id="doc-upload-form" method="post" action="/documents/upload" enctype="multipart/form-data" style="display:none">
+  <form id="doc-upload-form" method="post" action="{{ root_path }}/documents/upload" enctype="multipart/form-data" style="display:none">
     <input type="file" name="file" accept=".pdf,.txt,.md,.docx"
            onchange="document.getElementById('doc-upload-form').submit()">
   </form>
@@ -42,7 +42,7 @@
     <span style="font-size:48px">🔗</span>
     <h3 style="margin-top:0.75rem">Telegram Account Not Linked</h3>
     <p class="text-muted">Documents are stored per-user and require a linked Telegram account.<br>
-      Go to <a href="/profile">Profile</a> → Link to Web to connect your account.</p>
+      Go to <a href="{{ root_path }}/profile">Profile</a> → Link to Web to connect your account.</p>
   </div>
 
   {% elif docs %}
@@ -68,7 +68,7 @@
               style="cursor:pointer; font-weight:500; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
               title="{{ d.title }}">{{ d.title }}</span>
         <form x-show="editing" @click.away="editing=false"
-              method="post" action="/documents/{{ d.doc_id }}/rename"
+              method="post" action="{{ root_path }}/documents/{{ d.doc_id }}/rename"
               style="display:flex; gap:0.4rem; align-items:center">
           <input type="text" name="title" value="{{ d.title }}"
                  style="margin:0; padding:0.25rem 0.5rem; font-size:0.9rem; flex:1"
@@ -91,7 +91,7 @@
 
       <!-- Shared toggle -->
       <td style="padding:0.6rem 0.75rem; text-align:center">
-        <form method="post" action="/documents/{{ d.doc_id }}/share" style="display:inline">
+        <form method="post" action="{{ root_path }}/documents/{{ d.doc_id }}/share" style="display:inline">
           <button type="submit" class="btn btn-sm"
                   style="padding:0.2rem 0.5rem; background:none; border:none; cursor:pointer"
                   title="{{ 'Unshare (currently visible to all users)' if d.is_shared else 'Share with all users' }}">
@@ -107,7 +107,7 @@
 
       <!-- Delete -->
       <td style="padding:0.6rem 0.75rem; text-align:right">
-        <form method="post" action="/documents/{{ d.doc_id }}/delete"
+        <form method="post" action="{{ root_path }}/documents/{{ d.doc_id }}/delete"
               onsubmit="return confirm('Delete «{{ d.title }}»?')">
           <button type="submit" class="btn btn-sm"
                   style="padding:0.2rem 0.5rem; color:var(--pico-color-red-500); background:none; border:1px solid var(--pico-color-red-300); border-radius:4px">
@@ -136,7 +136,7 @@
       Uploaded documents are searchable in AI chat via RAG.</p>
     <label class="btn btn-accent" style="cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; margin-top:1rem">
       <span class="material-icons-round" style="font-size:18px">upload_file</span> Upload Document
-      <form id="doc-upload-form2" method="post" action="/documents/upload" enctype="multipart/form-data" style="display:none">
+      <form id="doc-upload-form2" method="post" action="{{ root_path }}/documents/upload" enctype="multipart/form-data" style="display:none">
         <input type="file" name="file" accept=".pdf,.txt,.md,.docx"
                onchange="document.getElementById('doc-upload-form2').submit()">
       </form>

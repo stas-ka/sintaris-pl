@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login — Taris @ {{ hostname }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="{{ root_path }}/static/style.css">
 </head>
 <body>
 <div class="login-page">
@@ -21,7 +21,7 @@
     <div class="login-error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="/login" autocomplete="on">
+    <form method="post" action="{{ root_path }}/login" autocomplete="on">
       <label>
         <span class="text-sm text-muted">Username</span>
         <input type="text" name="username" required autocomplete="username"
@@ -41,8 +41,8 @@
     </form>
 
     <p class="text-center text-sm text-dim" style="margin-top:16px">
-      No account? <a href="/register">Register</a>
-      &nbsp;·&nbsp; <a href="/forgot-password">Forgot password?</a>
+      No account? <a href="{{ root_path }}/register">Register</a>
+      &nbsp;·&nbsp; <a href="{{ root_path }}/forgot-password">Forgot password?</a>
     </p>
   </div>
 </div>

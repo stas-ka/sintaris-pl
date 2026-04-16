@@ -29,7 +29,7 @@
   </p>
   <div style="display:flex; gap:10px; flex-wrap:wrap">
     {% for code, label in supported_langs.items() %}
-    <form method="post" action="/settings/language" style="margin:0">
+    <form method="post" action="{{ root_path }}/settings/language" style="margin:0">
       <input type="hidden" name="language" value="{{ code }}">
       <button type="submit"
         style="{% if current_lang == code %}
@@ -51,7 +51,7 @@
 <!-- ── Change password card ──────────────────────────────── -->
 <p class="section-label mt-md">Change Password</p>
 <div class="card mb-md">
-  <form method="post" action="/settings/password">
+  <form method="post" action="{{ root_path }}/settings/password">
     <div style="display:grid; gap:12px; max-width:420px">
 
       <div>

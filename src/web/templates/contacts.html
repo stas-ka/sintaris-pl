@@ -3,7 +3,7 @@
 {% block page_title %}📇 Contacts{% endblock %}
 
 {% block topbar_extra %}
-<a href="/contacts/new" class="btn btn-accent btn-sm">
+<a href="{{ root_path }}/contacts/new" class="btn btn-accent btn-sm">
   <span class="material-icons-round" style="font-size:16px">person_add</span> New Contact
 </a>
 {% endblock %}
@@ -15,14 +15,14 @@
   <div class="notes-sidebar">
 
     <!-- Search bar -->
-    <form method="get" action="/contacts" style="margin-bottom:0.75rem; display:flex; gap:0.4rem">
+    <form method="get" action="{{ root_path }}/contacts" style="margin-bottom:0.75rem; display:flex; gap:0.4rem">
       <input type="search" name="q" value="{{ q }}" placeholder="Search contacts…"
              style="flex:1; margin:0; padding:0.4rem 0.6rem; font-size:0.9rem">
       <button type="submit" class="btn btn-sm" style="padding:0.4rem 0.7rem">
         <span class="material-icons-round" style="font-size:16px">search</span>
       </button>
       {% if q %}
-      <a href="/contacts" class="btn btn-sm" style="padding:0.4rem 0.7rem" title="Clear search">
+      <a href="{{ root_path }}/contacts" class="btn btn-sm" style="padding:0.4rem 0.7rem" title="Clear search">
         <span class="material-icons-round" style="font-size:16px">close</span>
       </a>
       {% endif %}
@@ -32,7 +32,7 @@
     {% if contacts %}
       {% for c in contacts %}
       <div class="note-item{{ ' active' if show_form and form_contact and form_contact.id == c.id else '' }}">
-        <a href="/contacts/{{ c.id }}" style="text-decoration:none; color:inherit; display:block">
+        <a href="{{ root_path }}/contacts/{{ c.id }}" style="text-decoration:none; color:inherit; display:block">
           <div class="note-title">{{ c.name }}</div>
           <div class="note-meta">
             {% if c.phone %}📞 {{ c.phone }}{% endif %}
@@ -47,7 +47,7 @@
       {% if pages > 1 %}
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; font-size:0.85rem">
         {% if pg > 0 %}
-        <a href="/contacts?q={{ q }}&pg={{ pg - 1 }}" class="btn btn-sm">◀</a>
+        <a href="{{ root_path }}/contacts?q={{ q }}&pg={{ pg - 1 }}" class="btn btn-sm">◀</a>
         {% else %}
         <span class="btn btn-sm" style="opacity:0.3">◀</span>
         {% endif %}
@@ -55,7 +55,7 @@
         <span class="text-muted">{{ pg + 1 }} / {{ pages }}</span>
 
         {% if pg + 1 < pages %}
-        <a href="/contacts?q={{ q }}&pg={{ pg + 1 }}" class="btn btn-sm">▶</a>
+        <a href="{{ root_path }}/contacts?q={{ q }}&pg={{ pg + 1 }}" class="btn btn-sm">▶</a>
         {% else %}
         <span class="btn btn-sm" style="opacity:0.3">▶</span>
         {% endif %}
@@ -126,14 +126,14 @@
             <span class="material-icons-round" style="font-size:16px">save</span>
             {% if form_contact %}Save{% else %}Add Contact{% endif %}
           </button>
-          <a href="/contacts" class="btn btn-secondary">Cancel</a>
+          <a href="{{ root_path }}/contacts" class="btn btn-secondary">Cancel</a>
         </div>
 
       </form>
 
       {% if form_contact %}
       <!-- Delete button (separate form to use POST) -->
-      <form method="post" action="/contacts/{{ form_contact.id }}/delete"
+      <form method="post" action="{{ root_path }}/contacts/{{ form_contact.id }}/delete"
             style="margin-top:1rem"
             onsubmit="return confirm('Delete {{ form_contact.name }}?')">
         <button type="submit" class="btn btn-sm" style="color:var(--pico-color-red-500)">
@@ -149,7 +149,7 @@
     <div class="note-empty">
       <span style="font-size:48px">📇</span>
       <p class="text-muted">Select a contact or create a new one</p>
-      <a href="/contacts/new" class="btn btn-accent" style="margin-top:0.5rem">
+      <a href="{{ root_path }}/contacts/new" class="btn btn-accent" style="margin-top:0.5rem">
         <span class="material-icons-round" style="font-size:16px">person_add</span> New Contact
       </a>
     </div>

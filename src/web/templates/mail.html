@@ -22,7 +22,7 @@
       <button id="mail-refresh-btn" class="btn btn-primary btn-sm"
               style="margin-left:auto"
               onclick="this.textContent='Fetching mail…'; this.disabled=true;
-                       fetch('/mail/refresh',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}})
+                       fetch('{{ root_path }}/',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}})
                        .then(()=>window.location.reload())">
         🔄 Refresh
       </button>
@@ -69,8 +69,8 @@
         </span>
       </div>
       <div class="flex gap-sm">
-        <a href="/mail?show_settings=1" class="btn btn-secondary btn-sm">✏️ Change</a>
-        <form method="post" action="/mail/settings/delete"
+        <a href="{{ root_path }}/mail?show_settings=1" class="btn btn-secondary btn-sm">✏️ Change</a>
+        <form method="post" action="{{ root_path }}/mail/settings/delete"
               onsubmit="return confirm('Delete IMAP credentials?')">
           <button type="submit" class="btn btn-sm" style="background:#7f0000; color:#ff8a80">🗑 Delete</button>
         </form>
@@ -85,7 +85,7 @@
         <h4 class="mt-0 mb-0">{% if has_creds %}Change Mailbox{% else %}Set Up Mailbox{% endif %}</h4>
       </div>
 
-      <form method="post" action="/mail/settings" x-data="{
+      <form method="post" action="{{ root_path }}/mail/settings" x-data="{
         provider: '{{ creds.provider if creds else 'gmail' }}',
         providers: {
           gmail:  { imap_host: 'imap.gmail.com',  imap_port: 993, spam_folder: '[Google Mail]/Spam', hint: '' },
@@ -118,7 +118,7 @@
             Click the button below — you will be redirected to Google to grant access.
             Your credentials stay on this server only.
           </div>
-          <a href="/mail/oauth/google/start"
+          <a href="{{ root_path }}/mail/oauth/google/start"
              class="btn" style="background:#4285f4; color:#fff; border-color:#4285f4;
                                 text-decoration:none; display:inline-flex; align-items:center; gap:8px">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
@@ -130,7 +130,7 @@
             Sign in with Google
           </a>
           {% if has_creds %}
-          <a href="/mail" class="btn btn-secondary" style="margin-left:8px">Cancel</a>
+          <a href="{{ root_path }}/mail" class="btn btn-secondary" style="margin-left:8px">Cancel</a>
           {% endif %}
           {% elif not google_auth_ok %}
           <div class="login-info mb-md" style="font-size:13px; border-color:rgba(239,83,80,0.4); background:rgba(239,83,80,0.06)">
@@ -200,7 +200,7 @@
           <div class="flex gap-sm mt-md">
             <button type="submit" class="btn btn-primary">✅ Save & Test Connection</button>
             {% if has_creds %}
-            <a href="/mail" class="btn btn-secondary">Cancel</a>
+            <a href="{{ root_path }}/mail" class="btn btn-secondary">Cancel</a>
             {% endif %}
           </div>
         </div><!-- /non-gmail -->

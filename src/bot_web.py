@@ -241,6 +241,10 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # script in base.html only runs when SSL cert is actually configured.
 _HTTPS_AVAILABLE = (BASE / "ssl" / "key.pem").exists() and (BASE / "ssl" / "cert.pem").exists()
 templates.env.globals["https_available"] = _HTTPS_AVAILABLE
+# Inject ROOT_PATH into every template so form actions, hrefs and src
+# attributes can be prefixed correctly when the app runs under a sub-path.
+_ROOT_PATH = os.environ.get("ROOT_PATH", "")
+templates.env.globals["root_path"] = _ROOT_PATH
 
 
 @app.middleware("http")
@@ -252,6 +256,18 @@ async def _no_cache_html(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
     return response
+
+
+def _redir(path: str, status_code: int = 302) -> RedirectResponse:
+    """Return a RedirectResponse with ROOT_PATH prepended.
+
+    Required when the app is served under a sub-path (e.g. /supertaris/) via
+    nginx proxy_pass that strips the prefix before passing to uvicorn.
+    Without this, `_redir("/login")` sends the browser to /login
+    which nginx has no location block for → 404.
+    """
+    root = os.environ.get("ROOT_PATH", "")
+    return RedirectResponse(f"{root}{path}", status_code=status_code)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -459,7 +475,7 @@ _HOSTNAME = socket.gethostname()
 async def login_page(request: Request):
     user = _get_current_user(request)
     if user:
-        return RedirectResponse("/", status_code=302)
+        return _redir("/", status_code=302)
     return templates.TemplateResponse(request, "login.html", {
         "request": request, "error": None, "hostname": _HOSTNAME, "username": None,
     })
@@ -486,7 +502,7 @@ async def login_submit(request: Request, username: str = Form(...), password: st
             "hostname": _HOSTNAME, "username": username,
         })
     token = create_token(account["user_id"], account["username"], account.get("role", "user"))
-    resp = RedirectResponse("/", status_code=302)
+    resp = _redir("/", status_code=302)
     resp.set_cookie(
         COOKIE_NAME, token,
         httponly=True, samesite="lax", max_age=86400,
@@ -563,14 +579,14 @@ async def register_submit(
             "hostname": _HOSTNAME,
         })
     token = create_token(account["user_id"], account["username"], account.get("role", "user"))
-    resp = RedirectResponse("/", status_code=302)
+    resp = _redir("/", status_code=302)
     resp.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax", max_age=86400)
     return resp
 
 
 @app.get("/logout")
 async def logout():
-    resp = RedirectResponse("/login", status_code=302)
+    resp = _redir("/login", status_code=302)
     resp.delete_cookie(COOKIE_NAME)
     return resp
 
@@ -638,7 +654,7 @@ async def forgot_password_submit(request: Request):
         sent_ok = True
 
     if sent_ok:
-        return RedirectResponse("/forgot-password?msg=Notification+sent.+Check+your+channel.",
+        return _redir("/forgot-password?msg=Notification+sent.+Check+your+channel.",
                                 status_code=302)
     return templates.TemplateResponse(request, "forgot_password.html", {
         "request": request,
@@ -685,7 +701,7 @@ async def reset_password_submit(request: Request, token: str):
 
     await asyncio.to_thread(lambda: change_password(username, new_pw))
     log.info(f"[Auth] Password reset via token for user '{username}'")
-    return RedirectResponse("/login?msg=Password+reset+successful.+Please+log+in.",
+    return _redir("/login?msg=Password+reset+successful.+Please+log+in.",
                             status_code=302)
 
 _SUPPORTED_LANGS = {"en": "🇬🇧 English", "ru": "🇷🇺 Русский", "de": "🇩🇪 Deutsch"}
@@ -699,7 +715,7 @@ _SUPPORTED_LANGS = {"en": "🇬🇧 English", "ru": "🇷🇺 Русский", "
 async def profile_page(request: Request, msg: str = "", error: str = ""):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     account = find_account_by_id(user["sub"]) or {}
     tg_chat_id = account.get("telegram_chat_id")
     tg_reg = None
@@ -729,33 +745,33 @@ async def profile_page(request: Request, msg: str = "", error: str = ""):
 async def profile_update_name(request: Request, display_name: str = Form(...)):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     display_name = display_name.strip()
     if not display_name:
-        return RedirectResponse("/profile?error=Name+cannot+be+empty", status_code=302)
+        return _redir("/profile?error=Name+cannot+be+empty", status_code=302)
     update_account(user["sub"], display_name=display_name)
-    return RedirectResponse("/profile?msg=name_saved", status_code=302)
+    return _redir("/profile?msg=name_saved", status_code=302)
 
 
 @app.post("/profile/change-username", response_class=HTMLResponse)
 async def profile_change_username(request: Request, new_username: str = Form(...)):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     new_username = new_username.strip().lower()
     if len(new_username) < 3:
-        return RedirectResponse("/profile?error=Username+must+be+at+least+3+characters", status_code=302)
+        return _redir("/profile?error=Username+must+be+at+least+3+characters", status_code=302)
     if not new_username.replace("_", "").replace("-", "").isalnum():
-        return RedirectResponse("/profile?error=Username+may+only+contain+letters%2C+digits%2C+hyphens+and+underscores", status_code=302)
+        return _redir("/profile?error=Username+may+only+contain+letters%2C+digits%2C+hyphens+and+underscores", status_code=302)
     result = await asyncio.to_thread(lambda: change_username(user["sub"], new_username))
     if result == "taken":
-        return RedirectResponse("/profile?error=Username+is+already+taken", status_code=302)
+        return _redir("/profile?error=Username+is+already+taken", status_code=302)
     if result != "ok":
-        return RedirectResponse("/profile?error=Could+not+change+username", status_code=302)
+        return _redir("/profile?error=Could+not+change+username", status_code=302)
     # Re-issue JWT with new username
     account = find_account_by_id(user["sub"]) or {}
     new_token = create_token(user["sub"], new_username, account.get("role", "user"))
-    resp = RedirectResponse("/profile?msg=username_saved", status_code=302)
+    resp = _redir("/profile?msg=username_saved", status_code=302)
     resp.set_cookie(COOKIE_NAME, new_token, httponly=True, samesite="lax", max_age=86400 * 7)
     return resp
 
@@ -765,11 +781,11 @@ async def profile_link_telegram(request: Request, link_code: str = Form(...)):
     """User enters the 6-char code from Telegram bot to link accounts."""
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     import core.bot_state as _st_web
     tg_id = await asyncio.to_thread(lambda: _st_web.validate_web_link_code(link_code.strip()))
     if tg_id is None:
-        return RedirectResponse("/profile?error=Invalid+or+expired+link+code.+Generate+a+new+one+in+Telegram+with+/link", status_code=302)
+        return _redir("/profile?error=Invalid+or+expired+link+code.+Generate+a+new+one+in+Telegram+with+/link", status_code=302)
     # If another account already claims this Telegram ID, unlink it first (merge)
     existing = find_account_by_chat_id(tg_id)
     if existing and existing.get("user_id") != user["sub"]:
@@ -777,7 +793,7 @@ async def profile_link_telegram(request: Request, link_code: str = Form(...)):
         log.info(f"[Auth] Unlinked Telegram {tg_id} from '{existing.get('username')}' (merging to '{user['username']}')")
     update_account(user["sub"], telegram_chat_id=tg_id)
     log.info(f"[Auth] Telegram {tg_id} linked to web account '{user['username']}'")
-    return RedirectResponse("/profile?msg=telegram_linked", status_code=302)
+    return _redir("/profile?msg=telegram_linked", status_code=302)
 
 
 @app.post("/profile/voice-gender", response_class=HTMLResponse)
@@ -785,18 +801,18 @@ async def profile_voice_gender(request: Request, voice_male: str = Form("off")):
     """Toggle per-user TTS voice between male (dmitri) and female (irina)."""
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     chat_id = _profile_chat_id(user)
     if not chat_id:
-        return RedirectResponse("/profile?error=Link+your+Telegram+account+to+set+voice+preference", status_code=302)
+        return _redir("/profile?error=Link+your+Telegram+account+to+set+voice+preference", status_code=302)
     try:
         from core.store import store as _store
         new_val = voice_male.lower() in ("on", "1", "true", "male")
         _store.set_voice_opt("voice_male", new_val, chat_id=int(chat_id))
     except Exception as _e:
         log.warning(f"[Web] profile/voice-gender failed for user={user['username']}: {_e}")
-        return RedirectResponse("/profile?error=Could+not+update+voice+preference", status_code=302)
-    return RedirectResponse("/profile?msg=voice_gender_saved", status_code=302)
+        return _redir("/profile?error=Could+not+update+voice+preference", status_code=302)
+    return _redir("/profile?msg=voice_gender_saved", status_code=302)
 
 
 def _profile_chat_id(user: dict) -> int | None:
@@ -812,7 +828,7 @@ def _profile_chat_id(user: dict) -> int | None:
 async def settings_page(request: Request, msg: str = "", error: str = ""):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     account = find_account_by_id(user["sub"]) or {}
     current_lang = account.get("language", "en")
     return templates.TemplateResponse(request, "settings.html", _ctx(
@@ -828,11 +844,11 @@ async def settings_page(request: Request, msg: str = "", error: str = ""):
 async def settings_set_language(request: Request, language: str = Form(...)):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     if language not in _SUPPORTED_LANGS:
-        return RedirectResponse("/settings?error=invalid_language", status_code=302)
+        return _redir("/settings?error=invalid_language", status_code=302)
     update_account(user["sub"], language=language)
-    return RedirectResponse("/settings?msg=language_saved", status_code=302)
+    return _redir("/settings?msg=language_saved", status_code=302)
 
 
 @app.post("/settings/password", response_class=HTMLResponse)
@@ -844,7 +860,7 @@ async def settings_change_password(
 ):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     account = find_account_by_id(user["sub"])
     current_lang = (account or {}).get("language", "en")
     ctx_error = lambda msg: templates.TemplateResponse(request, "settings.html", _ctx(
@@ -861,7 +877,7 @@ async def settings_change_password(
     if new_password != confirm_password:
         return ctx_error("New passwords do not match.")
     change_password(user["sub"], new_password)
-    return RedirectResponse("/settings?msg=password_changed", status_code=302)
+    return _redir("/settings?msg=password_changed", status_code=302)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -872,7 +888,7 @@ async def settings_change_password(
 async def dashboard(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
 
     uid = user["sub"]
     notes = _list_notes(uid)[:3]
@@ -920,7 +936,7 @@ async def dashboard(request: Request):
 async def chat_page(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
 
     uid = user["sub"]
     messages = _chat_history.get(uid, [])
@@ -984,7 +1000,7 @@ async def chat_clear(request: Request):
 async def notes_page(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
 
     uid = user["sub"]
     notes = _list_notes(uid)
@@ -1127,7 +1143,7 @@ def _cal_save(user_id: str, events: list[dict]) -> None:
 async def calendar_page(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
 
     uid = user["sub"]
     now = datetime.now()
@@ -1170,7 +1186,7 @@ async def calendar_add(
 ):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     uid = user["sub"]
     events = _cal_load(uid)
     try:
@@ -1185,7 +1201,7 @@ async def calendar_add(
         "reminded": False,
     })
     _cal_save(uid, events)
-    return RedirectResponse("/calendar", status_code=303)
+    return _redir("/calendar", status_code=303)
 
 
 @app.post("/calendar/{ev_id}/delete")
@@ -1195,12 +1211,12 @@ async def calendar_delete(
 ):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     uid = user["sub"]
     events = _cal_load(uid)
     events = [e for e in events if e.get("id") != ev_id]
     _cal_save(uid, events)
-    return RedirectResponse("/calendar", status_code=303)
+    return _redir("/calendar", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1369,12 +1385,12 @@ async def calendar_console_route(request: Request):
 async def google_oauth_start(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     if not _GOOGLE_AUTH_OK:
-        return RedirectResponse("/mail?error=Google+auth+library+not+available", status_code=302)
+        return _redir("/mail?error=Google+auth+library+not+available", status_code=302)
     cs = _find_google_client_secret()
     if not cs:
-        return RedirectResponse("/mail?error=Google+client_secret+file+not+found+on+server", status_code=302)
+        return _redir("/mail?error=Google+client_secret+file+not+found+on+server", status_code=302)
     redirect_uri = str(request.base_url).rstrip("/") + "/mail/oauth/google/callback"
     flow = _GoogleFlow.from_client_secrets_file(str(cs), scopes=_GMAIL_OAUTH_SCOPES,
                                                 redirect_uri=redirect_uri)
@@ -1388,10 +1404,10 @@ async def google_oauth_start(request: Request):
 async def google_oauth_callback(request: Request, code: str = "", state: str = "",
                                 error: str = ""):
     if error:
-        return RedirectResponse("/mail?error=Google+sign-in+was+cancelled", status_code=302)
+        return _redir("/mail?error=Google+sign-in+was+cancelled", status_code=302)
     state_data = _oauth_state.pop(state, None)
     if not state_data:
-        return RedirectResponse("/mail?error=OAuth+session+expired+-+please+try+again",
+        return _redir("/mail?error=OAuth+session+expired+-+please+try+again",
                                 status_code=302)
     uid = state_data["uid"]
     cs = _find_google_client_secret()
@@ -1403,7 +1419,7 @@ async def google_oauth_callback(request: Request, code: str = "", state: str = "
         flow.fetch_token(code=code)
     except Exception as exc:
         log.warning(f"[Mail] OAuth2 token exchange failed: {exc}")
-        return RedirectResponse("/mail?error=Token+exchange+failed+-+please+retry",
+        return _redir("/mail?error=Token+exchange+failed+-+please+retry",
                                 status_code=302)
     gc = flow.credentials
     # Get the user's email address from Gmail API
@@ -1441,7 +1457,7 @@ async def google_oauth_callback(request: Request, code: str = "", state: str = "
         except Exception as _e:
             log.warning("[Mail/Web] _store.save_mail_creds failed: %s", _e)
     log.info(f"[Mail] OAuth2 Gmail connected: {email_addr} for user {uid}")
-    return RedirectResponse("/mail", status_code=302)
+    return _redir("/mail", status_code=302)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1463,7 +1479,7 @@ def _contacts_for(chat_id: int, q: str = "", offset: int = 0) -> tuple[list[dict
 async def contacts_page(request: Request, q: str = "", pg: int = 0):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
     offset = pg * PAGE_SIZE
@@ -1481,7 +1497,7 @@ async def contacts_page(request: Request, q: str = "", pg: int = 0):
 async def contacts_new_form(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     return templates.TemplateResponse(
         request, "contacts.html",
         _ctx(request, user, "contacts",
@@ -1501,7 +1517,7 @@ async def contacts_create(
 ):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     from features.bot_contacts import _contact_add
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
@@ -1511,20 +1527,20 @@ async def contacts_create(
                  email=email.strip() or None,
                  address=address.strip() or None,
                  notes=notes.strip() or None)
-    return RedirectResponse("/contacts", status_code=303)
+    return _redir("/contacts", status_code=303)
 
 
 @app.get("/contacts/{cid}", response_class=HTMLResponse)
 async def contacts_detail(request: Request, cid: str):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     from features.bot_contacts import _contact_get
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
     contact = _contact_get(chat_id, cid)
     if not contact:
-        return RedirectResponse("/contacts", status_code=302)
+        return _redir("/contacts", status_code=302)
     return templates.TemplateResponse(
         request, "contacts.html",
         _ctx(request, user, "contacts",
@@ -1545,7 +1561,7 @@ async def contacts_update(
 ):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     from features.bot_contacts import _contact_update
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
@@ -1562,12 +1578,12 @@ async def contacts_update(
 async def contacts_delete(request: Request, cid: str):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     from features.bot_contacts import _contact_delete
     account = find_account_by_id(user["sub"])
     chat_id = (account or {}).get("telegram_chat_id") or 0
     _contact_delete(chat_id, cid)
-    return RedirectResponse("/contacts", status_code=303)
+    return _redir("/contacts", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1584,7 +1600,7 @@ def _docs_chat_id(user: dict) -> int:
 async def docs_page(request: Request, msg: str = "", error: str = ""):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     chat_id = _docs_chat_id(user)
     docs: list[dict] = []
     rag_available = False
@@ -1607,12 +1623,12 @@ async def docs_page(request: Request, msg: str = "", error: str = ""):
 async def docs_upload(request: Request, file: UploadFile = File(...)):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     chat_id = _docs_chat_id(user)
     if not chat_id:
-        return RedirectResponse("/documents?error=Link+your+Telegram+account+first", status_code=303)
+        return _redir("/documents?error=Link+your+Telegram+account+first", status_code=303)
     if not _store or not _store.has_document_search():
-        return RedirectResponse("/documents?error=RAG+not+available", status_code=303)
+        return _redir("/documents?error=RAG+not+available", status_code=303)
 
     orig_name = file.filename or "upload"
     ext = Path(orig_name).suffix.lower()
@@ -1623,7 +1639,7 @@ async def docs_upload(request: Request, file: UploadFile = File(...)):
 
     data = await file.read()
     if len(data) > 20 * 1024 * 1024:
-        return RedirectResponse("/documents?error=File+too+large+(max+20+MB)", status_code=303)
+        return _redir("/documents?error=File+too+large+(max+20+MB)", status_code=303)
 
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(data)
@@ -1632,7 +1648,7 @@ async def docs_upload(request: Request, file: UploadFile = File(...)):
         _process_doc_file(chat_id, tmp_path, ext, orig_name)
     except Exception as e:
         log.error("[Docs/Web] upload failed: %s", e)
-        return RedirectResponse("/documents?error=Upload+failed", status_code=303)
+        return _redir("/documents?error=Upload+failed", status_code=303)
     return RedirectResponse(f"/documents?msg=Uploaded+{orig_name}", status_code=303)
 
 
@@ -1640,20 +1656,20 @@ async def docs_upload(request: Request, file: UploadFile = File(...)):
 async def docs_rename(request: Request, doc_id: str, title: str = Form(...)):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     if _store:
         try:
             _store.update_document_field(doc_id, title=title.strip())
         except Exception as e:
             log.warning("[Docs/Web] rename failed: %s", e)
-    return RedirectResponse("/documents", status_code=303)
+    return _redir("/documents", status_code=303)
 
 
 @app.post("/documents/{doc_id}/share")
 async def docs_toggle_share(request: Request, doc_id: str):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     if _store:
         try:
             chat_id = _docs_chat_id(user)
@@ -1663,20 +1679,20 @@ async def docs_toggle_share(request: Request, doc_id: str):
                 _store.update_document_field(doc_id, is_shared=0 if d.get("is_shared") else 1)
         except Exception as e:
             log.warning("[Docs/Web] share toggle failed: %s", e)
-    return RedirectResponse("/documents", status_code=303)
+    return _redir("/documents", status_code=303)
 
 
 @app.post("/documents/{doc_id}/delete")
 async def docs_delete(request: Request, doc_id: str):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     if _store:
         try:
             _store.delete_document(doc_id)
         except Exception as e:
             log.warning("[Docs/Web] delete failed: %s", e)
-    return RedirectResponse("/documents", status_code=303)
+    return _redir("/documents", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1734,7 +1750,7 @@ def _load_mail_creds_for_user(uid: str) -> Optional[dict]:
 async def mail_page(request: Request, show_settings: bool = False, error: str = ""):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
 
     uid = user["sub"]
     mail_dir = Path(_TARIS_DIR) / "mail_creds"
@@ -1806,7 +1822,7 @@ async def mail_settings_save(request: Request):
     uid = user["sub"]
     # Block IMAP form submission for Gmail — should use OAuth2 flow instead
     if provider == "gmail":
-        return RedirectResponse("/mail/oauth/google/start", status_code=302)
+        return _redir("/mail/oauth/google/start", status_code=302)
     # If password is blank, reuse the existing stored password (edit flow)
     if not app_password:
         existing = _load_mail_creds_for_user(uid)
@@ -1814,9 +1830,9 @@ async def mail_settings_save(request: Request):
             app_password = existing["app_password"]
 
     if not email_addr or not app_password:
-        return RedirectResponse("/mail?show_settings=1&error=Email+and+app+password+are+required.", status_code=302)
+        return _redir("/mail?show_settings=1&error=Email+and+app+password+are+required.", status_code=302)
     if provider == "custom" and not imap_host:
-        return RedirectResponse("/mail?show_settings=1&error=IMAP+host+is+required+for+custom+provider.", status_code=302)
+        return _redir("/mail?show_settings=1&error=IMAP+host+is+required+for+custom+provider.", status_code=302)
 
     # Test IMAP connection before saving
     def _imap_err_str(exc: Exception) -> str:
@@ -1864,7 +1880,7 @@ async def mail_settings_save(request: Request):
             log.warning("[Mail/Web] _store.save_mail_creds failed: %s", _e)
 
     log.info(f"[Mail] Web user {uid} saved IMAP creds (provider={provider}, email={email_addr})")
-    return RedirectResponse("/mail", status_code=302)
+    return _redir("/mail", status_code=302)
 
 
 @app.post("/mail/settings/delete")
@@ -1880,7 +1896,7 @@ async def mail_settings_delete(request: Request):
         if f.exists():
             f.unlink(missing_ok=True)
     log.info(f"[Mail] Web user {uid} deleted IMAP creds")
-    return RedirectResponse("/mail", status_code=302)
+    return _redir("/mail", status_code=302)
 
 
 @app.post("/mail/refresh")
@@ -1894,7 +1910,7 @@ async def mail_refresh(request: Request):
     import asyncio
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _do_imap_fetch_and_save, uid)
-    return RedirectResponse("/mail", status_code=302)
+    return _redir("/mail", status_code=302)
 
 
 def _do_imap_fetch_and_save(uid: str) -> str:
@@ -2278,7 +2294,7 @@ def _voice_pipeline_status() -> list[dict]:
 async def voice_page(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
 
     d = Path(_TARIS_DIR)
 
@@ -2677,7 +2693,7 @@ async def voice_chat_text_endpoint(request: Request, message: str = Form(...)):
 async def admin_page(request: Request):
     user = _get_current_user(request)
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return _redir("/login", status_code=302)
     if user.get("role") != "admin":
         raise HTTPException(403, detail="Admin only")
 
