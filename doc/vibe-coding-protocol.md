@@ -5,6 +5,12 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-16 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 07:26 | Fix 502 Bad Gateway + all root_path sub-path issues for https://agents.sintaris.net/supertaris/: nginx double-prefix, HTMX paths, HX-Redirect, voice fetch URLs, manifest.json dynamic endpoint | 4 | 8 | claude-sonnet-4.6 | bot_web.py, voice.html, chat.html, notes.html, _note_list.html, _note_editor.html, base.html | done |
+
 ### Session — 2026-04-14 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
