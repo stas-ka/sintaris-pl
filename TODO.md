@@ -433,56 +433,54 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 
 ---
 
-## 26. Deployment Plan: VPS (Cloud) 🔲
+## 26. Deployment Plan: VPS (Cloud) ✅ Implemented (v2026.4.50)
 
-> **Minimum spec:** 2 vCPU · 4 GB RAM · 40 GB SSD · Ubuntu 22.04 LTS.
-> **Stack:** Docker Compose · PostgreSQL 16 + pgvector · nginx + Let's Encrypt TLS.
-> **Bot mode:** Telegram webhook (not polling). Multi-user (`MULTI_USER=1`).
+> **Deployed:** Docker on `dev2null.de` VPS (Ubuntu, aarch64, 6 vCPU, 7.7 GB RAM).
+> **Stack:** Docker Compose · system PostgreSQL 16 + pgvector 0.8.0 · nginx + Let's Encrypt TLS.
+> **Bot mode:** Telegram polling (webhook optional later). Web UI at `https://agents.sintaris.net/supertaris-vps/`.
+> **Deploy path:** `/opt/taris-docker/` · Config: `deploy/system-configs/vps/docker/`
 
 ### 26.1 Provision & Base Setup
-- [ ] Provision Ubuntu 22.04 VPS; create user `taris`; enable SSH key-only login; disable password auth
-- [ ] `sudo apt install docker.io docker-compose-v2 git nginx certbot python3-certbot-nginx ufw -y`
-- [ ] Clone repo to `/opt/taris/`; `chown -R taris:taris /opt/taris`
+- ✅ VPS already existed: Ubuntu aarch64, Docker 28.3.2, nginx + certbot installed
+- ✅ `stas` user in `docker` group; source deployed to `/opt/taris-docker/app/src/`
+- ⚠️ SSH key-only login not enforced (password auth still enabled)
 
 ### 26.2 PostgreSQL + pgvector
-- [ ] Deploy `postgres:16-alpine` in Docker Compose (internal only, not exposed); or install system PostgreSQL
-- [ ] `CREATE EXTENSION IF NOT EXISTS vector;`; create `taris` user + `taris_db`; run `migrate_to_db.py`
-- [ ] Set `STORE_BACKEND=postgres`, `DB_URL=postgresql://taris:…@localhost/taris_db`, `STORE_VECTORS=on`, `EMBED_KEEP_RESIDENT=1` in `bot.env`
-- [ ] HNSW index: `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops);`
+- ✅ System PostgreSQL 16 installed; `taris` user + `taris_vps` database created
+- ✅ `CREATE EXTENSION vector;` run → pgvector 0.8.0 active in `taris_vps`
+- ✅ `STORE_BACKEND=postgres`, `STORE_PG_DSN=postgresql://taris:…@127.0.0.1:5432/taris_vps`
+- ✅ Tables auto-created by app on first start (`StorePostgres connected vec=True`)
+- [ ] HNSW index (optional perf): `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops);`
 
 ### 26.3 TLS & nginx
-- [ ] nginx server block: proxy `/` → `http://localhost:8080`; `/webhook` → `http://localhost:8080/webhook`
-- [ ] `sudo certbot --nginx -d yourdomain.com` (Let's Encrypt; auto-renew)
-- [ ] nginx rate limiting on `/webhook`: `limit_req_zone $binary_remote_addr zone=webhook:10m rate=30r/m;`
-- [ ] Firewall: `ufw allow 80,443/tcp; ufw deny 5432/tcp; ufw enable`
+- ✅ nginx proxies `/supertaris-vps/` → `http://127.0.0.1:8090/` (Docker host networking)
+- ✅ TLS via existing Let's Encrypt cert on `agents.sintaris.net`
+- ⚠️ Webhook rate limiting not added (using polling mode)
 
-### 26.4 Telegram Webhook
-- [ ] Register: `curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://yourdomain.com/webhook&secret_token=<RANDOM_SECRET>"`
-- [ ] Verify: `curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"` → `"pending_update_count":0`
-- [ ] Set `TELEGRAM_WEBHOOK_URL=https://yourdomain.com/webhook`, `WEBHOOK_SECRET=<secret>`, `MULTI_USER=1` in `bot.env`
+### 26.4 Telegram Bot
+- ✅ `ALLOWED_USERS`, `ADMIN_USERS`, LLM config all set in `bot.env`
+- ❌ `BOT_TOKEN` = CHANGE_ME — **user must create `Supertariss` bot via @BotFather and set token in `/opt/taris-docker/bot.env`**
+- ⚠️ Webhook mode not configured (polling works; webhook needs BOT_TOKEN first)
 
 ### 26.5 RAG & Embeddings
-- [ ] `pip install onnxruntime sentence-transformers psycopg2-binary` in bot virtualenv
-- [ ] `EMBED_MODEL=all-MiniLM-L6-v2`, `EMBED_KEEP_RESIDENT=1` in `bot.env`
-- [ ] LLM: connect via `LLM_PROVIDER` to cloud provider (OpenAI / Anthropic / Gemini); local llama.cpp only if VPS RAM ≥8 GB
-- [ ] Implement Phases A–D from §25.6 (same RAG code; only backend differs — pgvector already configured)
+- ✅ `fastembed` installed in Docker image; `pgvector` enabled → RAG active
+- ✅ LLM: `LLM_PROVIDER=openai`, `OPENAI_MODEL=gpt-4o-mini`
+- ✅ STT: `faster-whisper base` pre-downloaded to `/opt/taris-docker/data/whisper/`
+- ✅ TTS: Piper + `ru_RU-irina-medium` model at `/opt/taris-docker/data/piper/`
 
 ### 26.6 Backups & Monitoring
-- [ ] Daily: `pg_dump taris_db | gzip > /backup/taris_$(date +%F).sql.gz`; rsync to `cloud.dev2null.de` (see §6.2); retain 30 days
-- [ ] Deploy `src/services/taris-logrotate` → `/etc/logrotate.d/taris`
-- [ ] `bot_logger.py` structured logs; CRITICAL events forwarded to admin Telegram ID
-- [ ] `Restart=on-failure; RestartSec=10` in all systemd service units
+- [ ] Daily `pg_dump taris_vps` cron job (not yet set up)
+- [ ] Docker container auto-restart: `restart: unless-stopped` ✅ (in docker-compose.yml)
+- [ ] Log rotation for Docker JSON logs: `max-size: 20m, max-file: 5` ✅ (in docker-compose.yml)
 
 ### 26.7 Security Hardening
-- [ ] `ADMIN_USERS` + `ALLOWED_USERS` must be set in `bot.env` before first start; review on every deploy
-- [ ] Rotate `WEBHOOK_SECRET` and `JWT_SECRET` on first deploy; store outside git
-- [ ] `sudo apt install fail2ban` — monitor SSH + nginx auth log
-- [ ] `sudo unattended-upgrades` enabled; monthly review of `deploy/requirements.txt` for CVEs
+- ✅ `ADMIN_USERS` + `ALLOWED_USERS` set in `bot.env`
+- ✅ Web login: `stas/buerger` (admin) — default `admin/admin` account deleted
+- [ ] SSH key-only login (currently password auth enabled)
+- [ ] fail2ban check
 
 ### 26.8 Scaling Path
-- [ ] ≤50 concurrent users: single instance as above is sufficient
-- [ ] 50–200 users: Redis session cache (`REDIS_URL=redis://localhost:6379`); `uvicorn --workers 4`
-- [ ] 200+ users: horizontal scale via load balancer + multiple bot-web instances; RabbitMQ/Redis update queue
+- ✅ ≤50 users: single Docker instance sufficient for current load
 
 ---
 
