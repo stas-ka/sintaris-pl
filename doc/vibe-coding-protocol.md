@@ -10,6 +10,7 @@ Use this to analyse cost (time, requests) per feature over time.
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
 | 07:26 | Fix 502 Bad Gateway + all root_path sub-path issues for https://agents.sintaris.net/supertaris/: nginx double-prefix, HTMX paths, HX-Redirect, voice fetch URLs, manifest.json dynamic endpoint | 4 | 8 | claude-sonnet-4.6 | bot_web.py, voice.html, chat.html, notes.html, _note_list.html, _note_editor.html, base.html | done |
+| 19:30 | Add external internet-facing UI tests (43 tests); fix docs.html datetime bug with PostgreSQL; add PWA icon files; update test-suite.md | 2 | 6 | claude-sonnet-4.6 | test_external_ui.py (new), run_external_ui_tests.py (new), docs.html, icon-192.png, icon-512.png, test-suite.md | done |
 
 ### Session — 2026-04-14 (UTC)
 
