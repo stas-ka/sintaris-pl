@@ -1,0 +1,53 @@
+# docker-compose.yml — Taris OpenClaw on VPS
+#
+# Deploy path:  /opt/taris-docker/
+# Source:       /opt/taris-docker/app/  (copy of sintaris-pl/src/)
+# Data:         /opt/taris-docker/data/ (whisper cache, piper models)
+# Config:       /opt/taris-docker/bot.env
+#
+# Web UI port:  8090 (nginx proxies /supertaris-vps/ → 127.0.0.1:8090)
+# Update flow:  rsync src/ → /opt/taris-docker/app/ && docker restart taris-vps-telegram taris-vps-web
+
+services:
+
+  # ── Telegram bot ────────────────────────────────────────────────────────────
+  taris-telegram:
+    image: taris-vps:latest
+    container_name: taris-vps-telegram
+    network_mode: host            # direct access to 127.0.0.1:5432 (PostgreSQL)
+    env_file: /opt/taris-docker/bot.env
+    volumes:
+      - /opt/taris-docker/app/src:/app:ro          # source code (update via rsync)
+      - /opt/taris-docker/data/whisper:/root/.cache/huggingface  # model cache
+      - /opt/taris-docker/data/piper:/opt/piper:ro              # TTS binary + model
+    command: python3 telegram_menu_bot.py
+    working_dir: /app
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ── Web UI ───────────────────────────────────────────────────────────────────
+  taris-web:
+    image: taris-vps:latest
+    container_name: taris-vps-web
+    network_mode: host            # listens on 0.0.0.0:8090 (set via --port in command)
+    env_file: /opt/taris-docker/bot.env
+    volumes:
+      - /opt/taris-docker/app/src:/app:ro          # source code (update via rsync)
+      - /opt/taris-docker/data/whisper:/root/.cache/huggingface  # model cache
+      - /opt/taris-docker/data/piper:/opt/piper:ro              # TTS binary + model
+    command: >
+      python3 -m uvicorn bot_web:app
+      --host 0.0.0.0
+      --port 8090
+      --root-path /supertaris-vps
+    working_dir: /app
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"

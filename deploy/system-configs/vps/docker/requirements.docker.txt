@@ -1,0 +1,46 @@
+# Taris Bot — Docker image dependencies (VPS/OpenClaw, no live microphone)
+# Excludes: sounddevice, webrtcvad (live audio), sentence-transformers (too large)
+# Install: pip install --no-cache-dir -r requirements.docker.txt
+
+# ── Telegram bot ──────────────────────────────────────────────────────────────
+pyTelegramBotAPI
+
+# ── Voice — STT (Telegram OGG files, no live mic) ────────────────────────────
+faster-whisper         # CTranslate2 Whisper — STT_PROVIDER=faster_whisper
+scipy                  # audio resampling for faster-whisper path
+vosk                   # offline fallback STT (STT_FALLBACK_PROVIDER=vosk)
+
+# ── Gmail digest — Google API ─────────────────────────────────────────────────
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
+# ── Web UI (FastAPI) ──────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+jinja2
+bcrypt
+PyJWT
+python-multipart
+requests
+
+# ── Embeddings (lightweight — no PyTorch) ────────────────────────────────────
+fastembed              # onnxruntime-cpu backed; no PyTorch (~80MB vs ~1.5GB)
+
+# ── Storage — PostgreSQL + pgvector ──────────────────────────────────────────
+psycopg[binary]
+psycopg-pool
+pgvector
+cryptography
+
+# ── Screen DSL ───────────────────────────────────────────────────────────────
+pyyaml
+jsonschema
+
+# ── LLM providers ────────────────────────────────────────────────────────────
+openai                 # LLM_PROVIDER=openai (gpt-4o-mini) — primary on VPS
+
+# ── Documents / RAG ──────────────────────────────────────────────────────────
+pdfminer.six
+python-docx
+sqlite-vec
