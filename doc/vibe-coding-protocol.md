@@ -11,6 +11,8 @@ Use this to analyse cost (time, requests) per feature over time.
 |---|---|---|---|---|---|---|
 | 07:26 | Fix 502 Bad Gateway + all root_path sub-path issues for https://agents.sintaris.net/supertaris/: nginx double-prefix, HTMX paths, HX-Redirect, voice fetch URLs, manifest.json dynamic endpoint | 4 | 8 | claude-sonnet-4.6 | bot_web.py, voice.html, chat.html, notes.html, _note_list.html, _note_editor.html, base.html | done |
 | 19:30 | Add external internet-facing UI tests (43 tests); fix docs.html datetime bug with PostgreSQL; add PWA icon files; update test-suite.md | 2 | 6 | claude-sonnet-4.6 | test_external_ui.py (new), run_external_ui_tests.py (new), docs.html, icon-192.png, icon-512.png, test-suite.md | done |
+| 20:10 | Save system config files to git (gitignore fix, deploy/system-configs/ committed); VPS resource analysis; fix web login stas/buerger; SSH admin tunnel via VPS ProxyJump | 3 | 12 | claude-sonnet-4.6 | .gitignore, deploy/system-configs/* (29 files), doc/vps-taris-deployment-analysis.md (new), deploy/system-configs/sintaition/taris-tunnel.service, ssh-admin-access.md | done |
+| 21:30 | Gemma4 VPS feasibility analysis: e2b is 7.2 GB Q8 (not 3.2 GB), exceeds 3.5 GB available RAM — not feasible; updated VPS report with Gemma4 section and corrected LLM options | 2 | 3 | claude-sonnet-4.6 | doc/vps-taris-deployment-analysis.md | done |
 
 ### Session — 2026-04-14 (UTC)
 
