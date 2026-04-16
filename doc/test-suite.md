@@ -41,6 +41,7 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | **F — Offline Telegram regression** | pytest (`test_telegram_bot.py`) | Local machine | Yes |
 | **G — Screen DSL loader** | pytest (`src/tests/screen_loader/`) | Local machine | Yes |
 | **H — LLM provider tests** | pytest (`src/tests/llm/`) | Local machine | Yes |
+| **I — External internet UI tests** | Playwright (`test_external_ui.py`) | Any machine → internet | Yes |
 
 ---
 
@@ -622,6 +623,74 @@ Run after any change to:
 - `src/core/bot_llm.py`
 - `LLM_PROVIDER`, `OLLAMA_MODEL`, `LLM_FALLBACK_PROVIDER` constants in `bot_config.py`
 - Adding or removing LLM providers in `_DISPATCH`
+
+---
+
+## 6e. Category I — External Internet-Facing UI Tests
+
+**File:** `src/tests/ui/test_external_ui.py`  
+**Runner:** `tools/run_external_ui_tests.py`  
+**Technology:** Playwright + pytest (Chromium headless)  
+**Target:** Internet-deployed taris instances (e.g. `https://agents.sintaris.net/supertaris/`)  
+**Run from:** any machine with internet access — no local taris install needed
+
+### 6e.1 Run commands
+
+```powershell
+# Single instance (Windows)
+cd src\tests\ui
+$env:TARIS_ADMIN_USER = "stas"
+$env:TARIS_ADMIN_PASS = "yourpassword"
+python -m pytest test_external_ui.py -v `
+    --base-url https://agents.sintaris.net/supertaris `
+    --browser chromium --tb=short
+
+# Multi-instance runner (all configured targets)
+python tools/run_external_ui_tests.py
+```
+
+```bash
+# Linux/macOS
+cd src/tests/ui
+TARIS_ADMIN_USER=stas TARIS_ADMIN_PASS=yourpassword \
+  python -m pytest test_external_ui.py -v \
+    --base-url https://agents.sintaris.net/supertaris \
+    --browser chromium
+```
+
+### 6e.2 Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TARIS_ADMIN_USER` | No | `stas` | Login username for auth tests |
+| `TARIS_ADMIN_PASS` | No | — | Login password; auth tests SKIP if unset |
+| `TARIS_INSTANCES` | No | `supertaris,supertaris2` | Comma-separated sub-paths for multi-instance runner |
+
+### 6e.3 What it covers (43 tests)
+
+| Class | Tests | What it checks |
+|---|---|---|
+| `TestExternalReachability` | 5 | HTTP 200, no 502, HTTPS cert valid, SSL, login page loads |
+| `TestExternalAuth` | 5 | Login form, wrong password rejected, login succeeds, logout, protected pages redirect |
+| `TestExternalDashboard` | 4 | Dashboard loads after login, nav links present, page title, no 500 errors |
+| `TestExternalPages` | 10 | `/chat`, `/voice`, `/notes`, `/calendar`, `/contacts`, `/documents`, `/profile`, `/settings`, `/admin`, each with heading + no-500 checks |
+| `TestExternalHTMX` | 4 | New note via HTMX, note list update, chat form, calendar HTMX form |
+| `TestExternalAdmin` | 5 | Admin page only for admin users, non-admin denied, user list loads, Web-token generation |
+| `TestExternalRegressions` | 10 | `manifest.json` valid JSON, icon URLs correct, icon files not 404, root_path prefix in nav links, no double-prefix, HTTPS cert expiry > 7 days, static assets load, no mixed content, sub-path links consistent, security headers present |
+
+### 6e.4 When to run
+
+- After every deployment to any internet-facing target
+- After nginx config changes (sub-path, proxy, SSL)
+- After web UI template or bot_web.py changes
+- Run as part of post-deploy verification before marking a release done
+
+### 6e.5 Notes
+
+- Auth tests auto-skip if `TARIS_ADMIN_PASS` is not set (CI-safe)
+- Sub-path aware: uses `href*=` selectors, not exact href matches
+- Chat test uses `wait_for_selector` (not `networkidle`) — chat page uses streaming
+- Calendar test uses `wait_for_timeout(3_000)` — not networkidle
 
 ---
 
