@@ -47,7 +47,7 @@
 | EspoCRM | 8888 | ✅ Running | ✅ Yes — existing CRM |
 | nginx | 80/443 | ✅ Running | ✅ Yes — add new sub-path |
 | Ollama | 11434 | ❌ Not installed | Optional |
-| ffmpeg | — | ❌ Not installed | Needs install |
+| ffmpeg | — | ✅ Installed (2026-04-16) | ✅ Yes — audio processing |
 
 ---
 
@@ -65,19 +65,105 @@
 
 ---
 
-## Voice Features
+## Voice Features on VPS
 
-**Voice: ❌ DISABLED on VPS**
+**⚠️ VPS has no microphone/speaker** — the live voice assistant is not usable. But **Telegram voice message processing** (STT + TTS) works fully via software.
 
-The VPS has no:
-- Audio input hardware (microphone)
-- Audio output (speaker)
-- Physical presence (remote cloud server)
+### What works vs what doesn't
 
-Set in `bot.env`:
-```
-STT_PROVIDER=none
+| Feature | VPS | SintAItion |
+|---------|-----|-----------|
+| Transcribe Telegram voice messages (OGG→text) | ✅ Yes (faster-whisper/openai_whisper) | ✅ Yes |
+| Send voice replies (text→OGG) | ✅ Yes (Piper aarch64) | ✅ Yes |
+| "Read aloud" any bot reply | ✅ Yes | ✅ Yes |
+| Live voice assistant (hotword + mic) | ❌ No mic | ✅ Yes |
+| Real-time streaming STT | ❌ No mic | ✅ Yes |
+
+### Package availability on ARM64 (aarch64) — VERIFIED ✅
+
+| Package | ARM64 wheel | Status |
+|---------|-------------|--------|
+| `faster-whisper` 1.2.1 | `ctranslate2-4.7.1-cp312-cp312-manylinux_2_27_aarch64` | ✅ Available |
+| `vosk` 0.3.45 | `manylinux2014_aarch64` | ✅ Available |
+| Piper binary 2023.11.14-2 | `piper_linux_aarch64.tar.gz` | ✅ Available |
+| `ffmpeg` | arm64 apt package (v6.1.1) | ✅ Available |
+| `onnxruntime` 1.24.4 | `manylinux_2_27_aarch64` | ✅ Available |
+
+All packages tested and installed on VPS (2026-04-16).
+
+### STT Benchmark — faster-whisper on VPS ARM Neoverse-N1 (CPU, int8)
+
+*Benchmarked 2026-04-16 on actual VPS hardware:*
+
+| Model | Load time | RTF (5s audio) | WER estimate | RAM loaded |
+|-------|-----------|----------------|--------------|------------|
+| `tiny` | 2.4s | **0.14** (7× real-time) | ~25% RU / ~14% EN | ~250 MB |
+| `base` | 2.2s | **0.23** (4× real-time) | ~22% RU / ~12% EN | ~350 MB |
+| `small` | not tested | ~0.35 estimated | ~18% RU / ~10% EN | ~650 MB |
+
+> With `FASTER_WHISPER_PRELOAD=0` (lazy load): 0 MB at idle, peak RAM only during voice message processing.  
+> **Recommendation: `base` model** — better accuracy than `tiny` at similar RAM, both very fast.
+
+**Comparison with SintAItion** (AMD Radeon 890M GPU, `small` model):
+- SintAItion STT: RTF ≈ 0.05 (GPU-accelerated) — ~3× faster than VPS base
+- VPS base RTF=0.23 is still **4× faster than real-time** — fine for Telegram (10s OGG → 2.3s transcription)
+
+### TTS Benchmark — Piper aarch64 (60 MB RU voice, no GPU)
+
+*Benchmarked 2026-04-16:*
+
+| Text length | Chars | Synthesis time | Audio duration | RTF | OGG encode |
+|-------------|-------|----------------|----------------|-----|------------|
+| Short | 41 | 0.92s | 4.1s | 0.22 | 0.19s |
+| Medium | 139 | 1.43s | 9.7s | 0.15 | 0.28s |
+| Long | 289 | 2.32s | 19.9s | **0.12** | 0.49s |
+
+> Piper runs as subprocess — no persistent RAM usage (model loaded per call, ~150 MB peak).  
+> Total voice reply latency for medium text: ~1.4s TTS + 0.3s OGG + LLM time = **fast enough for Telegram**.
+
+### Recommended bot.env for VPS Voice
+
+```env
+# STT: local faster-whisper (best privacy, ~350 MB peak RAM)
+STT_PROVIDER=faster_whisper
+FASTER_WHISPER_MODEL=base
+FASTER_WHISPER_DEVICE=cpu
+FASTER_WHISPER_COMPUTE=int8
+FASTER_WHISPER_THREADS=4
+FASTER_WHISPER_PRELOAD=0       # lazy load — 0 MB at idle
+
+# Or: OpenAI Whisper API (0 MB RAM, best quality, ~$0.006/min)
+# STT_PROVIDER=openai_whisper
+# STT_FALLBACK_PROVIDER=faster_whisper
+
+# TTS: Piper aarch64
+PIPER_BIN=~/.taris/piper/piper
+PIPER_MODEL=~/.taris/ru_RU-irina-medium.onnx
+
+# Live voice assistant disabled (no mic)
 VOICE_DISABLED=1
+```
+
+### Installation (voice packages)
+
+```bash
+# System deps
+sudo apt-get install -y ffmpeg
+
+# Python voice packages
+pip3 install --break-system-packages faster-whisper vosk
+
+# Piper binary (aarch64)
+mkdir -p ~/.taris/piper
+curl -sL https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz \
+  | tar -xz -C ~/.taris/piper/ --strip-components=1
+chmod +x ~/.taris/piper/piper
+
+# RU voice model (60 MB)
+curl -sL https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx \
+  -o ~/.taris/ru_RU-irina-medium.onnx
+curl -sL https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json \
+  -o ~/.taris/ru_RU-irina-medium.onnx.json
 ```
 
 ---
@@ -234,8 +320,16 @@ N8N_API_KEY=CHANGE_ME
 ROOT_PATH=/vps
 WEB_PORT=8092
 
-# No faster-whisper preload (no voice)
+# No faster-whisper preload (lazy load, saves RAM at idle)
 FASTER_WHISPER_PRELOAD=0
+STT_PROVIDER=faster_whisper
+FASTER_WHISPER_MODEL=base
+FASTER_WHISPER_DEVICE=cpu
+FASTER_WHISPER_COMPUTE=int8
+FASTER_WHISPER_THREADS=4
+PIPER_BIN=~/.taris/piper/piper
+PIPER_MODEL=~/.taris/ru_RU-irina-medium.onnx
+VOICE_DISABLED=1
 ```
 
 ---
@@ -250,7 +344,8 @@ FASTER_WHISPER_PRELOAD=0
 | **Total (with local LLM)** | **~6905 MB** |
 | **Headroom** | **~800 MB + 7.5 GB swap** |
 | **Total (no local LLM)** | **~5805 MB** |
-| **Headroom (no local LLM)** | **~1900 MB** |
+| RAM (voice idle, PRELOAD=0) | ~0 MB (lazy load) |
+| RAM (voice active, base model) | ~350 MB (during processing) |
 
 > Safe to operate. Swap provides emergency buffer. ARM server is designed for sustained server workloads.
 
