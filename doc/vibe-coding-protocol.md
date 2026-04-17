@@ -15,6 +15,7 @@ Use this to analyse cost (time, requests) per feature over time.
 | 21:30 | Gemma4 VPS feasibility analysis: e2b is 7.2 GB Q8 (not 3.2 GB), exceeds 3.5 GB available RAM — not feasible; updated VPS report with Gemma4 section and corrected LLM options | 2 | 3 | claude-sonnet-4.6 | doc/vps-taris-deployment-analysis.md | done |
 | 23:30 | Deploy Taris OpenClaw in Docker on VPS: Dockerfile (ARM64), docker-compose.yml, nginx /supertaris-vps/ location; fix volume path bug; create stas/buerger admin; whisper base pre-downloaded; web UI live at https://agents.sintaris.net/supertaris-vps/ | 4 | 14 | claude-sonnet-4.6 | deploy/system-configs/vps/docker/* (5 new files), deploy/system-configs/vps/nginx/agents.sintaris.net.conf | done |
 | 19:43 | Activate @supetariss_bot Telegram token; migrate all SintAItion user data to VPS taris_vps DB (24 cal, 13 notes, 162 chat, 3 docs, 4 contacts); add persistent userdata volumes; copy note/doc files | 3 | 7 | claude-sonnet-4.6 | deploy/system-configs/vps/docker/docker-compose.yml, vps/postgresql/* (4 new), vps/cron/backup-taris-vps.sh, vps/docker/update.sh, deploy/system-configs/README.md | done |
+| 20:xx | Mark §25 + §26 done in TODO/DONE; create OBSOLETE.md (§17 Max UI, §18 ZeroClaw); fix install scripts (missing packages: pyTelegramBotAPI, fastembed, bcrypt, PyJWT, pymupdf, etc.) | 2 | 2 | claude-sonnet-4.6 | TODO.md, DONE.md, OBSOLETE.md (new), deploy/system-configs/taristation2/install.sh, deploy/system-configs/sintaition/install.sh, deploy/system-configs/vps/docker/deploy.sh | done |
 
 ### Session — 2026-04-14 (UTC)
 
