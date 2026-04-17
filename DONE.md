@@ -370,7 +370,34 @@ Per-user sliding window history stored in SQLite `chat_history` table; injected 
 
 ---
 
-## 25.4 Embedding Service ✅ Implemented (v2026.4.13)
+## 25. Deployment Plan: OpenClaw (TariStation2 + SintAItion) ✅ Implemented (v2026.4.50)
+
+- [x] **25.1 Base System** — Ubuntu 24.04 LTS; `ffmpeg`, `git`, Python 3.12; source deployed to `~/.taris/` on both targets
+- [x] **25.2 PostgreSQL + pgvector** — PostgreSQL 17 (TariStation2) + 16 (SintAItion); `CREATE EXTENSION IF NOT EXISTS vector;`; `STORE_BACKEND=postgres` + auto-table creation
+- [x] **25.3 Local LLM (Ollama)** — SintAItion: `gemma4:e4b` (AMD ROCm GPU, 45 t/s); TariStation2: `qwen3.5:0.8b` (CPU-only); `LLM_PROVIDER=ollama`, `LLM_FALLBACK_PROVIDER=openai`
+- [x] **25.4 Embedding Service** → `src/core/bot_embeddings.py` (v2026.4.13)
+- [x] **25.5 Voice Pipeline** → faster-whisper STT + Piper TTS + Vosk hotword (v2026.3.28 / v2026.4.13)
+- [x] **25.6 RAG A–D** → Memory, Enhanced RAG, Document Mgmt, Remote MCP (v2026.3.30–v2026.4.38)
+- [x] **25.7 SQLite → PostgreSQL Migration** → `migrate_sqlite_to_postgres.py`; 316 rows; SQLite eliminated on OpenClaw (v2026.4.31)
+- [x] **25.8 Services** → `taris-telegram`, `taris-web`, `taris-tunnel`, `taris-pg-tunnel`, `ollama` services on both targets; Playwright + offline tests passing
+- [ ] **25.9 HNSW index** (optional perf improvement — not yet applied on either target)
+- [ ] **doc_sharing ACL table** (§27.4 — fine-grained per-user ACL) — still open
+
+---
+
+## 26. Deployment Plan: VPS (Cloud Docker) ✅ Implemented (v2026.4.50)
+
+- [x] **26.1 Provision** — Docker 28.3.2 on dev2null.de (Ubuntu aarch64, 6 vCPU, 7.7 GB RAM); `stas` user in docker group
+- [x] **26.2 PostgreSQL + pgvector** — PG16 + pgvector 0.8.0; `taris_vps` database; `STORE_BACKEND=postgres`; tables auto-created
+- [x] **26.3 TLS + nginx** — nginx proxies `/supertaris-vps/` → `http://127.0.0.1:8090/`; TLS via Let's Encrypt on `agents.sintaris.net`
+- [x] **26.4 Telegram Bot** — @supetariss_bot (`supetariss_bot`) live; `BOT_TOKEN` set in `/opt/taris-docker/bot.env`; `Polling Telegram…` confirmed
+- [x] **26.5 RAG + Embeddings** — `fastembed` + `pgvector` in Docker image; `LLM_PROVIDER=openai` (gpt-4o-mini); faster-whisper + Piper TTS pre-loaded
+- [x] **26.6 User data migration** — SintAItion → `taris_vps`: 24 calendar, 162 chat_history, 13 notes, 4 contacts, 3 docs, 13 summaries migrated; persistent volumes for notes/docs/mail_creds added to docker-compose.yml
+- [x] **26.6 Backup script** — `deploy/system-configs/vps/cron/backup-taris-vps.sh` created (cron install pending on VPS)
+- [x] **26.7 Web access** — `https://agents.sintaris.net/supertaris-vps/`; login: stas / buerger (admin)
+- [ ] **26.7 Security hardening** — SSH key-only login + fail2ban still open on VPS
+
+---
 
 `src/core/bot_embeddings.py` — `EmbeddingService`: fastembed-first, sentence-transformers fallback; `EMBED_MODEL` / `EMBED_KEEP_RESIDENT` / `EMBED_DIMENSION` constants in `bot_config.py`; wired into `bot_documents.py`; `src/setup/install_embedding_model.sh`; `bot.env.example` updated.
 

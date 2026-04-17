@@ -273,10 +273,7 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 ## 16 Implementing functions of personal assistant
 - [] Implementing open fuctions if they are not already implemented from concept\additional\KIM_PACKAGES.md
 
-## [] 17. Implementing  Max messenger UI analog Telegram
-
-## [] 18. Using ZeroClaw instead PicoClaw
-→ [Hardware Requirements Report §4.2](doc/hw-requirements-report.md) — ZeroClaw feasibility analysis (text-only; voice not viable on 512 MB)
+> **§17 and §18 moved to OBSOLETE.md** — Max messenger UI (superseded by Web UI) and ZeroClaw (hardware not viable)
 
 ## 19. OpenClaw Platform 🔄 Core integration implemented
 
@@ -374,32 +371,27 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 
 ---
 
-## 25. Deployment Plan: OpenClaw (Laptop / AI X1 / Pi 5 8 GB / RK3588) 🔲
+## 25. Deployment Plan: OpenClaw (TariStation2 + SintAItion) ✅ Implemented (v2026.4.50)
 
-> **Hardware options:** x86_64 Laptop/AI X1 · Pi 5 8 GB (A76 @ 2.4 GHz, NVMe 900 MB/s) · RK3588 (6 TOPS NPU, ≤16 GB, NVMe 3000 MB/s).
-> **Voice target:** ≤2 s requires NPU/GPU (≥13 TOPS). Pi 5 + Hailo-8L HAT achieves 1.5–2.0 s with cloud LLM.
-> **Backend:** `STORE_BACKEND=postgres` + pgvector HNSW. **LLM:** Local llama.cpp + cloud fallback.
-> → Hardware specs: [doc/hw-requirements-report.md §1.3 + §0](doc/hw-requirements-report.md)
-> → RAG architecture: [concept/rag-memory-architecture.md](concept/rag-memory-architecture.md) (Variant C — Hybrid Tiered RAG, score 4.45)
+> **Deployed targets:** TariStation2 (IniCoS-1, i7-2640M, 7.6 GB, CPU-only) + SintAItion (AMD Radeon 890M GPU, 48 GB RAM).
+> **Backend:** `STORE_BACKEND=postgres` + pgvector HNSW. **LLM:** Ollama (gemma4:e4b on SintAItion / qwen3.5:0.8b on TariStation2) + OpenAI fallback.
+> → Deployment scripts: `deploy/system-configs/taristation2/` + `deploy/system-configs/sintaition/`
+> → Completed items → See DONE.md §25
 
-### 25.1 Base System
-- [ ] Ubuntu 22.04 LTS (or Raspberry Pi OS Bookworm 64-bit for Pi 5); `sudo apt install python3.11 python3-pip git ffmpeg -y`
-- [ ] NVMe SSD: mount at `/data/taris/`; symlink `~/.taris → /data/taris/` (Pi 5: PCIe 2.0 900 MB/s; RK3588: PCIe 3.0 3000 MB/s)
-- [ ] Clone repo; `pip install -r deploy/requirements.txt`
+### 25.1 Base System ✅ Done
+- [x] Ubuntu 24.04 LTS; `ffmpeg`, `git`, Python 3.12 installed on both targets
+- [x] Source deployed to `~/.taris/`; `pip install -r requirements.txt` (see install scripts)
 
-### 25.2 PostgreSQL + pgvector
-- [ ] `sudo apt install postgresql-16 -y; pip install psycopg2-binary`
-- [ ] `sudo -u postgres psql -c "CREATE USER taris WITH PASSWORD '…'; CREATE DATABASE taris_db OWNER taris;"`
-- [ ] `sudo apt install postgresql-16-pgvector -y` (or build from source); `CREATE EXTENSION IF NOT EXISTS vector;`
-- [ ] HNSW index: `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64);`
-- [ ] Set `STORE_BACKEND=postgres`, `DB_URL=postgresql://taris:…@localhost/taris_db`, `STORE_VECTORS=on` in `bot.env`
+### 25.2 PostgreSQL + pgvector ✅ Done
+- [x] PostgreSQL 17 (TariStation2) / 16 (SintAItion); `CREATE EXTENSION IF NOT EXISTS vector;`
+- [x] `STORE_BACKEND=postgres`; tables auto-created on first start (`StorePostgres connected vec=True`)
+- [ ] HNSW index (optional perf): `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64);`
 
-### 25.3 Local LLM (llama.cpp)
-- [ ] Build: `git clone https://github.com/ggerganov/llama.cpp /data/llama.cpp && cmake -B build -DLLAMA_BLAS=ON && cmake --build build -j$(nproc)`
-- [ ] GPU (Laptop/AI X1): add `-DLLAMA_CUDA=on` (NVIDIA) or `-DLLAMA_METAL=on` (Apple) to cmake flags
-- [ ] Download model: Pi 5 → `Phi-3-mini-4k-instruct-Q4_K_M.gguf` (2.4 GB); Laptop/AI X1 → 7B–13B GGUF
-- [ ] Deploy `src/services/taris-llm.service`; configure `--model` path and `--port 8081`; `sudo systemctl enable --now taris-llm`
-- [ ] Set `LLM_PROVIDER=local`, `LLAMA_CPP_URL=http://localhost:8081`, `LLM_LOCAL_FALLBACK=true` in `bot.env`
+### 25.3 Local LLM (Ollama) ✅ Done
+- [x] Ollama installed on both targets via `curl -fsSL https://ollama.com/install.sh | sh`
+- [x] SintAItion: `ollama pull gemma4:e4b` (5 GB, AMD ROCm GPU, ~45 t/s)
+- [x] TariStation2: `ollama pull qwen3.5:0.8b` (fits 7.6 GB RAM); primary LLM switched to OpenAI
+- [x] `LLM_PROVIDER=ollama` (SintAItion) / `LLM_PROVIDER=openai` (TariStation2); `LLM_FALLBACK_PROVIDER=ollama`
 
 ### 25.4 Embedding Service ✅ All done → See DONE.md (v2026.4.13)
 
@@ -413,22 +405,21 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
   - [ ] Separate `doc_sharing` permission table — fine-grained per-user ACL → tracked in **§27.4**
 - [x] **Phase D — Remote RAG + MCP** ✅ → See DONE.md (v2026.4.1)
 
+### 25.7 Migration from PicoClaw ✅ Done
+- [x] `migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL; 316 rows migrated; idempotent (v2026.4.31)
+- [x] SQLite fully eliminated on OpenClaw (`STORE_BACKEND=postgres` prevents SQLite init); v2026.4.31
 
-### 25.7 Migration from PicoClaw
-- [ ] `python3 src/setup/migrate_sqlite_to_pg.py` (copies taris.db → PostgreSQL, idempotent)
-- [ ] Validate row counts; run full test suite T01–T26 + Web UI Playwright + offline Telegram tests
-
-### 25.8 Services & Test
-- [ ] `sudo cp src/services/taris-*.service /etc/systemd/system/ && sudo systemctl daemon-reload`
-- [ ] `sudo systemctl enable --now taris-telegram taris-web taris-llm`
-- [ ] AutoResearch (§23.7–23.9): `pip install ragas deepeval`; configure `evaluate.py` per `concept/rag-memory-architecture.md §6b`
-- [ ] Playwright UI tests: `py -m pytest src/tests/ui/ -v --base-url https://openclawpi2:8080`
+### 25.8 Services & Test ✅ Done
+- [x] Systemd user services running on both targets: `taris-telegram`, `taris-web`, `taris-voice`, `taris-tunnel`
+- [x] Ollama system service (SintAItion): `/etc/systemd/system/ollama.service` with AMD ROCm GPU
+- [x] Web UI Playwright tests passing; Telegram offline tests passing
+- [ ] AutoResearch eval (§23.7–23.9): `pip install ragas deepeval` — future/research only
 
 ### 25.9 Hardware Notes
-- **Pi 5 8 GB** — minimum for full stack (PostgreSQL + llama.cpp + RAG). NVMe HAT strongly recommended.
-- **Pi 5 4 GB** — marginal: pgvector feasible but local LLM too slow; use cloud LLM provider.
-- **RK3588 (Orange Pi 5 / Rock 5B)** — best Pi-class option: 6 TOPS NPU + PCIe 3.0 + up to 16 GB.
-- **Laptop / AI X1 (x86_64)** — full stack; 7B–13B models with GPU; fastest development iteration.
+- **SintAItion** — AMD Radeon 890M GPU (16 GB shared VRAM), 48 GB RAM, 915 GB NVMe. Full stack primary target.
+- **TariStation2 (IniCoS-1)** — i7-2640M CPU-only, 7.6 GB RAM. Engineering/dev target. Small Ollama models only.
+- **Pi 5 8 GB** — minimum for full stack. NVMe HAT strongly recommended. Use Ollama with small models.
+- **RK3588 (Orange Pi 5 / Rock 5B)** — good Pi-class option: 6 TOPS NPU + PCIe 3.0 + up to 16 GB.
 - **Pi 4 B 4 GB** — not recommended for OpenClaw tier; stick to §24 patterns with cloud LLM.
 
 ---
@@ -459,7 +450,7 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 
 ### 26.4 Telegram Bot
 - ✅ `ALLOWED_USERS`, `ADMIN_USERS`, LLM config all set in `bot.env`
-- ❌ `BOT_TOKEN` = CHANGE_ME — **user must create `Supertariss` bot via @BotFather and set token in `/opt/taris-docker/bot.env`**
+- ✅ `BOT_TOKEN` set — @supetariss_bot live, `Polling Telegram…` confirmed
 - ⚠️ Webhook mode not configured (polling works; webhook needs BOT_TOKEN first)
 
 ### 26.5 RAG & Embeddings
@@ -469,7 +460,8 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - ✅ TTS: Piper + `ru_RU-irina-medium` model at `/opt/taris-docker/data/piper/`
 
 ### 26.6 Backups & Monitoring
-- [ ] Daily `pg_dump taris_vps` cron job (not yet set up)
+- ✅ Daily `pg_dump taris_vps` cron script created (`deploy/system-configs/vps/cron/backup-taris-vps.sh`)
+- ⚠️ Cron job not yet installed on VPS: run `(crontab -l; echo '0 3 * * * /opt/taris-docker/backup-taris-vps.sh >> /var/log/taris-backup.log 2>&1') | crontab -`
 - [ ] Docker container auto-restart: `restart: unless-stopped` ✅ (in docker-compose.yml)
 - [ ] Log rotation for Docker JSON logs: `max-size: 20m, max-file: 5` ✅ (in docker-compose.yml)
 

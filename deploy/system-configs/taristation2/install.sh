@@ -29,14 +29,22 @@ ollama pull qwen3.5:0.8b
 
 echo "=== 3. Python packages ==="
 pip3 install --break-system-packages \
+    pyTelegramBotAPI \
     fastapi "uvicorn[standard]" \
-    python-telegram-bot \
     faster-whisper \
     vosk \
     pyaudio \
     psycopg[binary] psycopg-pool pgvector psycopg2-binary \
     python-multipart jinja2 aiofiles \
     requests httpx \
+    bcrypt PyJWT \
+    fastembed \
+    pymupdf python-docx \
+    pyyaml jsonschema \
+    openai \
+    sqlite-vec \
+    google-api-python-client google-auth-httplib2 google-auth-oauthlib \
+    scipy cryptography \
     playwright
 
 python3 -m playwright install chromium

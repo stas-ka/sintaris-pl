@@ -23,7 +23,7 @@ sudo apt install -y \
     python3 python3-pip python3-venv \
     ffmpeg \
     autossh \
-    postgresql-client \
+    postgresql postgresql-contrib \
     git curl wget \
     libsndfile1 portaudio19-dev \
     pipewire pipewire-pulse \
@@ -46,14 +46,22 @@ ollama pull gemma4:e4b      # primary (AMD GPU, 5GB)
 
 echo "=== 4. Python packages ==="
 pip3 install --break-system-packages \
+    pyTelegramBotAPI \
     fastapi "uvicorn[standard]" \
-    python-telegram-bot \
     faster-whisper \
     vosk \
     pyaudio \
     psycopg[binary] psycopg-pool pgvector psycopg2-binary \
     python-multipart jinja2 aiofiles \
     requests httpx \
+    bcrypt PyJWT \
+    fastembed \
+    pymupdf python-docx \
+    pyyaml jsonschema \
+    openai \
+    sqlite-vec \
+    google-api-python-client google-auth-httplib2 google-auth-oauthlib \
+    scipy cryptography \
     playwright
 
 python3 -m playwright install chromium
@@ -87,8 +95,8 @@ sudo systemctl start ollama
 echo "=== 9. IPv4 preference (AMD ROCm / Ollama pull fix) ==="
 sudo cp "$SCRIPT_DIR/../../system-configs/sintaition/etc/gai.conf" /etc/gai.conf
 
-echo "=== 10. PostgreSQL (local) ==="
-sudo apt install -y postgresql postgresql-contrib
+echo "=== 10. PostgreSQL (local) — configure DB and user ==="
+# postgresql was already installed in step 1
 sudo -u postgres psql <<'SQL'
 CREATE USER taris_user WITH PASSWORD 'CHANGE_ME';
 CREATE DATABASE taris_db OWNER taris_user;

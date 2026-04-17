@@ -38,6 +38,8 @@ echo "=============================="
 echo ""
 echo "=== 1. Creating /opt/taris-docker/ structure ==="
 sudo mkdir -p "$DOCKER_DIR"/{app,data/whisper,data/piper}
+# Persistent user data volumes (notes, docs, mail_creds — mapped into container)
+sudo mkdir -p "$DOCKER_DIR"/userdata/{notes,docs,mail_creds}
 sudo chown -R "$USER:$USER" "$DOCKER_DIR"
 
 # ── 2. Dockerfile + docker-compose.yml ────────────────────────────────────────
