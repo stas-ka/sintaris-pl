@@ -24,7 +24,8 @@ import time as _time
 from core.bot_config import (
     BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
     PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER, DEVICE_VARIANT,
-    FASTER_WHISPER_PRELOAD,
+    FASTER_WHISPER_PRELOAD, AUTO_GUEST_ENABLED,
+    GUEST_MSG_HOURLY_LIMIT, GUEST_MSG_DAILY_LIMIT,
     log,
 )
 import core.bot_state as _st
@@ -39,6 +40,7 @@ from telegram.bot_access import (
     _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
+    _get_prompt_role_key, _check_guest_rate_limit,
 )
 
 # ─── Screen DSL ───────────────────────────────────────────────────────────────
@@ -234,6 +236,17 @@ def cmd_start(message):
             bot.send_message(cid, _t(cid, "reg_blocked"))
         elif _is_pending_reg(cid):
             bot.send_message(cid, _t(cid, "reg_pending_exists"))
+        elif AUTO_GUEST_ENABLED:
+            # Auto-register as guest — no admin approval needed
+            name = f"{first} {last}".strip() or username or str(cid)
+            _upsert_registration(cid, username=username, name=name,
+                                 status="guest",
+                                 first_name=first, last_name=last)
+            _st._dynamic_guests.add(cid)
+            log.info("[Guest] auto-registered chat_id=%s username=%s", cid, username)
+            bot.send_message(cid, _t(cid, "guest_welcome"),
+                             parse_mode="Markdown",
+                             reply_markup=_menu_keyboard(cid))
         elif _st._user_mode.get(cid) == "reg_name":
             bot.send_message(cid, _t(cid, "reg_ask_name"), parse_mode="Markdown")
         else:
@@ -1232,6 +1245,20 @@ def text_handler(message):
         return
 
     _set_lang(cid, message.from_user)
+
+    # Guest rate-limit check — applied before any LLM-bound flow
+    if _is_guest(cid):
+        allowed, reason = _check_guest_rate_limit(cid)
+        if not allowed:
+            if reason == "hourly":
+                bot.send_message(cid, _t(cid, "guest_rate_limit_hourly",
+                                         limit=str(GUEST_MSG_HOURLY_LIMIT)),
+                                 parse_mode="Markdown")
+            else:
+                bot.send_message(cid, _t(cid, "guest_rate_limit_daily",
+                                         limit=str(GUEST_MSG_DAILY_LIMIT)),
+                                 parse_mode="Markdown")
+            return
 
     # Admin typing an API key
     if cid in _st._pending_llm_key:

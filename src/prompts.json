@@ -23,5 +23,20 @@
   "web": {
     "cal_event_parse": "Current date and time: {now_iso}\nTask: extract ALL events mentioned in the text (there may be one or several).\nRules:\n- dt must be YYYY-MM-DDTHH:MM format\n- if no date mentioned, use today's date\n- if no time mentioned, use 09:00\n- if no events found, return {\"events\": []}\nReply ONLY with valid JSON, no explanation:\n{\"events\": [{\"title\": \"...\", \"dt\": \"YYYY-MM-DDTHH:MM\"}, ...]}\n\nText: \"{text}\"",
     "cal_intent": "You are a JSON intent classifier. Return ONLY a single JSON object, no explanation.\nCurrent date/time: {now_iso}\nUser's existing events: [{events_hint}]\nClassify the user command into one of: add, query, delete, edit.\n- add:    {\"intent\": \"add\"}\n- query:  {\"intent\": \"query\"}\n- delete: {\"intent\": \"delete\", \"ev_id\": \"<matching id or empty string>\"}\n- edit:   {\"intent\": \"edit\",   \"ev_id\": \"<matching id or empty string>\"}\nIf uncertain or it sounds like adding something, default to add.\nUser: \"{text}\"\nJSON:"
+  },
+  "role_system_prompts": {
+    "user": "{security_preamble}{bot_config_block}{personal_ctx}{memory_note}{lang_instruction}",
+    "admin": "{security_preamble}{bot_config_block}{personal_ctx}{memory_note}{lang_instruction}",
+    "guest": "{security_preamble}{bot_config_block}{memory_note}{lang_instruction}"
+  },
+  "role_capabilities": {
+    "user": "- Document upload (PDF, TXT, DOCX, MD — up to 20 MB): send the file directly in chat\n- Documents are indexed and used as a knowledge base (RAG) during conversations\n- Calendar: add, view, edit and delete events via natural language or the menu\n- Notes: create, view, append to and delete personal notes\n- Contacts: manage your personal contact book\n- Voice: send a voice message and receive a spoken reply (STT → LLM → TTS)\n- Mail digest: summarise unread emails from a connected mailbox\n- Multi-language: Russian, English and German are supported",
+    "admin": "- Document upload (PDF, TXT, DOCX, MD — up to 20 MB): send the file directly in chat\n- Documents are indexed and used as a knowledge base (RAG) during conversations\n- Calendar: add, view, edit and delete events via natural language or the menu\n- Notes: create, view, append to and delete personal notes\n- Contacts: manage your personal contact book\n- Voice: send a voice message and receive a spoken reply (STT → LLM → TTS)\n- Mail digest: summarise unread emails from a connected mailbox\n- Multi-language: Russian, English and German are supported\n- Admin panel: manage users, LLM model, RAG settings, MCP integrations",
+    "guest": "- AI chat: ask questions on any topic (rate-limited)\n- Voice: send a voice message and receive a text reply\n- Shared knowledge base: query shared documents when available\n- Calendar: request a meeting or view available time slots\n- Multi-language: Russian, English and German are supported"
+  },
+  "role_styles": {
+    "user": "Respond naturally and helpfully. Use personal context (calendar, notes, contacts) when relevant.",
+    "admin": "Respond naturally and helpfully. You may discuss system configuration and status when asked.",
+    "guest": "Respond helpfully and concisely. Keep answers brief (2–4 sentences). Do not mention user-specific data, personal files, or admin features."
   }
 }

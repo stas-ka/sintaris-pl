@@ -28,6 +28,8 @@ from core.bot_config import (
     BOT_VERSION, LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
     STT_PROVIDER, FASTER_WHISPER_MODEL, PIPER_MODEL,
     RAG_ENABLED, RAG_TOP_K,
+    GUEST_MSG_DAILY_LIMIT, GUEST_MSG_HOURLY_LIMIT, GUEST_MAX_TOKENS,
+    SHARED_DOCS_OWNER,
 )
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS, fmt_prompt
@@ -39,13 +41,14 @@ import core.bot_state as _st
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_allowed(chat_id: int) -> bool:
-    """True for admins, full users, dynamically added users, and any dynamic role."""
+    """True for admins, full users, dynamically added users, guests, and any dynamic role."""
     return (chat_id in ADMIN_USERS
             or chat_id in ALLOWED_USERS
             or chat_id in _dynamic_users
             or chat_id in _st._dynamic_admins
             or chat_id in _st._dynamic_devs
-            or chat_id in _st._advanced_users)
+            or chat_id in _st._advanced_users
+            or chat_id in _st._dynamic_guests)
 
 
 def _is_admin(chat_id: int) -> bool:
@@ -71,8 +74,57 @@ def _is_superadmin(chat_id: int) -> bool:
 
 
 def _is_guest(chat_id: int) -> bool:
-    """All approved users get full access — no guest restrictions."""
-    return False
+    """True if the user is a limited guest (auto-registered, not a full user or admin)."""
+    if _is_admin(chat_id):
+        return False
+    if chat_id in ALLOWED_USERS or chat_id in _dynamic_users or chat_id in _st._advanced_users:
+        return False
+    return chat_id in _st._dynamic_guests
+
+
+# Alias used in handlers for clarity.
+_is_limited_guest = _is_guest
+
+
+def _get_prompt_role_key(chat_id: int) -> str:
+    """Return the prompt role key for a user: 'admin' | 'user' | 'guest'."""
+    if _is_admin(chat_id):
+        return "admin"
+    if _is_guest(chat_id):
+        return "guest"
+    return "user"
+
+
+def _check_guest_rate_limit(chat_id: int) -> tuple[bool, str]:
+    """Check whether a guest has hit their hourly or daily message limit.
+
+    Returns (allowed: bool, reason: str).
+    Reason is '' when allowed, or 'hourly'|'daily' when the limit is exceeded.
+    Updates the counters in _st._guest_message_counts when allowed.
+    """
+    import time
+    now = time.time()
+    counts = _st._guest_message_counts.setdefault(chat_id, {
+        "hour": 0, "day": 0,
+        "hour_ts": now, "day_ts": now,
+    })
+    # Reset hourly window
+    if now - counts["hour_ts"] >= 3600:
+        counts["hour"] = 0
+        counts["hour_ts"] = now
+    # Reset daily window
+    if now - counts["day_ts"] >= 86400:
+        counts["day"] = 0
+        counts["day_ts"] = now
+
+    if counts["hour"] >= GUEST_MSG_HOURLY_LIMIT:
+        return False, "hourly"
+    if counts["day"] >= GUEST_MSG_DAILY_LIMIT:
+        return False, "daily"
+
+    counts["hour"] += 1
+    counts["day"]  += 1
+    return True, ""
 
 
 def _deny(chat_id: int) -> None:
@@ -289,6 +341,7 @@ def _contacts_context(chat_id: int) -> str:
 def _docs_rag_context(chat_id: int, query: str) -> str:
     """Return a [KNOWLEDGE] context block from user's documents, or empty string.
 
+    For guests: if SHARED_DOCS_OWNER is set, queries that owner's documents instead.
     Uses adaptive routing (classify_query) to skip RAG for simple queries.
     Uses RRF fusion when vector search is available (HYBRID/FULL tier).
     Falls back to FTS5-only on constrained hardware.
@@ -303,6 +356,14 @@ def _docs_rag_context(chat_id: int, query: str) -> str:
         from core.rag_settings import get as _rget
         from core.bot_db import db_get_user_pref
 
+        # Guests use shared documents owned by SHARED_DOCS_OWNER
+        effective_chat_id = chat_id
+        if _is_guest(chat_id) and SHARED_DOCS_OWNER:
+            try:
+                effective_chat_id = int(SHARED_DOCS_OWNER)
+            except ValueError:
+                return ""
+
         rag_timeout = float(_rget("rag_timeout"))
         # Per-user overrides (user_prefs)
         top_k_pref = db_get_user_pref(chat_id, "rag_top_k")
@@ -312,7 +373,7 @@ def _docs_rag_context(chat_id: int, query: str) -> str:
         import concurrent.futures
         _user_is_admin = _is_admin(chat_id)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-            _fut = _pool.submit(retrieve_context, chat_id, query, top_k, 2000, _user_is_admin)
+            _fut = _pool.submit(retrieve_context, effective_chat_id, query, top_k, 2000, _user_is_admin)
             try:
                 chunks, assembled, strategy, trace = _fut.result(timeout=rag_timeout)
             except concurrent.futures.TimeoutError:
@@ -384,8 +445,10 @@ def _with_lang(chat_id: int, user_text: str) -> str:
 def _build_system_message(chat_id: int, user_text: str = "") -> str:
     """Build the content for a role:system message in multi-turn LLM calls.
 
-    Contains: security preamble + bot config + personal data context
-    (calendar, notes, contacts) + memory context note + language instruction.
+    Contains: security preamble + bot config + role-specific personal data context
+    (calendar, notes, contacts — skipped for guests) + memory context note +
+    language instruction.  Role key drives which system prompt template is used
+    when 'role_system_prompts' are present in prompts.json.
     """
     from security.bot_security import SECURITY_PREAMBLE
     lang = _resolve_lang(chat_id, user_text)
@@ -394,7 +457,27 @@ def _build_system_message(chat_id: int, user_text: str = "") -> str:
         "You have access to the conversation history shown in this context. "
         "Use it to maintain coherent, context-aware responses across all turns.\n\n"
     )
-    personal_ctx = _calendar_context(chat_id) + _notes_context(chat_id) + _contacts_context(chat_id)
+
+    role_key = _get_prompt_role_key(chat_id)
+
+    # Personal context — omit for guests (they have no personal data)
+    if role_key == "guest":
+        personal_ctx = ""
+    else:
+        personal_ctx = _calendar_context(chat_id) + _notes_context(chat_id) + _contacts_context(chat_id)
+
+    # Role-specific system prompt template (optional — falls back to classic assembly)
+    role_prompts = PROMPTS.get("role_system_prompts", {})
+    if role_key in role_prompts:
+        return fmt_prompt(
+            role_prompts[role_key],
+            security_preamble=SECURITY_PREAMBLE,
+            bot_config_block=_bot_config_block(),
+            personal_ctx=personal_ctx,
+            memory_note=memory_note,
+            lang_instruction=lang_instr,
+        )
+
     return SECURITY_PREAMBLE + _bot_config_block() + personal_ctx + memory_note + lang_instr
 
 

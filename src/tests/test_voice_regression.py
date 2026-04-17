@@ -7898,6 +7898,160 @@ def t_rbac_allowlist_enforcement(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T140–T149 — Guest user + role-based prompt templates
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_guest_user_feature(**_) -> list[TestResult]:
+    """T140-T149: Guest user support + role-based prompt templates."""
+    import ast
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # ── T140: bot_config.py — AUTO_GUEST_ENABLED constant present ────────────
+    config_src = SRC_ROOT / "core" / "bot_config.py"
+    config_text = config_src.read_text(encoding="utf-8") if config_src.exists() else ""
+    checks_config = [
+        ("AUTO_GUEST_ENABLED", "AUTO_GUEST_ENABLED" in config_text),
+        ("GUEST_MSG_DAILY_LIMIT", "GUEST_MSG_DAILY_LIMIT" in config_text),
+        ("GUEST_MSG_HOURLY_LIMIT", "GUEST_MSG_HOURLY_LIMIT" in config_text),
+        ("GUEST_MAX_TOKENS", "GUEST_MAX_TOKENS" in config_text),
+        ("SHARED_DOCS_OWNER", "SHARED_DOCS_OWNER" in config_text),
+    ]
+    for name, ok in checks_config:
+        results.append(TestResult(
+            f"guest_config_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{name} constant present in bot_config.py" if ok else f"MISSING: {name} in bot_config.py",
+        ))
+
+    # ── T141: bot_state.py — _dynamic_guests and _guest_message_counts present ─
+    state_src = SRC_ROOT / "core" / "bot_state.py"
+    state_text = state_src.read_text(encoding="utf-8") if state_src.exists() else ""
+    checks_state = [
+        ("_dynamic_guests", "_dynamic_guests" in state_text),
+        ("_guest_message_counts", "_guest_message_counts" in state_text),
+        ("_load_dynamic_guests", "_load_dynamic_guests" in state_text),
+    ]
+    for name, ok in checks_state:
+        results.append(TestResult(
+            f"guest_state_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{name} present in bot_state.py" if ok else f"MISSING: {name} in bot_state.py",
+        ))
+
+    # ── T142: bot_access.py — _is_guest(), _get_prompt_role_key(), _check_guest_rate_limit() ─
+    access_src = SRC_ROOT / "telegram" / "bot_access.py"
+    access_text = access_src.read_text(encoding="utf-8") if access_src.exists() else ""
+    checks_access = [
+        ("_is_guest_real_impl", "_dynamic_guests" in access_text and "def _is_guest" in access_text),
+        ("_get_prompt_role_key", "def _get_prompt_role_key" in access_text),
+        ("_check_guest_rate_limit", "def _check_guest_rate_limit" in access_text),
+        ("shared_docs_owner", "SHARED_DOCS_OWNER" in access_text),
+    ]
+    for name, ok in checks_access:
+        results.append(TestResult(
+            f"guest_access_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{name} present in bot_access.py" if ok else f"MISSING: {name} in bot_access.py",
+        ))
+
+    # ── T143: bot_access.py — _build_system_message() uses role_system_prompts ─
+    ok = "role_system_prompts" in access_text and "_get_prompt_role_key" in access_text
+    results.append(TestResult(
+        "guest_system_msg_role_aware", "PASS" if ok else "FAIL", time.time() - t0,
+        "role_system_prompts + _get_prompt_role_key used in _build_system_message" if ok
+        else "MISSING: role_system_prompts or _get_prompt_role_key in bot_access.py",
+    ))
+
+    # ── T144: _check_guest_rate_limit logic uses hourly/daily keys ────────────
+    ok_hourly = "hourly" in access_text and "GUEST_MSG_HOURLY_LIMIT" in access_text
+    ok_daily  = "daily"  in access_text and "GUEST_MSG_DAILY_LIMIT"  in access_text
+    results.append(TestResult(
+        "guest_rate_limit_hourly_logic", "PASS" if ok_hourly else "FAIL", time.time() - t0,
+        "hourly rate limit logic present" if ok_hourly else "MISSING: hourly rate limit logic",
+    ))
+    results.append(TestResult(
+        "guest_rate_limit_daily_logic", "PASS" if ok_daily else "FAIL", time.time() - t0,
+        "daily rate limit logic present" if ok_daily else "MISSING: daily rate limit logic",
+    ))
+
+    # ── T145: telegram_menu_bot.py — rate limit enforced in text_handler ──────
+    menu_src = SRC_ROOT / "telegram_menu_bot.py"
+    menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    ok_rl = "_check_guest_rate_limit" in menu_text and "guest_rate_limit_hourly" in menu_text
+    results.append(TestResult(
+        "guest_rate_limit_enforced", "PASS" if ok_rl else "FAIL", time.time() - t0,
+        "Rate limit enforced in text_handler" if ok_rl else "MISSING: _check_guest_rate_limit call in text_handler",
+    ))
+
+    # ── T146: AUTO_GUEST_ENABLED branch in cmd_start ──────────────────────────
+    ok_auto = "AUTO_GUEST_ENABLED" in menu_text and "guest_welcome" in menu_text
+    results.append(TestResult(
+        "guest_auto_registration", "PASS" if ok_auto else "FAIL", time.time() - t0,
+        "AUTO_GUEST_ENABLED + guest_welcome in cmd_start" if ok_auto
+        else "MISSING: AUTO_GUEST_ENABLED branch or guest_welcome in cmd_start",
+    ))
+
+    # ── T147: prompts.json — role_system_prompts present with guest key ───────
+    prompts_file = SRC_ROOT / "prompts.json"
+    try:
+        import json as _json
+        prompts = _json.loads(prompts_file.read_text(encoding="utf-8"))
+        rsp = prompts.get("role_system_prompts", {})
+        ok_rsp  = isinstance(rsp, dict) and "guest" in rsp and "user" in rsp and "admin" in rsp
+        ok_cap  = "role_capabilities" in prompts
+        ok_sty  = "role_styles" in prompts
+    except Exception as e:
+        ok_rsp = ok_cap = ok_sty = False
+    results.append(TestResult(
+        "prompts_role_system_prompts", "PASS" if ok_rsp else "FAIL", time.time() - t0,
+        "role_system_prompts[guest/user/admin] in prompts.json" if ok_rsp
+        else "MISSING: role_system_prompts.guest in prompts.json",
+    ))
+    results.append(TestResult(
+        "prompts_role_capabilities", "PASS" if ok_cap else "FAIL", time.time() - t0,
+        "role_capabilities in prompts.json" if ok_cap else "MISSING: role_capabilities",
+    ))
+    results.append(TestResult(
+        "prompts_role_styles", "PASS" if ok_sty else "FAIL", time.time() - t0,
+        "role_styles in prompts.json" if ok_sty else "MISSING: role_styles",
+    ))
+
+    # ── T148: strings.json — guest_welcome in all 3 languages ────────────────
+    strings_file = SRC_ROOT / "strings.json"
+    try:
+        import json as _json
+        strings = _json.loads(strings_file.read_text(encoding="utf-8"))
+        ok_gw_ru = "guest_welcome" in strings.get("ru", {})
+        ok_gw_en = "guest_welcome" in strings.get("en", {})
+        ok_gw_de = "guest_welcome" in strings.get("de", {})
+        ok_rl_ru = "guest_rate_limit_hourly" in strings.get("ru", {})
+        ok_rl_en = "guest_rate_limit_hourly" in strings.get("en", {})
+        ok_rl_de = "guest_rate_limit_hourly" in strings.get("de", {})
+    except Exception:
+        ok_gw_ru = ok_gw_en = ok_gw_de = ok_rl_ru = ok_rl_en = ok_rl_de = False
+    ok_gw = ok_gw_ru and ok_gw_en and ok_gw_de
+    ok_rl = ok_rl_ru and ok_rl_en and ok_rl_de
+    results.append(TestResult(
+        "guest_strings_welcome", "PASS" if ok_gw else "FAIL", time.time() - t0,
+        "guest_welcome in ru/en/de" if ok_gw else f"MISSING: guest_welcome (ru={ok_gw_ru} en={ok_gw_en} de={ok_gw_de})",
+    ))
+    results.append(TestResult(
+        "guest_strings_rate_limit", "PASS" if ok_rl else "FAIL", time.time() - t0,
+        "guest_rate_limit_hourly in ru/en/de" if ok_rl else f"MISSING: guest_rate_limit_hourly (ru={ok_rl_ru} en={ok_rl_en} de={ok_rl_de})",
+    ))
+
+    # ── T149: .env.example — guest constants documented ───────────────────────
+    env_ex = (SRC_ROOT.parent / ".env.example")
+    env_text = env_ex.read_text(encoding="utf-8") if env_ex.exists() else ""
+    ok_env = "AUTO_GUEST_ENABLED" in env_text and "SHARED_DOCS_OWNER" in env_text
+    results.append(TestResult(
+        "guest_env_example", "PASS" if ok_env else "FAIL", time.time() - t0,
+        "AUTO_GUEST_ENABLED + SHARED_DOCS_OWNER in .env.example" if ok_env
+        else "MISSING: guest constants in .env.example",
+    ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8117,6 +8271,8 @@ TEST_FUNCTIONS = [
     # RBAC allowlist enforcement: ADMIN_ALLOWED_CMDS, DEVELOPER_ALLOWED_CMDS, _classify_cmd_class,
     # configurable extra blocklist, admin security policy UI (T122)
     t_rbac_allowlist_enforcement,
+    # Guest user support + role-based prompt templates (T140–T149)
+    t_guest_user_feature,
 ]
 
 
