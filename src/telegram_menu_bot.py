@@ -89,6 +89,9 @@ from telegram.bot_admin import (
     _handle_crm_contacts_list, _handle_crm_add_start, _handle_crm_search_start,
     _handle_crm_stats, finish_crm_input,
     _handle_admin_roles_menu, _handle_admin_user_set_role,
+    _handle_admin_security_policy, _handle_admin_syschat_block_remove,
+    _handle_admin_syschat_block_add_prompt, handle_admin_syschat_block_add_input,
+    _pending_syschat_block_add,
     _admin_keyboard,
 )
 
@@ -759,6 +762,29 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    # ── Security policy ───────────────────────────────────────────────────────
+    elif data == "admin_security_policy":
+        if _is_admin(cid):
+            _handle_admin_security_policy(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_syschat_block_add":
+        if _is_admin(cid):
+            _handle_admin_syschat_block_add_prompt(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_syschat_block_rm:"):
+        if _is_admin(cid):
+            try:
+                idx = int(data.split(":")[1])
+                _handle_admin_syschat_block_remove(cid, idx)
+            except (ValueError, IndexError):
+                pass
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Agents menu ───────────────────────────────────────────────────────────
     elif data == "agents_menu":
         if _is_admin(cid) or _is_advanced(cid):
@@ -1213,6 +1239,14 @@ def text_handler(message):
             _handle_save_llm_key(cid, message.text)
         else:
             _st._pending_llm_key.pop(cid, None)
+        return
+
+    # Admin typing a command to block in security policy
+    if cid in _pending_syschat_block_add:
+        if _is_admin(cid):
+            handle_admin_syschat_block_add_input(cid, message.text)
+        else:
+            _pending_syschat_block_add.discard(cid)
         return
 
     mode = _st._user_mode.get(cid)

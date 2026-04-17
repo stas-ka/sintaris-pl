@@ -48,6 +48,8 @@ from telegram.bot_users import (
     _set_reg_status, _load_registrations,
 )
 from features.bot_voice import _warm_piper_cache, _start_persistent_piper, _stop_persistent_piper
+from security.bot_security import get_extra_blocked_cmds, SYSCHAT_EXTRA_BLOCKED_KEY
+from core.bot_db import db_get_system_setting, db_set_system_setting
 
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -134,6 +136,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_n8n"),         callback_data="admin_n8n_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_crm"),         callback_data="admin_crm_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_roles"),       callback_data="admin_roles_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_security_policy"), callback_data="admin_security_policy"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_restart"),         callback_data="admin_restart"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
     )
@@ -2051,3 +2054,71 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
         reply_markup=_admin_keyboard(chat_id),
     )
     _handle_admin_roles_menu(chat_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin Security Policy — configurable system-chat command blocklist
+# ─────────────────────────────────────────────────────────────────────────────
+
+# chat_ids waiting to type a command to block
+_pending_syschat_block_add: set[int] = set()
+
+
+def _handle_admin_security_policy(chat_id: int) -> None:
+    """Show the admin-configurable system-chat command blocklist."""
+    blocked = get_extra_blocked_cmds()
+    kb = InlineKeyboardMarkup(row_width=1)
+    for idx, cmd in enumerate(blocked):
+        kb.add(InlineKeyboardButton(
+            f"❌ {cmd}",
+            callback_data=f"admin_syschat_block_rm:{idx}",
+        ))
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "admin_syschat_block_add_btn"), callback_data="admin_syschat_block_add"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"),
+    )
+    title = _t(chat_id, "admin_security_policy_title")
+    if blocked:
+        cmd_list = "\n".join(f"• `{c}`" for c in blocked)
+        body = _t(chat_id, "admin_security_policy_text", cmds=cmd_list)
+    else:
+        body = _t(chat_id, "admin_security_policy_empty")
+    bot.send_message(chat_id, f"{title}\n\n{body}", parse_mode="Markdown", reply_markup=kb)
+
+
+def _handle_admin_syschat_block_remove(chat_id: int, idx: int) -> None:
+    """Remove a command from the extra blocklist by index."""
+    blocked = get_extra_blocked_cmds()
+    if 0 <= idx < len(blocked):
+        removed = blocked.pop(idx)
+        db_set_system_setting(SYSCHAT_EXTRA_BLOCKED_KEY, json.dumps(blocked))
+        bot.send_message(chat_id, _t(chat_id, "admin_syschat_block_removed", cmd=removed), parse_mode="Markdown")
+    _handle_admin_security_policy(chat_id)
+
+
+def _handle_admin_syschat_block_add_prompt(chat_id: int) -> None:
+    """Ask admin to type a command prefix to block."""
+    _pending_syschat_block_add.add(chat_id)
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_cancel"), callback_data="admin_security_policy"))
+    bot.send_message(chat_id, _t(chat_id, "admin_syschat_block_prompt"), parse_mode="Markdown", reply_markup=kb)
+
+
+def handle_admin_syschat_block_add_input(chat_id: int, text: str) -> bool:
+    """Handle text input when admin is adding a blocked command. Returns True if consumed."""
+    if chat_id not in _pending_syschat_block_add:
+        return False
+    _pending_syschat_block_add.discard(chat_id)
+    cmd = text.strip().lower()
+    if not cmd:
+        _handle_admin_security_policy(chat_id)
+        return True
+    blocked = get_extra_blocked_cmds()
+    if cmd in [b.lower() for b in blocked]:
+        bot.send_message(chat_id, _t(chat_id, "admin_syschat_block_exists", cmd=cmd), parse_mode="Markdown")
+    else:
+        blocked.append(cmd)
+        db_set_system_setting(SYSCHAT_EXTRA_BLOCKED_KEY, json.dumps(blocked))
+        bot.send_message(chat_id, _t(chat_id, "admin_syschat_block_added", cmd=cmd), parse_mode="Markdown")
+    _handle_admin_security_policy(chat_id)
+    return True

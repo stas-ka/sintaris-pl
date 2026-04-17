@@ -45,6 +45,20 @@
 
 ---
 
+## 0.1 Update Documentation ✅ Implemented (v2026.4.50)
+- `doc/howto_admin.md` — version updated, LLM config corrected (SintAItion: `gemma4:e4b`), Variants table updated
+- `doc/howto_bot.md` — N8N Campaign, CRM, VPS Docker variant, updated Web Interface URLs, Agents section
+- `doc/architecture/security.md` — RBAC §6.2 command allowlists + configurable blocklist documented; §6.5 enforcement ✅
+- RAG upload to TariStation2 and SintAItion pending (see §12)
+
+## 1.1 Role-Based Access Control (RBAC) ✅ Implemented (v2026.4.50)
+- `src/security/bot_security.py` — `get_extra_blocked_cmds()` + `SYSCHAT_EXTRA_BLOCKED_KEY`; `_classify_cmd_class()` checks extra blocklist first (highest priority)
+- `src/telegram/bot_admin.py` — 🔒 Security Policy button; `_handle_admin_security_policy()`, `_handle_admin_syschat_block_remove()`, `handle_admin_syschat_block_add_input()`, multi-step add flow
+- `src/telegram_menu_bot.py` — callbacks `admin_security_policy`, `admin_syschat_block_add`, `admin_syschat_block_rm:*` wired; message routing for `_pending_syschat_block_add`
+- `src/strings.json` — `admin_btn_security_policy`, `admin_security_policy_title/text/empty`, `admin_syschat_block_added/removed/exists/prompt/add_btn` in ru/en/de
+- `src/tests/test_voice_regression.py` — T122 `t_rbac_allowlist_enforcement` added (15/15 PASS)
+- → [Full spec](doc/todo/1.1-rbac.md) · [Developer menu spec](doc/todo/1.3-developer-role.md)
+
 ## 1. Open Issues &amp; Roadmap
 
 ### 1.0 Profile Redesign ✅ Implemented (v2026.3.31)

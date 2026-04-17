@@ -22,6 +22,7 @@ Access restriction (enforced by callers):
   - Injection-blocked messages are never forwarded to the LLM.
 """
 
+import json
 import re
 
 from core.bot_config import BOT_NAME, log_security as log
@@ -198,15 +199,37 @@ DEVELOPER_ALLOWED_CMDS: set[str] = ADMIN_ALLOWED_CMDS | {
 }
 
 
+SYSCHAT_EXTRA_BLOCKED_KEY = "syschat_blocked_cmds"
+
+
+def get_extra_blocked_cmds() -> list[str]:
+    """Return admin-configured extra blocked commands (stored in system_settings.json).
+
+    Commands in this list override the built-in allowlists and are denied for all roles.
+    """
+    try:
+        from core.bot_db import db_get_system_setting
+        raw = db_get_system_setting(SYSCHAT_EXTRA_BLOCKED_KEY, "[]")
+        result = json.loads(raw) if raw else []
+        return result if isinstance(result, list) else []
+    except Exception:
+        return []
+
+
 def _classify_cmd_class(cmd: str) -> str:
     """Return 'admin', 'developer', or 'blocked' for *cmd*.
 
     'admin'     — command is allowed for the admin role (read-only + inspection)
     'developer' — command requires the developer role (service control / writes)
-    'blocked'   — command is not on any allowlist; must be denied
+    'blocked'   — command is not on any allowlist or is in the extra blocklist
     """
     cmd_lower = cmd.strip().lower()
-    # Check admin allowlist first (subset of developer)
+    # Extra blocklist has highest priority — overrides allowlists for all roles
+    for blocked in get_extra_blocked_cmds():
+        b = blocked.strip().lower()
+        if b and (cmd_lower == b or cmd_lower.startswith(b + " ")):
+            return "blocked"
+    # Check admin allowlist (read-only + inspection)
     for allowed in ADMIN_ALLOWED_CMDS:
         if cmd_lower == allowed or cmd_lower.startswith(allowed + " "):
             return "admin"

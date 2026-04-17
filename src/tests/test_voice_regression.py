@@ -7818,6 +7818,86 @@ def t_ollama_model_picker(**_) -> list[TestResult]:
     return results
 
 
+def t_rbac_allowlist_enforcement(**_) -> list[TestResult]:
+    """T122: RBAC allowlist enforcement — ADMIN_ALLOWED_CMDS, DEVELOPER_ALLOWED_CMDS,
+    _classify_cmd_class() with extra-blocklist priority, get_extra_blocked_cmds(),
+    SYSCHAT_EXTRA_BLOCKED_KEY, db_get_system_setting import, admin security policy UI.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # 1. bot_security.py source inspection
+    sec_src = SRC_ROOT / "security" / "bot_security.py"
+    sec_text = sec_src.read_text(encoding="utf-8") if sec_src.exists() else ""
+
+    checks_sec = [
+        ("admin_allowed_cmds_set",     "ADMIN_ALLOWED_CMDS: set[str]" in sec_text,
+         "ADMIN_ALLOWED_CMDS: set[str]"),
+        ("developer_allowed_cmds_set", "DEVELOPER_ALLOWED_CMDS: set[str]" in sec_text
+         or ("DEVELOPER_ALLOWED_CMDS" in sec_text and "ADMIN_ALLOWED_CMDS |" in sec_text),
+         "DEVELOPER_ALLOWED_CMDS extends ADMIN_ALLOWED_CMDS"),
+        ("classify_cmd_fn",            "def _classify_cmd_class" in sec_text,
+         "_classify_cmd_class() defined"),
+        ("extra_blocked_fn",           "def get_extra_blocked_cmds" in sec_text,
+         "get_extra_blocked_cmds() defined"),
+        ("extra_blocked_key",          "SYSCHAT_EXTRA_BLOCKED_KEY" in sec_text,
+         "SYSCHAT_EXTRA_BLOCKED_KEY constant present"),
+        ("db_setting_import",          "db_get_system_setting" in sec_text,
+         "db_get_system_setting imported in bot_security"),
+        ("extra_blocked_priority",
+         "def _classify_cmd_class" in sec_text
+         and "get_extra_blocked_cmds" in sec_text[sec_text.find("def _classify_cmd_class"):
+                                                  sec_text.find("def _classify_cmd_class") + 600],
+         "extra blocklist checked inside _classify_cmd_class (priority)"),
+    ]
+    for name, ok, detail in checks_sec:
+        results.append(TestResult(
+            f"rbac_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            detail if ok else f"MISSING: {detail}",
+        ))
+
+    # 2. bot_admin.py — admin security policy UI
+    admin_src = SRC_ROOT / "telegram" / "bot_admin.py"
+    admin_text = admin_src.read_text(encoding="utf-8") if admin_src.exists() else ""
+    checks_admin = [
+        ("admin_security_policy_handler", "_handle_admin_security_policy" in admin_text,
+         "_handle_admin_security_policy() in bot_admin"),
+        ("admin_security_policy_btn",     "admin_security_policy" in admin_text,
+         "admin_security_policy callback_data wired"),
+        ("pending_syschat_block_add",     "_pending_syschat_block_add" in admin_text,
+         "_pending_syschat_block_add set for multi-step input"),
+        ("syschat_block_remove_handler",  "_handle_admin_syschat_block_remove" in admin_text,
+         "_handle_admin_syschat_block_remove() present"),
+        ("syschat_block_add_input",       "handle_admin_syschat_block_add_input" in admin_text,
+         "handle_admin_syschat_block_add_input() present"),
+    ]
+    for name, ok, detail in checks_admin:
+        results.append(TestResult(
+            f"rbac_admin_ui_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            detail if ok else f"MISSING: {detail}",
+        ))
+
+    # 3. telegram_menu_bot.py — callback dispatch wired
+    menu_src = SRC_ROOT / "telegram_menu_bot.py"
+    menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    checks_menu = [
+        ("dispatch_security_policy", 'data == "admin_security_policy"' in menu_text,
+         'data == "admin_security_policy" dispatch in telegram_menu_bot'),
+        ("dispatch_block_rm",        '"admin_syschat_block_rm:"' in menu_text or
+         "admin_syschat_block_rm:" in menu_text,
+         "admin_syschat_block_rm: dispatch present"),
+        ("dispatch_block_add",       'data == "admin_syschat_block_add"' in menu_text,
+         'data == "admin_syschat_block_add" dispatch present'),
+    ]
+    for name, ok, detail in checks_menu:
+        results.append(TestResult(
+            f"rbac_dispatch_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            detail if ok else f"MISSING: {detail}",
+        ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8034,6 +8114,9 @@ TEST_FUNCTIONS = [
     t_gemma4_benchmark_report,
     # Ollama model picker: get/set model, admin UI handler, callback dispatch (T121)
     t_ollama_model_picker,
+    # RBAC allowlist enforcement: ADMIN_ALLOWED_CMDS, DEVELOPER_ALLOWED_CMDS, _classify_cmd_class,
+    # configurable extra blocklist, admin security policy UI (T122)
+    t_rbac_allowlist_enforcement,
 ]
 
 

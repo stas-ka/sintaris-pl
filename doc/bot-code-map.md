@@ -1014,6 +1014,9 @@ All `data=` keys handled in `callback_handler()`:
 | `llm_setkey_openai` | `_handle_llm_setkey_prompt` |
 | `admin_llm_fallback_menu` | `_handle_admin_llm_fallback_menu` |
 | `admin_llm_fallback_toggle` | `_handle_admin_llm_fallback_toggle` |
+| `admin_security_policy` | `_handle_admin_security_policy` in `bot_admin.py` |
+| `admin_syschat_block_add` | `_handle_admin_syschat_block_add_prompt` in `bot_admin.py` |
+| `admin_syschat_block_rm:<idx>` | `_handle_admin_syschat_block_remove` in `bot_admin.py` |
 | `voice_opts_menu` | `_handle_voice_opts_menu` |
 | `voice_opt_toggle:<key>` | `_handle_voice_opt_toggle` |
 | `admin_changelog` | `_handle_admin_changelog` |

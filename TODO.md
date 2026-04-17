@@ -1,4 +1,4 @@
-# Taris Bot — TODO & Roadmap
+﻿# Taris Bot — TODO & Roadmap
 
 **Legend:** ✅ Done · 🔄 In progress · 🔲 Planned · 💡 Idea / future
 
@@ -18,31 +18,13 @@
 - [] Vosk WER regression on short audio (`audio_2026-03-08_08-34-23.ogg`) — WER 0.70 vs threshold 0.35; Pi-only (TariStation2 uses faster-whisper); tune model or adjust threshold when Pi is online
 
 ## 0.1 Update Documentation
-
-1. Create `doc/howto_admin.md` - a proper standalone admin guide covering:
-   - Configuration for both TariStation2 and SintAItion
-   - Network setup, software stacks, memory tuning
-   - All the performance optimizations from yesterday
-2. Update `doc/howto_bot.md` (user guide) with any relevant user-facing changes
-3. Create `doc/performance-report-2026-04-02.md` - performance report
-
-4. Update `src/setup/load_system_docs.py` to use the new `howto_admin.md` instead of README + overview
-5. ✅ Update `doc/architecture/openclaw-integration.md` with current config info (v2026.4.23)
-6. Update uploaded user guide in Taris client
+✅ Implemented (v2026.4.50) — `doc/howto_admin.md`, `doc/howto_bot.md` updated; N8N/CRM/VPS variants added; RAG upload done.
 
 ## 1. Access & Security
 
-### 1.1 Role-Based Access Control (RBAC) �
-Per-role command allowlists, System Chat branching, Developer role and menu.
+### 1.1 Role-Based Access Control (RBAC) 🔒
+✅ Implemented (v2026.4.50) — allowlists, `_classify_cmd_class()`, configurable extra blocklist, admin Security Policy UI, T122 regression test.
 → [Full spec](doc/todo/1.1-rbac.md) · [Developer menu spec](doc/todo/1.3-developer-role.md)
-
-- [x] `DEVELOPER_USERS` constant + `_is_developer()` helper (v2026.3.30)
-- [x] `ADMIN_ALLOWED_CMDS` / `DEVELOPER_ALLOWED_CMDS` allowlists (v2026.3.30)
-- [x] Role-aware `_handle_system_message()` with `_classify_cmd_class()` (v2026.3.30)
-- [x] Dev Menu — `bot_dev.py`: Dev Chat, Restart/Log/Error/FileList/Security Log buttons (v2026.3.32)
-- [x] `security_events` DB table + `log_security_event()` + `log_access_denied()` (v2026.3.32)
-- [ ] Regression test — allowlist enforcement
-- [ ] Configurable access rules (admin UI + config file); runtime policy updates without restart
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 [] Add additional fields for contact
 ---

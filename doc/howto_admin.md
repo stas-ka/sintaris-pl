@@ -1,7 +1,7 @@
 # Taris — Admin & Operator Guide
 
-**Version:** `2026.4.24`  
-**Applies to:** OpenClaw variant (`taris-openclaw` branch)  
+**Version:** `2026.4.50`  
+**Applies to:** OpenClaw variant (`master` branch)  
 **Targets:** TariStation2 (engineering) · SintAItion / TariStation1 (production)  
 **User guide:** [howto_bot.md](howto_bot.md) · **Install guide:** [install-new-target.md](install-new-target.md)
 
@@ -50,9 +50,9 @@ Both targets run `DEVICE_VARIANT=openclaw` (`taris-openclaw` branch) but differ 
 | Setting | TariStation2 | SintAItion |
 |---|---|---|
 | `DEVICE_VARIANT` | `openclaw` | `openclaw` |
-| `LLM_PROVIDER` | `openai` (gpt-4o-mini) | `ollama` (qwen3.5:9b) |
+| `LLM_PROVIDER` | `openai` (gpt-4o-mini) | `ollama` (gemma4:e4b GPU) |
 | `LLM_FALLBACK_PROVIDER` | `ollama` | `openai` |
-| `OLLAMA_MODEL` | `qwen3.5:0.8b` (fast, CPU) | `qwen3.5:latest` (9B, GPU) |
+| `OLLAMA_MODEL` | `qwen3.5:0.8b` (fast, CPU) | `gemma4:e4b` (9.6 GB, AMD ROCm GPU, 45 t/s) |
 | `STT_PROVIDER` | `faster_whisper` | `faster_whisper` |
 | `FASTER_WHISPER_MODEL` | `small` | `small` |
 | `FASTER_WHISPER_PRELOAD` | **`0`** ← disabled | **`1`** ← enabled |
@@ -97,7 +97,7 @@ OPENAI_MODEL=gpt-4o-mini
 
 # ── Ollama (local LLM) ───────────────────────────────────────────────────────
 OLLAMA_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen3.5:latest           # TariStation2: qwen3.5:0.8b | SintAItion: qwen3.5:latest
+OLLAMA_MODEL=qwen3.5:latest           # TariStation2: qwen3.5:0.8b | SintAItion: gemma4:e4b
 OLLAMA_MIN_TIMEOUT=90                 # Prevents cold-load timeouts for large models
 OLLAMA_THINK=false                    # REQUIRED for qwen3 — without this, empty responses
 
@@ -157,7 +157,7 @@ Taris runs on machines that may share RAM with other processes (Ollama, IDE, bro
 | Bot (no preload) | ~70 MB | Python + bot modules only |
 | Bot (small model preloaded) | ~530 MB | +460 MB for FasterWhisper small |
 | Ollama — qwen3.5:0.8b | ~512 MB | Good for CPU-only machines |
-| Ollama — qwen3.5:9b | ~2.0 GB | GPU machine recommended |
+| Ollama — qwen3.5:9b / gemma4:e4b | ~2.0 GB | GPU machine recommended (SintAItion: gemma4:e4b) |
 | PostgreSQL | ~50–100 MB | |
 | Piper TTS (per call) | ~50 MB | Released after synthesis |
 
@@ -285,7 +285,7 @@ systemctl status ollama
 # Restart
 sudo systemctl restart ollama
 
-# Check GPU offload (should show 41/41 layers for qwen3.5:9b)
+# Check GPU offload (should show 41/41 layers for gemma4:e4b on SintAItion)
 journalctl -u ollama -n 20 --no-pager | grep -i "offload\|layer\|gpu"
 ```
 

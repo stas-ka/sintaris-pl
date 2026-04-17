@@ -24,6 +24,8 @@ Taris is a personal AI assistant with the following capabilities:
 | 🔊 **Voice Settings** | Toggle VAD, Whisper STT, parallel TTS, model warm-up per user. |
 | 📊 **System Info** | CPU, memory, disk, uptime, service status. Admin can restart services. |
 | 🌍 **Multilingual** | Full Russian, English, and German interface. Language auto-detected or manually set. |
+| 📢 **N8N Campaign** | AI-powered email campaign agent (advanced/admin). Select topic, filter contacts, preview, approve, send. Integrates with N8N workflow automation. |
+| 👥 **CRM** | Built-in contact relationship management — add, search, tag contacts; AI-assisted analytics and campaign planning. (Admin / advanced user feature.) |
 
 ---
 
@@ -31,13 +33,16 @@ Taris is a personal AI assistant with the following capabilities:
 
 Taris runs in two flavours depending on the hardware:
 
-| Variant | Hardware | Web UI | STT |
+| Variant | Hardware | Web UI URL | STT |
 |---|---|---|---|
-| **taris / PicoClaw** | Raspberry Pi (OpenClawPI / OpenClawPI2) | `https://agents.sintaris.net/picoassist/` | Vosk (offline) |
-| **OpenClaw** | Linux workstation (TariStation2 / TariStation1) | `http://localhost:8080/` (TariStation2) · `http://SintAItion:8080/` (TariStation1) | faster-whisper |
+| **PicoClaw** | Raspberry Pi (OpenClawPI / OpenClawPI2) | `https://agents.sintaris.net/picoassist/` | Vosk (offline) |
+| **OpenClaw — TariStation2** | Linux workstation (IniCoS-1, engineering) | `https://agents.sintaris.net/supertaris2/` | faster-whisper |
+| **OpenClaw — SintAItion** | Linux workstation / GPU host (production) | `https://agents.sintaris.net/supertaris/` | faster-whisper |
+| **OpenClaw — VPS Docker** | VPS (dev2null.de, Docker) | `https://agents.sintaris.net/supertaris-vps/` | faster-whisper |
 
-- **PicoClaw** is the default variant. All Pi-specific instructions in this guide apply to PicoClaw.
-- **OpenClaw** runs on a local Linux workstation, uses **faster-whisper** for STT instead of Vosk, and supports remote **Ollama** LLM inference in addition to cloud providers.
+- **PicoClaw** is the original Pi variant. All Pi-specific instructions in this guide apply to PicoClaw.
+- **OpenClaw** runs on Linux workstations, uses **faster-whisper** for STT, and supports local **Ollama** LLM inference.
+- **VPS Docker** is the cloud-hosted variant running in Docker on the VPS.
 
 ---
 
@@ -171,6 +176,40 @@ Full system management. Visible only to **Admin** users.
 
 ---
 
+## 📢 Agents — N8N Campaign (Advanced / Admin)
+
+The **Agents** menu is available to **admin** and **advanced** users. It provides access to AI-powered automation workflows.
+
+### 📢 Campaign Agent
+
+An AI-driven email campaign assistant that integrates with N8N workflow automation and the built-in CRM.
+
+**Flow:**
+1. Tap **📢 Кампания / Campaign** from the Agents menu.
+2. Enter the campaign topic (e.g. "spring sale for all contacts tagged 'newsletter'").
+3. The agent queries the CRM, filters contacts by tag/segment, and generates a personalised message script.
+4. **Preview** the script — tap ✅ to approve or ✏️ to edit.
+5. Tap **Send** — the agent triggers the N8N workflow, which delivers emails / messages.
+
+> 🛈 Campaign agent requires N8N and CRM to be configured. Admin must set `N8N_URL` and `N8N_API_KEY` in `bot.env`.
+
+---
+
+## 👥 CRM — Contacts & Relationships (Admin / Advanced)
+
+The CRM is a built-in contact management system stored in the shared VPS PostgreSQL database.
+
+| Action | How |
+|---|---|
+| List contacts | Admin panel → CRM → 📋 Contacts |
+| Add contact | CRM → ➕ Add (then enter name, email, phone, tags) |
+| Search contacts | CRM → 🔍 Search (enter any field) |
+| View stats | CRM → 📊 Stats (total, active, tag distribution) |
+
+> Available to **admin** and **advanced** (N8N) users only.
+
+---
+
 ## 🌐 Web Interface
 
 The Pico assistant is also accessible from any browser — no Telegram required.
@@ -180,7 +219,10 @@ The Pico assistant is also accessible from any browser — no Telegram required.
 |---|---|
 | Pi2 (primary) | `https://agents.sintaris.net/picoassist2/` |
 | Pi1 | `https://agents.sintaris.net/picoassist/` |
-| Local (on your network) | `https://<pi-ip>:8080/` |
+| TariStation2 (engineering) | `https://agents.sintaris.net/supertaris2/` |
+| SintAItion (production) | `https://agents.sintaris.net/supertaris/` |
+| VPS Docker | `https://agents.sintaris.net/supertaris-vps/` |
+| Local (on your network) | `https://<host-ip>:8080/` |
 
 > The Pi uses a self-signed TLS certificate for local access — accept the browser security warning.  
 > Internet access (via VPS) uses a valid Let's Encrypt certificate.

@@ -1,6 +1,6 @@
 # Taris — Security Architecture
 
-**Version:** `2026.3.32`  
+**Version:** `2026.4.50`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ## When to read this file
@@ -34,6 +34,20 @@ Modifying user roles, adding access guards, changing `bot_security.py`, `bot_acc
 **File:** `src/telegram/bot_access.py` — all `_is_*()` functions.  
 **File:** `src/telegram/bot_admin.py` — Admin panel entry point.
 
+### System-Chat Command Allowlists (since v2026.4.50)
+
+**File:** `src/security/bot_security.py` — `ADMIN_ALLOWED_CMDS`, `DEVELOPER_ALLOWED_CMDS`, `_classify_cmd_class()`
+
+| Constant | Contents | Who can run |
+|---|---|---|
+| `ADMIN_ALLOWED_CMDS` | `cat`, `grep`, `ls`, `find`, `ps`, `systemctl status`, `journalctl`, `ping`, `curl`, `echo`, + monitoring | admin + developer |
+| `DEVELOPER_ALLOWED_CMDS` | All of above + `systemctl restart/stop/start`, `cp`, `mv`, `rm`, `git`, `python3`, `apt`, `scp`, etc. | developer only |
+| Extra blocklist | Admin-configurable via Security Policy UI → stored in `system_settings.json` as `syschat_blocked_cmds` | Blocked for ALL roles |
+
+`get_extra_blocked_cmds()` reads `system_settings.json["syschat_blocked_cmds"]` at runtime.  
+`_classify_cmd_class(cmd)` checks the extra blocklist first (highest priority), then admin allowlist, then developer-only allowlist.  
+Admin UI: Admin panel → 🔒 Security Policy → add/remove custom blocked commands.
+
 > ⏳ **OPEN:** Full per-feature RBAC (e.g. calendar-only users) → See [TODO.md §1.1](../TODO.md)
 
 ---
@@ -54,6 +68,16 @@ Modifying user roles, adding access guards, changing `bot_security.py`, `bot_acc
 ---
 
 ## 6.5 RBAC Extensions
+
+### System-Chat Allowlist Enforcement — ✅ Implemented (v2026.4.50)
+
+| Item | Status |
+|---|---|
+| `ADMIN_ALLOWED_CMDS` + `DEVELOPER_ALLOWED_CMDS` defined | ✅ |
+| `_classify_cmd_class()` checks extra blocklist first | ✅ |
+| `get_extra_blocked_cmds()` reads from `system_settings.json` | ✅ |
+| Admin UI: 🔒 Security Policy button + add/remove flow | ✅ |
+| T122 regression test | ✅ PASS |
 
 ### Full Role Model (Target)
 
