@@ -5,6 +5,12 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-17 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 09:13 | Doc/concept cleanup: archive implemented specs, create doc/research/, restructure doc/ for Copilot efficiency, fix TODO.md, update copilot-instructions | 3 | 6 | claude-sonnet-4.6 | TODO.md, .github/copilot-instructions.md, .github/skills/taris-update-doc/SKILL.md, doc/archive/* (new), doc/research/* (new), 40+ file moves/deletes | done |
+
 ### Session — 2026-04-16 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
