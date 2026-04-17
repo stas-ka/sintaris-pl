@@ -17,6 +17,8 @@ Use this to analyse cost (time, requests) per feature over time.
 | 12:23 | Deploy v2026.4.51 (feature/guest-user-prompt-templates) to VPS Docker (dev2null.de); update deploy skill: feature branches → VPS by default | 1 | 1 | claude-sonnet-4.6 | .github/skills/taris-deploy-openclaw-target/SKILL.md | done |
 | 12:43 | Audit all remaining todos (79 total): mark 7 more done (CRM/N8N/campaign/advanced-user all already implemented); add seed_demo_contacts() to store_crm.py; add T150-T155 CRM+N8N+advanced-user regression tests; update doc/test-suite.md | 2 | 2 | claude-sonnet-4.6 | store_crm.py, test_voice_regression.py, doc/test-suite.md | done |
 | 14:00 | Implement Approve as Guest: "Guest" button in pending + admin notification keyboards; _do_approve_as_guest(); guest in _ROLE_ICONS + _get_user_role() + role management + _handle_admin_user_set_role(); T156 (6/6 PASS); v2026.4.52; deploy to VPS | 3 | 2 | claude-sonnet-4.6 | bot_admin.py, telegram_menu_bot.py, test_voice_regression.py, bot_config.py, release_notes.json, doc/test-suite.md | done |
+| 12:03 | Remove "Raspberry Pi" from /start welcome message (ru/en/de) — bot runs on VPS/PC, not Pi; deploy strings.json to VPS | 1 | 1 | claude-sonnet-4.6 | src/strings.json | done |
+| 14:30 | Admin UX: user management submenu + two-step role picker + role badges in user list + guests section; add admin_role_user: callback; T157 (6/6 PASS); v2026.4.53; deploy to VPS | 2 | 2 | claude-sonnet-4.6 | bot_admin.py, telegram_menu_bot.py, strings.json, bot_config.py, release_notes.json, test_voice_regression.py | done |
 
 ### Session — 2026-04-16 (UTC)
 
