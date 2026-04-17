@@ -12,6 +12,7 @@ Use this to analyse cost (time, requests) per feature over time.
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
 | 09:13 | Doc/concept cleanup: archive implemented specs, create doc/research/, restructure doc/ for Copilot efficiency, fix TODO.md, update copilot-instructions | 3 | 6 | claude-sonnet-4.6 | TODO.md, .github/copilot-instructions.md, .github/skills/taris-update-doc/SKILL.md, doc/archive/* (new), doc/research/* (new), 40+ file moves/deletes | done |
+| 10:30 | Update guest user spec (remove Digest, add meeting request/slots/confirmation, shared docs RAG, web UI section, User rename); create prompt templates spec (§1.5); update security.md + TODO.md | 2 | 3 | claude-sonnet-4.6 | doc/todo/1.2-guest-users.md, doc/todo/1.5-prompt-templates.md (new), doc/users/roles-overview.md, doc/architecture/security.md, TODO.md | done |
 
 ### Session — 2026-04-16 (UTC)
 
