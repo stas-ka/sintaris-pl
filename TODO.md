@@ -24,7 +24,13 @@
 
 ### 1.1 Role-Based Access Control (RBAC) 🔒
 ✅ Implemented (v2026.4.50) — allowlists, `_classify_cmd_class()`, configurable extra blocklist, admin Security Policy UI, T122 regression test.
-→ [Full spec](doc/todo/1.1-rbac.md) · [Developer menu spec](doc/todo/1.3-developer-role.md)
+→ [Full spec](doc/archive/todo/1.1-rbac.md) · [Developer menu spec](doc/archive/todo/1.3-developer-role.md)
+
+### 1.2 Guest Users 🔲 Planned
+Limited access for new / unverified users: chat-only, rate-limited, no personal data features.
+Auto-grant guest on `/start` (configurable); admin promotes to full user.
+→ [Full spec](doc/todo/1.2-guest-users.md) · [Roles overview](doc/users/roles-overview.md)
+
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 → [Full spec](doc/archive/todo/4.0-contact-book.md) · [Developer role spec](doc/archive/todo/1.3-developer-role.md)
 - [ ] Add additional fields for contact (planned, not yet implemented)

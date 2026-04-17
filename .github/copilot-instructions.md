@@ -41,6 +41,7 @@ taris is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/
 | [`doc/research/hardware-performance-analysis.md`](../doc/research/hardware-performance-analysis.md) | Before choosing algorithms, models, or suggesting hardware upgrades. |
 | [`doc/research/`](../doc/research/) | Benchmarks, LLM evals, performance reports, VPS analysis — read specific file only. |
 | [`doc/test-suite.md`](../doc/test-suite.md) | **Before running or extending tests** — all test categories, run commands, trigger rules. |
+| [`doc/users/roles-overview.md`](../doc/users/roles-overview.md) | Role/feature matrix, promotion paths, guest user design — before touching RBAC or access control. |
 | [`TODO.md`](../TODO.md) | **Session start** — check planned/in-progress/done before proposing work. |
 
 ### Architecture Topic Files — use the right one, read only the relevant section
@@ -87,9 +88,10 @@ taris/
   backup/device/  ← sanitized Pi config snapshot
   doc/            ← architecture, code map, dev patterns
     architecture/ ← Copilot navigation maps — use with view_range, never load whole
-    todo/         ← Active spec files only (5-voice-pipeline, 7-demo-features, 8.4-crm-platform)
+    todo/         ← Active spec files only (1.2-guest-users, 5-voice-pipeline, 7-demo-features, 8.4-crm-platform)
     research/     ← Benchmarks, LLM evals, hardware analyses (not loaded by default)
     archive/      ← Implemented specs + old concepts (NOT for Copilot navigation)
+    users/        ← User/role documentation: roles-overview.md + drawio diagrams
   .credentials/   ← secrets ONLY (never scripts or code) [gitignored]
   .env            ← all sensitive values for local use [gitignored]
   .env.example    ← variable names with placeholder values ONLY [committed]

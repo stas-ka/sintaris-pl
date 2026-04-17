@@ -87,12 +87,13 @@ Admin UI: Admin panel → 🔒 Security Policy → add/remove custom blocked com
 | **Developer** | ✅ Implemented | ✅ All ops + restart | ✅ Full | ✅ bot_dev.py (v2026.3.32) | ✅ Full |
 | **Full User** | ✅ Implemented | ❌ No | ❌ No | ❌ No | ✅ Full |
 | **Approved Guest** | ✅ Implemented | ❌ No | ❌ No | ❌ No | ✅ Full (dynamic) |
-| **Limited Guest** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ Subset only |
+| **Limited Guest** | 🔲 Planned | ❌ No | ❌ No | ❌ No | ⏳ Chat + Digest only, rate-limited |
 | **Read-only** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ View only, no writes |
 | **Per-feature user** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ e.g. calendar-only |
 | **Group/shared** | ⏳ Planned | ❌ No | ❌ No | ❌ No | ⏳ Shared chat_id namespace |
 
-→ Spec: [doc/todo/1.1-rbac.md](../todo/1.1-rbac.md) · [doc/todo/1.3-developer-role.md](../todo/1.3-developer-role.md)
+→ Spec: [doc/archive/todo/1.1-rbac.md](../archive/todo/1.1-rbac.md) · [doc/archive/todo/1.3-developer-role.md](../archive/todo/1.3-developer-role.md)
+→ Guest spec: [doc/todo/1.2-guest-users.md](../todo/1.2-guest-users.md) · [doc/users/roles-overview.md](../users/roles-overview.md)
 
 ### Developer Menu — ✅ Implemented (v2026.3.32)
 
