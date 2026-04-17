@@ -418,16 +418,29 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "systemctl list-units taris-* -
 | `src/services/*.service` | the changed service (+ `daemon-reload`) |
 | `strings.json`, `release_notes.json` | `taris-telegram` |
 
-## VPS Deployment (separate concern)
+## VPS Deployment (feature branches)
 
-`src/setup/deploy_vps.sh` is **not** part of the bot deployment flow.
-It is used exclusively to deploy the **nginx reverse proxy** on the dedicated VPS server (`agents.sintaris.net`) so the Pi web UI is reachable over the internet via HTTPS. Run it only when the VPS config or nginx setup changes:
+The VPS (`dev2null.de`) now runs the **full taris bot** in Docker containers (`taris-vps-telegram`, `taris-vps-web`). It is the **default staging target for feature branches** — deploy here first before integrating into TariStation2/TariStation1.
+
+Use the unified deploy script (from Linux/WSL):
 
 ```bash
-bash src/setup/deploy_vps.sh
+# Deploy feature branch to VPS
+bash src/setup/taris_deploy.sh --action deploy --target vps
+
+# Verify Docker containers
+bash src/setup/taris_deploy.sh --action verify --target vps
+
+# Restart containers only
+bash src/setup/taris_deploy.sh --action restart --target vps
 ```
 
-This reads all config from `.env` and has no effect on the Pi bot services.
+For full VPS deploy procedures, bot.env setup, and Docker-specific notes, see:
+👉 `.github/skills/taris-deploy-openclaw-target/SKILL.md` — includes VPS section.
+
+> **Credentials:** `VPS_HOST`, `VPS_USER`, `VPS_PWD` in `.env` (never commit).  
+> **Data path:** `/opt/taris-docker/` (bot.env, DB, user data — Docker volumes).  
+> **Source path:** `/opt/taris-docker/app/src/` (mounted as `/app` in containers).
 
 ---
 

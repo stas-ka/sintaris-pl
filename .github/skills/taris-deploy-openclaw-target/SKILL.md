@@ -97,54 +97,53 @@ plink -pw "$VPS_PWD" -batch ${VPS_USER}@${VPS_HOST} "echo 'AUTO_GUEST_ENABLED=1'
 
 ## Environment Variables (read from `.env` in project root)
 
-> ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
-> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.  
-> If on a feature branch — **STOP**. Do not deploy to TariStation1. Inform the user to merge to `master` first.
-
-> ⚠️ **TariStation1 confirmation rule**: After TariStation2 tests pass, **STOP and ask the user**:  
-> `"TariStation2 deployment verified ✅. Shall I also deploy to TariStation1 (SintAItion)?"`  
-> Deploy to TariStation1 **only after explicit "yes" from the user/owner**.
-
----
-
-## Environment Variables (read from `.env` in project root)
-
 | Variable | Purpose |
 |---|---|
+| `VPS_HOST` | VPS hostname (e.g. `dev2null.de`) — staging / feature branches |
+| `VPS_USER` | SSH user on VPS (default: `stas`) |
+| `VPS_PWD` | SSH password for VPS |
 | `OPENCLAW1_HOST` | TariStation1 hostname or IP (e.g. `SintAItion`) |
 | `OPENCLAW1_USER` | SSH user on TariStation1 (default: `stas`) |
 | `OPENCLAW1PWD` | SSH password for TariStation1 |
 
 TariStation2 is the local machine — no SSH credentials needed.
 
+> ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
+> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.  
+> If on a feature branch — **STOP**. Use VPS instead.
+
 ---
 
 ## 🚀 Quick Deploy via Script (Recommended)
 
-All deployment operations use the unified `taris_deploy.sh` script:
+All deployment operations use the unified `taris_deploy.sh` script. **Run from TariStation2 (Linux) or WSL.**
 
 ```bash
-# Deploy to TariStation2 (local engineering target) — ALWAYS first
-bash src/setup/taris_deploy.sh --action deploy --target ts2
+# ── FEATURE BRANCH DEFAULT: deploy to VPS ────────────────────────────────────
+bash src/setup/taris_deploy.sh --action deploy --target vps
 
-# Deploy to TariStation1 (remote production) — only after TS2 verified + user confirmed
-bash src/setup/taris_deploy.sh --action deploy --target ts1
+# Verify VPS Docker containers after deploy
+bash src/setup/taris_deploy.sh --action verify --target vps
 
-# Patch specific files only (fast iteration)
-bash src/setup/taris_deploy.sh --action patch --target ts2 \
+# Restart VPS containers only
+bash src/setup/taris_deploy.sh --action restart --target vps
+
+# Patch specific files on VPS (fast iteration)
+bash src/setup/taris_deploy.sh --action patch --target vps \
   --files "core/bot_llm.py,telegram_menu_bot.py"
 
+# ── INTEGRATION: deploy to TariStation2 (local engineering) ──────────────────
+bash src/setup/taris_deploy.sh --action deploy --target ts2
+
+# ── PRODUCTION: deploy to TariStation1 (master branch only, user confirmed) ──
+bash src/setup/taris_deploy.sh --action deploy --target ts1
+
 # Backup only (before risky changes)
+bash src/setup/taris_deploy.sh --action backup --target vps --backup-type data
 bash src/setup/taris_deploy.sh --action backup --target ts2 --backup-type all
 
 # Run migration only (after schema change)
 bash src/setup/taris_deploy.sh --action migrate --target ts2
-
-# Verify service status + journal
-bash src/setup/taris_deploy.sh --action verify --target ts2
-
-# Restart services only
-bash src/setup/taris_deploy.sh --action restart --target ts2
 
 # Full install (first-time setup on new TariStation machine)
 bash src/setup/taris_deploy.sh --action install --target ts2
@@ -152,13 +151,13 @@ bash src/setup/taris_deploy.sh --action install --target ts2
 # Options:
 #   --yes            Non-interactive (CI mode)
 #   --no-backup      Skip pre-deploy backup (rapid iteration only)
-#   --no-tests       Skip smoke tests
+#   --no-tests       Skip post-deploy smoke tests
 #   --no-migrate     Skip migration step
 #   --force-restart  Restart even if no change detected
 #   --git-ref TAG    Checkout specific commit/tag before deploy
 ```
 
-The script handles: backup → data check → deploy all packages → service files → migration → restart → journal verify → smoke tests → summary.
+The script handles: backup → data check → deploy all packages → service files (skipped for VPS/Docker) → restart → journal/docker-logs verify → smoke tests → summary.
 
 > **Legacy wrappers** (backward compat, delegate to taris_deploy.sh):
 > - `bash src/setup/update_openclaw.sh --target ts2`

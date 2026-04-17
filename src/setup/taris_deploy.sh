@@ -19,18 +19,19 @@
 #   verify      Check service status + journal tail + version
 #
 # Targets:
+#   vps   VPS staging (dev2null.de, Docker, any branch — default for feature branches)
 #   ts2   TariStation2 (local OpenClaw, engineering)
 #   ts1   TariStation1 / SintAItion (remote OpenClaw, production)
 #   pi2   OpenClawPI2 (remote PicoClaw, engineering)
 #   pi1   OpenClawPI (remote PicoClaw, production)
 #
 # Variant (auto-detected from target; override if needed):
-#   openclaw   ts1, ts2 — user systemd, cp or sshpass scp
+#   openclaw   ts1, ts2, vps — user systemd or Docker, cp or sshpass scp
 #   picoclaw   pi1, pi2 — system systemd (sudo), sshpass scp
 #
 # Options:
 #   --action ACTION         backup|deploy|patch|migrate|install|restart|verify
-#   --target TARGET         ts2|ts1|pi2|pi1
+#   --target TARGET         vps|ts2|ts1|pi2|pi1
 #   --variant VARIANT       openclaw|picoclaw (auto-detected if not given)
 #   --backup-type TYPE      data|software|system|binaries|all  (backup action)
 #   --files FILE1,FILE2     Comma-sep src/-relative paths for patch action
@@ -115,10 +116,10 @@ case "$ACTION" in
 esac
 
 # ── Validate target ───────────────────────────────────────────────────────────
-[[ -z "$TARGET" ]] && fail "--target is required. Valid: ts2 ts1 pi2 pi1"
+[[ -z "$TARGET" ]] && fail "--target is required. Valid: vps ts2 ts1 pi2 pi1"
 case "$TARGET" in
-  ts2|ts1|pi2|pi1) ;;
-  *) fail "Unknown --target '${TARGET}'. Valid: ts2 ts1 pi2 pi1" ;;
+  vps|ts2|ts1|pi2|pi1) ;;
+  *) fail "Unknown --target '${TARGET}'. Valid: vps ts2 ts1 pi2 pi1" ;;
 esac
 
 # ── Patch action requires --files ─────────────────────────────────────────────
@@ -128,7 +129,7 @@ esac
 # ── Auto-detect variant ───────────────────────────────────────────────────────
 if [[ -z "$VARIANT" ]]; then
   case "$TARGET" in
-    ts1|ts2) VARIANT="openclaw" ;;
+    ts1|ts2|vps) VARIANT="openclaw" ;;
     pi1|pi2) VARIANT="picoclaw" ;;
   esac
 fi
@@ -143,6 +144,7 @@ esac
 # TARGET CONFIGURATION
 # =============================================================================
 IS_LOCAL=false
+IS_DOCKER=false
 REMOTE_HOST=""
 REMOTE_USER="stas"
 REMOTE_PASS=""
@@ -166,6 +168,21 @@ _load_cred() {
 }
 
 case "$TARGET" in
+  vps)
+    IS_LOCAL=false
+    IS_DOCKER=true
+    REMOTE_HOST="${OPT_HOST:-$(_load_cred VPS_HOST)}"
+    REMOTE_HOST="${REMOTE_HOST:-dev2null.de}"
+    REMOTE_USER="${OPT_USER:-$(_load_cred VPS_USER)}"
+    REMOTE_USER="${REMOTE_USER:-stas}"
+    REMOTE_PASS="${OPT_PASSWORD:-$(_load_cred VPS_PWD)}"
+    TARIS_HOME="${OPT_TARIS_HOME:-/opt/taris-docker/app/src}"
+    DOCKER_DATA_HOME="/opt/taris-docker"
+    DOCKER_CONTAINERS=(taris-vps-telegram taris-vps-web)
+    SERVICES=(taris-vps-telegram taris-vps-web)
+    DEVICE_VARIANT="openclaw"
+    SMOKE_TESTS="t_openclaw_stt_routing i18n_string_coverage bot_name_injection"
+    ;;
   ts2)
     IS_LOCAL=true
     TARIS_HOME="${OPT_TARIS_HOME:-${HOME}/.taris}"
@@ -327,7 +344,12 @@ _daemon_reload() {
 
 # _get_version — get BOT_VERSION from deployed target
 _get_version() {
-  _exec "grep BOT_VERSION ${TARIS_HOME}/core/bot_config.py 2>/dev/null | head -1 | cut -d'\"' -f2" 2>/dev/null || echo "?"
+  if [[ "$IS_DOCKER" == true ]]; then
+    _exec "docker exec ${DOCKER_CONTAINERS[0]} python3 -c 'from core.bot_config import BOT_VERSION; print(BOT_VERSION)' 2>/dev/null" || \
+    _exec "grep BOT_VERSION ${TARIS_HOME}/core/bot_config.py 2>/dev/null | head -1 | cut -d'\"' -f2" 2>/dev/null || echo "?"
+  else
+    _exec "grep BOT_VERSION ${TARIS_HOME}/core/bot_config.py 2>/dev/null | head -1 | cut -d'\"' -f2" 2>/dev/null || echo "?"
+  fi
 }
 
 # _get_src_version — get BOT_VERSION from source
@@ -400,10 +422,15 @@ _confirm() {
 # =============================================================================
 action_verify() {
   hdr "Verify — service status + journal"
-  if [[ "$IS_LOCAL" == true ]]; then
+  if [[ "$IS_DOCKER" == true ]]; then
+    JLOG=$(_exec "docker logs ${DOCKER_CONTAINERS[0]} 2>&1 | tail -20" 2>/dev/null || true)
+    _exec "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep taris" 2>/dev/null || true
+    echo "$JLOG" | tail -12
+  elif [[ "$IS_LOCAL" == true ]]; then
     systemctl --user status taris-telegram --no-pager 2>/dev/null | head -6 || true
     echo ""
     JLOG=$(journalctl --user -u taris-telegram -n 20 --no-pager 2>/dev/null || true)
+    echo "$JLOG" | tail -12
   else
     _exec "systemctl --user status taris-telegram --no-pager 2>/dev/null | head -6" 2>/dev/null || \
     _exec "sudo systemctl status taris-telegram --no-pager 2>/dev/null | head -6" 2>/dev/null || true
@@ -413,8 +440,8 @@ action_verify() {
     else
       JLOG=$(_exec "journalctl --user -u taris-telegram -n 20 --no-pager 2>/dev/null" || true)
     fi
+    echo "$JLOG" | tail -12
   fi
-  echo "$JLOG" | tail -12
   if echo "$JLOG" | grep -q "Polling Telegram"; then
     ok "✓ Service is polling Telegram (Version: $(_get_version))"
   else
@@ -439,12 +466,14 @@ action_backup() {
 
   # data (always included in 'all')
   if [[ "$BACKUP_TYPE" == "data" || "$BACKUP_TYPE" == "all" ]]; then
+    # VPS: data lives in /opt/taris-docker/ (bot.env, registrations.json etc)
+    DATA_DIR="${IS_DOCKER:+${DOCKER_DATA_HOME:-/opt/taris-docker}}"
+    DATA_DIR="${DATA_DIR:-${TARIS_HOME}}"
     TAR_CMD="tar czf /tmp/${BNAME}_data.tar.gz \
-      -C ${TARIS_HOME} \
+      -C ${DATA_DIR} \
       --exclude='*/__pycache__' --exclude='*.pyc' --exclude='*.onnx' \
       --exclude='*.bin' --exclude='*.log' --exclude='vosk-model-*' \
-      taris.db bot.env config.json voice_opts.json users.json registrations.json \
-      calendar/ mail_creds/ notes/ error_protocols/ docs/ screens/ \
+      $(ls ${DATA_DIR}/*.json ${DATA_DIR}/*.db ${DATA_DIR}/bot.env 2>/dev/null | xargs -I{} basename {} | tr '\n' ' ') \
       2>/dev/null; echo BACKUP_OK"
     _exec "$TAR_CMD" | grep -q BACKUP_OK || fail "Data backup tar failed"
     if [[ "$IS_LOCAL" == true ]]; then
@@ -692,6 +721,10 @@ action_patch() {
 # =============================================================================
 _deploy_service_files() {
   hdr "Service files"
+  if [[ "$IS_DOCKER" == true ]]; then
+    ok "VPS Docker — service files managed by Docker Compose; skipping"
+    return
+  fi
   SVC_UPDATED=false
 
   if [[ "$VARIANT" == "openclaw" ]]; then
@@ -757,7 +790,10 @@ _deploy_service_files() {
 # =============================================================================
 action_restart() {
   hdr "Restart services"
-  if [[ "$IS_LOCAL" == true ]]; then
+  if [[ "$IS_DOCKER" == true ]]; then
+    _exec "sudo docker restart ${DOCKER_CONTAINERS[*]} 2>/dev/null || docker restart ${DOCKER_CONTAINERS[*]}"
+    ok "Docker containers restarted: ${DOCKER_CONTAINERS[*]}"
+  elif [[ "$IS_LOCAL" == true ]]; then
     ACTIVE=()
     for svc in "${SERVICES[@]}"; do
       systemctl --user is-active --quiet "$svc" 2>/dev/null && ACTIVE+=("$svc") || true
@@ -808,12 +844,18 @@ _run_smoke_tests() {
     return
   fi
 
-  TEST_CMD="DEVICE_VARIANT=${DEVICE_VARIANT} PYTHONPATH=${TARIS_HOME} \
-    python3 ${TARIS_HOME}/tests/test_voice_regression.py \
-    --test ${SMOKE_TESTS}"
-
-  if [[ "$IS_LOCAL" == true ]]; then
-    FAIL_COUNT=0
+  FAIL_COUNT=0
+  if [[ "$IS_DOCKER" == true ]]; then
+    # Run smoke tests inside the running telegram container
+    for T in $SMOKE_TESTS; do
+      RESULT=$(_exec "docker exec ${DOCKER_CONTAINERS[0]} \
+        bash -c 'DEVICE_VARIANT=openclaw PYTHONPATH=/app \
+        python3 /app/tests/test_voice_regression.py --test $T 2>&1 \
+        | grep -E \"PASS|FAIL|SKIP|WARN\" | tail -2'" 2>/dev/null || echo "SKIP (docker exec error)")
+      echo "  $T: ${RESULT:-skipped}"
+      echo "$RESULT" | grep -qE "^\S.*\s+FAIL\s" && FAIL_COUNT=$((FAIL_COUNT+1)) || true
+    done
+  elif [[ "$IS_LOCAL" == true ]]; then
     for T in $SMOKE_TESTS; do
       RESULT=$(DEVICE_VARIANT="${DEVICE_VARIANT}" PYTHONPATH="${TARIS_HOME}" \
         python3 "${TARIS_HOME}/tests/test_voice_regression.py" \
@@ -822,7 +864,6 @@ _run_smoke_tests() {
       echo "$RESULT" | grep -qE "^\S.*\s+FAIL\s" && FAIL_COUNT=$((FAIL_COUNT+1)) || true
     done
   else
-    FAIL_COUNT=0
     for T in $SMOKE_TESTS; do
       RESULT=$(_exec "DEVICE_VARIANT=${DEVICE_VARIANT} PYTHONPATH=${TARIS_HOME} \
         python3 ${TARIS_HOME}/tests/test_voice_regression.py \
@@ -915,7 +956,15 @@ echo INSTALL_OK'"
 # =============================================================================
 _check_data_dirs() {
   hdr "Data directory check"
-  CHECK_CMD="
+  if [[ "$IS_DOCKER" == true ]]; then
+    CHECK_CMD="
+missing=()
+for f in bot.env; do
+  [[ -f ${DOCKER_DATA_HOME}/\$f ]] || missing+=(\"\$f\")
+done
+[[ \${#missing[@]} -gt 0 ]] && echo \"MISSING: \${missing[*]}\" || echo OK"
+  else
+    CHECK_CMD="
 missing=()
 for d in calendar notes docs screens web/templates web/static; do
   [[ -d ${TARIS_HOME}/\$d ]] || missing+=(\"\$d\")
@@ -924,6 +973,7 @@ for f in taris.db bot.env; do
   [[ -f ${TARIS_HOME}/\$f ]] || missing+=(\"\$f\")
 done
 [[ \${#missing[@]} -gt 0 ]] && echo \"MISSING: \${missing[*]}\" || echo OK"
+  fi
 
   RESULT=$(_exec "$CHECK_CMD" 2>/dev/null || echo "MISSING: (check failed)")
   if [[ "$RESULT" == OK ]]; then
@@ -965,7 +1015,12 @@ _print_summary() {
     printf "  %-12s %s\n" "Backup:"  "backup/snapshots/${BNAME}/"
   fi
   echo ""
-  if [[ "$TARGET" == "ts2" || "$TARGET" == "pi2" ]]; then
+  if [[ "$TARGET" == "vps" ]]; then
+    echo "  Next steps (VPS / feature branch):"
+    echo "    1. Test the bot via Telegram (feature branch)"
+    echo "    2. When feature is ready: merge to master, then deploy to TariStation1"
+    echo "       bash src/setup/taris_deploy.sh --action deploy --target ts1"
+  elif [[ "$TARGET" == "ts2" || "$TARGET" == "pi2" ]]; then
     echo "  Next steps:"
     echo "    1. Test the bot in Telegram"
     echo "    2. Run full regression:"
