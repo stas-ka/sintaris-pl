@@ -203,6 +203,34 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T118 | `gemma4_ollama_config` | `bot_llm.py` passes `think:OLLAMA_THINK` to Ollama API; `bot_config.py` defaults `OLLAMA_THINK=False`. Ensures Gemma4 thinking suppressed in production. | After editing `bot_llm.py` or `bot_config.py` LLM constants |
 | T119 | `gemma4_live_availability` | Live Ollama API check: gemma4:e2b/e4b pulled and callable. SKIP if Ollama not running. | After pulling Gemma4 models; before switching `OLLAMA_MODEL` |
 | T120 | `gemma4_benchmark_report` | Research doc, Linux eval script, and Windows PowerShell eval helper all present. | After adding Gemma4 evaluation infrastructure |
+| T121 | `ollama_model_picker` | Admin Ollama model picker: `get_ollama_model`/`set_ollama_model` exist; admin UI handler + callback dispatch present. | After editing `bot_admin.py` LLM model picker |
+| T122 | `rbac_allowlist_enforcement` | `ADMIN_ALLOWED_CMDS`, `DEVELOPER_ALLOWED_CMDS`, `_classify_cmd_class`, configurable extra blocklist, admin security policy UI present. | After editing RBAC enforcement in `bot_security.py` or `bot_admin.py` |
+
+### 2.5c Guest User + Prompt Templates — `test_voice_regression.py --test t_guest_user_feature`
+
+| ID | Test | What it checks | When to run |
+|---|---|---|---|
+| T140 | `guest_config_constants` | `AUTO_GUEST_ENABLED`, `GUEST_MSG_DAILY_LIMIT`, `GUEST_MSG_HOURLY_LIMIT`, `GUEST_MAX_TOKENS`, `SHARED_DOCS_OWNER` in `bot_config.py`. | After editing guest constants |
+| T141 | `guest_state_fields` | `bot_state.py` has `_dynamic_guests` and `_guest_message_counts`. | After editing `bot_state.py` guest persistence |
+| T142 | `guest_access_functions` | `bot_access.py` has `_is_guest()`, `_get_prompt_role_key()`, `_check_guest_rate_limit()`. | After editing `bot_access.py` access functions |
+| T143 | `guest_system_message` | `_build_system_message()` uses `role_system_prompts` from `prompts.json`. | After editing system message builder |
+| T144 | `guest_rate_limit_logic` | `_check_guest_rate_limit` uses hourly/daily count keys. | After editing rate limit logic |
+| T145 | `guest_rate_limit_enforced` | Text handler in `telegram_menu_bot.py` calls `_check_guest_rate_limit` before LLM routing. | After editing message routing |
+| T146 | `guest_auto_registration` | `/start` handler has `AUTO_GUEST_ENABLED` branch to register guests. | After editing `/start` handler |
+| T147 | `guest_prompts_json` | `prompts.json` has `role_system_prompts`, `role_capabilities`, `role_styles` with `guest` key. | After editing `prompts.json` role prompts |
+| T148 | `guest_strings` | `strings.json` has `guest_welcome` in all 3 languages. | After editing `strings.json` guest keys |
+| T149 | `guest_env_example` | `.env.example` documents `AUTO_GUEST_ENABLED` and `SHARED_DOCS_OWNER`. | After adding guest constants to `.env.example` |
+
+### 2.5d CRM + N8N + Advanced User — `test_voice_regression.py --test t_crm_n8n_advanced_user`
+
+| ID | Test | What it checks | When to run |
+|---|---|---|---|
+| T150 | `n8n_adapter_source` | `bot_n8n.py` has `test_connection`, `trigger_workflow`, `list_workflows` + `N8N_URL`/`N8N_API_KEY` constants. | After editing `bot_n8n.py` |
+| T151 | `crm_store_source` | `store_crm.py` has `create_contact`, `get_stats`, `seed_demo_contacts`, `list_contacts`, `search_contacts`, `count_contacts`. | After editing `store_crm.py` |
+| T152 | `crm_intent_classifier` | `bot_crm.py` has `classify_intent()` + `CRM_INTENTS` set with `add_contact`/`search`/`campaign`. | After editing `bot_crm.py` intent classifier |
+| T153 | `advanced_user_role_management` | `bot_admin.py` has 4-role system: `_is_advanced`, `_handle_admin_user_set_role`, `valid_roles`, `_advanced_users`. | After editing role management in `bot_admin.py` |
+| T154 | `n8n_workflow_files` | `src/n8n/workflows/` contains ≥2 JSON workflow files. | After adding/removing N8N workflow definitions |
+| T155 | `crm_web_api` | `bot_web.py` has `/api/crm/` route + `api_crm_contacts` + `CRM_ENABLED`. | After editing CRM API endpoints in `bot_web.py` |
 
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 
@@ -283,6 +311,8 @@ Run with: `python src/tests/test_campaign.py` (offline) or deploy to target and 
 | After editing `bot_campaign.py` state machine or `call_webhook()` | T130–T137 (`python src/tests/test_campaign.py`) |
 | After changing `OLLAMA_MODEL` in bot.env on TariStation2 | T135 (`python src/tests/test_campaign.py`) |
 | After editing campaign callbacks or `handle_message()` routing in `telegram_menu_bot.py` | T137a, T137b (`python src/tests/test_campaign.py`) |
+| After editing guest user constants, `_is_guest()`, `_get_prompt_role_key()`, or `prompts.json` role prompts | T140–T149 (`--test t_guest_user_feature`) |
+| After editing `bot_n8n.py`, `store_crm.py`, `bot_crm.py`, `bot_admin.py` role management, or N8N workflows | T150–T155 (`--test t_crm_n8n_advanced_user`) |
 
 ---
 

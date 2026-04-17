@@ -8052,6 +8052,91 @@ def t_guest_user_feature(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T150–T155 — CRM + N8N + Advanced User
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_crm_n8n_advanced_user(**_) -> list[TestResult]:
+    """T150-T155: CRM store, N8N adapter, intent classifier, advanced user role, N8N workflows, CRM Web UI."""
+    import time as _time
+    results: list[TestResult] = []
+    t0 = _time.time()
+
+    def _src(rel: str) -> str:
+        p = SRC_ROOT / rel
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
+    # ── T150: bot_n8n.py — adapter functions present ──────────────────────────
+    n8n_src = _src("features/bot_n8n.py")
+    ok_n8n = bool(n8n_src) and all(fn in n8n_src for fn in [
+        "def test_connection", "def trigger_workflow", "def list_workflows",
+        "N8N_URL", "N8N_API_KEY",
+    ])
+    results.append(TestResult(
+        "n8n_adapter_source", "PASS" if ok_n8n else "FAIL", _time.time() - t0,
+        "bot_n8n.py: test_connection/trigger_workflow/list_workflows + constants" if ok_n8n
+        else f"MISSING in bot_n8n.py: check test_connection/trigger_workflow present",
+    ))
+
+    # ── T151: store_crm.py — critical functions + seed_demo_contacts ─────────
+    crm_store = _src("core/store_crm.py")
+    ok_store = bool(crm_store) and all(fn in crm_store for fn in [
+        "def create_contact", "def get_stats", "def seed_demo_contacts",
+        "def list_contacts", "def search_contacts", "def count_contacts",
+    ])
+    results.append(TestResult(
+        "crm_store_source", "PASS" if ok_store else "FAIL", _time.time() - t0,
+        "store_crm.py: create_contact/get_stats/seed_demo_contacts/list/search/count" if ok_store
+        else "MISSING: check store_crm.py for required CRM functions",
+    ))
+
+    # ── T152: bot_crm.py — LLM intent classifier present ────────────────────
+    crm_src = _src("features/bot_crm.py")
+    ok_intent = bool(crm_src) and all(fn in crm_src for fn in [
+        "def classify_intent", "CRM_INTENTS", "add_contact", "search", "campaign",
+    ])
+    results.append(TestResult(
+        "crm_intent_classifier", "PASS" if ok_intent else "FAIL", _time.time() - t0,
+        "bot_crm.py: classify_intent + CRM_INTENTS set present" if ok_intent
+        else "MISSING: classify_intent or CRM_INTENTS in bot_crm.py",
+    ))
+
+    # ── T153: bot_admin.py — 4-role management system ────────────────────────
+    adm_src = _src("telegram/bot_admin.py")
+    ok_roles = bool(adm_src) and all(s in adm_src for s in [
+        "_is_advanced", "_handle_admin_user_set_role", '"advanced"', '"developer"',
+        "valid_roles", "_advanced_users",
+    ])
+    results.append(TestResult(
+        "advanced_user_role_management", "PASS" if ok_roles else "FAIL", _time.time() - t0,
+        "bot_admin.py: 4-role system with _is_advanced/_handle_admin_user_set_role present" if ok_roles
+        else "MISSING: advanced user role management in bot_admin.py",
+    ))
+
+    # ── T154: N8N workflow JSON files present ────────────────────────────────
+    wf_dir = SRC_ROOT / "n8n" / "workflows"
+    wf_files = list(wf_dir.glob("*.json")) if wf_dir.exists() else []
+    ok_wf = len(wf_files) >= 2
+    results.append(TestResult(
+        "n8n_workflow_files", "PASS" if ok_wf else "FAIL", _time.time() - t0,
+        f"n8n/workflows/ has {len(wf_files)} JSON file(s): {[f.name for f in wf_files]}" if ok_wf
+        else f"MISSING: need ≥2 N8N workflow JSON files in src/n8n/workflows/ (found {len(wf_files)})",
+    ))
+
+    # ── T155: bot_web.py — /api/crm/ endpoints present ──────────────────────
+    web_src = _src("bot_web.py")
+    ok_web_crm = bool(web_src) and all(s in web_src for s in [
+        '"/api/crm/', "api_crm_contacts", "CRM_ENABLED",
+    ])
+    results.append(TestResult(
+        "crm_web_api", "PASS" if ok_web_crm else "FAIL", _time.time() - t0,
+        "bot_web.py: /api/crm/ route + api_crm_contacts + CRM_ENABLED present" if ok_web_crm
+        else "MISSING: CRM Web API routes in bot_web.py",
+    ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8273,6 +8358,8 @@ TEST_FUNCTIONS = [
     t_rbac_allowlist_enforcement,
     # Guest user support + role-based prompt templates (T140–T149)
     t_guest_user_feature,
+    # CRM + N8N adapter + intent classifier + advanced user + workflows + Web API (T150–T155)
+    t_crm_n8n_advanced_user,
 ]
 
 
