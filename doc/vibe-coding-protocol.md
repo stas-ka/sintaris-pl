@@ -13,6 +13,8 @@ Use this to analyse cost (time, requests) per feature over time.
 |---|---|---|---|---|---|---|
 | 09:13 | Doc/concept cleanup: archive implemented specs, create doc/research/, restructure doc/ for Copilot efficiency, fix TODO.md, update copilot-instructions | 3 | 6 | claude-sonnet-4.6 | TODO.md, .github/copilot-instructions.md, .github/skills/taris-update-doc/SKILL.md, doc/archive/* (new), doc/research/* (new), 40+ file moves/deletes | done |
 | 10:30 | Update guest user spec (remove Digest, add meeting request/slots/confirmation, shared docs RAG, web UI section, User rename); create prompt templates spec (§1.5); update security.md + TODO.md | 2 | 3 | claude-sonnet-4.6 | doc/todo/1.2-guest-users.md, doc/todo/1.5-prompt-templates.md (new), doc/users/roles-overview.md, doc/architecture/security.md, TODO.md | done |
+| 12:00 | Implement guest user feature + role-based prompts: AUTO_GUEST_ENABLED, real _is_guest(), _get_prompt_role_key(), _check_guest_rate_limit(), shared-docs RAG, role_system_prompts in prompts.json, strings, .env.example, T140-T149 (23 PASS), v2026.4.51 | 4 | 4 | claude-sonnet-4.6 | bot_config.py, bot_state.py, bot_access.py, prompts.json, strings.json, telegram_menu_bot.py, release_notes.json, test_voice_regression.py, .env.example | done |
+| 12:23 | Deploy v2026.4.51 (feature/guest-user-prompt-templates) to VPS Docker (dev2null.de); update deploy skill: feature branches → VPS by default | 1 | 1 | claude-sonnet-4.6 | .github/skills/taris-deploy-openclaw-target/SKILL.md | done |
 
 ### Session — 2026-04-16 (UTC)
 

@@ -1,13 +1,11 @@
 ---
 name: taris-deploy-openclaw-target
 description: >
-  Deploy the OpenClaw variant of taris to local target TariStation2 (engineering)
-  and remote target TariStation1 / SintAItion (production). Use when: deploying
-  bot updates, pushing new features, deploying service files, restarting services,
-  verifying deployment, running post-deploy tests, full module deploy, release
-  version bump. TariStation2 is always deployed first; TariStation1 requires
-  explicit user/owner confirmation after TariStation2 tests pass.
-argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and target (ts2/ts1/both)'
+  Deploy the OpenClaw variant of taris to VPS (feature branches / staging),
+  TariStation2 (local engineering), or TariStation1 / SintAItion (production).
+  Default for feature branches: VPS only. TariStation2 for integration testing.
+  TariStation1 requires explicit user/owner confirmation on master branch only.
+argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and target (vps/ts2/ts1)'
 ---
 
 # Deploy to Target — OpenClaw Variant
@@ -26,12 +24,78 @@ argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and ta
 
 ## ⚠️ Target Priority Rule — MANDATORY
 
-**ALWAYS deploy to TariStation2 first. TariStation1 (SintAItion) requires explicit confirmation from user/owner (stas) AFTER TariStation2 tests pass.**
+**Default for feature branches → VPS. TariStation2 for local integration. TariStation1 (SintAItion) requires explicit confirmation on `master` only.**
 
 | Target | Alias | Type | Transport | Branch rule |
 |---|---|---|---|---|
+| **VPS** (staging/feature) | `dev2null.de` | Docker (`pscp` + `plink`) | remote SSH | **any branch** — default for feature branches |
 | TariStation2 (engineering) | local machine | `cp` + `systemctl --user` | local filesystem | any branch |
 | TariStation1 (SintAItion, production) | `SintAItion` | `scp` + `ssh` | remote SSH | `master` only |
+
+> **Feature branch rule**: When on any branch OTHER than `master`, deploy to **VPS by default**.  
+> Do NOT deploy feature branches to TariStation1 (production).
+
+> ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
+> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.
+
+> ⚠️ **TariStation1 confirmation rule**: After VPS/TariStation2 tests pass, **STOP and ask the user**:  
+> `"VPS deployment verified ✅. Shall I also deploy to TariStation1 (SintAItion)?"`  
+> Deploy to TariStation1 **only after explicit "yes" from the user/owner**.
+
+---
+
+## VPS Deploy (feature branches — default)
+
+The VPS runs taris in Docker at `/opt/taris-docker/`. Source is volume-mounted from `/opt/taris-docker/app/src/`.  
+Credentials: `VPS_HOST`, `VPS_USER`, `VPS_PWD` from `.env`.
+
+### Upload all changed packages (Windows, using pscp/plink)
+
+```powershell
+# Load credentials
+$envContent = Get-Content .env -Encoding UTF8
+$VPS_HOST = ($envContent | Select-String "^VPS_HOST=").ToString().Split("=",2)[1].Trim()
+$VPS_USER = ($envContent | Select-String "^VPS_USER=").ToString().Split("=",2)[1].Trim()
+$VPS_PWD  = ($envContent | Select-String "^VPS_PWD=").ToString().Split("=",2)[1].Trim()
+$REMOTE   = "${VPS_USER}@${VPS_HOST}:/opt/taris-docker/app/src"
+
+# Full sync (recommended — avoids stale file errors on VPS)
+pscp -pw "$VPS_PWD" -q src\core\*.py     "${REMOTE}/core/"
+pscp -pw "$VPS_PWD" -q src\telegram\*.py "${REMOTE}/telegram/"
+pscp -pw "$VPS_PWD" -q src\features\*.py "${REMOTE}/features/"
+pscp -pw "$VPS_PWD" -q src\ui\*.py       "${REMOTE}/ui/"
+pscp -pw "$VPS_PWD" -q src\security\*.py "${REMOTE}/security/"
+pscp -pw "$VPS_PWD" -q src\telegram_menu_bot.py src\bot_web.py src\voice_assistant.py "${REMOTE}/"
+pscp -pw "$VPS_PWD" -q src\strings.json src\release_notes.json src\prompts.json "${REMOTE}/"
+```
+
+### Restart and verify
+
+```powershell
+plink -pw "$VPS_PWD" -batch ${VPS_USER}@${VPS_HOST} @"
+sudo docker restart taris-vps-telegram taris-vps-web
+sleep 5
+docker logs taris-vps-telegram 2>&1 | grep -E 'Version|Polling|ERROR|ImportError' | tail -5
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep taris
+"@
+```
+
+**Pass criteria:**  
+- `[INFO] Version      : 2026.X.Y` ✅  
+- `[INFO] Polling Telegram` ✅  
+- No `ImportError` or `ERROR` lines in the NEW startup section
+
+### VPS bot.env location
+
+`/opt/taris-docker/bot.env` — edit to set new env vars (e.g. `AUTO_GUEST_ENABLED=1`):
+
+```powershell
+plink -pw "$VPS_PWD" -batch ${VPS_USER}@${VPS_HOST} "echo 'AUTO_GUEST_ENABLED=1' >> /opt/taris-docker/bot.env"
+```
+
+---
+
+## Environment Variables (read from `.env` in project root)
 
 > ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
 > Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.  
