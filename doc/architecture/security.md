@@ -26,10 +26,12 @@ Modifying user roles, adding access guards, changing `bot_security.py`, `bot_acc
 |---|---|---|---|
 | **Admin** | `_is_admin(chat_id)` | `ADMIN_USERS` in `bot.env` | All features + Admin panel + System chat + LLM settings |
 | **Developer** | `_is_developer(chat_id)` | `DEVELOPER_USERS` in `bot.env` | Admin features + diagnostic tools + raw system info (since v2026.3.30) |
-| **Full user** | `_is_allowed(chat_id)` | `ALLOWED_USERS` in `bot.env` | All user features (chat, voice, notes, calendar, contacts) |
-| **Approved guest** | `_is_allowed(chat_id)` | `_dynamic_users` (DB) | All user features, dynamically approved by admin |
+| **User** | `_is_allowed(chat_id)` | `ALLOWED_USERS` in `bot.env` or `_dynamic_users` (DB) | All user features (chat, voice, notes, calendar, contacts, documents) |
+| **Guest** ⏳ | `_is_limited_guest(chat_id)` | `registrations` DB table `status="guest"` | Chat (rate-limited), shared-docs RAG, meeting request, help, profile |
 | **Pending** | `_is_pending(chat_id)` | `registrations` DB table | Registration confirmation only |
 | **Blocked** | `reg.status == "blocked"` | `registrations` DB table | Blocked message only |
+
+> ⏳ **OPEN:** Guest role — real implementation (`_is_limited_guest()` is a stub) → See [TODO.md §1.2](../TODO.md) · [spec](../todo/1.2-guest-users.md)
 
 **File:** `src/telegram/bot_access.py` — all `_is_*()` functions.  
 **File:** `src/telegram/bot_admin.py` — Admin panel entry point.

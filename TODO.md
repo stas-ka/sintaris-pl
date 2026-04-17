@@ -27,9 +27,13 @@
 → [Full spec](doc/archive/todo/1.1-rbac.md) · [Developer menu spec](doc/archive/todo/1.3-developer-role.md)
 
 ### 1.2 Guest Users 🔲 Planned
-Limited access for new / unverified users: chat-only, rate-limited, no personal data features.
-Auto-grant guest on `/start` (configurable); admin promotes to full user.
+Limited access for new / unverified users: rate-limited chat with shared-docs RAG, meeting request (calendar booking), no personal data features. "Full User" renamed to **"User"** throughout.  
+Registration modes: `pending` (default) · `AUTO_GUEST_ENABLED=1` · `AUTO_USER_ENABLED=1`.  
 → [Full spec](doc/todo/1.2-guest-users.md) · [Roles overview](doc/users/roles-overview.md)
+
+### 1.5 Prompt Templates per Role 🔲 Planned
+Role-based system prompt templates (`src/prompts/{role}_system.txt`), variable substitution (`{calendar_summary}`, `{rag_context}`, etc.), separate conversation style guides per role. Admin-configurable.  
+→ [Full spec](doc/todo/1.5-prompt-templates.md) · [conversation.md](doc/architecture/conversation.md)
 
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 → [Full spec](doc/archive/todo/4.0-contact-book.md) · [Developer role spec](doc/archive/todo/1.3-developer-role.md)
