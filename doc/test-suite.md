@@ -232,6 +232,17 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T154 | `n8n_workflow_files` | `src/n8n/workflows/` contains ≥2 JSON workflow files. | After adding/removing N8N workflow definitions |
 | T155 | `crm_web_api` | `bot_web.py` has `/api/crm/` route + `api_crm_contacts` + `CRM_ENABLED`. | After editing CRM API endpoints in `bot_web.py` |
 
+### 2.5e Guest Approval + Role Management — `test_voice_regression.py --test t_guest_approval_role`
+
+| ID | Test | What it checks | When to run |
+|---|---|---|---|
+| T156a | `guest_approval_fn` | `_do_approve_as_guest()` defined in `bot_admin.py`. | After editing admin registration approval |
+| T156b | `guest_approval_button` | `reg_guest:` callback present in registration keyboard buttons. | After editing `_handle_admin_pending_users()` or `_notify_admins_new_registration()` |
+| T156c | `guest_role_icon` | `'guest'` entry present in `_ROLE_ICONS` dict. | After editing `_ROLE_ICONS` |
+| T156d | `guest_role_detection` | `_get_user_role()` checks `_dynamic_guests` and returns `"guest"`. | After editing `_get_user_role()` |
+| T156e | `guest_role_set` | `_handle_admin_user_set_role()` handles `role == "guest"` case. | After editing `_handle_admin_user_set_role()` |
+| T156f | `guest_approval_dispatch` | `telegram_menu_bot.py` imports `_do_approve_as_guest` and dispatches `reg_guest:` callback. | After editing callback routing |
+
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 
 Run with: `python src/tests/test_campaign.py` (offline) or deploy to target and run with `PYTHONPATH=~/.taris python3 ~/.taris/tests/test_campaign.py`.
@@ -313,6 +324,7 @@ Run with: `python src/tests/test_campaign.py` (offline) or deploy to target and 
 | After editing campaign callbacks or `handle_message()` routing in `telegram_menu_bot.py` | T137a, T137b (`python src/tests/test_campaign.py`) |
 | After editing guest user constants, `_is_guest()`, `_get_prompt_role_key()`, or `prompts.json` role prompts | T140–T149 (`--test t_guest_user_feature`) |
 | After editing `bot_n8n.py`, `store_crm.py`, `bot_crm.py`, `bot_admin.py` role management, or N8N workflows | T150–T155 (`--test t_crm_n8n_advanced_user`) |
+| After editing guest approval flow (`bot_admin.py`, `telegram_menu_bot.py`) | T156 (`--test t_guest_approval_role`) |
 
 ---
 

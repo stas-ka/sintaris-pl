@@ -68,7 +68,7 @@ from telegram.bot_admin import (
     _start_admin_add_user, _finish_admin_add_user,
     _start_admin_remove_user, _finish_admin_remove_user,
     _handle_admin_pending_users,
-    _do_approve_registration, _do_block_registration,
+    _do_approve_registration, _do_block_registration, _do_approve_as_guest,
     _notify_admins_new_registration, _notify_admins_new_version,
     _handle_voice_opts_menu, _handle_voice_opt_toggle,
     _handle_admin_changelog,
@@ -523,6 +523,12 @@ def callback_handler(call):
     elif data.startswith("reg_approve:"):
         if _is_admin(cid):
             _do_approve_registration(cid, int(data.split(":", 1)[1]))
+        else:
+            bot.answer_callback_query(call.id, _t(cid, "admin_only"))
+
+    elif data.startswith("reg_guest:"):
+        if _is_admin(cid):
+            _do_approve_as_guest(cid, int(data.split(":", 1)[1]))
         else:
             bot.answer_callback_query(call.id, _t(cid, "admin_only"))
 

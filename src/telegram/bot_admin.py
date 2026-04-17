@@ -350,8 +350,9 @@ def _handle_admin_pending_users(chat_id: int) -> None:
         name_esc = _escape_md(name) if name else "_(not set)_"
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(
-            InlineKeyboardButton("\u2705  Approve", callback_data=f"reg_approve:{uid}"),
-            InlineKeyboardButton("\U0001f6ab  Block",   callback_data=f"reg_block:{uid}"),
+            InlineKeyboardButton("✅  Approve", callback_data=f"reg_approve:{uid}"),
+            InlineKeyboardButton("👤  Guest",   callback_data=f"reg_guest:{uid}"),
+            InlineKeyboardButton("🚫  Block",   callback_data=f"reg_block:{uid}"),
         )
         text = (
             f"\U0001f464 *Pending registration*\n\n"
@@ -394,6 +395,33 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
         log.warning(f"[Reg] Cannot notify approved user {target_id}: {e}")
 
 
+def _do_approve_as_guest(admin_id: int, target_id: int) -> None:
+    """Approve a pending registration as a limited guest (no full user rights)."""
+    from telegram.bot_access import _menu_keyboard
+    reg = _find_registration(target_id)
+    if not reg:
+        bot.send_message(admin_id, f"ℹ️ Registration for `{target_id}` not found.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+        return
+    if reg.get("status") in ("approved", "guest"):
+        bot.send_message(admin_id, f"ℹ️ User `{target_id}` is already active.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+        return
+    _set_reg_status(target_id, "guest")
+    _st._dynamic_guests.add(target_id)
+    name_disp = f" — {reg.get('name')}" if reg.get("name") else ""
+    log.info(f"[Reg] Admin {admin_id} approved user {target_id} as GUEST")
+    bot.send_message(admin_id,
+                     f"👤 User `{target_id}`{name_disp} approved as *guest* (limited access).",
+                     parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+    try:
+        bot.send_message(target_id, _t(target_id, "guest_welcome"),
+                         parse_mode="Markdown",
+                         reply_markup=_menu_keyboard(target_id))
+    except Exception as e:
+        log.warning(f"[Reg] Cannot notify guest {target_id}: {e}")
+
+
 def _do_block_registration(admin_id: int, target_id: int) -> None:
     """Block a registration: mark blocked and notify user."""
     reg       = _find_registration(target_id)
@@ -421,6 +449,7 @@ def _notify_admins_new_registration(chat_id: int, username: str, name: str,
             kb = InlineKeyboardMarkup(row_width=2)
             kb.add(
                 InlineKeyboardButton("✅  Approve", callback_data=f"reg_approve:{chat_id}"),
+                InlineKeyboardButton("👤  Guest",   callback_data=f"reg_guest:{chat_id}"),
                 InlineKeyboardButton("🚫  Block",   callback_data=f"reg_block:{chat_id}"),
             )
             bot.send_message(
@@ -1939,6 +1968,7 @@ def finish_crm_input(chat_id: int, text: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ROLE_ICONS: dict[str, str] = {
+    "guest":     "🌐",
     "user":      "👤",
     "advanced":  "⚡",
     "admin":     "🔐",
@@ -1954,6 +1984,10 @@ def _get_user_role(uid: int) -> str:
         return "developer"
     if uid in _st._advanced_users:
         return "advanced"
+    if uid in _st._dynamic_users or uid in ALLOWED_USERS:
+        return "user"
+    if uid in _st._dynamic_guests:
+        return "guest"
     return "user"
 
 
@@ -1968,6 +2002,7 @@ def _handle_admin_roles_menu(chat_id: int) -> None:
         set(ADMIN_USERS) | set(DEVELOPER_USERS) | set(ALLOWED_USERS)
         | set(_st._dynamic_users) | set(_st._advanced_users)
         | set(_st._dynamic_admins) | set(_st._dynamic_devs)
+        | set(_st._dynamic_guests)
     )
     if not all_ids:
         bot.send_message(chat_id, _t(chat_id, "admin_roles_empty"),
@@ -1996,7 +2031,7 @@ def _handle_admin_roles_menu(chat_id: int) -> None:
             callback_data="noop",
         ))
         # Role-change buttons for each alternative role
-        alternatives = [r for r in ["user", "advanced", "admin", "developer"] if r != current]
+        alternatives = [r for r in ["guest", "user", "advanced", "admin", "developer"] if r != current]
         kb.row(*[
             InlineKeyboardButton(
                 f"{_ROLE_ICONS[r]} {r}",
@@ -2016,7 +2051,7 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
                          reply_markup=_admin_keyboard(chat_id))
         return
 
-    valid_roles = {"user", "advanced", "admin", "developer"}
+    valid_roles = {"guest", "user", "advanced", "admin", "developer"}
     if role not in valid_roles:
         return
 
@@ -2024,18 +2059,26 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
     _st._advanced_users.discard(target_uid)
     _st._dynamic_admins.discard(target_uid)
     _st._dynamic_devs.discard(target_uid)
+    _st._dynamic_users.discard(target_uid)
+    _st._dynamic_guests.discard(target_uid)
 
-    # Ensure the user stays in _dynamic_users (allowed to access bot)
-    _st._dynamic_users.add(target_uid)
+    if role == "guest":
+        # Limited access: guest only
+        _st._dynamic_guests.add(target_uid)
+        _set_reg_status(target_uid, "guest")
+    else:
+        # All non-guest roles keep the user in _dynamic_users
+        _st._dynamic_users.add(target_uid)
+        _set_reg_status(target_uid, "approved")
 
-    # Apply the new role
-    if role == "advanced":
-        _st._advanced_users.add(target_uid)
-    elif role == "admin":
-        _st._dynamic_admins.add(target_uid)
-    elif role == "developer":
-        _st._dynamic_devs.add(target_uid)
-    # role == "user": only in _dynamic_users, no extra set
+        # Apply the new role
+        if role == "advanced":
+            _st._advanced_users.add(target_uid)
+        elif role == "admin":
+            _st._dynamic_admins.add(target_uid)
+        elif role == "developer":
+            _st._dynamic_devs.add(target_uid)
+        # role == "user": only in _dynamic_users, no extra set
 
     _st._save_advanced_users()
     _st._save_dynamic_admins()

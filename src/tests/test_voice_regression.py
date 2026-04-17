@@ -8137,6 +8137,77 @@ def t_crm_n8n_advanced_user(**_) -> list[TestResult]:
     return results
 
 
+# ─── T156: Guest approval + role management ───────────────────────────────────
+
+def t_guest_approval_role(**_) -> list[TestResult]:
+    """T156: Verify 'Approve as Guest' button and guest role in role management."""
+    import time as _time
+    results = []
+
+    try:
+        src = Path(__file__).parent.parent / "telegram" / "bot_admin.py"
+        text = src.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+
+    t0 = _time.time()
+
+    # T156a: _do_approve_as_guest function exists
+    ok = "_do_approve_as_guest" in text
+    results.append(TestResult(
+        "guest_approval_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_do_approve_as_guest() defined in bot_admin.py" if ok
+        else "MISSING: _do_approve_as_guest function",
+    ))
+
+    # T156b: reg_guest callback in registration keyboards
+    ok = 'callback_data=f"reg_guest:{' in text or "reg_guest:" in text
+    results.append(TestResult(
+        "guest_approval_button", "PASS" if ok else "FAIL", _time.time() - t0,
+        "reg_guest: callback present in registration keyboard" if ok
+        else "MISSING: reg_guest: button in bot_admin.py keyboards",
+    ))
+
+    # T156c: guest in _ROLE_ICONS dict
+    ok = '"guest"' in text and "_ROLE_ICONS" in text
+    results.append(TestResult(
+        "guest_role_icon", "PASS" if ok else "FAIL", _time.time() - t0,
+        "'guest' in _ROLE_ICONS" if ok
+        else "MISSING: 'guest' entry in _ROLE_ICONS",
+    ))
+
+    # T156d: _get_user_role returns guest for _dynamic_guests members
+    ok = "_dynamic_guests" in text and '"guest"' in text
+    results.append(TestResult(
+        "guest_role_detection", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_get_user_role checks _dynamic_guests" if ok
+        else "MISSING: guest detection in _get_user_role",
+    ))
+
+    # T156e: _handle_admin_user_set_role handles guest role
+    ok = "role == \"guest\"" in text or "role == 'guest'" in text
+    results.append(TestResult(
+        "guest_role_set", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_handle_admin_user_set_role handles guest role" if ok
+        else "MISSING: guest case in _handle_admin_user_set_role",
+    ))
+
+    # T156f: telegram_menu_bot.py imports _do_approve_as_guest and dispatches reg_guest:
+    try:
+        mb = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        mb_text = mb.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        mb_text = ""
+    ok = "_do_approve_as_guest" in mb_text and "reg_guest:" in mb_text
+    results.append(TestResult(
+        "guest_approval_dispatch", "PASS" if ok else "FAIL", _time.time() - t0,
+        "telegram_menu_bot.py imports + dispatches reg_guest:" if ok
+        else "MISSING: _do_approve_as_guest import or reg_guest: dispatch in telegram_menu_bot.py",
+    ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8360,6 +8431,8 @@ TEST_FUNCTIONS = [
     t_guest_user_feature,
     # CRM + N8N adapter + intent classifier + advanced user + workflows + Web API (T150–T155)
     t_crm_n8n_advanced_user,
+    # Guest approval + role management (T156)
+    t_guest_approval_role,
 ]
 
 

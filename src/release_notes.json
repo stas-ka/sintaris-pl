@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.52",
+    "date": "2026-04-17",
+    "title": "Approve as Guest + guest role management",
+    "notes": "- feat: admin can approve pending registrations as guests (👤 Guest button in pending & notification keyboards)\n- feat: _do_approve_as_guest() adds user to _dynamic_guests with status=guest\n- feat: guest role added to _ROLE_ICONS and _handle_admin_user_set_role()\n- feat: _get_user_role() returns 'guest' for _dynamic_guests members\n- feat: roles menu includes guests + allows promoting guest to user/advanced\n- feat: reg_guest: callback dispatched in telegram_menu_bot.py\n- test: T156 guest approval regression (6 sub-tests, all PASS)"
+  },
+  {
     "version": "2026.4.51",
     "date": "2026-04-17",
     "title": "Guest user support + role-based prompt templates",
