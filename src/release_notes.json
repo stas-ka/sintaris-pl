@@ -1,6 +1,11 @@
 [
   {
-    "version": "2026.4.52",
+    "version": "2026.4.53",
+    "date": "2026-04-17",
+    "title": "Admin user management submenu + two-step role picker",
+    "notes": "- feat: all user management actions grouped under 👥 User Management submenu\n- feat: user list now shows role badge (🌐 guest / 👤 user / ⚡ advanced) per user\n- feat: guests section added to user list\n- feat: roles menu rewritten as two-step UX: pick user → then pick role\n- feat: admin_role_user: callback dispatched in telegram_menu_bot.py\n- fix: role switching now works — select user to see per-user role buttons\n- test: T157 admin submenu regression (6 sub-tests, all PASS)"
+  },
+  {
     "date": "2026-04-17",
     "title": "Approve as Guest + guest role management",
     "notes": "- feat: admin can approve pending registrations as guests (👤 Guest button in pending & notification keyboards)\n- feat: _do_approve_as_guest() adds user to _dynamic_guests with status=guest\n- feat: guest role added to _ROLE_ICONS and _handle_admin_user_set_role()\n- feat: _get_user_role() returns 'guest' for _dynamic_guests members\n- feat: roles menu includes guests + allows promoting guest to user/advanced\n- feat: reg_guest: callback dispatched in telegram_menu_bot.py\n- test: T156 guest approval regression (6 sub-tests, all PASS)"

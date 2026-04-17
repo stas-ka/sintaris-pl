@@ -8208,6 +8208,76 @@ def t_guest_approval_role(**_) -> list[TestResult]:
     return results
 
 
+def t_admin_users_submenu(**_) -> list[TestResult]:
+    """T157: Verify admin user management submenu + two-step role picker UX."""
+    import time as _time
+    results = []
+
+    try:
+        src = Path(__file__).parent.parent / "telegram" / "bot_admin.py"
+        text = src.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+
+    t0 = _time.time()
+
+    # T157a: _admin_users_keyboard() exists (submenu keyboard)
+    ok = "_admin_users_keyboard" in text
+    results.append(TestResult(
+        "admin_users_keyboard_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_admin_users_keyboard() defined" if ok
+        else "MISSING: _admin_users_keyboard function",
+    ))
+
+    # T157b: _handle_admin_users_menu() exists
+    ok = "_handle_admin_users_menu" in text
+    results.append(TestResult(
+        "admin_users_menu_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_handle_admin_users_menu() defined" if ok
+        else "MISSING: _handle_admin_users_menu function",
+    ))
+
+    # T157c: _handle_admin_user_role_detail() exists (step 2 of role picker)
+    ok = "_handle_admin_user_role_detail" in text
+    results.append(TestResult(
+        "admin_role_detail_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_handle_admin_user_role_detail() defined" if ok
+        else "MISSING: _handle_admin_user_role_detail function",
+    ))
+
+    # T157d: _handle_admin_list_users shows guests section
+    ok = "_dynamic_guests" in text and "Guests" in text
+    results.append(TestResult(
+        "admin_list_shows_guests", "PASS" if ok else "FAIL", _time.time() - t0,
+        "Guests section in _handle_admin_list_users" if ok
+        else "MISSING: guests section in _handle_admin_list_users",
+    ))
+
+    # T157e: role label shown in user list (role_label call in list function)
+    ok = "_role_label(uid)" in text
+    results.append(TestResult(
+        "admin_list_role_badges", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_role_label(uid) used in user list blocks" if ok
+        else "MISSING: _role_label(uid) call in list function",
+    ))
+
+    # T157f: telegram_menu_bot.py dispatches admin_users_menu + admin_role_user:
+    try:
+        mb = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        mb_text = mb.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        mb_text = ""
+    ok = ("admin_users_menu" in mb_text and "admin_role_user:" in mb_text
+          and "_handle_admin_users_menu" in mb_text and "_handle_admin_user_role_detail" in mb_text)
+    results.append(TestResult(
+        "admin_submenu_callbacks", "PASS" if ok else "FAIL", _time.time() - t0,
+        "admin_users_menu + admin_role_user: callbacks dispatched" if ok
+        else "MISSING: admin_users_menu or admin_role_user: callbacks in telegram_menu_bot.py",
+    ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8433,6 +8503,8 @@ TEST_FUNCTIONS = [
     t_crm_n8n_advanced_user,
     # Guest approval + role management (T156)
     t_guest_approval_role,
+    # Admin users submenu + two-step role picker + role badges in list (T157)
+    t_admin_users_submenu,
 ]
 
 
