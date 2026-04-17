@@ -1,4 +1,4 @@
-﻿# Taris Bot — TODO & Roadmap
+# Taris Bot — TODO & Roadmap
 
 **Legend:** ✅ Done · 🔄 In progress · 🔲 Planned · 💡 Idea / future
 
@@ -26,30 +26,14 @@
 ✅ Implemented (v2026.4.50) — allowlists, `_classify_cmd_class()`, configurable extra blocklist, admin Security Policy UI, T122 regression test.
 → [Full spec](doc/todo/1.1-rbac.md) · [Developer menu spec](doc/todo/1.3-developer-role.md)
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
-[] Add additional fields for contact
+→ [Full spec](doc/archive/todo/4.0-contact-book.md) · [Developer role spec](doc/archive/todo/1.3-developer-role.md)
+- [ ] Add additional fields for contact (planned, not yet implemented)
+
 ---
 ## 2. N8N Workflow — Campaign Email Broadcast ✅ Implemented (v2026.4.50)
 
-Full spec: [doc/todo/2-n8n-campaign-workflow.md](doc/todo/2-n8n-campaign-workflow.md)
-
-### ✅ Implemented (v2026.4.45 – v2026.4.50)
-- [x] `bot_campaign.py` — campaign state machine (topic → filter → preview → send)
-- [x] Agents menu in Telegram (advanced/admin users only)
-- [x] N8N `Taris - Campaign Select` workflow (ID: `YF9eU2H2N3Nr4j3O`):
-  - `Demo Mode?` IF branch (true → Demo Clients / false → GS Read Clients)
-  - GS Read Clients from "клиенты" tab
-  - OpenAI (native node, gpt-4o-mini) selects matching clients
-  - GS Read Templates from "Шаблоны рассылки" — uses template if found
-  - Merge Template: prefers GS template over AI-generated
-  - Returns `{clients, template, count}` to Taris
-- [x] N8N `Taris - Campaign Send` workflow (ID: `AjIB5izjiCunMcp6`):
-  - **GS Append Queued**: writes `Status="Gesendet wird..."` to "Status рассылок" BEFORE each send
-  - Send Email via Gmail (native Gmail node, OAuth2)
-  - **GS Append Status**: writes `Status="sent"/"ERROR:..."` to "Status рассылок" AFTER each send
-  - Both GS nodes: `onError=continueRegularOutput` (GS failure never blocks send)
-- [x] Configurable `CAMPAIGN_FROM_EMAIL`, `CAMPAIGN_DEMO_MODE` env vars
-- [x] Workflow files: `src/n8n/workflows/Taris - Campaign Select.json`, `Taris - Campaign Send.json`
-- [x] Tests T50–T57: 40 unit tests passing (see `src/tests/test_campaign.py`)
+`bot_campaign.py` · Campaign Select + Send N8N workflows · Gmail integration · T50–T57 tests.
+→ [Full spec](doc/archive/todo/2-n8n-campaign-workflow.md)
 
 ### 🔲 Planned
 - [ ] Status rows written before sending (in campaign-select response, not only in send)
@@ -143,7 +127,7 @@ Baseline: Pi 3 B+ ~115 s total; target <25 s with all opts ON.
 → PicoClaw (Pi 3 B+) performance tuning: **§24.4** (USB SSD, tmpfs ONNX, zram, CPU governor, low-quality voice model)
 → OpenClaw upgrade path (Pi 5 / RK3588 / Laptop/AI X1): **§25** — pgvector, local LLM, ≤2 s voice with NPU
 → VPS cloud deployment: **§26** — Docker Compose, webhook mode, pgvector, multi-user
-→ Full hardware analysis: [doc/hw-requirements-report.md](doc/hw-requirements-report.md) · [doc/hardware-performance-analysis.md](doc/hardware-performance-analysis.md)
+→ Full hardware analysis: [doc/research/hw-requirements-report.md](doc/research/hw-requirements-report.md) · [doc/research/hardware-performance-analysis.md](doc/research/hardware-performance-analysis.md)
 
 ### 6.5 Recovery Testing 🔲
 
@@ -175,48 +159,23 @@ Contacts → Deals → Custom fields → White-label. Core platform C0 done (v20
 
 ---
 
-## 9. Flexible Storage Architecture 🔄
+## 9. Flexible Storage Architecture ✅ Implemented (v2026.4.31)
 
-Multi-backend storage with adapter pattern:  
-**PicoClaw / ZeroClaw** → SQLite + `sqlite-vec` (vector search, local RAG) · **OpenClaw** → PostgreSQL + pgvector.  
-Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files always on disk.
+Multi-backend storage with adapter pattern. All phases complete.  
+**PicoClaw / ZeroClaw** → SQLite + `sqlite-vec` · **OpenClaw/VPS** → PostgreSQL + pgvector.  
+Config: `STORE_BACKEND=sqlite|postgres` in `bot.env`.
 
-→ **[Storage Architecture Proposal](doc/todo/storage-architecture.md)** ← full design, adapter interface, DDL, migration  
-→ [Original SQLite schema & Phase 1 spec](doc/todo/9-sqlite-data-layer.md) (Phase 1 done, superseded for scope by the proposal above)
+→ [Full spec](doc/archive/todo/storage-architecture.md) · [Phase 1 spec](doc/archive/todo/9-sqlite-data-layer.md)
 
-| Phase | Description | Status |
-|---|---|---|
-| Phase 1 | `bot_db.py` schema + `init_db()` at startup | ✅ Done (v2026.3.30) |
-| Phase 2a | `store_base.py` Protocol + `store.py` factory singleton | ✅ Done (v2026.3.32) |
-| Phase 2b | `store_sqlite.py` full adapter (no vector yet) | ✅ Done (v2026.3.32) |
-| Phase 2c | Dual-write wrappers: existing JSON writers also call adapter | ✅ Done (v2026.3.32) |
-| Phase 2d | `documents` + `vec_embeddings` tables; `upsert_embedding` / `search_similar` | ✅ Done (v2026.4.13) |
-| Phase 3 | `migrate_to_db.py` — JSON → adapter (idempotent) | ✅ |
-| Phase 4 | Switch all reads to adapter; remove JSON writes | 🔄 In progress — notes/calendar/contacts/mail_creds ✅; voice_opts/registrations dual-write ⚠️; dynamic_users JSON-only ⚠️ |
-| Phase 5 | `store_postgres.py` PostgreSQL adapter; test on OpenClaw | ✅ Done (v2026.4.13) |
-| Phase 6 | RAG (§4.1) via `search_similar()`; conversation memory (§2.1) via `append_history()` | ✅ Done (v2026.4.13) |
+| Phase | Status |
+|---|---|
+| Phase 1–3: Schema, adapters, migration scripts | ✅ Done |
+| Phase 4: All reads via adapter; dual-write eliminated | ✅ Done (v2026.4.31) |
+| Phase 5: PostgreSQL + pgvector adapter | ✅ Done (v2026.4.13) |
+| Phase 6: RAG + conversation memory via adapter | ✅ Done (v2026.4.13) |
 
-- [x] `src/core/bot_db.py` schema + `init_db()` on startup — SQLite Phase 1 (v2026.3.30)
-- [x] `src/core/store_base.py` — `DataStore` Protocol definition + `StoreCapabilityError`
-- [x] `src/core/store.py` — `create_store()` factory + module-level `store` singleton
-- [x] `src/core/store_sqlite.py` — full SQLite adapter incl. sqlite-vec optional vector support
-- [x] `src/core/store_postgres.py` — PostgreSQL + pgvector adapter (OpenClaw) ✅ (v2026.4.13)
-- [x] `src/core/bot_db.py` extended — `documents` table added to schema; `vec_embeddings` managed via `store_sqlite.py` (Phase 2d) (v2026.4.13)
-- [x] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target (v2026.4.13)
-- [x] `src/setup/migrate_to_db.py` — JSON → adapter migration (Phase 3, idempotent)
-- [x] `src/setup/migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL (Phase 5, was migrate_sqlite_to_pg.py; 316 rows migrated v2026.4.31)
-- [ ] Tests T22 `sqlite_schema`, T23 `migration_idempotent`, T24 `vector_search_basic`, T25 `store_adapter_contract`, T26 `credential_encryption`
-### 9.1 Storing of user data in the local database not in files
-- [x] Notes reads from DB (`store.list_notes()`); file fallback preserved; double-write bug fixed (v2026.3.30)
-- [x] Notes content stored in DB (`notes_index.content` column); `_load_note_text` reads DB first, file fallback; `_save_note_file` writes content to DB (v2026.3.31)
-- [x] Calendar data stored in database — DB-primary via `store.save_event/load_events/delete_event`; JSON file write removed (v2026.3.31)
-- [x] All kinds of memory (conversation context) stored in database — `chat_history` + `conversation_summaries` tables; cleared via Profile (v2026.3.30+5)
-- [x] All user contacts stored in database — `store.save_contact / list_contacts / delete_contact / search_contacts` in `store_sqlite.py`
-- [x] Migration scripts exist — `src/setup/migrate_to_db.py` idempotent JSON → DB (v2026.3.30)
-- [x] Per-user preferences stored in DB — `user_prefs` table; `db_get_user_pref / db_set_user_pref` (v2026.3.31)
-- [ ] Last interactions, opened UI and status of UI stored in database — not yet implemented
-- [x] `src/setup/install_sqlite_vec.sh` — install sqlite-vec wheel on Pi target (v2026.4.13)
-- [x] `src/setup/migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL migration (was migrate_sqlite_to_pg.py; 316 rows migrated v2026.4.31)
+- [ ] Tests T22–T26 (sqlite_schema, migration, vector_search, adapter_contract, credential_encryption)
+- [ ] Last interactions / active UI stored in DB (not yet implemented)
 
 ## 10. Upload and using documents as Knowledges
 - [x] FTS5 RAG context injection: `_docs_rag_context()` in `bot_access.py`; called from `_with_lang()` and `_with_lang_voice()`; caps at 2000 chars; guard on `RAG_ENABLED` and user docs present (v2026.3.30)
@@ -229,31 +188,36 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 
 ### 10.1 Short-, Middle- and Long-term Memories ✅ All done → See DONE.md (v2026.3.30+5 / v2026.3.31)
 
-## 11. Central control dashboard (primary per voice)
-- [] IMplementing central dashboard to control and run all activities of the asstsiant
-- [] all functions can be runned and controled from this board. Steering can be do per voice or per text input.
-- [] ui shall be switchable  per voice to functional ui part to run activities
-- [] all activities can be used later as knowledge for conversation with assistant and for running new activities. Context depended activities. This fucntion shall be deactivatable
-- [] all activities shall be  stored in databse as activities and as text for LLM context 
+## 11. Central Control Dashboard 💡 Planned
 
-## 12. Input all textes in all application parts per voice in one window
-- [] all inputs of textes shall be possible per voice exceptional confirmation of runnig activities
+Primary control via voice — all assistant activities controllable from a unified dashboard.
 
-## 13. Implementing smart CRM 
-- [] Implementing open fuctions if they are not already implemented from concept\additional\crm_system_requirements.md and concept\additional\SYSTEM_REQUIREMENTS_SmartClient360.md
-- [] all inputs and switching between  all windows shall be controlable per voice. Smart client. 
-- [] smart input of text and automatical set values in the input fields 
+- [ ] Central dashboard: all activities runnable and controllable from one place (voice + text input)
+- [ ] UI switchable per voice between functional areas
+- [ ] Activities stored in DB as structured entries + LLM context (deactivatable)
 
+## 12. Voice Text Input — Unified Window 💡 Planned
 
-## 14. Developer Board
-- [] Impelementing developer board to extend , update, remove functionality of applciation based on agent principe
+- [ ] All text input fields in all application parts supportable via voice
 
+## 13. Smart CRM 💡 Planned
 
-## [] 15. Connecting Calendar, E-Mails, Drives from Google and Yandex
+- [ ] Implement open functions from [CRM requirements spec](doc/archive/concept/crm-requirements/)
+- [ ] All windows controllable per voice; smart input with automatic field population
+→ [Full CRM platform vision](doc/todo/8.4-crm-platform.md)
 
+## 14. Developer Board 💡 Planned
 
-## 16 Implementing functions of personal assistant
-- [] Implementing open fuctions if they are not already implemented from concept\additional\KIM_PACKAGES.md
+- [ ] Developer board to extend/update/remove bot functionality via agent-based editing
+
+## 15. Calendar, E-Mail, Drive Integration 💡 Planned
+
+- [ ] Google Calendar, Gmail, Google Drive integration
+- [ ] Yandex Calendar, Mail, Disk integration
+
+## 16. Personal Assistant Functions 💡 Planned
+
+- [ ] Implement open functions from [KIM packages spec](doc/archive/concept/crm-requirements/KIM_PACKAGES.md)
 
 > **§17 and §18 moved to OBSOLETE.md** — Max messenger UI (superseded by Web UI) and ZeroClaw (hardware not viable)
 
@@ -261,19 +225,15 @@ Config-driven switch: `STORE_BACKEND=sqlite|postgres` in `bot.env`. Binary files
 
 Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alongside the PicoClaw (Raspberry Pi) variant.
 → Full deployment plan: **§25 Deployment Plan: OpenClaw (Laptop / AI X1 / Pi 5 8 GB / RK3588)**
-→ Hardware specs and options: [doc/hw-requirements-report.md §1.3](doc/hw-requirements-report.md)
 → Integration architecture: [doc/architecture/openclaw-integration.md](doc/architecture/openclaw-integration.md)
 → Related project: [sintaris-openclaw](https://github.com/stas-ka/sintaris-openclaw) — Node.js AI gateway + `skill-taris` + MCP server
 
 ### 19.4 Pending ✅ All done → See DONE.md (v2026.3.29+10 / v2026.4.31)
 
-## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader �
+## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader ✅ Implemented (v2026.4.50)
 
-Extend the existing Screen DSL with a declarative file loader that reads screen
-definitions from YAML/JSON files. Zero RAM overhead; both renderers unchanged;
-incremental migration from Python-coded screens.
-
-→ [Research report](doc/research-dynamic-ui-scenarios.md) · [Spec](doc/todo/21-screen-dsl-loader.md)
+Screen DSL loader implemented; YAML/JSON file-based screens active on all targets.
+→ [Research report](doc/research/research-dynamic-ui-scenarios.md) · [Spec](doc/archive/todo/21-screen-dsl-loader.md)
 
 ### 21.6 Phase 6 — Visual Editor (OpenClaw only) 🔲
 
@@ -281,23 +241,16 @@ incremental migration from Python-coded screens.
 - [ ] `PUT /admin/screens/{id}` route to save edited YAML to `src/screens/`
 - [ ] Auto-trigger `reload_screens()` on save
 
-## 23. Research & Comparison — Hybrid RAG vs Google Grounding 🔲
+## 23. Research Backlog — AutoResearch & RAG Comparison 💡 Future
 
-Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-side Grounding and the Worksafety reference implementation. Use **Karpathy AutoResearch** (`karpathy/autoresearch`) as the autonomous evaluation framework — agent-driven experiments across three target architectures: Raspberry Pi (mini PC), OpenClaw on AI X1 (GPU), VPS.
-→ [Concept paper](concept/rag-memory-architecture.md) · [Extended research](concept/rag-memory-extended-research.md) (§6b AutoResearch)
+> Not started. Planned for a dedicated research sprint.
+→ [Concept paper](doc/archive/concept/rag-memory-architecture.md) · [Extended research](doc/research/rag-memory-extended-research.md)
 
-- [x] 23.1 OpenClaw on Laptop — Taris running locally via `sintaris-openclaw-local-deploy/` with `TARIS_HOME`, symlinks into `sintaris-pl/src/`; `skill-taris` connected ✅ (v2026.4.13)
-- [ ] 23.2 n8n + PostgreSQL clone on Laptop — replicate Worksafety orchestration stack locally for comparison baseline
-- [ ] 23.3 Karpathy nanochat + AutoResearch — install nanochat (edge LLM training) and autoresearch (autonomous evaluation) on OpenClaw laptop (AI X1); verify GPU access
-- [ ] 23.4 Hybrid RAG on Google Grounding — bind OpenClaw to Gemini Grounding API; evaluate server-side RAG quality vs local FTS5+vector
-- [ ] 23.5 Clone Worksafety DB + n8n app on OpenClaw — replicate Worksafety knowledge base and workflows on OpenClaw hardware
-- [ ] 23.6 Clone Worksafety DB for Google Grounding case — prepare Worksafety dataset as test corpus for Gemini Grounding evaluation
-- [ ] 23.7 AutoResearch environment setup — write `program.md` (RAG evaluation agenda), `evaluate.py` (RAG pipeline config runner), `prepare.py` (test corpus + ground truth); define `rag_score` composite metric (precision, recall, latency, memory, cost); configure per-architecture targets (Pi SSH, AI X1 native, VPS SSH)
-- [ ] 23.8 Implement Worksafety workflow on OpenClaw with Google Grounding — port n8n RAG pipeline to Taris architecture, bind to Gemini Grounding
-- [ ] 23.9 AutoResearch RAG evaluation — run automated overnight experiments per target architecture; ~100 configurations per target; measure rag_score; log all results to `~/.taris/autoresearch/results/`
-- [ ] 23.10 Cross-architecture Pareto analysis — aggregate AutoResearch results across Pi/X1/VPS; identify Pareto-optimal configurations per hardware tier; document recommended defaults
-- [ ] 23.11 AutoResearch for nanochat training — adapt autoresearch paradigm to optimize nanochat hyperparameters (depth, vocab_size, seq_len) for edge LLM on Pi 5 / AI X1
-- [ ] 23.12 Compare Hybrid RAG vs Google Grounding — run identical queries through both pipelines using AutoResearch evaluation harness; measure quality/latency/cost; document results
+- [x] 23.1 OpenClaw on Laptop — Taris running locally; `skill-taris` connected ✅ (v2026.4.13)
+- [ ] 23.2 n8n + PostgreSQL clone on Laptop — replicate Worksafety orchestration stack for comparison baseline
+- [ ] 23.3 Karpathy AutoResearch — install nanochat + autoresearch on OpenClaw (AI X1); verify GPU access
+- [ ] 23.4 Hybrid RAG vs Google Grounding — bind OpenClaw to Gemini Grounding API; evaluate vs local FTS5+vector
+- [ ] 23.5–23.12 — full evaluation backlog (Worksafety clone, AutoResearch runs, Pareto analysis, nanochat training)
 
 ---
 
@@ -306,7 +259,7 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 > **Hardware:** BCM2837B0 · 4× Cortex-A53 @ 1.4 GHz · 1 GB LPDDR2. RAM budget at full load: ~715 MB (critical).
 > **Voice latency baseline:** ~30–60 s; achievable after tuning: ~20–25 s. ≤2 s target is **not achievable** (no NPU/GPU).
 > **Backend:** `STORE_BACKEND=sqlite` + sqlite-vec. **LLM:** Cloud only (no local inference on Pi 3).
-> → Hardware deep-dive: [doc/hardware-performance-analysis.md](doc/hardware-performance-analysis.md) · [doc/hw-requirements-report.md §1.1](doc/hw-requirements-report.md)
+> → Hardware deep-dive: [doc/research/hardware-performance-analysis.md](doc/research/hardware-performance-analysis.md) · [doc/research/hw-requirements-report.md §1.1](doc/research/hw-requirements-report.md)
 
 ### 24.1 Base System
 - [ ] Flash Raspberry Pi OS Lite 64-bit (Bookworm); enable SSH; set hostname; disable GUI
@@ -341,7 +294,7 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - [ ] Voice regression: `python3 ~/.taris/tests/test_voice_regression.py` — all T01–T26 pass
 
 ### 24.6 RAG on Pi 3 (FTS5-only mode)
-- [ ] Phase A — Memory System: add `memory_summaries`/`memory_long` tables to `store_sqlite.py`; implement `compact_short_to_middle()` / `compact_middle_to_long()` (see `concept/rag-memory-architecture.md §6.3`)
+- [ ] Phase A — Memory System: add `memory_summaries`/`memory_long` tables to `store_sqlite.py`; implement `compact_short_to_middle()` / `compact_middle_to_long()` (see [doc/archive/concept/rag-memory-architecture.md §6.3](doc/archive/concept/rag-memory-architecture.md))
 - [ ] Phase B — FTS5 RAG: `classify_query()` adaptive routing; FTS5 BM25 search only (no vectors — RAM constraint); `rag_log` table
 - [ ] **Do NOT** enable `STORE_VECTORS=on` on Pi 3 unless `free -m` under full load confirms ≥150 MB available
 - [ ] Embedding model (`all-MiniLM-L6-v2`): load on demand and free after use (`EMBED_KEEP_RESIDENT=0`)
@@ -364,38 +317,15 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 - [x] Ubuntu 24.04 LTS; `ffmpeg`, `git`, Python 3.12 installed on both targets
 - [x] Source deployed to `~/.taris/`; `pip install -r requirements.txt` (see install scripts)
 
-### 25.2 PostgreSQL + pgvector ✅ Done
-- [x] PostgreSQL 17 (TariStation2) / 16 (SintAItion); `CREATE EXTENSION IF NOT EXISTS vector;`
-- [x] `STORE_BACKEND=postgres`; tables auto-created on first start (`StorePostgres connected vec=True`)
-- [ ] HNSW index (optional perf): `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64);`
+### 25.2–25.5 Base, PostgreSQL, Ollama, Embedding, Voice ✅ All done → See DONE.md
 
-### 25.3 Local LLM (Ollama) ✅ Done
-- [x] Ollama installed on both targets via `curl -fsSL https://ollama.com/install.sh | sh`
-- [x] SintAItion: `ollama pull gemma4:e4b` (5 GB, AMD ROCm GPU, ~45 t/s)
-- [x] TariStation2: `ollama pull qwen3.5:0.8b` (fits 7.6 GB RAM); primary LLM switched to OpenAI
-- [x] `LLM_PROVIDER=ollama` (SintAItion) / `LLM_PROVIDER=openai` (TariStation2); `LLM_FALLBACK_PROVIDER=ollama`
+### 25.6 RAG — Hybrid Tiered RAG ✅ Done (Phases A–D)
+- [ ] `doc_sharing` permission table — fine-grained per-user ACL (Phase C open item) → tracked in **§27.4**
 
-### 25.4 Embedding Service ✅ All done → See DONE.md (v2026.4.13)
+### 25.7 Migration from PicoClaw ✅ Done → See DONE.md (v2026.4.31)
 
-### 25.5 Voice Pipeline + NPU Acceleration ✅ All done → See DONE.md (v2026.3.28-openclaw / v2026.4.13)
-
-### 25.6 RAG Implementation — Variant C (Hybrid Tiered RAG)
-- [x] **Phase A — Memory System** ✅ → See DONE.md (v2026.3.31)
-- [x] **Phase B — Enhanced RAG** ✅ → See DONE.md (v2026.3.30–v2026.4.13)
-- [~] **Phase C — Document Management (one item open):**
-  - [x] Upload/chunk, sharing, deduplication, PyMuPDF, per-user settings, admin-only docs, MCP UI → See DONE.md
-  - [ ] Separate `doc_sharing` permission table — fine-grained per-user ACL → tracked in **§27.4**
-- [x] **Phase D — Remote RAG + MCP** ✅ → See DONE.md (v2026.4.1)
-
-### 25.7 Migration from PicoClaw ✅ Done
-- [x] `migrate_sqlite_to_postgres.py` — taris.db → PostgreSQL; 316 rows migrated; idempotent (v2026.4.31)
-- [x] SQLite fully eliminated on OpenClaw (`STORE_BACKEND=postgres` prevents SQLite init); v2026.4.31
-
-### 25.8 Services & Test ✅ Done
-- [x] Systemd user services running on both targets: `taris-telegram`, `taris-web`, `taris-voice`, `taris-tunnel`
-- [x] Ollama system service (SintAItion): `/etc/systemd/system/ollama.service` with AMD ROCm GPU
-- [x] Web UI Playwright tests passing; Telegram offline tests passing
-- [ ] AutoResearch eval (§23.7–23.9): `pip install ragas deepeval` — future/research only
+### 25.8 Services & Tests ✅ Done
+- [ ] AutoResearch eval (§23.3+): `pip install ragas deepeval` — future/research only (§23)
 
 ### 25.9 Hardware Notes
 - **SintAItion** — AMD Radeon 890M GPU (16 GB shared VRAM), 48 GB RAM, 915 GB NVMe. Full stack primary target.
@@ -413,48 +343,18 @@ Validate the Hybrid Tiered RAG architecture (Variant C) against Google's server-
 > **Bot mode:** Telegram polling (webhook optional later). Web UI at `https://agents.sintaris.net/supertaris-vps/`.
 > **Deploy path:** `/opt/taris-docker/` · Config: `deploy/system-configs/vps/docker/`
 
-### 26.1 Provision & Base Setup
-- ✅ VPS already existed: Ubuntu aarch64, Docker 28.3.2, nginx + certbot installed
-- ✅ `stas` user in `docker` group; source deployed to `/opt/taris-docker/app/src/`
-- ⚠️ SSH key-only login not enforced (password auth still enabled)
+### 26.1–26.5 Base, PostgreSQL, TLS, Bot, RAG ✅ All done → See DONE.md
 
-### 26.2 PostgreSQL + pgvector
-- ✅ System PostgreSQL 16 installed; `taris` user + `taris_vps` database created
-- ✅ `CREATE EXTENSION vector;` run → pgvector 0.8.0 active in `taris_vps`
-- ✅ `STORE_BACKEND=postgres`, `STORE_PG_DSN=postgresql://taris:…@127.0.0.1:5432/taris_vps`
-- ✅ Tables auto-created by app on first start (`StorePostgres connected vec=True`)
+### 26.6 Backups ⚠️ Open items
+- [ ] Install cron job on VPS: `(crontab -l; echo '0 3 * * * /opt/taris-docker/backup-taris-vps.sh >> /var/log/taris-backup.log 2>&1') | crontab -`
 - [ ] HNSW index (optional perf): `CREATE INDEX CONCURRENTLY ON documents USING hnsw (embedding vector_cosine_ops);`
 
-### 26.3 TLS & nginx
-- ✅ nginx proxies `/supertaris-vps/` → `http://127.0.0.1:8090/` (Docker host networking)
-- ✅ TLS via existing Let's Encrypt cert on `agents.sintaris.net`
-- ⚠️ Webhook rate limiting not added (using polling mode)
-
-### 26.4 Telegram Bot
-- ✅ `ALLOWED_USERS`, `ADMIN_USERS`, LLM config all set in `bot.env`
-- ✅ `BOT_TOKEN` set — @supetariss_bot live, `Polling Telegram…` confirmed
-- ⚠️ Webhook mode not configured (polling works; webhook needs BOT_TOKEN first)
-
-### 26.5 RAG & Embeddings
-- ✅ `fastembed` installed in Docker image; `pgvector` enabled → RAG active
-- ✅ LLM: `LLM_PROVIDER=openai`, `OPENAI_MODEL=gpt-4o-mini`
-- ✅ STT: `faster-whisper base` pre-downloaded to `/opt/taris-docker/data/whisper/`
-- ✅ TTS: Piper + `ru_RU-irina-medium` model at `/opt/taris-docker/data/piper/`
-
-### 26.6 Backups & Monitoring
-- ✅ Daily `pg_dump taris_vps` cron script created (`deploy/system-configs/vps/cron/backup-taris-vps.sh`)
-- ⚠️ Cron job not yet installed on VPS: run `(crontab -l; echo '0 3 * * * /opt/taris-docker/backup-taris-vps.sh >> /var/log/taris-backup.log 2>&1') | crontab -`
-- [ ] Docker container auto-restart: `restart: unless-stopped` ✅ (in docker-compose.yml)
-- [ ] Log rotation for Docker JSON logs: `max-size: 20m, max-file: 5` ✅ (in docker-compose.yml)
-
-### 26.7 Security Hardening
-- ✅ `ADMIN_USERS` + `ALLOWED_USERS` set in `bot.env`
-- ✅ Web login: `stas/buerger` (admin) — default `admin/admin` account deleted
+### 26.7 Security Hardening ⚠️ Open items
 - [ ] SSH key-only login (currently password auth enabled)
-- [ ] fail2ban check
+- [ ] fail2ban check on VPS
 
-### 26.8 Scaling Path
-- ✅ ≤50 users: single Docker instance sufficient for current load
+### 26.8 Scaling
+- ✅ ≤50 users: single Docker instance sufficient
 
 ---
 

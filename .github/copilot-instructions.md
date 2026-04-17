@@ -38,7 +38,8 @@ taris is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/
 | [`doc/bot-code-map.md`](../doc/bot-code-map.md) | **Search, don't read whole** — grep for function name, callback key, or file name; read only the matching section. Do NOT load the full file. |
 | [`doc/dev-patterns.md`](../doc/dev-patterns.md) | **Before adding any feature** — copy-paste patterns for callbacks, voice opts, multi-step flows, i18n, access guards, subprocess, session state. |
 | [`doc/architecture.md`](../doc/architecture.md) | **Index only** — find the right topic file, then read only that file. Never load the index AND the topic file. |
-| [`doc/hardware-performance-analysis.md`](../doc/hardware-performance-analysis.md) | Before choosing algorithms, models, or suggesting hardware upgrades. |
+| [`doc/research/hardware-performance-analysis.md`](../doc/research/hardware-performance-analysis.md) | Before choosing algorithms, models, or suggesting hardware upgrades. |
+| [`doc/research/`](../doc/research/) | Benchmarks, LLM evals, performance reports, VPS analysis — read specific file only. |
 | [`doc/test-suite.md`](../doc/test-suite.md) | **Before running or extending tests** — all test categories, run commands, trigger rules. |
 | [`TODO.md`](../TODO.md) | **Session start** — check planned/in-progress/done before proposing work. |
 
@@ -85,6 +86,10 @@ taris/
     tests/        ← hardware & regression tests
   backup/device/  ← sanitized Pi config snapshot
   doc/            ← architecture, code map, dev patterns
+    architecture/ ← Copilot navigation maps — use with view_range, never load whole
+    todo/         ← Active spec files only (5-voice-pipeline, 7-demo-features, 8.4-crm-platform)
+    research/     ← Benchmarks, LLM evals, hardware analyses (not loaded by default)
+    archive/      ← Implemented specs + old concepts (NOT for Copilot navigation)
   .credentials/   ← secrets ONLY (never scripts or code) [gitignored]
   .env            ← all sensitive values for local use [gitignored]
   .env.example    ← variable names with placeholder values ONLY [committed]

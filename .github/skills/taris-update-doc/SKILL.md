@@ -192,17 +192,24 @@ Update the **Architecture:** header line and `**Version:**` when the version cha
 
 **Linked spec files in `doc/todo/`:**
 
-| Spec file | TODO section |
+| Spec file | TODO section | Status |
+|---|---|---|
+| `doc/todo/5-voice-pipeline.md` | §5 Voice Pipeline | 🔲 Active |
+| `doc/todo/7-demo-features.md` | §7 Demo Features | 🔲 Active |
+| `doc/todo/8.4-crm-platform.md` | §8.4 CRM Platform Vision | 💡 Active |
+
+**Archived spec files (implemented) — in `doc/archive/todo/`:**
+
+| Spec file | Implemented |
 |---|---|
-| `doc/todo/1.1-rbac.md` | §1.1 Role-Based Access Control |
-| `doc/todo/1.3-developer-role.md` | §1.3 Developer Role |
-| `doc/todo/4.0-contact-book.md` | §4.0 Contact Book |
-| `doc/todo/5-voice-pipeline.md` | §5 Voice Pipeline |
-| `doc/todo/7-demo-features.md` | §7 Demo Features |
-| `doc/todo/8.4-crm-platform.md` | §8.4 CRM Platform Vision |
-| `doc/todo/9-sqlite-data-layer.md` | §9 Flexible Storage Architecture |
-| `doc/todo/refactor-prompts-llm.md` | LLM refactor (linked when relevant) |
-| `doc/todo/storage-architecture.md` | §9 Flexible Storage Architecture |
+| `doc/archive/todo/1.1-rbac.md` | ✅ v2026.4.50 |
+| `doc/archive/todo/1.3-developer-role.md` | ✅ v2026.4.x |
+| `doc/archive/todo/2-n8n-campaign-workflow.md` | ✅ v2026.4.50 |
+| `doc/archive/todo/4.0-contact-book.md` | ✅ v2026.3.30 |
+| `doc/archive/todo/9-sqlite-data-layer.md` | ✅ v2026.4.31 |
+| `doc/archive/todo/storage-architecture.md` | ✅ v2026.4.31 |
+| `doc/archive/todo/21-screen-dsl-loader.md` | ✅ v2026.4.50 |
+| `doc/archive/todo/refactor-prompts-llm.md` | ✅ implemented |
 
 **When creating a new spec file in `doc/todo/`:**
 1. Create `doc/todo/X.Y-feature-name.md` with a matching structure (Goal, Spec, Phases, Checklist).
