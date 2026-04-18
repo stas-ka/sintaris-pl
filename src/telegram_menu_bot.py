@@ -116,6 +116,7 @@ from telegram.bot_handlers import (
     _handle_profile,
     _handle_web_link,
     _start_profile_edit_name, _finish_profile_edit_name,
+    _start_profile_set_email, _finish_profile_set_email,
     _start_profile_change_pw, _finish_profile_change_pw,
     _handle_profile_lang, _set_profile_lang, _handle_profile_my_data,
     _handle_profile_clear_memory, _handle_profile_clear_memory_confirmed,
@@ -462,6 +463,9 @@ def callback_handler(call):
     elif data == "profile_edit_name":
         if not _is_allowed(cid): return _deny(cid)
         _start_profile_edit_name(cid)
+    elif data == "profile_set_email":
+        # All users (including guests) may set their contact email
+        _start_profile_set_email(cid)
     elif data == "profile_change_pw":
         if not _is_allowed(cid): return _deny(cid)
         _start_profile_change_pw(cid)
@@ -1356,6 +1360,10 @@ def text_handler(message):
     # ── Profile self-service text flows ────────────────────────────────────────
     if mode == "profile_edit_name":
         _finish_profile_edit_name(cid, message.text)
+        return
+
+    if mode == "profile_set_email":
+        _finish_profile_set_email(cid, message.text)
         return
 
     if mode == "profile_change_pw":

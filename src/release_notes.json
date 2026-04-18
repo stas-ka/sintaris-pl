@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.57",
+    "date": "2026-04-18",
+    "title": "Profile contact email: set address without IMAP; block guests from mail digest",
+    "notes": "- feat: all users (incl. guests) can set a contact email address in profile (📧 button)\n- feat: contact email stored as user preference, used for meeting invitations and newsletters\n- feat: email displayed in profile with masking (backward compat: falls back to IMAP creds email)\n- fix: guests blocked from mail digest (handle_digest_auth, handle_mail_consent, handle_mail_settings)\n- fix: profile mailbox button now leads to simple email setter instead of IMAP wizard"
+  },
+  {
     "version": "2026.4.56",
     "date": "2026-04-18",
     "title": "Meeting flow: expert selection + multi-day navigation + localized weekday names",

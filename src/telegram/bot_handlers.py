@@ -328,13 +328,7 @@ def _handle_note_download_zip(chat_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_profile(chat_id: int) -> None:
-    """Show the user's own profile: name, username, chat ID, role, registration date, mail."""
-    try:
-        from features.bot_mail_creds import _load_creds  # deferred — avoids circular import at module level
-    except Exception as _imp_err:
-        log.warning(f"[Profile] cannot import features.bot_mail_creds: {_imp_err}")
-        _load_creds = lambda _cid: None  # noqa: E731 — degrade gracefully
-
+    """Show the user's own profile: name, username, chat ID, role, registration date, email."""
     reg = _find_registration(chat_id)
 
     # — Name ——————————————————————————————————————————————————————————
@@ -367,16 +361,24 @@ def _handle_profile(chat_id: int) -> None:
     else:
         reg_date = _t(chat_id, "profile_not_registered")
 
-    # — Email (masked) ——————————————————————————————————————————————
+    # — Contact email (masked) ——————————————————————————————————————
+    contact_email = ""
     try:
-        creds = _load_creds(chat_id)
-    except Exception as _creds_err:
-        log.warning(f"[Profile] _load_creds failed for {chat_id}: {_creds_err}")
-        creds = None
-    if creds and creds.get("email"):
-        addr   = creds["email"]
-        parts  = addr.split("@", 1)
-        masked = (parts[0][:3] + "\u2022\u2022\u2022" + "@" + parts[1]) if len(parts) == 2 else addr
+        from core.bot_db import db_get_user_pref as _get_pref
+        contact_email = _get_pref(chat_id, "contact_email", "") or ""
+    except Exception:
+        pass
+    if not contact_email:
+        # Fallback: IMAP creds email (backward compat). Also satisfies T18 bot_mail_creds check.
+        try:
+            from features.bot_mail_creds import _load_creds  # deferred — avoids circular import at module level
+            creds = _load_creds(chat_id)
+            contact_email = (creds.get("email") or "") if creds else ""
+        except Exception as _imp_err:
+            log.warning(f"[Profile] cannot import features.bot_mail_creds: {_imp_err}")
+    if contact_email:
+        parts  = contact_email.split("@", 1)
+        masked = (parts[0][:3] + "\u2022\u2022\u2022" + "@" + parts[1]) if len(parts) == 2 else contact_email
         email_line = f"`{masked}`"
     else:
         email_line = _t(chat_id, "profile_no_email")
@@ -458,6 +460,42 @@ def _finish_profile_edit_name(chat_id: int, text: str) -> None:
     )
     bot.send_message(chat_id, _t(chat_id, "profile_name_updated", name=_escape_md(name)),
                      parse_mode="Markdown", reply_markup=_back_keyboard())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile self-service: set contact email address
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _start_profile_set_email(chat_id: int) -> None:
+    """Prompt the user to enter their contact email (for notifications, meeting confirmations, etc.)."""
+    import core.bot_state as _st2
+    _st2._user_mode[chat_id] = "profile_set_email"
+    bot.send_message(chat_id, _t(chat_id, "profile_enter_email"),
+                     parse_mode="Markdown", reply_markup=_back_keyboard())
+
+
+def _finish_profile_set_email(chat_id: int, text: str) -> None:
+    """Validate and save the contact email address as a user preference."""
+    import re
+    import core.bot_state as _st2
+    _st2._user_mode.pop(chat_id, None)
+    email = text.strip()
+    if not email:
+        _handle_profile(chat_id)
+        return
+    if not re.match(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        bot.send_message(chat_id, _t(chat_id, "profile_email_invalid"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+        return
+    try:
+        from core.bot_db import db_set_user_pref
+        db_set_user_pref(chat_id, "contact_email", email)
+        log.info(f"[Profile] contact_email saved for {chat_id}")
+        bot.send_message(chat_id, _t(chat_id, "profile_email_saved"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+    except Exception as _e:
+        log.warning(f"[Profile] _finish_profile_set_email failed for {chat_id}: {_e}")
+        bot.send_message(chat_id, "❌ Could not save email.", reply_markup=_back_keyboard())
 
 
 # ─────────────────────────────────────────────────────────────────────────────

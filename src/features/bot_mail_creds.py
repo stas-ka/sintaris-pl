@@ -409,6 +409,10 @@ def handle_digest_auth(chat_id: int) -> None:
     Replacement for the old global _handle_digest.
     Routes to setup if no credentials; shows per-user digest otherwise.
     """
+    if _is_guest(chat_id):
+        bot.send_message(chat_id, _t(chat_id, "mail_guest_not_allowed"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+        return
     if not _mail_has_creds(chat_id):
         bot.send_message(
             chat_id,
@@ -455,6 +459,10 @@ def handle_digest_refresh(chat_id: int) -> None:
 
 def handle_mail_consent(chat_id: int) -> None:
     """Show GDPR / 152-FZ consent screen."""
+    if _is_guest(chat_id):
+        bot.send_message(chat_id, _t(chat_id, "mail_guest_not_allowed"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+        return
     bot.send_message(
         chat_id,
         _t(chat_id, "mail_consent_text"),
@@ -639,6 +647,10 @@ def _do_test_and_save(chat_id: int, state: dict, msg_id: int) -> None:
 
 def handle_mail_settings(chat_id: int) -> None:
     """Show current mail configuration + delete option."""
+    if _is_guest(chat_id):
+        bot.send_message(chat_id, _t(chat_id, "mail_guest_not_allowed"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+        return
     creds = _load_creds(chat_id)
     if not creds or not creds.get("email"):
         handle_digest_auth(chat_id)
