@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.55",
+    "date": "2026-04-18",
+    "title": "Fix: Meeting request button now works — missing module-level state and helpers added",
+    "notes": "- fix: add _pending_meeting and _pending_invitations module-level dicts to bot_calendar.py\n- fix: add _get_free_slots() helper (weekday business hours, conflict check)\n- fix: add _handle_inv_confirm/_handle_inv_decline imports and cal_inv_ok/cal_inv_no callbacks\n- feat: add all missing i18n strings (guest_inv_notify_admin, guest_inv_btn_*, guest_inv_*_admin/guest) in ru/en/de"
+  },
+  {
     "version": "2026.4.54",
     "date": "2026-04-18",
     "title": "Meeting request in main menu for all users; Mail hidden from guests",

@@ -47,6 +47,13 @@ from core.store import store
 
 _pending_cal: dict[int, dict] = {}   # chat_id → {"step": "input"}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Meeting invitation state
+# ─────────────────────────────────────────────────────────────────────────────
+
+_pending_meeting: dict = {}       # chat_id → {"step", "topic", "expert_id", "slots"}
+_pending_invitations: dict = {}   # inv_id  → {"guest_chat_id", "expert_id", "topic", "dt_iso"}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Active reminder timers (in-memory; rebuilt on startup)
@@ -1105,6 +1112,36 @@ def _cal_morning_briefing_loop() -> None:
 
             except Exception as e:
                 log.debug(f"[Cal] Morning briefing error for {fp}: {e}")
+
+def _get_free_slots(expert_id: int, days: int = 7, max_slots: int = 5) -> list:
+    """Return up to max_slots available 1-hour slots in the next 'days' days.
+    Business hours: Mon–Fri 09:00–16:00. Slots conflicting within 1 h are excluded.
+    """
+    events = _cal_load(expert_id)
+    busy_times = []
+    for ev in events:
+        try:
+            busy_times.append(datetime.fromisoformat(ev["dt_iso"]))
+        except Exception:
+            pass
+
+    now = datetime.now()
+    slots: list = []
+    candidate = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    cutoff = now + timedelta(days=days)
+
+    while len(slots) < max_slots and candidate < cutoff:
+        if candidate.weekday() <= 4 and 9 <= candidate.hour <= 16:
+            conflict = any(
+                abs((candidate - bt).total_seconds()) < 3600
+                for bt in busy_times
+            )
+            if not conflict:
+                slots.append(candidate)
+        candidate += timedelta(hours=1)
+
+    return slots
+
 
 def _start_guest_meeting(chat_id: int) -> None:
     """Entry point — called when a pending user clicks 'Request Meeting'."""

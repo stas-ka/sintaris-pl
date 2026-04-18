@@ -138,6 +138,7 @@ from features.bot_calendar import (
     _handle_cal_delete_request, _handle_cal_delete_confirmed,
     _handle_calendar_query, _start_cal_console, _handle_cal_console,
     _start_guest_meeting, _finish_guest_meeting_topic, _finish_guest_meeting_slot,
+    _handle_inv_confirm, _handle_inv_decline,
 )
 
 # ─── Mail credentials ──────────────────────────────────────────────────────────
@@ -430,6 +431,12 @@ def callback_handler(call):
             _finish_guest_meeting_slot(cid, slot_idx)
         except (ValueError, IndexError):
             pass
+    elif data.startswith("cal_inv_ok:"):
+        inv_id = data.split(":", 1)[1]
+        _handle_inv_confirm(cid, inv_id)
+    elif data.startswith("cal_inv_no:"):
+        inv_id = data.split(":", 1)[1]
+        _handle_inv_decline(cid, inv_id)
 
     # ── User profile ───────────────────────────────────────────────────────────
     elif data == "profile":
