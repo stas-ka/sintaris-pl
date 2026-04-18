@@ -7,6 +7,131 @@
 
 ---
 
+## 0 — WSL Quick Start (Porsche network — already configured)
+
+> **Your `~/.ssh/config` is already set up** with `Host vps` (via corporate proxy) and `Host vps-direct` (no proxy).  
+> Your key `~/.ssh/id_vps` is generated and added to the VPS.  
+> **Just open WSL and run the commands below.**
+
+### 0.1 — First connection (one time only)
+
+```bash
+# Verify connection — accept host key fingerprint when prompted
+ssh vps "echo connected && whoami && hostname"
+# Expected: connected / stas / dev2null.de
+# Fingerprint to accept: SHA256:E2ycjThOe09yMfERUKN76uDyW7YBT12rjS5FJXB+PZ4
+```
+
+### 0.2 — Interactive shell on VPS
+
+```bash
+# Open interactive shell
+ssh vps
+
+# Then you're logged in as stas@dev2null.de — type any Linux commands:
+ls /opt/taris-docker/
+docker ps
+```
+
+### 0.3 — Run single commands remotely
+
+```bash
+# Check which processes are running
+ssh vps "docker ps"
+
+# Check running taris bot token
+ssh vps "grep BOT_TOKEN /opt/taris-docker/bot.env"
+
+# Check taris bot version on VPS
+ssh vps "docker exec taris-vps-telegram grep BOT_VERSION /app/core/bot_config.py"
+
+# View live bot logs (last 50 lines)
+ssh vps "docker logs taris-vps-telegram --tail 50"
+
+# Follow logs in real time (Ctrl+C to stop)
+ssh vps "docker logs -f taris-vps-telegram"
+
+# Check web UI logs
+ssh vps "docker logs taris-vps-web --tail 30"
+```
+
+### 0.4 — Run tests inside Docker on VPS
+
+```bash
+# Full voice regression suite inside telegram container
+ssh vps "docker exec taris-vps-telegram python3 /app/tests/test_voice_regression.py"
+
+# Quick unit tests
+ssh vps "docker exec taris-vps-telegram python3 -m pytest /app/tests/telegram/ -q"
+
+# Web UI sanity check
+ssh vps "docker exec taris-vps-web python3 -c 'import bot_web; print(\"web ok\")'"
+```
+
+### 0.5 — Deploy updated source to VPS
+
+```bash
+# Sync changed Python files from WSL project to VPS Docker app dir
+rsync -av --progress \
+  ~/projects/sintaris-pl/src/ \
+  stas@dev2null.de:/opt/taris-docker/app/src/ \
+  -e "ssh -p 443 -i ~/.ssh/id_vps -o ProxyCommand='nc -X connect -x http-proxy.porsche.org:3133 %h %p'"
+
+# After rsync — restart containers to pick up changes (volume-mounted, no rebuild)
+ssh vps "cd /opt/taris-docker && docker compose restart taris-telegram taris-web"
+
+# Verify new version running
+ssh vps "docker logs taris-vps-telegram --tail 10"
+```
+
+### 0.6 — File operations
+
+```bash
+# Download a file from VPS
+scp -P 443 stas@dev2null.de:/opt/taris-docker/bot.env ~/vps-bot.env
+
+# Upload a file to VPS
+scp -P 443 src/core/bot_config.py stas@dev2null.de:/opt/taris-docker/app/src/core/
+
+# Note: scp uses the Host vps alias automatically if configured in ~/.ssh/config
+scp vps:/opt/taris-docker/bot.env ~/vps-bot.env
+```
+
+### 0.7 — VPS system management
+
+```bash
+# Check disk usage
+ssh vps "df -h"
+
+# Check Docker container status and resource usage
+ssh vps "docker stats --no-stream"
+
+# Restart a single container
+ssh vps "docker restart taris-vps-telegram"
+
+# Stop all taris containers
+ssh vps "cd /opt/taris-docker && docker compose down"
+
+# Start all taris containers
+ssh vps "cd /opt/taris-docker && docker compose up -d"
+
+# Check PostgreSQL on VPS
+ssh vps "docker ps | grep postgres"
+```
+
+### 0.8 — If not on Porsche network (home/VPN)
+
+```bash
+# Use vps-direct alias (no corporate proxy needed)
+ssh vps-direct "echo connected"
+
+# All other commands work the same — just replace 'vps' with 'vps-direct':
+ssh vps-direct "docker ps"
+ssh vps-direct "docker logs taris-vps-telegram --tail 30"
+```
+
+---
+
 ## 1 — Find the Corporate Proxy Address
 
 Before configuring SSH, identify the proxy your restricted machine uses:
