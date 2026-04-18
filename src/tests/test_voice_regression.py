@@ -7719,7 +7719,7 @@ def t_gemma4_benchmark_report(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     checks = [
-        (SRC_ROOT.parent / "doc" / "research-gemma4-benchmark.md",
+        (SRC_ROOT.parent / "doc" / "research" / "gemma4-evaluation-report.md",
          "Gemma4 research + hardware analysis doc"),
         (SRC_ROOT.parent / "tools" / "run_gemma4_evaluation.sh",
          "Linux evaluation script for SintAItion / TariStation2"),
