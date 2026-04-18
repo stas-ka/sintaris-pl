@@ -1378,6 +1378,13 @@ def _handle_inv_confirm(admin_chat_id: int, inv_id: str) -> None:
     ev = _cal_add_event(admin_chat_id, topic, dt, remind_before_min=15)
     _schedule_reminder(admin_chat_id, ev)
 
+    # Also save the confirmed appointment in the guest's calendar
+    try:
+        guest_ev = _cal_add_event(guest_id, topic, dt, remind_before_min=15)
+        _schedule_reminder(guest_id, guest_ev)
+    except Exception as e:
+        log.warning("[CalInv] Failed to save event to guest %s calendar: %s", guest_id, e)
+
     bot.send_message(
         admin_chat_id,
         _t(admin_chat_id, "guest_inv_confirmed_admin",

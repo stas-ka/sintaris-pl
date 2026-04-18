@@ -581,12 +581,15 @@ def _handle_profile_my_data(chat_id: int) -> None:
     reg_date = str(reg.get("timestamp", ""))[:10] or "\u2014"
 
     if _is_guest(chat_id):
-        # Guests only see basic profile info — no features available
+        # Guests only see basic profile info + their confirmed meeting appointments
+        from features.bot_calendar import _cal_load
         from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="profile"))
+        meetings = _cal_load(chat_id)
         text = _t(chat_id, "profile_my_data_guest_msg").format(
-            name=_escape_md(name), tg_id=str(chat_id), lang=lang, reg_date=reg_date)
+            name=_escape_md(name), tg_id=str(chat_id), lang=lang, reg_date=reg_date,
+            meetings_count=str(len(meetings)))
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
         return
 

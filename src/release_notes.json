@@ -1,5 +1,14 @@
 [
   {
+    "version": "2026.4.59",
+    "date": "2026-04-19",
+    "title": "Meeting confirmation: save appointment to guest calendar; show count in My Data",
+    "changes": [
+      "When expert confirms meeting, event is now saved to guest's calendar (was only in expert's)",
+      "My Data for guests now shows confirmed meetings count instead of empty section"
+    ]
+  },
+  {
     "version": "2026.4.58",
     "date": "2026-04-19",
     "title": "My Data: hide notes/events/contacts/mail from guests",
