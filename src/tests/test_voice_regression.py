@@ -7898,6 +7898,498 @@ def t_rbac_allowlist_enforcement(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T140–T149 — Guest user + role-based prompt templates
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_guest_user_feature(**_) -> list[TestResult]:
+    """T140-T149: Guest user support + role-based prompt templates."""
+    import ast
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # ── T140: bot_config.py — AUTO_GUEST_ENABLED constant present ────────────
+    config_src = SRC_ROOT / "core" / "bot_config.py"
+    config_text = config_src.read_text(encoding="utf-8") if config_src.exists() else ""
+    checks_config = [
+        ("AUTO_GUEST_ENABLED", "AUTO_GUEST_ENABLED" in config_text),
+        ("GUEST_MSG_DAILY_LIMIT", "GUEST_MSG_DAILY_LIMIT" in config_text),
+        ("GUEST_MSG_HOURLY_LIMIT", "GUEST_MSG_HOURLY_LIMIT" in config_text),
+        ("GUEST_MAX_TOKENS", "GUEST_MAX_TOKENS" in config_text),
+        ("SHARED_DOCS_OWNER", "SHARED_DOCS_OWNER" in config_text),
+    ]
+    for name, ok in checks_config:
+        results.append(TestResult(
+            f"guest_config_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{name} constant present in bot_config.py" if ok else f"MISSING: {name} in bot_config.py",
+        ))
+
+    # ── T141: bot_state.py — _dynamic_guests and _guest_message_counts present ─
+    state_src = SRC_ROOT / "core" / "bot_state.py"
+    state_text = state_src.read_text(encoding="utf-8") if state_src.exists() else ""
+    checks_state = [
+        ("_dynamic_guests", "_dynamic_guests" in state_text),
+        ("_guest_message_counts", "_guest_message_counts" in state_text),
+        ("_load_dynamic_guests", "_load_dynamic_guests" in state_text),
+    ]
+    for name, ok in checks_state:
+        results.append(TestResult(
+            f"guest_state_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{name} present in bot_state.py" if ok else f"MISSING: {name} in bot_state.py",
+        ))
+
+    # ── T142: bot_access.py — _is_guest(), _get_prompt_role_key(), _check_guest_rate_limit() ─
+    access_src = SRC_ROOT / "telegram" / "bot_access.py"
+    access_text = access_src.read_text(encoding="utf-8") if access_src.exists() else ""
+    checks_access = [
+        ("_is_guest_real_impl", "_dynamic_guests" in access_text and "def _is_guest" in access_text),
+        ("_get_prompt_role_key", "def _get_prompt_role_key" in access_text),
+        ("_check_guest_rate_limit", "def _check_guest_rate_limit" in access_text),
+        ("shared_docs_owner", "SHARED_DOCS_OWNER" in access_text),
+    ]
+    for name, ok in checks_access:
+        results.append(TestResult(
+            f"guest_access_{name}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{name} present in bot_access.py" if ok else f"MISSING: {name} in bot_access.py",
+        ))
+
+    # ── T143: bot_access.py — _build_system_message() uses role_system_prompts ─
+    ok = "role_system_prompts" in access_text and "_get_prompt_role_key" in access_text
+    results.append(TestResult(
+        "guest_system_msg_role_aware", "PASS" if ok else "FAIL", time.time() - t0,
+        "role_system_prompts + _get_prompt_role_key used in _build_system_message" if ok
+        else "MISSING: role_system_prompts or _get_prompt_role_key in bot_access.py",
+    ))
+
+    # ── T144: _check_guest_rate_limit logic uses hourly/daily keys ────────────
+    ok_hourly = "hourly" in access_text and "GUEST_MSG_HOURLY_LIMIT" in access_text
+    ok_daily  = "daily"  in access_text and "GUEST_MSG_DAILY_LIMIT"  in access_text
+    results.append(TestResult(
+        "guest_rate_limit_hourly_logic", "PASS" if ok_hourly else "FAIL", time.time() - t0,
+        "hourly rate limit logic present" if ok_hourly else "MISSING: hourly rate limit logic",
+    ))
+    results.append(TestResult(
+        "guest_rate_limit_daily_logic", "PASS" if ok_daily else "FAIL", time.time() - t0,
+        "daily rate limit logic present" if ok_daily else "MISSING: daily rate limit logic",
+    ))
+
+    # ── T145: telegram_menu_bot.py — rate limit enforced in text_handler ──────
+    menu_src = SRC_ROOT / "telegram_menu_bot.py"
+    menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    ok_rl = "_check_guest_rate_limit" in menu_text and "guest_rate_limit_hourly" in menu_text
+    results.append(TestResult(
+        "guest_rate_limit_enforced", "PASS" if ok_rl else "FAIL", time.time() - t0,
+        "Rate limit enforced in text_handler" if ok_rl else "MISSING: _check_guest_rate_limit call in text_handler",
+    ))
+
+    # ── T146: AUTO_GUEST_ENABLED branch in cmd_start ──────────────────────────
+    ok_auto = "AUTO_GUEST_ENABLED" in menu_text and "guest_welcome" in menu_text
+    results.append(TestResult(
+        "guest_auto_registration", "PASS" if ok_auto else "FAIL", time.time() - t0,
+        "AUTO_GUEST_ENABLED + guest_welcome in cmd_start" if ok_auto
+        else "MISSING: AUTO_GUEST_ENABLED branch or guest_welcome in cmd_start",
+    ))
+
+    # ── T147: prompts.json — role_system_prompts present with guest key ───────
+    prompts_file = SRC_ROOT / "prompts.json"
+    try:
+        import json as _json
+        prompts = _json.loads(prompts_file.read_text(encoding="utf-8"))
+        rsp = prompts.get("role_system_prompts", {})
+        ok_rsp  = isinstance(rsp, dict) and "guest" in rsp and "user" in rsp and "admin" in rsp
+        ok_cap  = "role_capabilities" in prompts
+        ok_sty  = "role_styles" in prompts
+    except Exception as e:
+        ok_rsp = ok_cap = ok_sty = False
+    results.append(TestResult(
+        "prompts_role_system_prompts", "PASS" if ok_rsp else "FAIL", time.time() - t0,
+        "role_system_prompts[guest/user/admin] in prompts.json" if ok_rsp
+        else "MISSING: role_system_prompts.guest in prompts.json",
+    ))
+    results.append(TestResult(
+        "prompts_role_capabilities", "PASS" if ok_cap else "FAIL", time.time() - t0,
+        "role_capabilities in prompts.json" if ok_cap else "MISSING: role_capabilities",
+    ))
+    results.append(TestResult(
+        "prompts_role_styles", "PASS" if ok_sty else "FAIL", time.time() - t0,
+        "role_styles in prompts.json" if ok_sty else "MISSING: role_styles",
+    ))
+
+    # ── T148: strings.json — guest_welcome in all 3 languages ────────────────
+    strings_file = SRC_ROOT / "strings.json"
+    try:
+        import json as _json
+        strings = _json.loads(strings_file.read_text(encoding="utf-8"))
+        ok_gw_ru = "guest_welcome" in strings.get("ru", {})
+        ok_gw_en = "guest_welcome" in strings.get("en", {})
+        ok_gw_de = "guest_welcome" in strings.get("de", {})
+        ok_rl_ru = "guest_rate_limit_hourly" in strings.get("ru", {})
+        ok_rl_en = "guest_rate_limit_hourly" in strings.get("en", {})
+        ok_rl_de = "guest_rate_limit_hourly" in strings.get("de", {})
+    except Exception:
+        ok_gw_ru = ok_gw_en = ok_gw_de = ok_rl_ru = ok_rl_en = ok_rl_de = False
+    ok_gw = ok_gw_ru and ok_gw_en and ok_gw_de
+    ok_rl = ok_rl_ru and ok_rl_en and ok_rl_de
+    results.append(TestResult(
+        "guest_strings_welcome", "PASS" if ok_gw else "FAIL", time.time() - t0,
+        "guest_welcome in ru/en/de" if ok_gw else f"MISSING: guest_welcome (ru={ok_gw_ru} en={ok_gw_en} de={ok_gw_de})",
+    ))
+    results.append(TestResult(
+        "guest_strings_rate_limit", "PASS" if ok_rl else "FAIL", time.time() - t0,
+        "guest_rate_limit_hourly in ru/en/de" if ok_rl else f"MISSING: guest_rate_limit_hourly (ru={ok_rl_ru} en={ok_rl_en} de={ok_rl_de})",
+    ))
+
+    # ── T149: .env.example — guest constants documented ───────────────────────
+    env_ex = (SRC_ROOT.parent / ".env.example")
+    env_text = env_ex.read_text(encoding="utf-8") if env_ex.exists() else ""
+    ok_env = "AUTO_GUEST_ENABLED" in env_text and "SHARED_DOCS_OWNER" in env_text
+    results.append(TestResult(
+        "guest_env_example", "PASS" if ok_env else "FAIL", time.time() - t0,
+        "AUTO_GUEST_ENABLED + SHARED_DOCS_OWNER in .env.example" if ok_env
+        else "MISSING: guest constants in .env.example",
+    ))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T150–T155 — CRM + N8N + Advanced User
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_crm_n8n_advanced_user(**_) -> list[TestResult]:
+    """T150-T155: CRM store, N8N adapter, intent classifier, advanced user role, N8N workflows, CRM Web UI."""
+    import time as _time
+    results: list[TestResult] = []
+    t0 = _time.time()
+
+    def _src(rel: str) -> str:
+        p = SRC_ROOT / rel
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
+    # ── T150: bot_n8n.py — adapter functions present ──────────────────────────
+    n8n_src = _src("features/bot_n8n.py")
+    ok_n8n = bool(n8n_src) and all(fn in n8n_src for fn in [
+        "def test_connection", "def trigger_workflow", "def list_workflows",
+        "N8N_URL", "N8N_API_KEY",
+    ])
+    results.append(TestResult(
+        "n8n_adapter_source", "PASS" if ok_n8n else "FAIL", _time.time() - t0,
+        "bot_n8n.py: test_connection/trigger_workflow/list_workflows + constants" if ok_n8n
+        else f"MISSING in bot_n8n.py: check test_connection/trigger_workflow present",
+    ))
+
+    # ── T151: store_crm.py — critical functions + seed_demo_contacts ─────────
+    crm_store = _src("core/store_crm.py")
+    ok_store = bool(crm_store) and all(fn in crm_store for fn in [
+        "def create_contact", "def get_stats", "def seed_demo_contacts",
+        "def list_contacts", "def search_contacts", "def count_contacts",
+    ])
+    results.append(TestResult(
+        "crm_store_source", "PASS" if ok_store else "FAIL", _time.time() - t0,
+        "store_crm.py: create_contact/get_stats/seed_demo_contacts/list/search/count" if ok_store
+        else "MISSING: check store_crm.py for required CRM functions",
+    ))
+
+    # ── T152: bot_crm.py — LLM intent classifier present ────────────────────
+    crm_src = _src("features/bot_crm.py")
+    ok_intent = bool(crm_src) and all(fn in crm_src for fn in [
+        "def classify_intent", "CRM_INTENTS", "add_contact", "search", "campaign",
+    ])
+    results.append(TestResult(
+        "crm_intent_classifier", "PASS" if ok_intent else "FAIL", _time.time() - t0,
+        "bot_crm.py: classify_intent + CRM_INTENTS set present" if ok_intent
+        else "MISSING: classify_intent or CRM_INTENTS in bot_crm.py",
+    ))
+
+    # ── T153: bot_admin.py — 4-role management system ────────────────────────
+    adm_src = _src("telegram/bot_admin.py")
+    ok_roles = bool(adm_src) and all(s in adm_src for s in [
+        "_is_advanced", "_handle_admin_user_set_role", '"advanced"', '"developer"',
+        "valid_roles", "_advanced_users",
+    ])
+    results.append(TestResult(
+        "advanced_user_role_management", "PASS" if ok_roles else "FAIL", _time.time() - t0,
+        "bot_admin.py: 4-role system with _is_advanced/_handle_admin_user_set_role present" if ok_roles
+        else "MISSING: advanced user role management in bot_admin.py",
+    ))
+
+    # ── T154: N8N workflow JSON files present ────────────────────────────────
+    wf_dir = SRC_ROOT / "n8n" / "workflows"
+    wf_files = list(wf_dir.glob("*.json")) if wf_dir.exists() else []
+    ok_wf = len(wf_files) >= 2
+    results.append(TestResult(
+        "n8n_workflow_files", "PASS" if ok_wf else "FAIL", _time.time() - t0,
+        f"n8n/workflows/ has {len(wf_files)} JSON file(s): {[f.name for f in wf_files]}" if ok_wf
+        else f"MISSING: need ≥2 N8N workflow JSON files in src/n8n/workflows/ (found {len(wf_files)})",
+    ))
+
+    # ── T155: bot_web.py — /api/crm/ endpoints present ──────────────────────
+    web_src = _src("bot_web.py")
+    ok_web_crm = bool(web_src) and all(s in web_src for s in [
+        '"/api/crm/', "api_crm_contacts", "CRM_ENABLED",
+    ])
+    results.append(TestResult(
+        "crm_web_api", "PASS" if ok_web_crm else "FAIL", _time.time() - t0,
+        "bot_web.py: /api/crm/ route + api_crm_contacts + CRM_ENABLED present" if ok_web_crm
+        else "MISSING: CRM Web API routes in bot_web.py",
+    ))
+
+    return results
+
+
+# ─── T156: Guest approval + role management ───────────────────────────────────
+
+def t_guest_approval_role(**_) -> list[TestResult]:
+    """T156: Verify 'Approve as Guest' button and guest role in role management."""
+    import time as _time
+    results = []
+
+    try:
+        src = Path(__file__).parent.parent / "telegram" / "bot_admin.py"
+        text = src.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+
+    t0 = _time.time()
+
+    # T156a: _do_approve_as_guest function exists
+    ok = "_do_approve_as_guest" in text
+    results.append(TestResult(
+        "guest_approval_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_do_approve_as_guest() defined in bot_admin.py" if ok
+        else "MISSING: _do_approve_as_guest function",
+    ))
+
+    # T156b: reg_guest callback in registration keyboards
+    ok = 'callback_data=f"reg_guest:{' in text or "reg_guest:" in text
+    results.append(TestResult(
+        "guest_approval_button", "PASS" if ok else "FAIL", _time.time() - t0,
+        "reg_guest: callback present in registration keyboard" if ok
+        else "MISSING: reg_guest: button in bot_admin.py keyboards",
+    ))
+
+    # T156c: guest in _ROLE_ICONS dict
+    ok = '"guest"' in text and "_ROLE_ICONS" in text
+    results.append(TestResult(
+        "guest_role_icon", "PASS" if ok else "FAIL", _time.time() - t0,
+        "'guest' in _ROLE_ICONS" if ok
+        else "MISSING: 'guest' entry in _ROLE_ICONS",
+    ))
+
+    # T156d: _get_user_role returns guest for _dynamic_guests members
+    ok = "_dynamic_guests" in text and '"guest"' in text
+    results.append(TestResult(
+        "guest_role_detection", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_get_user_role checks _dynamic_guests" if ok
+        else "MISSING: guest detection in _get_user_role",
+    ))
+
+    # T156e: _handle_admin_user_set_role handles guest role
+    ok = "role == \"guest\"" in text or "role == 'guest'" in text
+    results.append(TestResult(
+        "guest_role_set", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_handle_admin_user_set_role handles guest role" if ok
+        else "MISSING: guest case in _handle_admin_user_set_role",
+    ))
+
+    # T156f: telegram_menu_bot.py imports _do_approve_as_guest and dispatches reg_guest:
+    try:
+        mb = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        mb_text = mb.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        mb_text = ""
+    ok = "_do_approve_as_guest" in mb_text and "reg_guest:" in mb_text
+    results.append(TestResult(
+        "guest_approval_dispatch", "PASS" if ok else "FAIL", _time.time() - t0,
+        "telegram_menu_bot.py imports + dispatches reg_guest:" if ok
+        else "MISSING: _do_approve_as_guest import or reg_guest: dispatch in telegram_menu_bot.py",
+    ))
+
+    return results
+
+
+def t_admin_users_submenu(**_) -> list[TestResult]:
+    """T157: Verify admin user management submenu + two-step role picker UX."""
+    import time as _time
+    results = []
+
+    try:
+        src = Path(__file__).parent.parent / "telegram" / "bot_admin.py"
+        text = src.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+
+    t0 = _time.time()
+
+    # T157a: _admin_users_keyboard() exists (submenu keyboard)
+    ok = "_admin_users_keyboard" in text
+    results.append(TestResult(
+        "admin_users_keyboard_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_admin_users_keyboard() defined" if ok
+        else "MISSING: _admin_users_keyboard function",
+    ))
+
+    # T157b: _handle_admin_users_menu() exists
+    ok = "_handle_admin_users_menu" in text
+    results.append(TestResult(
+        "admin_users_menu_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_handle_admin_users_menu() defined" if ok
+        else "MISSING: _handle_admin_users_menu function",
+    ))
+
+    # T157c: _handle_admin_user_role_detail() exists (step 2 of role picker)
+    ok = "_handle_admin_user_role_detail" in text
+    results.append(TestResult(
+        "admin_role_detail_fn", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_handle_admin_user_role_detail() defined" if ok
+        else "MISSING: _handle_admin_user_role_detail function",
+    ))
+
+    # T157d: _handle_admin_list_users shows guests section
+    ok = "_dynamic_guests" in text and "Guests" in text
+    results.append(TestResult(
+        "admin_list_shows_guests", "PASS" if ok else "FAIL", _time.time() - t0,
+        "Guests section in _handle_admin_list_users" if ok
+        else "MISSING: guests section in _handle_admin_list_users",
+    ))
+
+    # T157e: role label shown in user list (role_label call in list function)
+    ok = "_role_label(uid)" in text
+    results.append(TestResult(
+        "admin_list_role_badges", "PASS" if ok else "FAIL", _time.time() - t0,
+        "_role_label(uid) used in user list blocks" if ok
+        else "MISSING: _role_label(uid) call in list function",
+    ))
+
+    # T157f: telegram_menu_bot.py dispatches admin_users_menu + admin_role_user:
+    try:
+        mb = Path(__file__).parent.parent / "telegram_menu_bot.py"
+        mb_text = mb.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        mb_text = ""
+    ok = ("admin_users_menu" in mb_text and "admin_role_user:" in mb_text
+          and "_handle_admin_users_menu" in mb_text and "_handle_admin_user_role_detail" in mb_text)
+    results.append(TestResult(
+        "admin_submenu_callbacks", "PASS" if ok else "FAIL", _time.time() - t0,
+        "admin_users_menu + admin_role_user: callbacks dispatched" if ok
+        else "MISSING: admin_users_menu or admin_role_user: callbacks in telegram_menu_bot.py",
+    ))
+
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T158–T161 — Guest appointment / invitation flow
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_guest_appointment_flow(**_) -> list[TestResult]:
+    """T158-T161: Guest appointment booking + invitation confirm dual-save + My Data meetings count."""
+    import time as _time
+    import json as _json
+    results: list[TestResult] = []
+    t0 = _time.time()
+
+    cal_src = SRC_ROOT / "features" / "bot_calendar.py"
+    cal_text = cal_src.read_text(encoding="utf-8") if cal_src.exists() else ""
+
+    # ── T158a: _handle_inv_confirm saves event to BOTH admin and guest ────────
+    ok_admin = "_cal_add_event(admin_chat_id, topic, dt" in cal_text
+    ok_guest = "_cal_add_event(guest_id, topic, dt" in cal_text
+    ok_both = ok_admin and ok_guest
+    results.append(TestResult(
+        "inv_confirm_dual_save_admin", "PASS" if ok_admin else "FAIL", _time.time() - t0,
+        "_cal_add_event called for admin_chat_id in _handle_inv_confirm" if ok_admin
+        else "MISSING: _cal_add_event(admin_chat_id, ...) in _handle_inv_confirm",
+    ))
+    results.append(TestResult(
+        "inv_confirm_dual_save_guest", "PASS" if ok_guest else "FAIL", _time.time() - t0,
+        "_cal_add_event called for guest_id in _handle_inv_confirm" if ok_guest
+        else "MISSING: _cal_add_event(guest_id, ...) — guest calendar not saved on confirm (v2026.4.59 fix)",
+    ))
+
+    # ── T158b: _handle_inv_confirm wraps guest save in try/except ────────────
+    # Find the _handle_inv_confirm function body and check guest save is protected
+    fn_start = cal_text.find("def _handle_inv_confirm(")
+    fn_snippet = cal_text[fn_start:fn_start + 1200] if fn_start >= 0 else ""
+    ok_guard = ("guest_id, topic, dt" in fn_snippet and "except" in fn_snippet)
+    results.append(TestResult(
+        "inv_confirm_guest_save_guarded", "PASS" if ok_guard else "FAIL", _time.time() - t0,
+        "Guest calendar save is wrapped in try/except" if ok_guard
+        else "MISSING: try/except around guest _cal_add_event in _handle_inv_confirm",
+    ))
+
+    # ── T159: bot_handlers.py — guest My Data loads _cal_load + meetings_count ─
+    handlers_src = SRC_ROOT / "telegram" / "bot_handlers.py"
+    handlers_text = handlers_src.read_text(encoding="utf-8") if handlers_src.exists() else ""
+    ok_load = "_cal_load(chat_id)" in handlers_text and "meetings_count" in handlers_text
+    ok_fmt  = "meetings_count=str(len(meetings))" in handlers_text
+    results.append(TestResult(
+        "guest_my_data_loads_calendar", "PASS" if ok_load else "FAIL", _time.time() - t0,
+        "_cal_load + meetings_count present in guest My Data branch" if ok_load
+        else "MISSING: _cal_load(chat_id) or meetings_count in bot_handlers.py guest branch",
+    ))
+    results.append(TestResult(
+        "guest_my_data_meetings_count_fmt", "PASS" if ok_fmt else "FAIL", _time.time() - t0,
+        "meetings_count=str(len(meetings)) in format() call" if ok_fmt
+        else "MISSING: meetings_count=str(len(meetings)) in bot_handlers.py",
+    ))
+
+    # ── T160: bot_calendar.py — full invitation flow functions present ─────────
+    inv_fns = [
+        ("_finish_guest_meeting_slot", "_finish_guest_meeting_slot"),
+        ("_handle_inv_confirm", "def _handle_inv_confirm"),
+        ("_handle_inv_decline", "def _handle_inv_decline"),
+        ("_pending_invitations", "_pending_invitations"),
+        ("_schedule_reminder_guest", "_schedule_reminder(guest_id"),
+    ]
+    for name, needle in inv_fns:
+        ok = needle in cal_text
+        results.append(TestResult(
+            f"cal_inv_fn_{name}", "PASS" if ok else "FAIL", _time.time() - t0,
+            f"{name} present in bot_calendar.py" if ok
+            else f"MISSING: {needle} in bot_calendar.py",
+        ))
+
+    # ── T161: strings.json — all invitation + My Data guest strings in ru/en/de ─
+    strings_file = SRC_ROOT / "strings.json"
+    try:
+        strings = _json.loads(strings_file.read_text(encoding="utf-8"))
+    except Exception:
+        strings = {}
+
+    required_keys = [
+        "guest_inv_notify_admin",
+        "guest_inv_btn_confirm",
+        "guest_inv_btn_decline",
+        "guest_inv_confirmed_admin",
+        "guest_inv_confirmed_guest",
+        "guest_inv_declined_admin",
+        "guest_inv_declined_guest",
+        "guest_meeting_requested",
+        "profile_my_data_guest_msg",
+    ]
+    for key in required_keys:
+        for lang in ("ru", "en", "de"):
+            ok = key in strings.get(lang, {})
+            results.append(TestResult(
+                f"inv_string_{key}_{lang}", "PASS" if ok else "FAIL", _time.time() - t0,
+                f"{key} present in {lang}" if ok
+                else f"MISSING: {key} in strings.json[{lang}]",
+            ))
+
+    # ── T161b: profile_my_data_guest_msg contains {meetings_count} placeholder ─
+    for lang in ("ru", "en", "de"):
+        val = strings.get(lang, {}).get("profile_my_data_guest_msg", "")
+        ok = "{meetings_count}" in val
+        results.append(TestResult(
+            f"guest_msg_meetings_placeholder_{lang}", "PASS" if ok else "FAIL", _time.time() - t0,
+            f"{{meetings_count}} placeholder in profile_my_data_guest_msg[{lang}]" if ok
+            else f"MISSING: {{meetings_count}} in profile_my_data_guest_msg[{lang}]",
+        ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8117,6 +8609,16 @@ TEST_FUNCTIONS = [
     # RBAC allowlist enforcement: ADMIN_ALLOWED_CMDS, DEVELOPER_ALLOWED_CMDS, _classify_cmd_class,
     # configurable extra blocklist, admin security policy UI (T122)
     t_rbac_allowlist_enforcement,
+    # Guest user support + role-based prompt templates (T140–T149)
+    t_guest_user_feature,
+    # CRM + N8N adapter + intent classifier + advanced user + workflows + Web API (T150–T155)
+    t_crm_n8n_advanced_user,
+    # Guest approval + role management (T156)
+    t_guest_approval_role,
+    # Admin users submenu + two-step role picker + role badges in list (T157)
+    t_admin_users_submenu,
+    # Guest appointment flow: dual-save on confirm, My Data meetings count, inv flow, strings (T158–T161)
+    t_guest_appointment_flow,
 ]
 
 

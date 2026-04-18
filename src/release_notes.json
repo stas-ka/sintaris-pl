@@ -1,5 +1,16 @@
 [
   {
+    "version": "2026.4.60",
+    "date": "2026-04-19",
+    "title": "Tests: add T158-T161 guest appointment regression tests",
+    "changes": [
+      "T158: guest calendar dual-save on confirm (inv_confirm_dual_save + guard)",
+      "T159: guest My Data loads _cal_load + passes meetings_count",
+      "T160: full invitation flow functions present in bot_calendar.py",
+      "T161: all invitation strings + {meetings_count} placeholder in ru/en/de"
+    ]
+  },
+  {
     "version": "2026.4.59",
     "date": "2026-04-19",
     "title": "Meeting confirmation: save appointment to guest calendar; show count in My Data",
