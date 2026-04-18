@@ -9,6 +9,7 @@ Use this to analyse cost (time, requests) per feature over time.
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
 |---|---|---|---|---|---|---|
+| 09:11 | Fix code-server GitHub re-auth loop: add GITHUB_TOKEN to systemd env so extension uses PAT directly, no device flow | 1 | 1 | claude-sonnet-4.6 | deploy/system-configs/vps/code-server.service | done |
 | 09:08 | Configure GitHub PAT in git credential store on VPS for code-server GitHub integration | 1 | 1 | claude-sonnet-4.6 | (VPS only: ~/.git-credentials) | done |
 | 08:54 | Install code-server v4.116.0 on VPS (arm64); nginx vhost vsc.dev2null.de on port 443; Let's Encrypt cert; systemd service on port 8088 | 2 | 1 | claude-sonnet-4.6 | deploy/system-configs/vps/code-server.service, nginx/vsc.dev2null.de.conf | done |
 | 08:36 | Install sshwifty (WebSocket SSH client) on VPS; replace shellinabox at shell.dev2null.de; works through corporate HTTPS-inspection proxies | 2 | 4 | claude-sonnet-4.6 | deploy/system-configs/vps/sshwifty.service, sshwifty.conf.json, nginx/shell.dev2null.de.conf | done |
