@@ -130,6 +130,47 @@ ssh vps-direct "docker ps"
 ssh vps-direct "docker logs taris-vps-telegram --tail 30"
 ```
 
+### 0.9 — Troubleshooting: `407 Proxy Authentication Required`
+
+The Porsche corporate proxy requires **NTLM authentication**. Plain `nc` does not support NTLM.
+
+**Fix: install `cntlm` — a local NTLM proxy bridge in WSL.**
+
+```bash
+# Step 1 — install cntlm
+sudo apt install cntlm
+
+# Step 2 — generate your NTLM password hash (enter your Windows password when prompted)
+cntlm -H -d PORSCHE -u p355208 -p 'YourWindowsPassword'
+# Output: PassNTLMv2  <long hex string>   ← copy this hash
+```
+
+Edit `/etc/cntlm.conf` with `sudo nano /etc/cntlm.conf`:
+```
+Username    p355208
+Domain      PORSCHE
+Proxy       http-proxy.porsche.org:3133
+Listen      3128
+PassNTLMv2  <paste-hash-from-step-2>
+```
+
+```bash
+# Step 3 — start cntlm
+sudo systemctl enable cntlm
+sudo systemctl start cntlm
+
+# Step 4 — update ~/.ssh/config: change the ProxyCommand in Host vps to:
+#   ProxyCommand nc -X connect -x 127.0.0.1:3128 %h %p
+#   (point to localhost:3128 instead of the corporate proxy directly)
+
+# Step 5 — test
+ssh vps "echo connected && whoami && hostname"
+# Expected: connected / stas / dev2null.de
+```
+
+> **Security**: never put your plain-text password in `cntlm.conf` — always use the hash from `cntlm -H`.  
+> **Auto-start**: cntlm runs as a service and restarts on WSL boot automatically after `systemctl enable cntlm`.
+
 ---
 
 ## 1 — Find the Corporate Proxy Address
