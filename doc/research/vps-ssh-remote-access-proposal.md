@@ -19,7 +19,7 @@
 | 2 | SSH key generated on client (`~/.ssh/id_vps`) | ✅ Done |
 | 3 | `~/.ssh/config` entries added (`Host vps`, `vps-direct`, `vps-rem`) | ✅ Done |
 | 4 | Public key added to VPS `~/.ssh/authorized_keys` | ✅ Done — `p355208@porsche.de-vps` key added 2026-04-18 |
-| 5 | First connection tested, host key accepted | ⬜ Pending — run from Porsche machine |
+| 5 | First connection tested, host key accepted | ⬜ Run from WSL — see Step 5 below |
 
 ---
 
@@ -50,17 +50,20 @@ chmod 600 ~/.ssh/authorized_keys
 
 ### Step 5 — Test Connection
 
+> **Note:** This step must be run from your **WSL terminal** (Windows domain-joined machine).  
+> Reason: Menlo Security DPI in the Copilot cloud env blocks SSH at protocol level even though TCP port 443 is reachable. TCP connects fine (`Connection established`) but the SSH version string exchange is silently dropped by the proxy.
+
 ```bash
-# Test via corporate proxy (WSL on Porsche network) — uses Host vps alias
+# Run from WSL — test via corporate proxy (uses Host vps alias from ~/.ssh/config)
 ssh vps "echo connected && whoami && hostname"
 
-# Verify host key fingerprint on first connect — must match:
+# On first connect: accept/verify the host key fingerprint — must match:
 # SHA256:E2ycjThOe09yMfERUKN76uDyW7YBT12rjS5FJXB+PZ4
 
-# Test direct (home/VPN, no proxy) — uses Host vps-direct alias
+# Test direct (home network / no proxy):
 ssh vps-direct "echo connected"
 
-# Once key auth works, lock down password auth on VPS:
+# After confirming key auth works — lock down password auth on VPS:
 ssh vps "sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && sudo systemctl reload sshd && echo LOCKED"
 ```
 
