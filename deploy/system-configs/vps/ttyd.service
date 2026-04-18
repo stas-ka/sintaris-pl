@@ -1,0 +1,15 @@
+[Unit]
+Description=ttyd - Web Terminal
+After=network.target
+
+[Service]
+User=stas
+Group=stas
+ExecStart=/usr/bin/ttyd --port 7681 --interface 127.0.0.1 --base-path /shell bash
+Restart=always
+RestartSec=5
+Environment=TERM=xterm-256color
+Environment=HOME=/home/stas
+
+[Install]
+WantedBy=multi-user.target
