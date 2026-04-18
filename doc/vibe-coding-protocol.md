@@ -5,7 +5,12 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-18 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
 | 07:53 | Add drawio to git; create roles-overview.md (full feature matrix per role); create doc/todo/1.2-guest-users.md (guest user concept + impl plan P1–P6, T140–T144); update TODO.md §1.2, security.md, copilot-instructions | 2 | 2 | claude-sonnet-4.6 | doc/users/roles-overview.md (new), doc/todo/1.2-guest-users.md (new), doc/users/*.drawio, TODO.md, security.md, copilot-instructions.md | done |
+| 06:20 | Implement SSH-over-443 on VPS via nginx stream: install libnginx-mod-stream, add stream block to nginx.conf, route port 443 (no-TLS→sshd:22, TLS→nginx:8443); nginx -t OK; reload; SSH via port 443 verified from Windows | 3 | 5 | claude-sonnet-4.6 | deploy/nginx-stream-setup.sh, deploy/ssh-tunnel.conf, .env.example, .env | done |
 
 ### Session — 2026-04-17 (UTC)
 
