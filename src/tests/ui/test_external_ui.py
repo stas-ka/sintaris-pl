@@ -9,8 +9,13 @@ All path assertions are prefix-agnostic — they use href*= (contains) selectors
 instead of exact href matches, so the same test suite works both at root and
 under a sub-path.
 
-Run against SintAItion (TariStation1):
+Run against VPS-Supertaris Docker (default):
     cd <workspace>
+    pytest src/tests/ui/test_external_ui.py -v \
+        --base-url https://agents.sintaris.net/supertaris-vps \
+        --browser chromium
+
+Run against SintAItion (TariStation1, when SSH tunnel :8086 is active):
     pytest src/tests/ui/test_external_ui.py -v \
         --base-url https://agents.sintaris.net/supertaris \
         --browser chromium
@@ -70,7 +75,7 @@ def _login(page: Page, base: str, user: str = _ADMIN_USER, pw: str = _ADMIN_PASS
 def _base(pytestconfig) -> str:
     """Return --base-url or a sensible default for external testing."""
     return (pytestconfig.getoption("--base-url", default=None)
-            or "https://agents.sintaris.net/supertaris")
+            or "https://agents.sintaris.net/supertaris-vps")
 
 
 def _ensure_logged_in(page, base: str):

@@ -7,6 +7,19 @@ Use this to analyse cost (time, requests) per feature over time.
 
 | 07:53 | Add drawio to git; create roles-overview.md (full feature matrix per role); create doc/todo/1.2-guest-users.md (guest user concept + impl plan P1–P6, T140–T144); update TODO.md §1.2, security.md, copilot-instructions | 2 | 2 | claude-sonnet-4.6 | doc/users/roles-overview.md (new), doc/todo/1.2-guest-users.md (new), doc/users/*.drawio, TODO.md, security.md, copilot-instructions.md | done |
 
+### Session — 2026-04-18 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 21:00 UTC | Deploy v2026.4.54 to VPS-Supertaris: pull VPS v2026.4.53 → local, merge meeting-button fixes on top (btn_guest_meeting for all, Digest hidden from guests, guest meeting flow), bump version, commit 82cf849, rsync+docker restart | 4 | 18 | claude-sonnet-4.6 | bot_calendar.py, bot_access.py, telegram_menu_bot.py, strings.json, bot_config.py, release_notes.json | done |
+| 21:35 UTC | Fix v2026.4.55: diagnose silent failure of "Request Meeting" button (NameError — _pending_meeting dict, _pending_invitations dict, _get_free_slots function missing from bot_calendar.py); also added cal_inv_ok/no callbacks and all i18n strings; deploy+restart VPS | 3 | 12 | claude-sonnet-4.6 | bot_calendar.py, telegram_menu_bot.py, strings.json, bot_config.py, release_notes.json | done |
+| 21:56 UTC | Feat v2026.4.56: meeting flow — expert/consultant selection step, per-day slot picker with ← prev / next → day navigation, localized weekday+month names in user language (ru/en/de), search up to 30 days ahead | 3 | 5 | claude-sonnet-4.6 | bot_calendar.py, telegram_menu_bot.py, strings.json, bot_config.py, release_notes.json | done |
+| 00:22 UTC | v2026.4.60: T158-T161 guest appointment tests; full VPS run PASS 573/FAIL 10(pre-existing)/SKIP 34; commit+push | 2 | 1 | claude-sonnet-4-6 | test_voice_regression.py, test-suite.md, bot_config.py, release_notes.json | done |
+| 00:36 UTC | Check web UI + run Playwright UI tests: diagnosed 502s (tests pointed at /supertaris SSH tunnel, not /supertaris-vps docker); re-ran against correct URL → 43/43 PASSED; fixed _base() default in test_external_ui.py | 1 | 8 | claude-sonnet-4.6 | src/tests/ui/test_external_ui.py | done |
+| 22:14 UTC | Fix v2026.4.59: Save confirmed meeting to guest calendar; show meetings count in My Data | 2 | 2 | claude-sonnet-4-6 | bot_calendar.py, bot_handlers.py, strings.json, bot_config.py, release_notes.json | done |
+| 22:12 UTC | Feat v2026.4.58: My Data guest view — hide notes/events/contacts/mail; show only basic profile info | 2 | 3 | claude-sonnet-4-6 | bot_handlers.py, strings.json, bot_config.py, release_notes.json | done |
+| 22:08 UTC | Feat v2026.4.57: profile contact email for all users (incl. guests) — simple set-email flow without IMAP; guests blocked from mail digest (handle_digest_auth, handle_mail_consent, handle_mail_settings) | 2 | 3 | claude-sonnet-4.6 | bot_handlers.py, profile.yaml, telegram_menu_bot.py, bot_mail_creds.py, strings.json, bot_config.py, release_notes.json | done |
+
 ### Session — 2026-04-17 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
