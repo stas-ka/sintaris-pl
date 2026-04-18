@@ -139,6 +139,7 @@ from features.bot_calendar import (
     _handle_calendar_query, _start_cal_console, _handle_cal_console,
     _start_guest_meeting, _finish_guest_meeting_topic, _finish_guest_meeting_slot,
     _handle_inv_confirm, _handle_inv_decline,
+    _handle_expert_selected, _handle_day_nav,
 )
 
 # ─── Mail credentials ──────────────────────────────────────────────────────────
@@ -425,10 +426,23 @@ def callback_handler(call):
     # ── Meeting request (all allowed users) ────────────────────────────────
     elif data == "guest_meeting":
         _start_guest_meeting(cid)
-    elif data.startswith("cal_inv_slot:"):
+    elif data.startswith("cal_meet_expert:"):
         try:
-            slot_idx = int(data.split(":")[1])
-            _finish_guest_meeting_slot(cid, slot_idx)
+            _handle_expert_selected(cid, int(data.split(":", 1)[1]))
+        except (ValueError, IndexError):
+            pass
+    elif data.startswith("cal_meet_day:"):
+        # format: cal_meet_day:<expert_id>:<YYYY-MM-DD>
+        parts = data.split(":", 2)
+        try:
+            _handle_day_nav(cid, int(parts[1]), parts[2])
+        except (ValueError, IndexError):
+            pass
+    elif data.startswith("cal_meet_slot:"):
+        # format: cal_meet_slot:<expert_id>:<YYYY-MM-DD>:<hour>
+        parts = data.split(":", 3)
+        try:
+            _finish_guest_meeting_slot(cid, int(parts[1]), parts[2], int(parts[3]))
         except (ValueError, IndexError):
             pass
     elif data.startswith("cal_inv_ok:"):

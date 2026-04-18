@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.56",
+    "date": "2026-04-18",
+    "title": "Meeting flow: expert selection + multi-day navigation + localized weekday names",
+    "notes": "- feat: show consultant/expert selector if multiple admins exist\n- feat: per-day slot picker with ← Prev day / Next day → navigation\n- feat: weekday names localized (ru/en/de) using user language\n- fix: removed single-day limitation — now navigates all free business days in next 30 days\n- fix: callback format changed to cal_meet_expert/cal_meet_day/cal_meet_slot"
+  },
+  {
     "version": "2026.4.55",
     "date": "2026-04-18",
     "title": "Fix: Meeting request button now works — missing module-level state and helpers added",
