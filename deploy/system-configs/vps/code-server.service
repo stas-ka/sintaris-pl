@@ -6,6 +6,9 @@ After=network.target
 Type=simple
 User=stas
 Environment=HOME=/home/stas
+# GITHUB_TOKEN is set from /home/stas/.taris-env or injected at deploy time — never commit the value
+# Environment=GITHUB_TOKEN=<token>
+EnvironmentFile=-/home/stas/.code-server-env
 ExecStart=/usr/local/bin/code-server --config /home/stas/.config/code-server/config.yaml /home/stas
 Restart=on-failure
 RestartSec=10
