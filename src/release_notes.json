@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.51",
+    "date": "2026-04-18",
+    "title": "Meeting request in main menu for all users; Mail hidden from guests",
+    "notes": "- feat: 'Request Meeting' button added to main menu for all allowed users (not only pending/guests)\n- fix: Mail/Digest button hidden from guest users (inside not _is_guest block)\n- feat: guest_meeting callback and cal_inv_slot handled for allowed users in handle_callback\n- feat: guest_meeting_topic text input handled for allowed users (not only pending)"
+  },
+  {
     "version": "2026.4.50",
     "date": "2026-04-13",
     "title": "N8N Campaign Send: GS status tracking before and after sending",

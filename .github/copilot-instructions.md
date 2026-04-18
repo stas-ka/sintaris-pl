@@ -7,7 +7,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/skill-name` | What it does |
 |---|---|
 | `/taris-deploy-to_target` | Copy changed files to Pi, restart service, verify journal |
-| `/taris-deploy-openclaw-target` | Deploy OpenClaw variant locally to TariStation2 (engineering) and remote TariStation1/SintAItion (production) |
+| `/taris-deploy-openclaw-target` | Deploy OpenClaw variant locally to TariStation2 (engineering) and remote TariStation1/SintAItion (production) or VPS-Supertaris (agents.sintaris.net, internet-facing) |
 | `/taris-backup-target` | Backup a Raspberry Pi target (data, software, system config, binaries, or all) |
 | `/taris-performancetest` | Run taris performance benchmarks (storage ops, menu navigation) locally and/or on Pi targets, merge results, and print a cross-platform comparison |
 | `/taris-test-run-tests` | Run voice regression T01–T41 on Pi, report results |
@@ -118,6 +118,8 @@ taris/
 - **Docs:** update the relevant `doc/architecture/<topic>.md` file and `README.md` in the same commit as the code change.
 - **TODO.md:** keep current; collapse completed items to `✅ Implemented (vX.Y.Z)`.
 - **Deployment pipeline:** ALL changes MUST be deployed and tested on the engineering target **PI2** (`OpenClawPI2`) first. Only after tests pass and the change is committed and pushed to git may it be deployed to the production target **PI1** (`OpenClawPI`). Never deploy directly to PI1 without prior PI2 validation.
+- **TariStation1 (SintAItion) is a shared production VPS** — hosts PostgreSQL, N8N, Nginx, and other bots/services. ALL operations on TariStation1 (code deploy, service restarts, service file changes, package installs, database migrations, system config changes) require **explicit confirmation from the user before execution**. Present the VPS pre-checklist (see SKILL.md) before any TS1 action. Never bundle multiple TS1 operation types into a single confirmation — ask separately for each.
+- **VPS-Supertaris (`agents.sintaris.net`) is a shared public internet VPS** — 🔴 HIGHEST RISK. Hosts N8N, PostgreSQL (shared DB), Nginx (reverse proxy for all bots/apps), and other services. taris runs there at `/supertaris/`. ALL operations require **separate explicit confirmation from the user** with the mandatory pre-VPS checklist before execution. Forbidden without confirmation: `apt upgrade/install`, Nginx config changes, PostgreSQL DDL, shared service restarts, firewall changes.
 - **Continuous test improvement:** Every bug fix MUST add a regression test that would have caught the bug. Every new feature MUST add tests covering the happy path and the main failure modes. Tests live in `src/tests/test_voice_regression.py` (T-numbered) for voice/config/LLM; add new test IDs sequentially. Update `doc/test-suite.md` with the new test IDs in the same commit. No exceptions.
 
 ## Secrets & Configuration Security — MANDATORY

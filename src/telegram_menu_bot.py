@@ -134,6 +134,9 @@ from features.bot_calendar import (
     _show_cal_confirm_multi, _cal_multi_save_one, _cal_multi_skip, _cal_multi_save_all,
     _handle_cal_delete_request, _handle_cal_delete_confirmed,
     _handle_calendar_query, _start_cal_console, _handle_cal_console,
+    # Guest meeting request (§1.2 Phase 5)
+    _start_guest_meeting, _finish_guest_meeting_topic, _finish_guest_meeting_slot,
+    _handle_inv_confirm, _handle_inv_decline, _pending_meeting,
 )
 
 # ─── Mail credentials ──────────────────────────────────────────────────────────
@@ -233,7 +236,12 @@ def cmd_start(message):
         if _is_blocked_reg(cid):
             bot.send_message(cid, _t(cid, "reg_blocked"))
         elif _is_pending_reg(cid):
-            bot.send_message(cid, _t(cid, "reg_pending_exists"))
+            kb = InlineKeyboardMarkup()
+            kb.add(InlineKeyboardButton(
+                _t(cid, "btn_guest_meeting"), callback_data="guest_meeting"
+            ))
+            bot.send_message(cid, _t(cid, "reg_pending_exists"),
+                             reply_markup=kb)
         elif _st._user_mode.get(cid) == "reg_name":
             bot.send_message(cid, _t(cid, "reg_ask_name"), parse_mode="Markdown")
         else:
@@ -340,6 +348,30 @@ def cmd_status(message):
 def callback_handler(call):
     _cb_t0 = _time.perf_counter()
     cid  = call.message.chat.id
+
+    # ── Guest meeting request — allow for pending (not-yet-approved) users ─
+    if not _is_allowed(cid) and _is_pending_reg(cid):
+        _set_lang(cid, call.from_user)
+        data = call.data
+        try:
+            bot.answer_callback_query(call.id)
+        except Exception:
+            pass
+        if data == "guest_meeting":
+            _start_guest_meeting(cid)
+        elif data.startswith("cal_inv_slot:"):
+            try:
+                slot_idx = int(data.split(":")[1])
+                _finish_guest_meeting_slot(cid, slot_idx)
+            except (ValueError, IndexError):
+                pass
+        elif data == "cancel":
+            _pending_meeting.pop(cid, None)
+            _st._user_mode.pop(cid, None)
+            bot.send_message(cid, _t(cid, "reg_pending_exists"))
+        # ignore all other callbacks for pending users
+        return
+
     if not _is_allowed(cid):
         try:
             bot.answer_callback_query(call.id, "⛔ Access denied")
@@ -382,6 +414,16 @@ def callback_handler(call):
         _refresh_digest(cid)
     elif data == "digest_tts":
         _handle_digest_tts(cid)
+
+    # ── Meeting request (all allowed users) ───────────────────────────────
+    elif data == "guest_meeting":
+        _start_guest_meeting(cid)
+    elif data.startswith("cal_inv_slot:"):
+        try:
+            slot_idx = int(data.split(":")[1])
+            _finish_guest_meeting_slot(cid, slot_idx)
+        except (ValueError, IndexError):
+            pass
 
     # ── Chat / System mode ─────────────────────────────────────────────────
     elif data == "mode_chat":
@@ -1145,6 +1187,22 @@ def callback_handler(call):
     elif data == "cal_confirm_tts":
         if not _is_guest(cid) and cid in _pending_cal:
             _handle_cal_confirm_tts(cid)
+
+    # ── Meeting invitation responses (admin side) ──────────────────────────
+    elif data.startswith("cal_inv_ok:"):
+        if _is_admin(cid) or _is_allowed(cid):
+            inv_id = data[len("cal_inv_ok:"):]
+            _handle_inv_confirm(cid, inv_id)
+        else:
+            bot.send_message(cid, _t(cid, "access_denied"))
+
+    elif data.startswith("cal_inv_no:"):
+        if _is_admin(cid) or _is_allowed(cid):
+            inv_id = data[len("cal_inv_no:"):]
+            _handle_inv_decline(cid, inv_id)
+        else:
+            bot.send_message(cid, _t(cid, "access_denied"))
+
     # ── Documents / RAG ────────────────────────────────────────────────────
     elif data == "menu_docs":
         if not _is_guest(cid):
@@ -1227,11 +1285,22 @@ def text_handler(message):
         _finish_registration(cid, message.text)
         return
 
+    # ── Guest meeting topic input — pending users only ─────────────────────────
+    if _st._user_mode.get(cid) == "guest_meeting_topic" and _is_pending_reg(cid):
+        _set_lang(cid, message.from_user)
+        _finish_guest_meeting_topic(cid, message.text)
+        return
+
     if not _is_allowed(cid):
         _deny(cid)
         return
 
     _set_lang(cid, message.from_user)
+
+    # ── Meeting topic input — allowed users ────────────────────────────────────
+    if _st._user_mode.get(cid) == "guest_meeting_topic":
+        _finish_guest_meeting_topic(cid, message.text)
+        return
 
     # Admin typing an API key
     if cid in _st._pending_llm_key:

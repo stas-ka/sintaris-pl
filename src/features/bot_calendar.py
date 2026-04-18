@@ -1105,3 +1105,228 @@ def _cal_morning_briefing_loop() -> None:
 
             except Exception as e:
                 log.debug(f"[Cal] Morning briefing error for {fp}: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Guest Meeting Request — Phase 5 (§1.2)
+#
+# Pending users (status=="pending") can request a meeting with the first admin.
+# Free slots are computed from the admin's calendar (next 7 days, 09:00–18:00,
+# 30-min blocks).  Admin gets Confirm / Decline inline buttons.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# In-flight meeting request state keyed by guest chat_id
+_pending_meeting: dict[int, dict] = {}
+
+# Confirmed invitations waiting for admin action, keyed by inv_id (8-char uuid)
+_pending_invitations: dict[str, dict] = {}
+
+
+def _get_free_slots(expert_chat_id: int, n: int = 5,
+                    duration_min: int = 30) -> list[datetime]:
+    """Return up to *n* free datetime slots in the expert's calendar.
+
+    Scans the next 7 days (today + 7), 09:00–18:00, in *duration_min* steps.
+    A slot is free if no existing event overlaps [slot, slot+duration).
+    """
+    events = _cal_load(expert_chat_id)
+    busy: list[tuple[datetime, datetime]] = []
+    for ev in events:
+        try:
+            start = datetime.fromisoformat(ev["dt_iso"])
+            end   = start + timedelta(minutes=duration_min)
+            busy.append((start, end))
+        except Exception:
+            pass
+
+    slots: list[datetime] = []
+    now   = datetime.now()
+    # Start from the next full 30-min mark at least 1 hour from now
+    start_search = now + timedelta(hours=1)
+    if start_search.minute % duration_min:
+        start_search += timedelta(
+            minutes=duration_min - start_search.minute % duration_min
+        )
+    start_search = start_search.replace(second=0, microsecond=0)
+
+    day_offset = 0
+    while len(slots) < n and day_offset < 7:
+        base = (now + timedelta(days=day_offset)).replace(
+            hour=9, minute=0, second=0, microsecond=0
+        )
+        t = max(base, start_search)
+        while t.hour < 18 and len(slots) < n:
+            end_t = t + timedelta(minutes=duration_min)
+            overlap = any(
+                not (end_t <= bs or t >= be)
+                for bs, be in busy
+            )
+            if not overlap:
+                slots.append(t)
+            t += timedelta(minutes=duration_min)
+        day_offset += 1
+
+    return slots
+
+
+def _start_guest_meeting(chat_id: int) -> None:
+    """Entry point — called when a pending user clicks 'Request Meeting'."""
+    _pending_meeting[chat_id] = {"step": "topic"}
+    _st._user_mode[chat_id] = "guest_meeting_topic"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+    bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
+                     parse_mode="Markdown", reply_markup=kb)
+
+
+def _finish_guest_meeting_topic(chat_id: int, topic: str) -> None:
+    """User typed the meeting topic — compute free slots and show them."""
+    from core.bot_config import ADMIN_USERS
+    _st._user_mode.pop(chat_id, None)
+    topic = topic.strip()[:200]
+    if not topic:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
+                         parse_mode="Markdown")
+        _st._user_mode[chat_id] = "guest_meeting_topic"
+        return
+
+    experts = list(ADMIN_USERS)
+    if not experts:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+        _pending_meeting.pop(chat_id, None)
+        return
+
+    expert_id = experts[0]
+    slots = _get_free_slots(expert_id)
+
+    if not slots:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+        _pending_meeting.pop(chat_id, None)
+        return
+
+    state = _pending_meeting.get(chat_id, {})
+    state["topic"]     = topic
+    state["expert_id"] = expert_id
+    state["slots"]     = [s.strftime("%Y-%m-%dT%H:%M") for s in slots]
+    state["step"]      = "pick_slot"
+    _pending_meeting[chat_id] = state
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    for idx, slot in enumerate(slots):
+        label = slot.strftime("%a %d.%m %H:%M")
+        kb.add(InlineKeyboardButton(label, callback_data=f"cal_inv_slot:{idx}"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+    bot.send_message(chat_id, _t(chat_id, "guest_meeting_slots_header"),
+                     parse_mode="Markdown", reply_markup=kb)
+
+
+def _finish_guest_meeting_slot(chat_id: int, slot_idx: int) -> None:
+    """Guest chose a slot — create invitation and notify admin."""
+    state = _pending_meeting.pop(chat_id, {})
+    if not state:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"))
+        return
+
+    slots = state.get("slots", [])
+    if slot_idx >= len(slots):
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+        return
+
+    topic     = state.get("topic", "—")
+    expert_id = state.get("expert_id")
+    dt_iso    = slots[slot_idx]
+
+    inv_id = str(uuid.uuid4())[:8]
+    _pending_invitations[inv_id] = {
+        "guest_chat_id": chat_id,
+        "expert_id":     expert_id,
+        "topic":         topic,
+        "dt_iso":        dt_iso,
+    }
+
+    # Confirm to guest
+    dt = datetime.fromisoformat(dt_iso)
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "guest_meeting_requested",
+           topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M")),
+        parse_mode="Markdown",
+    )
+
+    # Notify expert/admin
+    if expert_id:
+        from telegram.bot_users import _find_registration
+        reg = _find_registration(chat_id)
+        guest_name = reg.get("name") or reg.get("first_name") or str(chat_id) if reg else str(chat_id)
+        text = _t(expert_id, "guest_inv_notify_admin",
+                  name=guest_name, topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M"))
+        kb = InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            InlineKeyboardButton("✅ " + _t(expert_id, "guest_inv_btn_confirm"),
+                                 callback_data=f"cal_inv_ok:{inv_id}"),
+            InlineKeyboardButton("❌ " + _t(expert_id, "guest_inv_btn_decline"),
+                                 callback_data=f"cal_inv_no:{inv_id}"),
+        )
+        try:
+            bot.send_message(expert_id, text, parse_mode="Markdown", reply_markup=kb)
+        except Exception as e:
+            log.warning("[CalInv] Failed to notify expert %s: %s", expert_id, e)
+
+    log.info("[CalInv] Created inv=%s guest=%s expert=%s dt=%s topic=%r",
+             inv_id, chat_id, expert_id, dt_iso, topic)
+
+
+def _handle_inv_confirm(admin_chat_id: int, inv_id: str) -> None:
+    """Admin confirmed the meeting — create event in admin's calendar + notify guest."""
+    inv = _pending_invitations.pop(inv_id, None)
+    if not inv:
+        bot.send_message(admin_chat_id, "⚠️ Invitation not found (already handled?).")
+        return
+
+    topic     = inv["topic"]
+    dt_iso    = inv["dt_iso"]
+    guest_id  = inv["guest_chat_id"]
+    dt        = datetime.fromisoformat(dt_iso)
+
+    ev = _cal_add_event(admin_chat_id, topic, dt, remind_before_min=15)
+    _schedule_reminder(admin_chat_id, ev)
+
+    bot.send_message(
+        admin_chat_id,
+        _t(admin_chat_id, "guest_inv_confirmed_admin",
+           topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M")),
+        parse_mode="Markdown",
+    )
+    try:
+        bot.send_message(
+            guest_id,
+            _t(guest_id, "guest_inv_confirmed_guest",
+               topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M")),
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        log.warning("[CalInv] Failed to notify guest %s: %s", guest_id, e)
+
+    log.info("[CalInv] Confirmed inv=%s expert=%s guest=%s dt=%s",
+             inv_id, admin_chat_id, guest_id, dt_iso)
+
+
+def _handle_inv_decline(admin_chat_id: int, inv_id: str) -> None:
+    """Admin declined the meeting — notify guest."""
+    inv = _pending_invitations.pop(inv_id, None)
+    if not inv:
+        bot.send_message(admin_chat_id, "⚠️ Invitation not found (already handled?).")
+        return
+
+    topic    = inv["topic"]
+    guest_id = inv["guest_chat_id"]
+
+    bot.send_message(admin_chat_id, _t(admin_chat_id, "guest_inv_declined_admin", topic=topic),
+                     parse_mode="Markdown")
+    try:
+        bot.send_message(guest_id, _t(guest_id, "guest_inv_declined_guest", topic=topic),
+                         parse_mode="Markdown")
+    except Exception as e:
+        log.warning("[CalInv] Failed to notify guest %s: %s", guest_id, e)
+
+    log.info("[CalInv] Declined inv=%s expert=%s guest=%s", inv_id, admin_chat_id, guest_id)
