@@ -1,0 +1,13 @@
+[Unit]
+Description=Sshwifty Web SSH Client
+After=network.target
+
+[Service]
+Type=simple
+User=stas
+ExecStart=/usr/local/bin/sshwifty
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
