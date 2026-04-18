@@ -575,12 +575,23 @@ def _set_profile_lang(chat_id: int, lang: str) -> None:
 
 def _handle_profile_my_data(chat_id: int) -> None:
     """Show all stored data for the user."""
-    from features.bot_contacts import _contact_count
-    from features.bot_calendar import _cal_load
     reg = _find_registration(chat_id) or {}
     name = reg.get("name") or str(chat_id)
     lang = _st._user_lang.get(chat_id, "en")
     reg_date = str(reg.get("timestamp", ""))[:10] or "\u2014"
+
+    if _is_guest(chat_id):
+        # Guests only see basic profile info — no features available
+        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="profile"))
+        text = _t(chat_id, "profile_my_data_guest_msg").format(
+            name=_escape_md(name), tg_id=str(chat_id), lang=lang, reg_date=reg_date)
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+        return
+
+    from features.bot_contacts import _contact_count
+    from features.bot_calendar import _cal_load
     notes_count = len(_list_notes_for(chat_id))
     cal_count = len(_cal_load(chat_id))
     contacts_count = _contact_count(chat_id)

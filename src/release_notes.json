@@ -1,5 +1,14 @@
 [
   {
+    "version": "2026.4.58",
+    "date": "2026-04-19",
+    "title": "My Data: hide notes/events/contacts/mail from guests",
+    "changes": [
+      "Guests see only basic profile info (name, TG ID, lang, reg date) in My Data",
+      "Notes, events, contacts and mail status rows are hidden for guests"
+    ]
+  },
+  {
     "version": "2026.4.57",
     "date": "2026-04-18",
     "title": "Profile contact email: set address without IMAP; block guests from mail digest",
