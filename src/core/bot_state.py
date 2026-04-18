@@ -24,6 +24,7 @@ from core.bot_config import (
     _VOICE_OPTS_FILE,
     _VOICE_OPTS_DEFAULTS,
     _WEB_LINK_CODES_FILE,
+    REGISTRATIONS_FILE,
     log,
     get_conv_history_max,
     get_conv_summary_threshold,
@@ -299,7 +300,30 @@ def _save_dynamic_devs() -> None:
 _dynamic_devs: set[int] = _load_dynamic_devs()
 
 
-# Per-user history.  Format: [{"role": "user"|"assistant", "content": str}]
+# ─────────────────────────────────────────────────────────────────────────────
+# Guest users — auto-registered via /start when AUTO_GUEST_ENABLED=1.
+# Loaded from the registrations file at startup (status="guest" records).
+# Updated in-memory when a new guest auto-registers (no file of their own).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_dynamic_guests() -> set[int]:
+    """Load chat_ids of users with status='guest' from the registrations file."""
+    try:
+        data = json.loads(Path(REGISTRATIONS_FILE).read_text(encoding="utf-8"))
+        return {int(r["chat_id"]) for r in data.get("registrations", [])
+                if r.get("status") == "guest"}
+    except Exception:
+        return set()
+
+
+_dynamic_guests: set[int] = _load_dynamic_guests()
+
+# Per-guest message counts for rate limiting.
+# Structure: {chat_id: {"hour": int, "day": int, "hour_ts": float, "day_ts": float}}
+_guest_message_counts: dict[int, dict] = {}
+
+
+# Per conversation history.  Format: [{"role": "user"|"assistant", "content": str}]
 _conversation_history: dict[int, list] = {}
 
 

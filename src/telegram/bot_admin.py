@@ -76,7 +76,7 @@ def _save_dynamic_users() -> None:
     _sdyn()
 
 
-def _user_info_block(uid: int, reg) -> str:
+def _user_info_block(uid: int, reg, role_label: str = "") -> str:
     """Compact Markdown block with all available identity info for a Telegram user."""
     if not reg:
         return f"\U0001f464 `{uid}` _(no registration record)_"
@@ -87,10 +87,12 @@ def _user_info_block(uid: int, reg) -> str:
     tg_full = f"{first} {last}".strip()
     udisp   = f"@{_escape_md(uname)}" if uname else "_no username_"
     tdisp   = f"{tg_full} ({udisp})" if tg_full else udisp
+    role_line = f"\n  \u2022 Role: {role_label}" if role_label else ""
     return (
         f"\U0001f464 `{uid}`\n"
         f"  \u2022 Telegram: {tdisp}\n"
         f"  \u2022 Name: {name or '\u2014'}"
+        f"{role_line}"
     )
 
 
@@ -117,14 +119,8 @@ def _web_account_block(account: dict, tg_ids_known: set) -> str:
 
 def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    pending_count = len(_get_pending_registrations())
-    pending_badge = f"  ({pending_count} new)" if pending_count else ""
     kb.add(
-        InlineKeyboardButton(_t(chat_id, "admin_btn_pending", pending_badge=pending_badge),
-                             callback_data="admin_pending_users"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_add_user"),   callback_data="admin_add_user"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_list_users"), callback_data="admin_list_users"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_remove_user"), callback_data="admin_remove_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_users_menu"), callback_data="admin_users_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_switch_llm"), callback_data="admin_llm_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_voice_config"), callback_data="admin_voice_config"),
@@ -135,10 +131,26 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_n8n"),         callback_data="admin_n8n_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_crm"),         callback_data="admin_crm_menu"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_roles"),       callback_data="admin_roles_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_security_policy"), callback_data="admin_security_policy"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_restart"),         callback_data="admin_restart"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
+    )
+    return kb
+
+
+def _admin_users_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
+    """Submenu keyboard for user management actions."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    pending_count = len(_get_pending_registrations())
+    pending_badge = f"  ({pending_count} new)" if pending_count else ""
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "admin_btn_pending", pending_badge=pending_badge),
+                             callback_data="admin_pending_users"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_list_users"), callback_data="admin_list_users"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_add_user"),   callback_data="admin_add_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_remove_user"), callback_data="admin_remove_user"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_roles"),       callback_data="admin_roles_menu"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="admin_menu"),
     )
     return kb
 
@@ -149,6 +161,16 @@ def _handle_admin_menu(chat_id: int) -> None:
         _t(chat_id, "admin_panel_title"),
         parse_mode="Markdown",
         reply_markup=_admin_keyboard(chat_id),
+    )
+
+
+def _handle_admin_users_menu(chat_id: int) -> None:
+    """Show the user-management submenu."""
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "admin_users_menu_title"),
+        parse_mode="Markdown",
+        reply_markup=_admin_users_keyboard(chat_id),
     )
 
 
@@ -219,21 +241,30 @@ def _handle_admin_list_users(chat_id: int) -> None:
 
     # 🔐 Admins (static from config)
     if ADMIN_USERS:
-        blocks = [_user_info_block(uid, _find_registration(uid)) for uid in sorted(ADMIN_USERS)]
+        blocks = [_user_info_block(uid, _find_registration(uid), _role_label(uid)) for uid in sorted(ADMIN_USERS)]
         sections.append("🔐 *Telegram Admins:*\n\n" + "\n\n".join(blocks))
 
     # ✅ Static allowed users (not admins)
     static_only = sorted(uid for uid in ALLOWED_USERS if uid not in ADMIN_USERS)
     if static_only:
-        blocks = [_user_info_block(uid, _find_registration(uid)) for uid in static_only]
+        blocks = [_user_info_block(uid, _find_registration(uid), _role_label(uid)) for uid in static_only]
         sections.append("✅ *Telegram Allowed:*\n\n" + "\n\n".join(blocks))
 
     # 👤 Dynamically approved users (not already in static lists)
     dyn_only = sorted(uid for uid in _dynamic_users()
                       if uid not in ALLOWED_USERS and uid not in ADMIN_USERS)
     if dyn_only:
-        blocks = [_user_info_block(uid, _find_registration(uid)) for uid in dyn_only]
+        blocks = [_user_info_block(uid, _find_registration(uid), _role_label(uid)) for uid in dyn_only]
         sections.append("👤 *Telegram Approved:*\n\n" + "\n\n".join(blocks))
+
+    # 🌐 Guests
+    guests_only = sorted(
+        uid for uid in _st._dynamic_guests
+        if uid not in ADMIN_USERS and uid not in ALLOWED_USERS
+    )
+    if guests_only:
+        blocks = [_user_info_block(uid, _find_registration(uid), _role_label(uid)) for uid in guests_only]
+        sections.append("🌐 *Guests:*\n\n" + "\n\n".join(blocks))
 
     # 🚫 Blocked users
     blocked = [r for r in _load_registrations() if r.get("status") == "blocked"]
@@ -254,17 +285,17 @@ def _handle_admin_list_users(chat_id: int) -> None:
 
     if not sections:
         bot.send_message(chat_id, _t(chat_id, "no_guests"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(chat_id))
         return
 
     # Split into multiple messages if too long (Telegram 4096 char limit)
     full_text = "\n\n" + "\n\n───────\n\n".join(sections)
     if len(full_text) <= 4000:
         bot.send_message(chat_id, full_text, parse_mode="Markdown",
-                         reply_markup=_admin_keyboard(chat_id))
+                         reply_markup=_admin_users_keyboard(chat_id))
     else:
         for i, section in enumerate(sections):
-            kb = _admin_keyboard(chat_id) if i == len(sections) - 1 else None
+            kb = _admin_users_keyboard(chat_id) if i == len(sections) - 1 else None
             bot.send_message(chat_id, "\n\n" + section, parse_mode="Markdown",
                              reply_markup=kb)
 
@@ -283,16 +314,16 @@ def _finish_admin_add_user(admin_id: int, text: str) -> None:
     dyn = _dynamic_users()
     if uid in dyn:
         bot.send_message(admin_id, _t(admin_id, "already_guest", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
     elif uid in ALLOWED_USERS or uid in ADMIN_USERS:
         bot.send_message(admin_id, _t(admin_id, "already_full", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
     else:
         dyn.add(uid)
         _save_dynamic_users()
         log.info(f"Admin {admin_id} added user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_added", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
     _st._user_mode.pop(admin_id, None)
 
 
@@ -300,10 +331,10 @@ def _start_admin_remove_user(chat_id: int) -> None:
     dyn = _dynamic_users()
     if not dyn:
         bot.send_message(chat_id, _t(chat_id, "no_guests_del"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(chat_id))
         return
     _st._user_mode[chat_id] = "admin_remove_user"
-    lst = "\n\n".join(_user_info_block(uid, _find_registration(uid)) for uid in sorted(dyn))
+    lst = "\n\n".join(_user_info_block(uid, _find_registration(uid), _role_label(uid)) for uid in sorted(dyn))
     bot.send_message(chat_id, _t(chat_id, "remove_prompt", lst=lst), parse_mode="Markdown")
 
 
@@ -319,10 +350,10 @@ def _finish_admin_remove_user(admin_id: int, text: str) -> None:
         _save_dynamic_users()
         log.info(f"Admin {admin_id} removed guest user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_removed", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
     else:
         bot.send_message(admin_id, _t(admin_id, "user_not_found", uid=uid),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
     _st._user_mode.pop(admin_id, None)
 
 
@@ -335,7 +366,7 @@ def _handle_admin_pending_users(chat_id: int) -> None:
     pending = _get_pending_registrations()
     if not pending:
         bot.send_message(chat_id, _t(chat_id, "no_pending_regs"),
-                         reply_markup=_admin_keyboard(chat_id))
+                         reply_markup=_admin_users_keyboard(chat_id))
         return
     for reg in pending:
         uid      = reg.get("chat_id")
@@ -350,8 +381,9 @@ def _handle_admin_pending_users(chat_id: int) -> None:
         name_esc = _escape_md(name) if name else "_(not set)_"
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(
-            InlineKeyboardButton("\u2705  Approve", callback_data=f"reg_approve:{uid}"),
-            InlineKeyboardButton("\U0001f6ab  Block",   callback_data=f"reg_block:{uid}"),
+            InlineKeyboardButton("✅  Approve", callback_data=f"reg_approve:{uid}"),
+            InlineKeyboardButton("👤  Guest",   callback_data=f"reg_guest:{uid}"),
+            InlineKeyboardButton("🚫  Block",   callback_data=f"reg_block:{uid}"),
         )
         text = (
             f"\U0001f464 *Pending registration*\n\n"
@@ -394,6 +426,33 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
         log.warning(f"[Reg] Cannot notify approved user {target_id}: {e}")
 
 
+def _do_approve_as_guest(admin_id: int, target_id: int) -> None:
+    """Approve a pending registration as a limited guest (no full user rights)."""
+    from telegram.bot_access import _menu_keyboard
+    reg = _find_registration(target_id)
+    if not reg:
+        bot.send_message(admin_id, f"ℹ️ Registration for `{target_id}` not found.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+        return
+    if reg.get("status") in ("approved", "guest"):
+        bot.send_message(admin_id, f"ℹ️ User `{target_id}` is already active.",
+                         parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+        return
+    _set_reg_status(target_id, "guest")
+    _st._dynamic_guests.add(target_id)
+    name_disp = f" — {reg.get('name')}" if reg.get("name") else ""
+    log.info(f"[Reg] Admin {admin_id} approved user {target_id} as GUEST")
+    bot.send_message(admin_id,
+                     f"👤 User `{target_id}`{name_disp} approved as *guest* (limited access).",
+                     parse_mode="Markdown", reply_markup=_admin_keyboard(admin_id))
+    try:
+        bot.send_message(target_id, _t(target_id, "guest_welcome"),
+                         parse_mode="Markdown",
+                         reply_markup=_menu_keyboard(target_id))
+    except Exception as e:
+        log.warning(f"[Reg] Cannot notify guest {target_id}: {e}")
+
+
 def _do_block_registration(admin_id: int, target_id: int) -> None:
     """Block a registration: mark blocked and notify user."""
     reg       = _find_registration(target_id)
@@ -421,6 +480,7 @@ def _notify_admins_new_registration(chat_id: int, username: str, name: str,
             kb = InlineKeyboardMarkup(row_width=2)
             kb.add(
                 InlineKeyboardButton("✅  Approve", callback_data=f"reg_approve:{chat_id}"),
+                InlineKeyboardButton("👤  Guest",   callback_data=f"reg_guest:{chat_id}"),
                 InlineKeyboardButton("🚫  Block",   callback_data=f"reg_block:{chat_id}"),
             )
             bot.send_message(
@@ -1939,6 +1999,7 @@ def finish_crm_input(chat_id: int, text: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ROLE_ICONS: dict[str, str] = {
+    "guest":     "🌐",
     "user":      "👤",
     "advanced":  "⚡",
     "admin":     "🔐",
@@ -1954,6 +2015,10 @@ def _get_user_role(uid: int) -> str:
         return "developer"
     if uid in _st._advanced_users:
         return "advanced"
+    if uid in _st._dynamic_users or uid in ALLOWED_USERS:
+        return "user"
+    if uid in _st._dynamic_guests:
+        return "guest"
     return "user"
 
 
@@ -1963,50 +2028,63 @@ def _role_label(uid: int) -> str:
 
 
 def _handle_admin_roles_menu(chat_id: int) -> None:
-    """Show all known users with current role + per-user role-change buttons."""
+    """Step 1: show clickable user list for role selection."""
     all_ids: list[int] = sorted(
         set(ADMIN_USERS) | set(DEVELOPER_USERS) | set(ALLOWED_USERS)
         | set(_st._dynamic_users) | set(_st._advanced_users)
         | set(_st._dynamic_admins) | set(_st._dynamic_devs)
+        | set(_st._dynamic_guests)
     )
     if not all_ids:
         bot.send_message(chat_id, _t(chat_id, "admin_roles_empty"),
-                         parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+                         parse_mode="Markdown", reply_markup=_admin_users_keyboard(chat_id))
         return
 
-    lines = [_t(chat_id, "admin_roles_title"), ""]
+    kb = InlineKeyboardMarkup(row_width=1)
     for uid in all_ids:
         reg = _find_registration(uid)
-        name = (reg.get("first_name", "") if reg else "") or str(uid)
-        badge = _role_label(uid)
-        superadmin = " 🌟" if _is_superadmin(uid) else ""
-        lines.append(f"`{uid}` {_escape_md(name)} — {badge}{superadmin}")
-
-    kb = InlineKeyboardMarkup(row_width=4)
-    for uid in all_ids:
-        if _is_superadmin(uid):
-            continue  # superadmins (env-var) cannot be changed via menu
-        reg = _find_registration(uid)
-        name = ((reg.get("first_name", "") if reg else "") or str(uid))[:14]
-        current = _get_user_role(uid)
-        icon = _ROLE_ICONS[current]
-        # Header row for this user (shows name + current role, not clickable)
+        name = ((reg.get("first_name", "") if reg else "") or str(uid))[:22]
+        role = _get_user_role(uid)
+        icon = _ROLE_ICONS.get(role, "❓")
+        superadmin_mark = " 🌟" if _is_superadmin(uid) else ""
         kb.add(InlineKeyboardButton(
-            f"── {icon} {name} ──",
-            callback_data="noop",
+            f"{icon} {name}{superadmin_mark} ({uid})",
+            callback_data=f"admin_role_user:{uid}",
         ))
-        # Role-change buttons for each alternative role
-        alternatives = [r for r in ["user", "advanced", "admin", "developer"] if r != current]
-        kb.row(*[
-            InlineKeyboardButton(
-                f"{_ROLE_ICONS[r]} {r}",
-                callback_data=f"admin_role_set:{uid}:{r}",
-            )
-            for r in alternatives
-        ])
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_users_menu"))
+    bot.send_message(chat_id, _t(chat_id, "admin_roles_title"),
+                     parse_mode="Markdown", reply_markup=kb)
 
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
-    bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=kb)
+
+def _handle_admin_user_role_detail(chat_id: int, target_uid: int) -> None:
+    """Step 2: show current role + role-change buttons for one specific user."""
+    if _is_superadmin(target_uid):
+        bot.send_message(chat_id, _t(chat_id, "admin_roles_cannot_change_admin"),
+                         reply_markup=_admin_users_keyboard(chat_id))
+        return
+
+    reg = _find_registration(target_uid)
+    name = (reg.get("first_name", "") if reg else "") or str(target_uid)
+    badge = _role_label(target_uid)
+
+    kb = InlineKeyboardMarkup(row_width=2)
+    current = _get_user_role(target_uid)
+    alternatives = [r for r in ["guest", "user", "advanced", "admin", "developer"] if r != current]
+    kb.row(*[
+        InlineKeyboardButton(
+            f"{_ROLE_ICONS[r]} {r}",
+            callback_data=f"admin_role_set:{target_uid}:{r}",
+        )
+        for r in alternatives
+    ])
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_roles_menu"))
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "admin_roles_user_detail",
+           name=_escape_md(name), uid=target_uid, role=badge),
+        parse_mode="Markdown",
+        reply_markup=kb,
+    )
 
 
 def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> None:
@@ -2016,7 +2094,7 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
                          reply_markup=_admin_keyboard(chat_id))
         return
 
-    valid_roles = {"user", "advanced", "admin", "developer"}
+    valid_roles = {"guest", "user", "advanced", "admin", "developer"}
     if role not in valid_roles:
         return
 
@@ -2024,18 +2102,26 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
     _st._advanced_users.discard(target_uid)
     _st._dynamic_admins.discard(target_uid)
     _st._dynamic_devs.discard(target_uid)
+    _st._dynamic_users.discard(target_uid)
+    _st._dynamic_guests.discard(target_uid)
 
-    # Ensure the user stays in _dynamic_users (allowed to access bot)
-    _st._dynamic_users.add(target_uid)
+    if role == "guest":
+        # Limited access: guest only
+        _st._dynamic_guests.add(target_uid)
+        _set_reg_status(target_uid, "guest")
+    else:
+        # All non-guest roles keep the user in _dynamic_users
+        _st._dynamic_users.add(target_uid)
+        _set_reg_status(target_uid, "approved")
 
-    # Apply the new role
-    if role == "advanced":
-        _st._advanced_users.add(target_uid)
-    elif role == "admin":
-        _st._dynamic_admins.add(target_uid)
-    elif role == "developer":
-        _st._dynamic_devs.add(target_uid)
-    # role == "user": only in _dynamic_users, no extra set
+        # Apply the new role
+        if role == "advanced":
+            _st._advanced_users.add(target_uid)
+        elif role == "admin":
+            _st._dynamic_admins.add(target_uid)
+        elif role == "developer":
+            _st._dynamic_devs.add(target_uid)
+        # role == "user": only in _dynamic_users, no extra set
 
     _st._save_advanced_users()
     _st._save_dynamic_admins()
@@ -2051,7 +2137,6 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
         chat_id,
         _t(chat_id, "admin_roles_changed", name=_escape_md(name), role=f"{icon} {role}"),
         parse_mode="Markdown",
-        reply_markup=_admin_keyboard(chat_id),
     )
     _handle_admin_roles_menu(chat_id)
 

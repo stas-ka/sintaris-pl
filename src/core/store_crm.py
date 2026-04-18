@@ -300,3 +300,46 @@ def get_stats() -> dict:
         "campaigns": campaigns,
         "interactions": interactions,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Demo / Seed Data
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DEMO_CONTACTS = [
+    {"first_name": "Анна",    "last_name": "Иванова",   "email": "anna.ivanova@example.com",  "phone": "+49 151 1111111", "segment": "Startup GmbH",       "tags": ["demo", "investor"]},
+    {"first_name": "Максим",  "last_name": "Петров",    "email": "maxim.petrov@example.com",  "phone": "+49 151 2222222", "segment": "Tech AG",            "tags": ["demo", "client"]},
+    {"first_name": "Лена",    "last_name": "Смирнова",  "email": "lena.smirnova@example.com", "phone": "+49 151 3333333", "segment": "Design Studio",      "tags": ["demo", "partner"]},
+    {"first_name": "Дмитрий", "last_name": "Козлов",    "email": "d.kozlov@example.com",      "phone": "+49 151 4444444", "segment": "Consulting GmbH",    "tags": ["demo", "prospect"]},
+    {"first_name": "Ольга",   "last_name": "Новикова",  "email": "o.novikova@example.com",    "phone": "+49 151 5555555", "segment": "Media Group",        "tags": ["demo", "client"]},
+    {"first_name": "Иван",    "last_name": "Соколов",   "email": "ivan.sokolov@example.com",  "phone": "+49 151 6666666", "segment": "Finance Ltd",        "tags": ["demo", "investor"]},
+    {"first_name": "Мария",   "last_name": "Попова",    "email": "m.popova@example.com",      "phone": "+49 151 7777777", "segment": "HR Solutions",       "tags": ["demo", "partner"]},
+    {"first_name": "Сергей",  "last_name": "Лебедев",   "email": "s.lebedev@example.com",     "phone": "+49 151 8888888", "segment": "LogiTech GmbH",      "tags": ["demo", "prospect"]},
+    {"first_name": "Татьяна", "last_name": "Морозова",  "email": "t.morozova@example.com",    "phone": "+49 151 9999999", "segment": "EduTech AG",         "tags": ["demo", "client"]},
+    {"first_name": "Алексей", "last_name": "Волков",    "email": "a.volkov@example.com",      "phone": "+49 152 1010101", "segment": "Security Systems",   "tags": ["demo", "partner"]},
+]
+
+
+def seed_demo_contacts() -> int:
+    """Insert demo CRM contacts (skip already-existing emails).
+
+    Returns the number of contacts actually inserted.
+    """
+    inserted = 0
+    for cd in _DEMO_CONTACTS:
+        with _conn() as c:
+            existing = c.execute(
+                "SELECT id FROM crm_contacts WHERE email = %s", (cd["email"],)
+            ).fetchone()
+        if existing:
+            continue
+        create_contact(
+            cd["first_name"], cd["last_name"],
+            email=cd["email"],
+            phone=cd["phone"],
+            segment=cd.get("segment", ""),
+            tags=cd.get("tags", ["demo"]),
+        )
+        inserted += 1
+    log.info("[CRM] seed_demo_contacts: inserted %d contacts", inserted)
+    return inserted
