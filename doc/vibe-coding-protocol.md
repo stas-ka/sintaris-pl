@@ -1524,3 +1524,4 @@ Every ~3 months, measure baseline health:
 | 19:33 UTC | | 19:00 UTC | | 19:33 UTC | 33 | GS status tracking Campaign Send (before+after per client) | 2 | 4 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py, bot_config.py, release_notes.json | done |
 | 23:30 UTC | | 21:00 UTC | | 23:30 UTC | 150 | Doc update + workflow file rename + backup SintAItion + git tag v2026.4.50 | 8 | 2 | 2 | claude-sonnet-4.6 | TODO.md, doc/architecture/features.md, doc/todo/2-n8n-campaign-workflow.md, Taris - Campaign Select.json, Taris - Campaign Send.json | done |
 
+| 07:36 UTC | | 07:00 UTC | | 07:36 UTC | 36 | WSL SSH Quick Start guide + NTLM proxy (cntlm) fix documented | 1 | 3 | claude-sonnet-4.6 | doc/research/vps-ssh-client-setup.md | done |
