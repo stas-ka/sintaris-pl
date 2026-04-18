@@ -18,8 +18,8 @@
 | 1 | nginx stream configured on VPS (no-TLS→sshd, TLS→nginx:8443) | ✅ Done |
 | 2 | SSH key generated on client (`~/.ssh/id_vps`) | ✅ Done |
 | 3 | `~/.ssh/config` entries added (`Host vps`, `vps-direct`, `vps-rem`) | ✅ Done |
-| 4 | Public key added to VPS `~/.ssh/authorized_keys` | ⬜ Pending — do this first |
-| 5 | First connection tested, host key accepted | ⬜ Pending |
+| 4 | Public key added to VPS `~/.ssh/authorized_keys` | ✅ Done — `p355208@porsche.de-vps` key added 2026-04-18 |
+| 5 | First connection tested, host key accepted | ⬜ Pending — run from Porsche machine |
 
 ---
 
