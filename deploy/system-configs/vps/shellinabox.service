@@ -1,0 +1,17 @@
+[Unit]
+Description=Shell In A Box - Web Terminal
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/shellinaboxd \
+  --port=4200 \
+  --localhost-only \
+  --disable-ssl \
+  --no-beep \
+  --service=/:stas:stas:/home/stas:/bin/bash
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
