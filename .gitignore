@@ -59,3 +59,10 @@ res/
 You
 doc/todo/*.ogg
 doc/todo/*.mp4
+
+# Windows Zone.Identifier metadata (never commit)
+*:Zone.Identifier
+
+# Zip archives (may contain secrets)
+*.zip
+env.zip
