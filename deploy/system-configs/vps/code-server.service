@@ -1,0 +1,14 @@
+[Unit]
+Description=code-server (browser VS Code)
+After=network.target
+
+[Service]
+Type=simple
+User=stas
+Environment=HOME=/home/stas
+ExecStart=/usr/local/bin/code-server --config /home/stas/.config/code-server/config.yaml /home/stas
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
