@@ -1106,69 +1106,6 @@ def _cal_morning_briefing_loop() -> None:
             except Exception as e:
                 log.debug(f"[Cal] Morning briefing error for {fp}: {e}")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Guest Meeting Request — Phase 5 (§1.2)
-#
-# Pending users (status=="pending") can request a meeting with the first admin.
-# Free slots are computed from the admin's calendar (next 7 days, 09:00–18:00,
-# 30-min blocks).  Admin gets Confirm / Decline inline buttons.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# In-flight meeting request state keyed by guest chat_id
-_pending_meeting: dict[int, dict] = {}
-
-# Confirmed invitations waiting for admin action, keyed by inv_id (8-char uuid)
-_pending_invitations: dict[str, dict] = {}
-
-
-def _get_free_slots(expert_chat_id: int, n: int = 5,
-                    duration_min: int = 30) -> list[datetime]:
-    """Return up to *n* free datetime slots in the expert's calendar.
-
-    Scans the next 7 days (today + 7), 09:00–18:00, in *duration_min* steps.
-    A slot is free if no existing event overlaps [slot, slot+duration).
-    """
-    events = _cal_load(expert_chat_id)
-    busy: list[tuple[datetime, datetime]] = []
-    for ev in events:
-        try:
-            start = datetime.fromisoformat(ev["dt_iso"])
-            end   = start + timedelta(minutes=duration_min)
-            busy.append((start, end))
-        except Exception:
-            pass
-
-    slots: list[datetime] = []
-    now   = datetime.now()
-    # Start from the next full 30-min mark at least 1 hour from now
-    start_search = now + timedelta(hours=1)
-    if start_search.minute % duration_min:
-        start_search += timedelta(
-            minutes=duration_min - start_search.minute % duration_min
-        )
-    start_search = start_search.replace(second=0, microsecond=0)
-
-    day_offset = 0
-    while len(slots) < n and day_offset < 7:
-        base = (now + timedelta(days=day_offset)).replace(
-            hour=9, minute=0, second=0, microsecond=0
-        )
-        t = max(base, start_search)
-        while t.hour < 18 and len(slots) < n:
-            end_t = t + timedelta(minutes=duration_min)
-            overlap = any(
-                not (end_t <= bs or t >= be)
-                for bs, be in busy
-            )
-            if not overlap:
-                slots.append(t)
-            t += timedelta(minutes=duration_min)
-        day_offset += 1
-
-    return slots
-
-
 def _start_guest_meeting(chat_id: int) -> None:
     """Entry point — called when a pending user clicks 'Request Meeting'."""
     _pending_meeting[chat_id] = {"step": "topic"}

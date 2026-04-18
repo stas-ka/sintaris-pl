@@ -24,7 +24,8 @@ import time as _time
 from core.bot_config import (
     BOT_VERSION, TARIS_BIN, DIGEST_SCRIPT,
     PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER, DEVICE_VARIANT,
-    FASTER_WHISPER_PRELOAD,
+    FASTER_WHISPER_PRELOAD, AUTO_GUEST_ENABLED,
+    GUEST_MSG_HOURLY_LIMIT, GUEST_MSG_DAILY_LIMIT,
     log,
 )
 import core.bot_state as _st
@@ -39,6 +40,7 @@ from telegram.bot_access import (
     _deny, _set_lang, _send_menu, _lang,
     _t, _menu_keyboard, _back_keyboard, _escape_md,
     _get_active_model, _run_subprocess,
+    _get_prompt_role_key, _check_guest_rate_limit,
 )
 
 # ─── Screen DSL ───────────────────────────────────────────────────────────────
@@ -66,7 +68,7 @@ from telegram.bot_admin import (
     _start_admin_add_user, _finish_admin_add_user,
     _start_admin_remove_user, _finish_admin_remove_user,
     _handle_admin_pending_users,
-    _do_approve_registration, _do_block_registration,
+    _do_approve_registration, _do_block_registration, _do_approve_as_guest,
     _notify_admins_new_registration, _notify_admins_new_version,
     _handle_voice_opts_menu, _handle_voice_opt_toggle,
     _handle_admin_changelog,
@@ -89,6 +91,7 @@ from telegram.bot_admin import (
     _handle_crm_contacts_list, _handle_crm_add_start, _handle_crm_search_start,
     _handle_crm_stats, finish_crm_input,
     _handle_admin_roles_menu, _handle_admin_user_set_role,
+    _handle_admin_user_role_detail, _handle_admin_users_menu,
     _handle_admin_security_policy, _handle_admin_syschat_block_remove,
     _handle_admin_syschat_block_add_prompt, handle_admin_syschat_block_add_input,
     _pending_syschat_block_add,
@@ -134,9 +137,7 @@ from features.bot_calendar import (
     _show_cal_confirm_multi, _cal_multi_save_one, _cal_multi_skip, _cal_multi_save_all,
     _handle_cal_delete_request, _handle_cal_delete_confirmed,
     _handle_calendar_query, _start_cal_console, _handle_cal_console,
-    # Guest meeting request (§1.2 Phase 5)
     _start_guest_meeting, _finish_guest_meeting_topic, _finish_guest_meeting_slot,
-    _handle_inv_confirm, _handle_inv_decline, _pending_meeting,
 )
 
 # ─── Mail credentials ──────────────────────────────────────────────────────────
@@ -236,12 +237,18 @@ def cmd_start(message):
         if _is_blocked_reg(cid):
             bot.send_message(cid, _t(cid, "reg_blocked"))
         elif _is_pending_reg(cid):
-            kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton(
-                _t(cid, "btn_guest_meeting"), callback_data="guest_meeting"
-            ))
-            bot.send_message(cid, _t(cid, "reg_pending_exists"),
-                             reply_markup=kb)
+            bot.send_message(cid, _t(cid, "reg_pending_exists"))
+        elif AUTO_GUEST_ENABLED:
+            # Auto-register as guest — no admin approval needed
+            name = f"{first} {last}".strip() or username or str(cid)
+            _upsert_registration(cid, username=username, name=name,
+                                 status="guest",
+                                 first_name=first, last_name=last)
+            _st._dynamic_guests.add(cid)
+            log.info("[Guest] auto-registered chat_id=%s username=%s", cid, username)
+            bot.send_message(cid, _t(cid, "guest_welcome"),
+                             parse_mode="Markdown",
+                             reply_markup=_menu_keyboard(cid))
         elif _st._user_mode.get(cid) == "reg_name":
             bot.send_message(cid, _t(cid, "reg_ask_name"), parse_mode="Markdown")
         else:
@@ -348,30 +355,6 @@ def cmd_status(message):
 def callback_handler(call):
     _cb_t0 = _time.perf_counter()
     cid  = call.message.chat.id
-
-    # ── Guest meeting request — allow for pending (not-yet-approved) users ─
-    if not _is_allowed(cid) and _is_pending_reg(cid):
-        _set_lang(cid, call.from_user)
-        data = call.data
-        try:
-            bot.answer_callback_query(call.id)
-        except Exception:
-            pass
-        if data == "guest_meeting":
-            _start_guest_meeting(cid)
-        elif data.startswith("cal_inv_slot:"):
-            try:
-                slot_idx = int(data.split(":")[1])
-                _finish_guest_meeting_slot(cid, slot_idx)
-            except (ValueError, IndexError):
-                pass
-        elif data == "cancel":
-            _pending_meeting.pop(cid, None)
-            _st._user_mode.pop(cid, None)
-            bot.send_message(cid, _t(cid, "reg_pending_exists"))
-        # ignore all other callbacks for pending users
-        return
-
     if not _is_allowed(cid):
         try:
             bot.answer_callback_query(call.id, "⛔ Access denied")
@@ -415,16 +398,6 @@ def callback_handler(call):
     elif data == "digest_tts":
         _handle_digest_tts(cid)
 
-    # ── Meeting request (all allowed users) ───────────────────────────────
-    elif data == "guest_meeting":
-        _start_guest_meeting(cid)
-    elif data.startswith("cal_inv_slot:"):
-        try:
-            slot_idx = int(data.split(":")[1])
-            _finish_guest_meeting_slot(cid, slot_idx)
-        except (ValueError, IndexError):
-            pass
-
     # ── Chat / System mode ─────────────────────────────────────────────────
     elif data == "mode_chat":
         _st._user_mode[cid] = "chat"
@@ -447,6 +420,17 @@ def callback_handler(call):
         screen = load_screen("screens/help.yaml", ctx,
                              t_func=lambda _lang_arg, key: _t(cid, key))
         render_screen(screen, cid, bot)
+
+    # ── Meeting request (all allowed users) ────────────────────────────────
+    elif data == "guest_meeting":
+        _start_guest_meeting(cid)
+    elif data.startswith("cal_inv_slot:"):
+        try:
+            slot_idx = int(data.split(":")[1])
+            _finish_guest_meeting_slot(cid, slot_idx)
+        except (ValueError, IndexError):
+            pass
+
     # ── User profile ───────────────────────────────────────────────────────────
     elif data == "profile":
         if not _is_allowed(cid): return _deny(cid)
@@ -513,6 +497,12 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    elif data == "admin_users_menu":
+        if _is_admin(cid):
+            _handle_admin_users_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     elif data == "admin_add_user":
         if _is_admin(cid):
             _start_admin_add_user(cid)
@@ -552,6 +542,12 @@ def callback_handler(call):
     elif data.startswith("reg_approve:"):
         if _is_admin(cid):
             _do_approve_registration(cid, int(data.split(":", 1)[1]))
+        else:
+            bot.answer_callback_query(call.id, _t(cid, "admin_only"))
+
+    elif data.startswith("reg_guest:"):
+        if _is_admin(cid):
+            _do_approve_as_guest(cid, int(data.split(":", 1)[1]))
         else:
             bot.answer_callback_query(call.id, _t(cid, "admin_only"))
 
@@ -793,6 +789,15 @@ def callback_handler(call):
     elif data == "admin_roles_menu":
         if _is_admin(cid):
             _handle_admin_roles_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_role_user:"):
+        if _is_admin(cid):
+            try:
+                _handle_admin_user_role_detail(cid, int(data.split(":", 1)[1]))
+            except (ValueError, IndexError):
+                pass
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -1187,22 +1192,6 @@ def callback_handler(call):
     elif data == "cal_confirm_tts":
         if not _is_guest(cid) and cid in _pending_cal:
             _handle_cal_confirm_tts(cid)
-
-    # ── Meeting invitation responses (admin side) ──────────────────────────
-    elif data.startswith("cal_inv_ok:"):
-        if _is_admin(cid) or _is_allowed(cid):
-            inv_id = data[len("cal_inv_ok:"):]
-            _handle_inv_confirm(cid, inv_id)
-        else:
-            bot.send_message(cid, _t(cid, "access_denied"))
-
-    elif data.startswith("cal_inv_no:"):
-        if _is_admin(cid) or _is_allowed(cid):
-            inv_id = data[len("cal_inv_no:"):]
-            _handle_inv_decline(cid, inv_id)
-        else:
-            bot.send_message(cid, _t(cid, "access_denied"))
-
     # ── Documents / RAG ────────────────────────────────────────────────────
     elif data == "menu_docs":
         if not _is_guest(cid):
@@ -1285,22 +1274,25 @@ def text_handler(message):
         _finish_registration(cid, message.text)
         return
 
-    # ── Guest meeting topic input — pending users only ─────────────────────────
-    if _st._user_mode.get(cid) == "guest_meeting_topic" and _is_pending_reg(cid):
-        _set_lang(cid, message.from_user)
-        _finish_guest_meeting_topic(cid, message.text)
-        return
-
     if not _is_allowed(cid):
         _deny(cid)
         return
 
     _set_lang(cid, message.from_user)
 
-    # ── Meeting topic input — allowed users ────────────────────────────────────
-    if _st._user_mode.get(cid) == "guest_meeting_topic":
-        _finish_guest_meeting_topic(cid, message.text)
-        return
+    # Guest rate-limit check — applied before any LLM-bound flow
+    if _is_guest(cid):
+        allowed, reason = _check_guest_rate_limit(cid)
+        if not allowed:
+            if reason == "hourly":
+                bot.send_message(cid, _t(cid, "guest_rate_limit_hourly",
+                                         limit=str(GUEST_MSG_HOURLY_LIMIT)),
+                                 parse_mode="Markdown")
+            else:
+                bot.send_message(cid, _t(cid, "guest_rate_limit_daily",
+                                         limit=str(GUEST_MSG_DAILY_LIMIT)),
+                                 parse_mode="Markdown")
+            return
 
     # Admin typing an API key
     if cid in _st._pending_llm_key:
@@ -1319,6 +1311,11 @@ def text_handler(message):
         return
 
     mode = _st._user_mode.get(cid)
+
+    # ── Meeting topic input — all allowed users ─────────────────────────────
+    if mode == "guest_meeting_topic":
+        _finish_guest_meeting_topic(cid, message.text)
+        return
 
     # ── Campaign agent text input — must be checked BEFORE mode fallback to chat ──
     if _campaign.is_active(cid):

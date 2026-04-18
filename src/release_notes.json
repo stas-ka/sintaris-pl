@@ -1,9 +1,26 @@
 [
   {
-    "version": "2026.4.51",
+    "version": "2026.4.54",
     "date": "2026-04-18",
     "title": "Meeting request in main menu for all users; Mail hidden from guests",
-    "notes": "- feat: 'Request Meeting' button added to main menu for all allowed users (not only pending/guests)\n- fix: Mail/Digest button hidden from guest users (inside not _is_guest block)\n- feat: guest_meeting callback and cal_inv_slot handled for allowed users in handle_callback\n- feat: guest_meeting_topic text input handled for allowed users (not only pending)"
+    "notes": "- feat: Request Meeting button in main menu for all allowed users (guests + full users)\n- fix: Mail/Digest button hidden from guest users in main menu\n- feat: guest_meeting_topic flow + cal_inv_slot time slot picker\n- chore: VPS-Supertaris documented as 3rd OpenClaw deploy target"
+  },
+  {
+    "version": "2026.4.53",
+    "date": "2026-04-17",
+    "title": "Admin user management submenu + two-step role picker",
+    "notes": "- feat: all user management actions grouped under 👥 User Management submenu\n- feat: user list now shows role badge (🌐 guest / 👤 user / ⚡ advanced) per user\n- feat: guests section added to user list\n- feat: roles menu rewritten as two-step UX: pick user → then pick role\n- feat: admin_role_user: callback dispatched in telegram_menu_bot.py\n- fix: role switching now works — select user to see per-user role buttons\n- test: T157 admin submenu regression (6 sub-tests, all PASS)"
+  },
+  {
+    "date": "2026-04-17",
+    "title": "Approve as Guest + guest role management",
+    "notes": "- feat: admin can approve pending registrations as guests (👤 Guest button in pending & notification keyboards)\n- feat: _do_approve_as_guest() adds user to _dynamic_guests with status=guest\n- feat: guest role added to _ROLE_ICONS and _handle_admin_user_set_role()\n- feat: _get_user_role() returns 'guest' for _dynamic_guests members\n- feat: roles menu includes guests + allows promoting guest to user/advanced\n- feat: reg_guest: callback dispatched in telegram_menu_bot.py\n- test: T156 guest approval regression (6 sub-tests, all PASS)"
+  },
+  {
+    "version": "2026.4.51",
+    "date": "2026-04-17",
+    "title": "Guest user support + role-based prompt templates",
+    "notes": "- feat: AUTO_GUEST_ENABLED: unknown /start users auto-register as guests\n- feat: real _is_guest() checking _dynamic_guests set loaded from registrations.json\n- feat: _get_prompt_role_key() returns admin/user/guest for any chat_id\n- feat: _build_system_message() is now role-aware: uses role_system_prompts from prompts.json\n- feat: _check_guest_rate_limit() enforces hourly + daily message limits for guests\n- feat: rate limit enforced in text_handler before any LLM routing\n- feat: SHARED_DOCS_OWNER: guests query shared owner documents via RAG instead of own\n- feat: role_system_prompts, role_capabilities, role_styles sections in prompts.json\n- feat: guest_welcome, guest_rate_limit_hourly, guest_rate_limit_daily strings (ru/en/de)\n- feat: guest constants in .env.example\n- test: T140-T149 guest user regression tests (23 sub-tests, all PASS)"
   },
   {
     "version": "2026.4.50",

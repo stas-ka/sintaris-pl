@@ -308,7 +308,26 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.51"
+BOT_VERSION        = "2026.4.54"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Guest / auto-registration
+# AUTO_GUEST_ENABLED=1  → unknown users who /start the bot are auto-registered
+#   as guests (limited read-only access, rate-limited LLM chat).
+# AUTO_USER_ENABLED=1   → guests whose first message triggers auto-promotion
+#   to full user status (skips manual admin approval).
+# GUEST_MSG_DAILY_LIMIT / GUEST_MSG_HOURLY_LIMIT — LLM message rate limits.
+# GUEST_MAX_TOKENS       — max LLM output tokens per guest request.
+# SHARED_DOCS_OWNER      — chat_id (int) whose shared documents guests can
+#   query via RAG; leave empty to disable shared-doc RAG for guests.
+# ─────────────────────────────────────────────────────────────────────────────
+AUTO_GUEST_ENABLED     = int(os.environ.get("AUTO_GUEST_ENABLED",     "0"))
+AUTO_USER_ENABLED      = int(os.environ.get("AUTO_USER_ENABLED",      "0"))
+GUEST_MSG_DAILY_LIMIT  = int(os.environ.get("GUEST_MSG_DAILY_LIMIT",  "20"))
+GUEST_MSG_HOURLY_LIMIT = int(os.environ.get("GUEST_MSG_HOURLY_LIMIT", "5"))
+GUEST_MAX_TOKENS       = int(os.environ.get("GUEST_MAX_TOKENS",       "500"))
+SHARED_DOCS_OWNER      = os.environ.get("SHARED_DOCS_OWNER",          "")
+
 RELEASE_NOTES_FILE = os.environ.get(
     "RELEASE_NOTES_FILE",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_notes.json"),
