@@ -7,6 +7,67 @@
 
 ---
 
+## ⚡ Copilot Implementation Checklist
+
+> **Read this section first.** Everything below it is background/reference. These are the exact steps to make SSH work end-to-end.
+
+### Status
+
+| Step | What | Status |
+|------|------|--------|
+| 1 | nginx stream configured on VPS (no-TLS→sshd, TLS→nginx:8443) | ✅ Done |
+| 2 | SSH key generated on client (`~/.ssh/id_vps`) | ✅ Done |
+| 3 | `~/.ssh/config` entries added (`Host vps`, `vps-direct`, `vps-rem`) | ✅ Done |
+| 4 | Public key added to VPS `~/.ssh/authorized_keys` | ⬜ Pending — do this first |
+| 5 | First connection tested, host key accepted | ⬜ Pending |
+
+---
+
+### Step 4 — Add SSH Public Key to VPS
+
+**Client public key** (generated 2026-04-18, file `~/.ssh/id_vps.pub`):
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJMZO3e9spkcDnXpOZ/hSLu3VlldXX8+NNnbelHhJAyA p355208@porsche.de-vps
+```
+
+**Run from WSL terminal** (password auth, one time only):
+```bash
+# Option A — pipe key directly (recommended)
+cat ~/.ssh/id_vps.pub | ssh -o PasswordAuthentication=yes \
+  -o PreferredAuthentications=password \
+  vps "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo KEY_ADDED"
+# Password when prompted: Zusammen!2019
+
+# Option B — manual (if Option A fails)
+ssh -o PasswordAuthentication=yes -o PreferredAuthentications=password vps
+# Then on VPS:
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJMZO3e9spkcDnXpOZ/hSLu3VlldXX8+NNnbelHhJAyA p355208@porsche.de-vps" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+---
+
+### Step 5 — Test Connection
+
+```bash
+# Test via corporate proxy (WSL on Porsche network) — uses Host vps alias
+ssh vps "echo connected && whoami && hostname"
+
+# Verify host key fingerprint on first connect — must match:
+# SHA256:E2ycjThOe09yMfERUKN76uDyW7YBT12rjS5FJXB+PZ4
+
+# Test direct (home/VPN, no proxy) — uses Host vps-direct alias
+ssh vps-direct "echo connected"
+
+# Once key auth works, lock down password auth on VPS:
+ssh vps "sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && sudo systemctl reload sshd && echo LOCKED"
+```
+
+---
+
+---
+
 ## Environment Facts
 
 | Fact | Value |
