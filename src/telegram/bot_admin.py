@@ -1903,7 +1903,7 @@ def _handle_admin_llm_trace(chat_id: int) -> None:
         lines.append(
             _t(chat_id, "admin_llm_trace_call").format(
                 i=i,
-                ts=r["created_at"][:16],
+                ts=str(r["created_at"])[:16],
                 provider=r.get("provider") or "?",
                 model=model_s,
                 temp=temp_s,
