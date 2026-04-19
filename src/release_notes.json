@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.68",
+    "date": "2026-04-19",
+    "title": "OpenClaw extensions: per-user Ollama model, N8N events, CRM sync, skill rendering",
+    "notes": "- Per-user Ollama model preference (role defaults + UI picker)\n- N8N inbound event router with lead_created handler\n- Contact CRM sync button (Telegram + Web API)\n- Ollama pull model UI + Web API endpoints\n- Skill result rendering for OpenClaw gateway responses\n- RAG config constants (VOICE_RAG_ENABLED, RAG_VECTOR_TOP_K)\n- 8 new regression tests (T200-T207)"
+  },
+  {
     "version": "2026.4.67",
     "date": "2026-04-21",
     "title": "Schema: contacts.telegram column + deploy bot_notify agent to VPS",

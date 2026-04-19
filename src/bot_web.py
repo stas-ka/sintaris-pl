@@ -1614,6 +1614,37 @@ async def contacts_delete(request: Request, cid: str):
     return _redir("/contacts", status_code=303)
 
 
+@app.post("/api/contacts/{cid}/sync")
+async def api_contact_sync_crm(request: Request, cid: str):
+    """Sync a contact to CRM via N8N webhook (Feature §28.4)."""
+    _verify_api_token(request)
+    from core.bot_config import CRM_SYNC_WEBHOOK_URL
+    if not CRM_SYNC_WEBHOOK_URL:
+        raise HTTPException(503, detail="CRM sync webhook not configured")
+    from features.bot_contacts import _contact_get
+    from features.bot_n8n import call_webhook
+    # Use admin chat_id (API caller)
+    from core.bot_config import ADMIN_IDS
+    chat_id = ADMIN_IDS[0] if ADMIN_IDS else 0
+    c = _contact_get(chat_id, cid)
+    if not c:
+        raise HTTPException(404, detail="Contact not found")
+    payload = {
+        "action": "sync_contact",
+        "contact": {
+            "name": c.get("name", ""),
+            "phone": c.get("phone", ""),
+            "email": c.get("email", ""),
+            "address": c.get("address", ""),
+            "notes": c.get("notes", ""),
+        },
+    }
+    result = call_webhook(CRM_SYNC_WEBHOOK_URL, payload)
+    if "error" in result:
+        return JSONResponse({"ok": False, "error": result["error"]}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Documents
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2815,6 +2846,43 @@ async def admin_set_llm(request: Request, model_name: str):
     return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/admin"})
 
 
+@app.get("/api/admin/ollama/models")
+async def api_admin_ollama_models(request: Request):
+    """List installed Ollama models (Feature §28.2)."""
+    _verify_api_token(request)
+    try:
+        from telegram.bot_admin import list_ollama_models
+        models = list_ollama_models()
+        return JSONResponse({"models": models})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/admin/ollama/pull")
+async def api_admin_ollama_pull(request: Request):
+    """Pull an Ollama model (Feature §28.2)."""
+    _verify_api_token(request)
+    body = await request.json()
+    model_name = (body.get("model") or "").strip()
+    if not model_name:
+        raise HTTPException(400, detail="model field required")
+    import urllib.request as _ureq
+    from core.bot_config import OLLAMA_URL
+    try:
+        req_body = json.dumps({"name": model_name, "stream": False}).encode()
+        req = _ureq.Request(
+            f"{OLLAMA_URL.rstrip('/')}/api/pull",
+            data=req_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        resp = _ureq.urlopen(req, timeout=600)
+        result = json.loads(resp.read().decode())
+        return JSONResponse({"ok": True, "status": result.get("status", "success")})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)[:300]}, status_code=500)
+
+
 @app.post("/admin/voice-opt/{key}")
 async def admin_toggle_voice_opt(request: Request, key: str):
     user = _get_current_user(request)
@@ -3134,6 +3202,7 @@ async def api_n8n_callback(request: Request):
 
     N8N sends HTTP POST with JSON payload when a workflow completes.
     Auth: X-Webhook-Secret header must match N8N_WEBHOOK_SECRET.
+    Supports structured events via dispatch_inbound_event (§28.3).
     """
     secret = request.headers.get("X-Webhook-Secret", "")
     if N8N_WEBHOOK_SECRET and secret != N8N_WEBHOOK_SECRET:
@@ -3143,8 +3212,17 @@ async def api_n8n_callback(request: Request):
     except Exception:
         raise HTTPException(400, detail="Invalid JSON body")
     try:
+        # §28.3: Try structured event routing first
+        if body.get("event_type") or body.get("event"):
+            from features.bot_n8n import dispatch_inbound_event
+            result = dispatch_inbound_event(body)
+            if "error" in result:
+                return JSONResponse({"ok": False, "error": result["error"]}, status_code=400)
+            return JSONResponse(result)
+        # Legacy: raw callback processing
         from features.bot_n8n import process_callback
-        result = process_callback(body)
+        event_type = body.get("type", "unknown")
+        result = process_callback(event_type, body)
         return JSONResponse({"ok": True, "processed": result})
     except Exception as exc:
         log.error("[N8N Webhook] %s", exc)

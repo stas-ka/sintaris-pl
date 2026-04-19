@@ -926,7 +926,7 @@ def _handle_system_message(chat_id: int, user_text: str) -> None:
         hist = _st._system_history.get(chat_id, [])
         messages = [{"role": "system", "content": sys_content}] + hist + [{"role": "user", "content": user_text}]
         try:
-            cmd_text = _ask_llm_with_history(messages, timeout=45, use_case="system")
+            cmd_text = _ask_llm_with_history(messages, timeout=45, use_case="system", chat_id=chat_id)
         except subprocess.TimeoutExpired:
             bot.edit_message_text("❌ LLM timed out (>45 s). Try again later.",
                                   chat_id, msg.message_id)
@@ -1151,7 +1151,7 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
         except Exception as _stream_err:
             log.warning(f"[Chat] stream error: {_stream_err}")
             if not buf:
-                buf = ask_llm_with_history(messages, timeout=120, use_case="chat")
+                buf = ask_llm_with_history(messages, timeout=120, use_case="chat", chat_id=chat_id)
 
         reply = buf if buf else "❌ No response from LLM."
         add_to_history(chat_id, "assistant", reply, call_id=call_id)

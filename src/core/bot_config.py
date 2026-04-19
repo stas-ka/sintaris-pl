@@ -157,6 +157,20 @@ WEBHOOK_HMAC_SECRET  = os.environ.get("WEBHOOK_HMAC_SECRET", "")   # HMAC + inbo
 # ─────────────────────────────────────────────────────────────────────────────
 CRM_ENABLED         = os.environ.get("CRM_ENABLED", "0") == "1"
 CRM_PG_DSN          = os.environ.get("CRM_PG_DSN", "")            # e.g. postgresql://taris:pw@dev2null.de:5432/taris
+CRM_SYNC_WEBHOOK_URL = os.environ.get("CRM_SYNC_WEBHOOK_URL", "")  # N8N webhook for contact → EspoCRM sync
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Inbound Events — Feature §28.3
+# N8N_INBOUND_EVENTS_ENABLED: enable processing of structured inbound events
+# ─────────────────────────────────────────────────────────────────────────────
+N8N_INBOUND_EVENTS_ENABLED = os.environ.get("N8N_INBOUND_EVENTS_ENABLED", "1") == "1"
+CRM_SYNC_WEBHOOK_URL = os.environ.get("CRM_SYNC_WEBHOOK_URL", "")  # N8N webhook for contact → EspoCRM sync
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Inbound Events — Feature §28.3
+# N8N_INBOUND_EVENTS_ENABLED: enable processing of structured inbound events
+# ─────────────────────────────────────────────────────────────────────────────
+N8N_INBOUND_EVENTS_ENABLED = os.environ.get("N8N_INBOUND_EVENTS_ENABLED", "1") == "1"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # N8N Campaign Agent — Google Sheets client campaign workflow
@@ -207,6 +221,15 @@ LLAMA_CPP_MODEL     = os.environ.get("LLAMA_CPP_MODEL", "")
 # Install: curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b
 OLLAMA_URL          = os.environ.get("OLLAMA_URL",  "http://127.0.0.1:11434")
 OLLAMA_MODEL        = os.environ.get("OLLAMA_MODEL", "qwen2:0.5b")
+
+# Per-user Ollama model preference — role defaults (Feature §29.1)
+# JSON string: role → default model name. Empty string = inherit global OLLAMA_MODEL.
+import json as _json_mod
+try:
+    ROLE_DEFAULT_OLLAMA_MODEL: dict[str, str] = _json_mod.loads(
+        os.environ.get("ROLE_DEFAULT_OLLAMA_MODEL", '{}'))
+except Exception:
+    ROLE_DEFAULT_OLLAMA_MODEL = {}
 
 # YandexGPT (Feature 3.1)
 YANDEXGPT_API_KEY   = os.environ.get("YANDEXGPT_API_KEY",   "")
@@ -300,6 +323,10 @@ EMBED_DIMENSION      = int(os.environ.get("EMBED_DIMENSION", "384"))
 RAG_ENABLED    = os.environ.get("RAG_ENABLED",    "1") == "1"
 RAG_TOP_K      = int(os.environ.get("RAG_TOP_K",      "3"))
 RAG_CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "512"))
+RAG_VECTOR_TOP_K     = int(os.environ.get("RAG_VECTOR_TOP_K", "3"))
+RAG_INJECT_MAX_CHARS = int(os.environ.get("RAG_INJECT_MAX_CHARS", "1500"))
+VOICE_RAG_ENABLED    = os.environ.get("VOICE_RAG_ENABLED", "1") == "1"
+VOICE_RAG_TOP_K      = int(os.environ.get("VOICE_RAG_TOP_K", "2"))
 MAX_DOC_SIZE_MB = int(os.environ.get("MAX_DOC_SIZE_MB", "20"))  # Telegram max = 20 MB
 RAG_FLAG_FILE  = os.path.expanduser("~/.taris/rag_disabled")
 RAG_SETTINGS_FILE = os.path.expanduser("~/.taris/rag_settings.json")
@@ -308,7 +335,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.67"
+BOT_VERSION        = "2026.4.68"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Guest / auto-registration

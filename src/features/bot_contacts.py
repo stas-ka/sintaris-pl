@@ -125,6 +125,13 @@ def _contact_detail_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "contact_btn_edit"),   callback_data=f"contact_edit:{cid}"),
         InlineKeyboardButton(_t(chat_id, "contact_btn_delete"), callback_data=f"contact_del:{cid}"),
     )
+    # CRM sync button — only if webhook is configured
+    from core.bot_config import CRM_SYNC_WEBHOOK_URL
+    if CRM_SYNC_WEBHOOK_URL:
+        kb.add(InlineKeyboardButton(
+            _t(chat_id, "cnt_sync_crm_btn"),
+            callback_data=f"cnt_sync_crm:{cid}",
+        ))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="contact_list"))
     return kb
 
@@ -351,3 +358,39 @@ def _finish_contact_search(chat_id: int, query: str) -> None:
                      _t(chat_id, "contact_search_results", q=query, n=len(results)),
                      parse_mode="Markdown",
                      reply_markup=kb)
+
+
+# ── CRM Sync (Feature §28.4) ─────────────────────────────────────────────────
+
+def _handle_contact_sync_crm(chat_id: int, cid: str) -> None:
+    """Sync a contact to CRM via N8N webhook."""
+    from core.bot_config import CRM_SYNC_WEBHOOK_URL
+    from features.bot_n8n import call_webhook
+
+    c = _contact_get(chat_id, cid)
+    if not c:
+        bot.send_message(chat_id, _t(chat_id, "contact_not_found"))
+        return
+
+    if not CRM_SYNC_WEBHOOK_URL:
+        bot.send_message(chat_id, _t(chat_id, "cnt_sync_crm_err"))
+        return
+
+    payload = {
+        "action": "sync_contact",
+        "contact": {
+            "name": c.get("name", ""),
+            "phone": c.get("phone", ""),
+            "email": c.get("email", ""),
+            "address": c.get("address", ""),
+            "notes": c.get("notes", ""),
+        },
+    }
+    result = call_webhook(CRM_SYNC_WEBHOOK_URL, payload)
+    if "error" in result:
+        log.warning("[contacts] CRM sync failed for %s: %s", cid, result["error"])
+        bot.send_message(chat_id, _t(chat_id, "cnt_sync_crm_err"))
+    else:
+        log.info("[contacts] CRM sync OK for contact %s", cid)
+        bot.send_message(chat_id, _t(chat_id, "cnt_sync_crm_ok", name=c.get("name", "")))
+    _handle_contact_open(chat_id, cid)

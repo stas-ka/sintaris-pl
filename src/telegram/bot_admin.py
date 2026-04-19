@@ -1284,6 +1284,8 @@ def _handle_ollama_llm_menu(chat_id: int) -> None:
                 ))
     else:
         kb.add(InlineKeyboardButton("⚠️  Ollama not reachable", callback_data="noop"))
+    kb.add(InlineKeyboardButton("➕ Pull model", callback_data="ollama_pull_start"))
+    kb.add(InlineKeyboardButton("🎯 My model preference", callback_data="user_model_menu"))
     kb.add(InlineKeyboardButton("🔙  LLM Settings", callback_data="admin_llm_menu"))
 
     text = (
@@ -1356,6 +1358,124 @@ def _handle_ollama_persist_model(chat_id: int, model: str) -> None:
         bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=kb)
     except Exception:
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=kb)
+
+
+# Pending pull model state: {chat_id: True}
+_pending_ollama_pull: dict[int, bool] = {}
+
+
+def _handle_ollama_pull_start(chat_id: int) -> None:
+    """Prompt admin for a model name to pull."""
+    _pending_ollama_pull[chat_id] = True
+    _st._user_mode[chat_id] = "ollama_pull"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("❌ Cancel", callback_data="ollama_llm_menu"))
+    bot.send_message(
+        chat_id,
+        "➕ *Pull Ollama Model*\n\n"
+        "Enter the model name to pull (e.g. `qwen2:0.5b`, `gemma2:2b`):",
+        parse_mode="Markdown", reply_markup=kb,
+    )
+
+
+def _handle_ollama_pull_done(chat_id: int, model_name: str) -> None:
+    """Execute ollama pull in a background thread."""
+    import threading
+    _pending_ollama_pull.pop(chat_id, None)
+    _st._user_mode.pop(chat_id, None)
+    model_name = model_name.strip()
+    if not model_name:
+        bot.send_message(chat_id, "❌ Empty model name.")
+        _handle_ollama_llm_menu(chat_id)
+        return
+
+    status_msg = bot.send_message(chat_id, f"⏳ Pulling `{model_name}`... This may take a while.")
+
+    def _pull():
+        import urllib.request as _ureq
+        try:
+            body = json.dumps({"name": model_name, "stream": False}).encode()
+            req = _ureq.Request(
+                f"{OLLAMA_URL.rstrip('/')}/api/pull",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            resp = _ureq.urlopen(req, timeout=600)
+            result = json.loads(resp.read().decode())
+            status = result.get("status", "success")
+            bot.edit_message_text(
+                f"✅ *Pull complete:* `{model_name}`\n\nStatus: {status}",
+                chat_id, status_msg.message_id, parse_mode="Markdown",
+            )
+        except Exception as exc:
+            log.warning(f"[LLM] ollama pull failed: {exc}")
+            try:
+                bot.edit_message_text(
+                    f"❌ *Pull failed:* `{model_name}`\n\n`{str(exc)[:200]}`",
+                    chat_id, status_msg.message_id, parse_mode="Markdown",
+                )
+            except Exception:
+                pass
+        _handle_ollama_llm_menu(chat_id)
+
+    threading.Thread(target=_pull, daemon=True).start()
+
+
+def list_ollama_models() -> list[dict]:
+    """Public API: Return list of installed Ollama models [{name, size_gb, family}]."""
+    return _get_ollama_models_from_api()
+
+
+# ── Per-User Ollama Model Preference (Feature §29.1) ─────────────────────────
+
+def _handle_user_model_menu(chat_id: int) -> None:
+    """Show per-user model picker for the calling user (admin or self)."""
+    from core.bot_db import get_store
+    store = get_store()
+    current_pref = store.get_user_pref(chat_id, "ollama_model", default="")
+    models = _get_ollama_models_from_api()
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    if models:
+        for m in models:
+            name = m["name"]
+            icon = "✅" if name == current_pref else "⬜"
+            size = f"  ({m['size_gb']:.1f} GB)" if m.get("size_gb") else ""
+            kb.add(InlineKeyboardButton(
+                f"{icon} {name}{size}",
+                callback_data=f"user_model_set:{name}",
+            ))
+    kb.add(InlineKeyboardButton("🔄 Reset to default", callback_data="user_model_set:"))
+    kb.add(InlineKeyboardButton("🔙  Ollama models", callback_data="ollama_llm_menu"))
+
+    from core.bot_llm import _resolve_ollama_model
+    effective = _resolve_ollama_model(chat_id)
+    text = (
+        "🎯 *Your LLM Model Preference*\n\n"
+        f"*Your setting:* `{current_pref or '(default)'}`\n"
+        f"*Effective model:* `{effective}`\n\n"
+        "_Select a model for your conversations. Reset clears your preference._"
+    )
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_user_model_set(chat_id: int, model: str) -> None:
+    """Set or clear per-user Ollama model preference."""
+    from core.bot_db import get_store
+    store = get_store()
+    model = model.strip()
+    store.set_user_pref(chat_id, "ollama_model", model)
+    if model:
+        log.info(f"[LLM] user {chat_id} set personal model to '{model}'")
+        bot.send_message(chat_id, f"✅ Your model preference set to `{model}`", parse_mode="Markdown")
+    else:
+        log.info(f"[LLM] user {chat_id} cleared personal model preference")
+        bot.send_message(chat_id, "✅ Model preference cleared — using system default.")
+    _handle_user_model_menu(chat_id)
 
 
 def _handle_admin_llm_fallback_menu(chat_id: int) -> None:

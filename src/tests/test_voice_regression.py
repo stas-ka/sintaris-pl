@@ -7759,15 +7759,17 @@ def t_ollama_model_picker(**_) -> list[TestResult]:
             "found in bot_llm.py" if present else f"MISSING: {sym}",
         ))
 
-    # 2. all three OLLAMA_MODEL usages replaced with get_ollama_model() call
+    # 2. all OLLAMA_MODEL usages replaced with get_ollama_model() or _resolve_ollama_model() call
     old_pattern_count = llm_text.count('"model": OLLAMA_MODEL,')
-    new_pattern_count = llm_text.count('"model": get_ollama_model(),')
+    new_pattern_count = (llm_text.count('"model": get_ollama_model(),')
+                         + llm_text.count('"model": _resolve_ollama_model(')
+                         + llm_text.count("_resolve_ollama_model(chat_id)"))
     ok = old_pattern_count == 0 and new_pattern_count >= 3
     results.append(TestResult(
         "ollama_picker_model_uses_getter",
         "PASS" if ok else "FAIL",
         time.time() - t0,
-        f"get_ollama_model() uses: {new_pattern_count}, old OLLAMA_MODEL direct: {old_pattern_count}",
+        f"get/resolve model uses: {new_pattern_count}, old OLLAMA_MODEL direct: {old_pattern_count}",
     ))
 
     # 3. bot_admin.py has all handler functions and helpers
@@ -8390,6 +8392,312 @@ def t_guest_appointment_flow(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T200–T212: OpenClaw Extensions §28–29 regression tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_rag_embedding_wired(**_) -> list[TestResult]:
+    """T200: RAG embeddings written on document upload — _store_text_chunks calls
+    EmbeddingService.embed_batch + store.upsert_embedding; _docs_rag_context calls
+    retrieve_context with hybrid search.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    docs_src = SRC_ROOT / "features" / "bot_documents.py"
+    docs_text = docs_src.read_text(encoding="utf-8") if docs_src.exists() else ""
+
+    # 1. _store_text_chunks calls embed_batch
+    ok = "embed_batch" in docs_text and "_store_text_chunks" in docs_text
+    results.append(TestResult(
+        "rag_embed_on_upload", "PASS" if ok else "FAIL", time.time() - t0,
+        "embed_batch found in _store_text_chunks" if ok else "MISSING: embed_batch in bot_documents.py",
+    ))
+
+    # 2. _store_text_chunks calls upsert_embedding
+    ok = "upsert_embedding" in docs_text
+    results.append(TestResult(
+        "rag_upsert_on_upload", "PASS" if ok else "FAIL", time.time() - t0,
+        "upsert_embedding found in bot_documents.py" if ok else "MISSING: upsert_embedding",
+    ))
+
+    # 3. _docs_rag_context calls retrieve_context
+    access_src = SRC_ROOT / "telegram" / "bot_access.py"
+    access_text = access_src.read_text(encoding="utf-8") if access_src.exists() else ""
+    ok = "retrieve_context" in access_text and "_docs_rag_context" in access_text
+    results.append(TestResult(
+        "rag_context_hybrid_search", "PASS" if ok else "FAIL", time.time() - t0,
+        "retrieve_context found in _docs_rag_context" if ok else "MISSING: retrieve_context in bot_access.py",
+    ))
+
+    return results
+
+
+def t_ollama_pull_model(**_) -> list[TestResult]:
+    """T201: Ollama pull model UI — _handle_ollama_pull_start, _handle_ollama_pull_done
+    in bot_admin.py; callback dispatch for ollama_pull_start in telegram_menu_bot.py;
+    pull button in Ollama menu; list_ollama_models public API.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    admin_src = SRC_ROOT / "telegram" / "bot_admin.py"
+    admin_text = admin_src.read_text(encoding="utf-8") if admin_src.exists() else ""
+
+    for sym in ("_handle_ollama_pull_start", "_handle_ollama_pull_done",
+                "list_ollama_models", "_pending_ollama_pull"):
+        ok = sym in admin_text
+        results.append(TestResult(
+            f"ollama_pull_{sym}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"found in bot_admin.py" if ok else f"MISSING: {sym}",
+        ))
+
+    # Pull button in menu
+    ok = "ollama_pull_start" in admin_text
+    results.append(TestResult(
+        "ollama_pull_button_in_menu", "PASS" if ok else "FAIL", time.time() - t0,
+        "Pull button callback found" if ok else "MISSING: ollama_pull_start callback",
+    ))
+
+    # Dispatch in telegram_menu_bot.py
+    menu_src = SRC_ROOT / "telegram_menu_bot.py"
+    menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    ok = "ollama_pull_start" in menu_text
+    results.append(TestResult(
+        "ollama_pull_dispatch", "PASS" if ok else "FAIL", time.time() - t0,
+        "ollama_pull_start dispatched" if ok else "MISSING dispatch",
+    ))
+
+    return results
+
+
+def t_n8n_event_router(**_) -> list[TestResult]:
+    """T202: N8N inbound event router — dispatch_inbound_event, _N8N_EVENT_HANDLERS,
+    _handle_lead_created in bot_n8n.py; N8N_INBOUND_EVENTS_ENABLED in bot_config.py;
+    /api/n8n/callback routes events in bot_web.py.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    n8n_src = SRC_ROOT / "features" / "bot_n8n.py"
+    n8n_text = n8n_src.read_text(encoding="utf-8") if n8n_src.exists() else ""
+
+    for sym in ("dispatch_inbound_event", "_N8N_EVENT_HANDLERS",
+                "_handle_lead_created", "_handle_contact_updated"):
+        ok = sym in n8n_text
+        results.append(TestResult(
+            f"n8n_event_{sym}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"found in bot_n8n.py" if ok else f"MISSING: {sym}",
+        ))
+
+    # Config constant
+    config_src = SRC_ROOT / "core" / "bot_config.py"
+    config_text = config_src.read_text(encoding="utf-8") if config_src.exists() else ""
+    ok = "N8N_INBOUND_EVENTS_ENABLED" in config_text
+    results.append(TestResult(
+        "n8n_event_config", "PASS" if ok else "FAIL", time.time() - t0,
+        "N8N_INBOUND_EVENTS_ENABLED in bot_config.py" if ok else "MISSING config constant",
+    ))
+
+    # Web route dispatches events
+    web_src = SRC_ROOT / "bot_web.py"
+    web_text = web_src.read_text(encoding="utf-8") if web_src.exists() else ""
+    ok = "dispatch_inbound_event" in web_text
+    results.append(TestResult(
+        "n8n_event_web_dispatch", "PASS" if ok else "FAIL", time.time() - t0,
+        "dispatch_inbound_event found in bot_web.py" if ok else "MISSING web dispatch",
+    ))
+
+    return results
+
+
+def t_contact_crm_sync(**_) -> list[TestResult]:
+    """T203: Contact → CRM sync button — cnt_sync_crm callback in telegram_menu_bot.py;
+    _handle_contact_sync_crm in bot_contacts.py; CRM_SYNC_WEBHOOK_URL in bot_config.py;
+    i18n strings cnt_sync_crm_btn/ok/err; Web API /api/contacts/{id}/sync.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # bot_contacts.py has sync handler
+    contacts_src = SRC_ROOT / "features" / "bot_contacts.py"
+    contacts_text = contacts_src.read_text(encoding="utf-8") if contacts_src.exists() else ""
+    for sym in ("_handle_contact_sync_crm", "cnt_sync_crm:", "CRM_SYNC_WEBHOOK_URL"):
+        ok = sym in contacts_text
+        results.append(TestResult(
+            f"crm_sync_{sym.replace(':', '_').lstrip('_')}", "PASS" if ok else "FAIL",
+            time.time() - t0,
+            f"found in bot_contacts.py" if ok else f"MISSING: {sym}",
+        ))
+
+    # Config constant
+    config_src = SRC_ROOT / "core" / "bot_config.py"
+    config_text = config_src.read_text(encoding="utf-8") if config_src.exists() else ""
+    ok = "CRM_SYNC_WEBHOOK_URL" in config_text
+    results.append(TestResult(
+        "crm_sync_config", "PASS" if ok else "FAIL", time.time() - t0,
+        "CRM_SYNC_WEBHOOK_URL in bot_config.py" if ok else "MISSING config constant",
+    ))
+
+    # i18n strings
+    try:
+        strings = json.loads((SRC_ROOT / "strings.json").read_text(encoding="utf-8"))
+    except Exception:
+        strings = {}
+    for lang in ("ru", "en", "de"):
+        for key in ("cnt_sync_crm_btn", "cnt_sync_crm_ok", "cnt_sync_crm_err"):
+            val = strings.get(lang, {}).get(key, "")
+            ok = bool(val)
+            results.append(TestResult(
+                f"crm_sync_i18n_{lang}_{key}", "PASS" if ok else "FAIL", time.time() - t0,
+                f"{key}[{lang}] present" if ok else f"MISSING: {key}[{lang}]",
+            ))
+
+    # Telegram callback dispatch
+    menu_src = SRC_ROOT / "telegram_menu_bot.py"
+    menu_text = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    ok = "cnt_sync_crm:" in menu_text
+    results.append(TestResult(
+        "crm_sync_callback_dispatch", "PASS" if ok else "FAIL", time.time() - t0,
+        "cnt_sync_crm: callback dispatched" if ok else "MISSING callback dispatch",
+    ))
+
+    # Web API endpoint
+    web_src = SRC_ROOT / "bot_web.py"
+    web_text = web_src.read_text(encoding="utf-8") if web_src.exists() else ""
+    ok = "/api/contacts/" in web_text and "sync" in web_text
+    results.append(TestResult(
+        "crm_sync_web_api", "PASS" if ok else "FAIL", time.time() - t0,
+        "/api/contacts/{id}/sync endpoint found" if ok else "MISSING Web API endpoint",
+    ))
+
+    return results
+
+
+def t_per_user_ollama_model(**_) -> list[TestResult]:
+    """T204: Per-user Ollama model preference — _resolve_ollama_model in bot_llm.py;
+    user_model_menu/user_model_set callbacks; ROLE_DEFAULT_OLLAMA_MODEL config;
+    ask_llm_with_history has chat_id parameter.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    # bot_llm.py has _resolve_ollama_model
+    llm_src = SRC_ROOT / "core" / "bot_llm.py"
+    llm_text = llm_src.read_text(encoding="utf-8") if llm_src.exists() else ""
+    for sym in ("_resolve_ollama_model", "chat_id: int | None"):
+        ok = sym in llm_text
+        results.append(TestResult(
+            f"user_model_{sym.split('(')[0].strip()}", "PASS" if ok else "FAIL",
+            time.time() - t0,
+            f"found in bot_llm.py" if ok else f"MISSING: {sym} in bot_llm.py",
+        ))
+
+    # _resolve_ollama_model called in ask_llm_with_history ollama branch
+    ok = "_resolve_ollama_model(chat_id)" in llm_text
+    results.append(TestResult(
+        "user_model_resolve_in_history", "PASS" if ok else "FAIL", time.time() - t0,
+        "_resolve_ollama_model(chat_id) found in history branch" if ok else "MISSING resolve call",
+    ))
+
+    # Config constant
+    config_src = SRC_ROOT / "core" / "bot_config.py"
+    config_text = config_src.read_text(encoding="utf-8") if config_src.exists() else ""
+    ok = "ROLE_DEFAULT_OLLAMA_MODEL" in config_text
+    results.append(TestResult(
+        "user_model_role_defaults_config", "PASS" if ok else "FAIL", time.time() - t0,
+        "ROLE_DEFAULT_OLLAMA_MODEL in bot_config.py" if ok else "MISSING config constant",
+    ))
+
+    # Admin UI handlers
+    admin_src = SRC_ROOT / "telegram" / "bot_admin.py"
+    admin_text = admin_src.read_text(encoding="utf-8") if admin_src.exists() else ""
+    for sym in ("_handle_user_model_menu", "_handle_user_model_set"):
+        ok = sym in admin_text
+        results.append(TestResult(
+            f"user_model_{sym}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"found in bot_admin.py" if ok else f"MISSING: {sym}",
+        ))
+
+    # chat_id passed in callers
+    handlers_src = SRC_ROOT / "telegram" / "bot_handlers.py"
+    handlers_text = handlers_src.read_text(encoding="utf-8") if handlers_src.exists() else ""
+    ok = "chat_id=chat_id" in handlers_text
+    results.append(TestResult(
+        "user_model_chat_id_passed", "PASS" if ok else "FAIL", time.time() - t0,
+        "chat_id=chat_id passed in bot_handlers.py" if ok else "MISSING chat_id in callers",
+    ))
+
+    return results
+
+
+def t_voice_rag_config(**_) -> list[TestResult]:
+    """T205: Voice RAG config — VOICE_RAG_ENABLED, VOICE_RAG_TOP_K, RAG_VECTOR_TOP_K,
+    RAG_INJECT_MAX_CHARS in bot_config.py.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    config_src = SRC_ROOT / "core" / "bot_config.py"
+    config_text = config_src.read_text(encoding="utf-8") if config_src.exists() else ""
+
+    for const in ("VOICE_RAG_ENABLED", "VOICE_RAG_TOP_K", "RAG_VECTOR_TOP_K", "RAG_INJECT_MAX_CHARS"):
+        ok = const in config_text
+        results.append(TestResult(
+            f"voice_rag_{const.lower()}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"{const} found in bot_config.py" if ok else f"MISSING: {const}",
+        ))
+
+    return results
+
+
+def t_skill_result_rendering(**_) -> list[TestResult]:
+    """T206: Skill result rendering — render_skill_result in render_telegram.py;
+    _SKILL_RENDERERS registry; _ask_openclaw detects skill_result; all 4 renderers present.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    render_src = SRC_ROOT / "ui" / "render_telegram.py"
+    render_text = render_src.read_text(encoding="utf-8") if render_src.exists() else ""
+
+    for sym in ("render_skill_result", "_SKILL_RENDERERS", "_render_table",
+                "_render_list", "_render_card", "_render_status"):
+        ok = sym in render_text
+        results.append(TestResult(
+            f"skill_render_{sym}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"found in render_telegram.py" if ok else f"MISSING: {sym}",
+        ))
+
+    # _ask_openclaw detects skill_result
+    llm_src = SRC_ROOT / "core" / "bot_llm.py"
+    llm_text = llm_src.read_text(encoding="utf-8") if llm_src.exists() else ""
+    ok = "skill_result" in llm_text and "render_skill_result" in llm_text
+    results.append(TestResult(
+        "skill_render_openclaw_detection", "PASS" if ok else "FAIL", time.time() - t0,
+        "skill_result detection + render_skill_result import in bot_llm.py" if ok
+        else "MISSING skill_result handling in _ask_openclaw",
+    ))
+
+    return results
+
+
+def t_web_api_ollama_models(**_) -> list[TestResult]:
+    """T207: Web API endpoints for Ollama model management — /api/admin/ollama/models,
+    /api/admin/ollama/pull in bot_web.py.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    web_src = SRC_ROOT / "bot_web.py"
+    web_text = web_src.read_text(encoding="utf-8") if web_src.exists() else ""
+
+    for route in ("/api/admin/ollama/models", "/api/admin/ollama/pull"):
+        ok = route in web_text
+        results.append(TestResult(
+            f"web_api_{route.replace('/', '_').strip('_')}", "PASS" if ok else "FAIL",
+            time.time() - t0,
+            f"{route} endpoint found in bot_web.py" if ok else f"MISSING: {route}",
+        ))
+
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -8619,6 +8927,22 @@ TEST_FUNCTIONS = [
     t_admin_users_submenu,
     # Guest appointment flow: dual-save on confirm, My Data meetings count, inv flow, strings (T158–T161)
     t_guest_appointment_flow,
+    # RAG embeddings written on upload, hybrid search wired (T200)
+    t_rag_embedding_wired,
+    # Ollama pull model UI + list_ollama_models API (T201)
+    t_ollama_pull_model,
+    # N8N inbound event router + lead_created handler (T202)
+    t_n8n_event_router,
+    # Contact → CRM sync button + Web API + i18n (T203)
+    t_contact_crm_sync,
+    # Per-user Ollama model preference + role defaults (T204)
+    t_per_user_ollama_model,
+    # Voice RAG config constants (T205)
+    t_voice_rag_config,
+    # Skill result rendering from OpenClaw (T206)
+    t_skill_result_rendering,
+    # Web API Ollama model list + pull endpoints (T207)
+    t_web_api_ollama_models,
 ]
 
 

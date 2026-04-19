@@ -79,6 +79,8 @@ from telegram.bot_admin import (
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
     _handle_ollama_llm_menu, _handle_ollama_set_model, _handle_ollama_persist_model,
+    _handle_ollama_pull_start, _handle_ollama_pull_done, _pending_ollama_pull,
+    _handle_user_model_menu, _handle_user_model_set,
     _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
     _handle_admin_voice_menu,
     _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
@@ -174,6 +176,7 @@ from features.bot_contacts import (
     _start_contact_edit, _start_contact_edit_field, _finish_contact_edit,
     _handle_contact_delete, _handle_contact_delete_confirmed,
     _start_contact_search, _finish_contact_search,
+    _handle_contact_sync_crm,
     _pending_contact,
 )
 
@@ -623,6 +626,24 @@ def callback_handler(call):
     elif data.startswith("admin_ollama_persist:"):
         if _is_admin(cid):
             _handle_ollama_persist_model(cid, data[len("admin_ollama_persist:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "ollama_pull_start":
+        if _is_admin(cid):
+            _handle_ollama_pull_start(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "user_model_menu":
+        if _is_admin(cid):
+            _handle_user_model_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("user_model_set:"):
+        if _is_admin(cid):
+            _handle_user_model_set(cid, data[len("user_model_set:"):])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -1222,6 +1243,10 @@ def callback_handler(call):
         if not _is_guest(cid):
             _handle_contact_delete_confirmed(cid, data[len("contact_del_confirm:"):])
 
+    elif data.startswith("cnt_sync_crm:"):
+        if not _is_guest(cid):
+            _handle_contact_sync_crm(cid, data[len("cnt_sync_crm:"):])
+
     # ── Calendar ───────────────────────────────────────────────────────────
     elif data == "menu_calendar":
         _handle_calendar_menu(cid)  # guest: shows own events, read-only keyboard (no Add/Console)
@@ -1729,6 +1754,14 @@ def text_handler(message):
         else:
             _st._user_mode.pop(cid, None)
             _docs_pending_rename.pop(cid, None)
+        return
+
+    if mode == "ollama_pull":
+        if _is_admin(cid):
+            _handle_ollama_pull_done(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            _pending_ollama_pull.pop(cid, None)
         return
 
     if mode == "dev_chat":
