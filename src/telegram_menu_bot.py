@@ -94,7 +94,7 @@ from telegram.bot_admin import (
     _handle_admin_n8n_menu, _handle_admin_crm_menu,
     _handle_crm_contacts_list, _handle_crm_add_start, _handle_crm_search_start,
     _handle_crm_stats, finish_crm_input,
-    _handle_admin_roles_menu, _handle_admin_user_set_role,
+    _handle_admin_roles_menu, _handle_admin_user_set_role, _handle_admin_role_notify,
     _handle_admin_user_role_detail, _handle_admin_users_menu,
     _handle_admin_security_policy, _handle_admin_syschat_block_remove,
     _handle_admin_syschat_block_add_prompt, handle_admin_syschat_block_add_input,
@@ -865,6 +865,14 @@ def callback_handler(call):
             parts = data.split(":", 2)
             if len(parts) == 3:
                 _handle_admin_user_set_role(cid, int(parts[1]), parts[2])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_role_notify:"):
+        if _is_admin(cid):
+            parts = data.split(":", 3)
+            if len(parts) == 4:
+                _handle_admin_role_notify(cid, int(parts[1]), parts[2], parts[3])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

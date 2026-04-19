@@ -2261,7 +2261,7 @@ def _handle_admin_user_role_detail(chat_id: int, target_uid: int) -> None:
 
 
 def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> None:
-    """Set target_uid's role to one of user/advanced/admin/developer and persist."""
+    """Apply the role change, then show notification channel choice."""
     if _is_superadmin(target_uid):
         bot.send_message(chat_id, _t(chat_id, "admin_roles_cannot_change_admin"),
                          reply_markup=_admin_keyboard(chat_id))
@@ -2279,22 +2279,17 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
     _st._dynamic_guests.discard(target_uid)
 
     if role == "guest":
-        # Limited access: guest only
         _st._dynamic_guests.add(target_uid)
         _set_reg_status(target_uid, "guest")
     else:
-        # All non-guest roles keep the user in _dynamic_users
         _st._dynamic_users.add(target_uid)
         _set_reg_status(target_uid, "approved")
-
-        # Apply the new role
         if role == "advanced":
             _st._advanced_users.add(target_uid)
         elif role == "admin":
             _st._dynamic_admins.add(target_uid)
         elif role == "developer":
             _st._dynamic_devs.add(target_uid)
-        # role == "user": only in _dynamic_users, no extra set
 
     _st._save_advanced_users()
     _st._save_dynamic_admins()
@@ -2308,12 +2303,105 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
         _auto_add_contact_for_admins(reg)
     name = (reg.get("first_name", "") if reg else "") or str(target_uid)
     icon = _ROLE_ICONS.get(role, "")
+
+    # Ask admin how to notify the user
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton(
+            _t(chat_id, "admin_roles_notify_tg"),
+            callback_data=f"admin_role_notify:{target_uid}:{role}:tg",
+        ),
+        InlineKeyboardButton(
+            _t(chat_id, "admin_roles_notify_email"),
+            callback_data=f"admin_role_notify:{target_uid}:{role}:email",
+        ),
+        InlineKeyboardButton(
+            _t(chat_id, "admin_roles_notify_both"),
+            callback_data=f"admin_role_notify:{target_uid}:{role}:both",
+        ),
+        InlineKeyboardButton(
+            _t(chat_id, "admin_roles_notify_none"),
+            callback_data=f"admin_role_notify:{target_uid}:{role}:none",
+        ),
+    )
     bot.send_message(
         chat_id,
-        _t(chat_id, "admin_roles_changed", name=_escape_md(name), role=f"{icon} {role}"),
+        _t(chat_id, "admin_roles_notify_title",
+           name=_escape_md(f"{icon} {name}"), role=f"{icon} {role}"),
         parse_mode="Markdown",
+        reply_markup=kb,
     )
-    _handle_admin_roles_menu(chat_id)
+
+
+def _handle_admin_role_notify(admin_id: int, target_uid: int, role: str, channel: str) -> None:
+    """Send role-change notification to user via selected channel(s)."""
+    reg = _find_registration(target_uid)
+    name = (reg.get("first_name", "") if reg else "") or str(target_uid)
+    icon = _ROLE_ICONS.get(role, "")
+    results: list[str] = []
+
+    if channel in ("tg", "both"):
+        try:
+            # Use guest_welcome for guest role, reg_approved for all others
+            msg_key = "guest_welcome" if role == "guest" else "reg_approved"
+            bot.send_message(target_uid, _t(target_uid, msg_key), parse_mode="Markdown")
+            results.append(_t(admin_id, "admin_roles_notify_sent_tg"))
+        except Exception as e:
+            results.append(f"⚠️ Telegram: {e}")
+
+    if channel in ("email", "both"):
+        # Look up contact email for target user from admin's contacts
+        try:
+            from features.bot_contacts import _contact_list
+            from features.bot_mail_creds import _load_creds
+            from features.bot_email import _do_smtp_send, _smtp_host_port
+
+            contacts = _contact_list(admin_id, limit=500)
+            tg_id_str = str(target_uid)
+            contact_email = next(
+                (c.get("email", "") for c in contacts
+                 if c.get("telegram", "").strip() == tg_id_str and c.get("email")),
+                None,
+            )
+            if not contact_email:
+                results.append(_t(admin_id, "admin_roles_notify_no_email", name=_escape_md(name)))
+            else:
+                creds = _load_creds(admin_id)
+                if not creds or not creds.get("email") or not creds.get("app_password"):
+                    results.append(_t(admin_id, "admin_roles_notify_no_creds"))
+                else:
+                    imap_host = creds.get("imap_host", "imap.gmail.com")
+                    smtp_host, smtp_port = _smtp_host_port(imap_host)
+                    subject = f"Taris: your role was updated to {role}"
+                    body = (
+                        f"Hello {name},\n\n"
+                        f"Your access role in Taris has been changed to: {icon} {role}\n\n"
+                        f"You can now use the bot with the new permissions.\n"
+                    )
+                    try:
+                        _do_smtp_send(
+                            from_email=creds["email"],
+                            app_password=creds["app_password"],
+                            smtp_host=smtp_host,
+                            smtp_port=smtp_port,
+                            to_addr=contact_email,
+                            subject=subject,
+                            body=body,
+                        )
+                        results.append(_t(admin_id, "admin_roles_notify_sent_email", email=contact_email))
+                    except Exception as e:
+                        results.append(_t(admin_id, "admin_roles_notify_email_err", err=str(e)[:80]))
+        except Exception as e:
+            results.append(f"⚠️ Email lookup error: {e}")
+
+    summary = "\n".join(results) if results else _t(admin_id, "admin_roles_changed",
+                                                     name=_escape_md(name), role=f"{icon} {role}")
+    full_msg = (
+        _t(admin_id, "admin_roles_changed", name=_escape_md(name), role=f"{icon} {role}")
+        + "\n" + summary if results else summary
+    )
+    bot.send_message(admin_id, full_msg, parse_mode="Markdown")
+    _handle_admin_roles_menu(admin_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
