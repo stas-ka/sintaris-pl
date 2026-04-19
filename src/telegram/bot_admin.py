@@ -2304,6 +2304,8 @@ def _handle_admin_user_set_role(chat_id: int, target_uid: int, role: str) -> Non
     log.info(f"Admin {chat_id} set role '{role}' for user {target_uid}")
 
     reg = _find_registration(target_uid)
+    if reg:
+        _auto_add_contact_for_admins(reg)
     name = (reg.get("first_name", "") if reg else "") or str(target_uid)
     icon = _ROLE_ICONS.get(role, "")
     bot.send_message(
