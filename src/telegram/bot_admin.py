@@ -426,19 +426,26 @@ def _handle_admin_pending_users(chat_id: int) -> None:
 def _auto_add_contact_for_admins(reg: dict) -> None:
     """Auto-add a newly approved/registered user to every admin's contact book."""
     try:
-        from features.bot_contacts import _contact_add, _contact_list
+        from features.bot_contacts import _contact_add, _contact_list, _contact_update
         first = reg.get("first_name", "") or ""
         last  = reg.get("last_name",  "") or ""
         name  = (reg.get("name") or f"{first} {last}".strip() or str(reg.get("chat_id", "?")))
-        notes_parts = [f"Telegram ID: {reg.get('chat_id', '')}"]
+        tg_id = str(reg.get("chat_id", "")).strip()
+        notes_parts = [f"Telegram ID: {tg_id}"]
         if reg.get("username"):
             notes_parts.append(f"@{reg['username']}")
         notes = ", ".join(notes_parts)
         for admin_id in ADMIN_USERS:
             existing = _contact_list(admin_id, limit=500)
-            if not any(c.get("name", "").strip().lower() == name.strip().lower() for c in existing):
-                _contact_add(admin_id, name=name, notes=notes)
-                log.info(f"[Reg] Auto-added '{name}' to contacts of admin {admin_id}")
+            match = next((c for c in existing if c.get("name", "").strip().lower() == name.strip().lower()), None)
+            if match:
+                # Contact already exists — update telegram field if missing
+                if not match.get("telegram") and tg_id:
+                    _contact_update(admin_id, match["id"], telegram=tg_id)
+                    log.info(f"[Reg] Updated telegram field for '{name}' in contacts of admin {admin_id}")
+            else:
+                _contact_add(admin_id, name=name, notes=notes, telegram=tg_id)
+                log.info(f"[Reg] Auto-added '{name}' (tg={tg_id}) to contacts of admin {admin_id}")
     except Exception as exc:
         log.warning(f"[Reg] Auto-add contact failed: {exc}")
 
