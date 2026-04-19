@@ -1525,4 +1525,5 @@ Every ~3 months, measure baseline health:
 | 09:30 UTC | | 09:00 UTC | | 09:30 UTC | 30 | GS status tracking in Campaign Send (before+after) | 2 | 3 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py | done |
 | 19:33 UTC | | 19:00 UTC | | 19:33 UTC | 33 | GS status tracking Campaign Send (before+after per client) | 2 | 4 | claude-sonnet-4.6 | taris-campaign-send.json, bot_campaign.py, bot_config.py, release_notes.json | done |
 | 23:30 UTC | | 21:00 UTC | | 23:30 UTC | 150 | Doc update + workflow file rename + backup SintAItion + git tag v2026.4.50 | 8 | 2 | 2 | claude-sonnet-4.6 | TODO.md, doc/architecture/features.md, doc/todo/2-n8n-campaign-workflow.md, Taris - Campaign Select.json, Taris - Campaign Send.json | done |
+| 07:15 UTC | Admin: Voice Settings submenu merge, auto-add contacts on approve, user role badges in web UI, web-Telegram sync | 3 | ~15 | claude-sonnet-4.6 | bot_admin.py, telegram_menu_bot.py, strings.json, bot_web.py, admin.html, bot_config.py, release_notes.json | done |
 
