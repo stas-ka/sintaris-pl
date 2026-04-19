@@ -5,6 +5,14 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-19 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 18:35 UTC | fix: taris_deploy.sh action_backup broken for VPS (Docker+Postgres) — rewrite data backup to use docker exec/cp for container data, pg_dump for STORE_PG_DSN+CRM_PG_DSN (Docker path); detect STORE_BACKEND=postgres on ts1/ts2 and run pg_dump locally or via ssh; run and verify VPS backup via fixed script (4.4 MB: container.tar.gz + userdata.tar.gz + bot.env + postgres_main.dump + postgres_crm.dump) | 2 | 4 | claude-sonnet-4.6 | src/setup/taris_deploy.sh | done |
+
+---
+
 ### Session — 2026-04-18 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
