@@ -28,8 +28,16 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ## OpenClaw Targets (master branch)
 
-> ⚠️ **TariStation1 Branch Rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**. TariStation2 may receive any branch for development/testing.
-> ⚠️ **TariStation1 Confirmation Rule**: Deploy to TariStation1 ONLY after explicit user/owner confirmation. Always deploy to TariStation2 first and verify all tests pass.
+> ⚠️ **Branch Rules**: TariStation1 and VPS-Supertaris only receive deployments from the **`master` branch**. TariStation2 may receive any branch for development/testing.
+> ⚠️ **Confirmation Rules**: Deploy to TariStation1 and VPS-Supertaris ONLY after explicit user/owner confirmation. Always deploy to TariStation2 first and verify all tests pass.
+
+**OpenClaw has 3 deployment targets:**
+
+| Target | Alias | Environment | Risk |
+|---|---|---|---|
+| TariStation2 | IniCoS-1 | Engineering (local LAN) | Low |
+| TariStation1 | SintAItion | Production (home LAN / Tailscale) | Medium — shared machine |
+| VPS-Supertaris | agents.sintaris.net | Internet-facing production | 🔴 HIGH — shared public VPS |
 
 ### TariStation2 — Engineering target (IniCoS-1, remote Lubuntu Linux)
 
@@ -49,6 +57,10 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 ### TariStation1 — Production target (SintAItion, remote Ubuntu Linux)
 
+> 🚨 **SHARED PRODUCTION VPS** — hosts PostgreSQL, N8N, Nginx, other bots and services in addition to taris.  
+> **ALL changes** (code deploy, service restarts, service file updates, package installs, database migrations, system config changes) require **explicit confirmation from the user (stas) before execution.**  
+> Present the VPS pre-checklist from the SKILL.md before any TS1 operation. Never bundle multiple operation types into one confirmation — ask separately for each.
+
 | Key | Value |
 |---|---|
 | `PROD_OPENCLAW_HOST` | `SintAItion.local` |
@@ -59,11 +71,54 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 | SCP | `pscp -pw "$OPENCLAW1PWD" -hostkey "$OPENCLAW1_HOSTKEY" src\file.py stas@SintAItion.local:/home/stas/.taris/` |
 | Deploy path | `/home/stas/.taris/` |
 | Project | `~/projects/sintaris-pl` (on target) |
-| DB | PostgreSQL (migrated 2026-04) |
+| DB | PostgreSQL (migrated 2026-04) — shared VPS database |
 | Ollama | ✅ Installed, AMD ROCm 890M GPU, qwen3.5:latest |
 | Skill | `/taris-deploy-openclaw-target` |
 
-## Current Bot Version
+**VPS co-located services (do not disrupt):**
+- PostgreSQL — shared database server
+- N8N workflow engine
+- Nginx reverse proxy
+- Other bot services
+
+### VPS-Supertaris — Internet-facing production target (agents.sintaris.net)
+
+> 🔴 **HIGHEST RISK TARGET — SHARED PUBLIC INTERNET VPS.**  
+> This VPS is **directly internet-facing** and hosts multiple critical services:  
+> PostgreSQL (shared DB), N8N (workflow engine), Nginx (reverse proxy for all bots), other bots and apps.  
+> taris runs here as `systemctl --user taris-telegram taris-web` behind the Nginx `/supertaris/` sub-path.  
+> **ALL operations require explicit confirmation from the user (stas) before execution — NO EXCEPTIONS.**  
+> **Never run `apt upgrade`, `apt install`, database DDL, or Nginx changes without explicit confirmation.**
+
+| Key | Value |
+|---|---|
+| Hostname | `agents.sintaris.net` |
+| `VPS_HOST` | `$VPS_HOST` (in `.env` — never commit) |
+| `VPS_USER` | `$VPS_USER` (in `.env` — never commit) |
+| `VPS_PWD` | `$VPS_PWD` (in `.env` — never commit) |
+| `VPS_HOSTKEY` | `$VPS_HOSTKEY` (in `.env` — never commit) |
+| SSH | `ssh -i ~/.ssh/vps_key $VPS_USER@$VPS_HOST "<cmd>"` or `sshpass -p "$VPS_PWD" ssh $VPS_USER@$VPS_HOST` |
+| Deploy path | `/home/$VPS_USER/.taris/` |
+| Web UI path | `https://agents.sintaris.net/supertaris/` |
+| ROOT_PATH | `/supertaris` (set in `~/.taris/bot.env`) |
+| DB | PostgreSQL — shared VPS database (same server as N8N and other bots) |
+| Ollama | depends on VPS resources |
+| Nginx config | `/etc/nginx/sites-available/agents.sintaris.net` |
+| Skill | `/taris-deploy-openclaw-target` (target=`vps`) |
+
+**VPS co-located services (do not disrupt):**
+- PostgreSQL — shared database for multiple applications
+- N8N workflow engine (production automation)
+- Nginx reverse proxy (serves all bots + apps via sub-paths)
+- Other bots and web services
+
+**Forbidden autonomous actions on VPS-Supertaris:**
+- ❌ `apt upgrade`, `apt install`, `pip install --upgrade` without confirmation
+- ❌ Any Nginx config change without confirmation (affects ALL apps on VPS)
+- ❌ PostgreSQL DDL (CREATE/DROP/ALTER TABLE) without confirmation + backup
+- ❌ Restart shared services (PostgreSQL, Nginx, N8N) without confirmation
+- ❌ Firewall changes (`ufw`, `iptables`) without confirmation
+- ❌ Restart taris services without confirmation (brief downtime visible publicly)
 
 `BOT_VERSION = "2026.3.48"` — deployed 2026-03-31
 

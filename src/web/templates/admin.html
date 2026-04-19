@@ -45,7 +45,7 @@
         {% for u in users %}
         <tr>
           <td class="text-white fw-bold">{{ u.username }}</td>
-          <td><span class="badge {% if u.role == 'Admin' %}badge-ok{% else %}badge-info{% endif %}">{{ u.role }}</span></td>
+          <td><span class="badge {{ u.role_badge }}">{{ u.role }}</span></td>
           <td>
             {% if u.status == 'pending' %}
               <span class="badge badge-warn">pending</span>
@@ -140,9 +140,31 @@
     {% endif %}
   </div>
 
-  <!-- ── Voice Opts ──────────────── -->
-  <p class="section-label">Voice Optimisations</p>
-  <div class="card">
+  <!-- ── Voice Settings ──────────────── -->
+  <p class="section-label">Voice Settings</p>
+  <div class="card mb-md">
+    <!-- STT / TTS config summary -->
+    <div class="flex items-center justify-between py-sm border-b" style="flex-wrap:wrap; gap:8px">
+      <div>
+        <span class="text-dim text-xs" style="display:block; margin-bottom:2px">STT (Speech-to-Text)</span>
+        <span class="text-white fw-bold">{{ voice_config.stt }}</span>
+        {% if voice_config.stt_model %}
+        <span class="text-dim" style="font-size:12px; margin-left:6px">
+          model={{ voice_config.stt_model }}{% if voice_config.stt_device %} · {{ voice_config.stt_device }}{% endif %}
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="flex items-center justify-between py-sm border-b" style="flex-wrap:wrap; gap:8px">
+      <div>
+        <span class="text-dim text-xs" style="display:block; margin-bottom:2px">TTS (Text-to-Speech)</span>
+        <span class="text-white fw-bold">{{ voice_config.tts }}</span>
+        {% if voice_config.tts_model %}
+        <span class="text-dim" style="font-size:12px; margin-left:6px">{{ voice_config.tts_model }}</span>
+        {% endif %}
+      </div>
+    </div>
+    <!-- Voice optimisation toggles -->
     {% for opt in voice_opts %}
     <div class="flex items-center justify-between py-sm {% if not loop.last %}border-b{% endif %}">
       <div>

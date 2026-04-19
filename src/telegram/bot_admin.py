@@ -122,8 +122,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb.add(
         InlineKeyboardButton(_t(chat_id, "admin_btn_users_menu"), callback_data="admin_users_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_switch_llm"), callback_data="admin_llm_menu"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_config"), callback_data="admin_voice_config"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_menu"), callback_data="admin_voice_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_release_notes"), callback_data="admin_changelog"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_logs"),       callback_data="admin_logs_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
@@ -171,6 +170,27 @@ def _handle_admin_users_menu(chat_id: int) -> None:
         _t(chat_id, "admin_users_menu_title"),
         parse_mode="Markdown",
         reply_markup=_admin_users_keyboard(chat_id),
+    )
+
+
+def _admin_voice_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
+    """Submenu keyboard merging Voice Options and Voice Config."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_config"), callback_data="admin_voice_config"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"),
+    )
+    return kb
+
+
+def _handle_admin_voice_menu(chat_id: int) -> None:
+    """Show the Voice Settings submenu."""
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "admin_voice_menu_title"),
+        parse_mode="Markdown",
+        reply_markup=_admin_voice_keyboard(chat_id),
     )
 
 
@@ -321,6 +341,10 @@ def _finish_admin_add_user(admin_id: int, text: str) -> None:
     else:
         dyn.add(uid)
         _save_dynamic_users()
+        # auto-add to contacts if we have registration info
+        reg = _find_registration(uid)
+        if reg:
+            _auto_add_contact_for_admins(reg)
         log.info(f"Admin {admin_id} added user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_added", uid=uid),
                          parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
@@ -399,6 +423,26 @@ def _handle_admin_pending_users(chat_id: int) -> None:
             bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
 
 
+def _auto_add_contact_for_admins(reg: dict) -> None:
+    """Auto-add a newly approved/registered user to every admin's contact book."""
+    try:
+        from features.bot_contacts import _contact_add, _contact_list
+        first = reg.get("first_name", "") or ""
+        last  = reg.get("last_name",  "") or ""
+        name  = (reg.get("name") or f"{first} {last}".strip() or str(reg.get("chat_id", "?")))
+        notes_parts = [f"Telegram ID: {reg.get('chat_id', '')}"]
+        if reg.get("username"):
+            notes_parts.append(f"@{reg['username']}")
+        notes = ", ".join(notes_parts)
+        for admin_id in ADMIN_USERS:
+            existing = _contact_list(admin_id, limit=500)
+            if not any(c.get("name", "").strip().lower() == name.strip().lower() for c in existing):
+                _contact_add(admin_id, name=name, notes=notes)
+                log.info(f"[Reg] Auto-added '{name}' to contacts of admin {admin_id}")
+    except Exception as exc:
+        log.warning(f"[Reg] Auto-add contact failed: {exc}")
+
+
 def _do_approve_registration(admin_id: int, target_id: int) -> None:
     """Approve a pending registration: add to guests and notify user."""
     from telegram.bot_access import _menu_keyboard
@@ -414,6 +458,7 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     _set_reg_status(target_id, "approved")
     _dynamic_users().add(target_id)
     _save_dynamic_users()
+    _auto_add_contact_for_admins(reg)
     name_disp = f" \u2014 {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id}")
     bot.send_message(admin_id, f"✅ User `{target_id}`{name_disp} approved and added.",
@@ -440,6 +485,7 @@ def _do_approve_as_guest(admin_id: int, target_id: int) -> None:
         return
     _set_reg_status(target_id, "guest")
     _st._dynamic_guests.add(target_id)
+    _auto_add_contact_for_admins(reg)
     name_disp = f" — {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id} as GUEST")
     bot.send_message(admin_id,
@@ -550,7 +596,7 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
 
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))
-    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+    kb.add(InlineKeyboardButton("🔙  Voice Settings", callback_data="admin_voice_menu"))
 
     active  = [k for k, v in opts.items() if v]
     status  = ("Active: " + ", ".join(active)) if active else "All OFF — stable defaults"
@@ -661,7 +707,7 @@ def _handle_admin_voice_config(chat_id: int) -> None:
             icon = "✅" if fw_model == model_name else "◻️"
             kb.add(InlineKeyboardButton(f"{icon} {model_name}", callback_data=f"admin_fw_model:{model_name}"))
 
-    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+    kb.add(InlineKeyboardButton("🔙  Voice Settings", callback_data="admin_voice_menu"))
 
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
@@ -682,9 +728,9 @@ def _handle_admin_stt_set(chat_id: int, provider: str) -> None:
     _save_voice_opts()
     log.info(f"[VoiceCfg] admin {chat_id} switched STT → {provider}")
     try:
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_voice_keyboard(chat_id))
     except Exception:
-        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_voice_keyboard(chat_id))
 
 
 def _handle_admin_fw_model_set(chat_id: int, model_name: str) -> None:
@@ -698,9 +744,9 @@ def _handle_admin_fw_model_set(chat_id: int, model_name: str) -> None:
         "_Note: restart voice service to apply model change (`systemctl --user restart taris-voice`)._"
     )
     try:
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_voice_keyboard(chat_id))
     except Exception:
-        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_voice_keyboard(chat_id))
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load_release_notes() -> list[dict]:
@@ -1238,6 +1284,8 @@ def _handle_ollama_llm_menu(chat_id: int) -> None:
                 ))
     else:
         kb.add(InlineKeyboardButton("⚠️  Ollama not reachable", callback_data="noop"))
+    kb.add(InlineKeyboardButton("➕ Pull model", callback_data="ollama_pull_start"))
+    kb.add(InlineKeyboardButton("🎯 My model preference", callback_data="user_model_menu"))
     kb.add(InlineKeyboardButton("🔙  LLM Settings", callback_data="admin_llm_menu"))
 
     text = (
@@ -1310,6 +1358,124 @@ def _handle_ollama_persist_model(chat_id: int, model: str) -> None:
         bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=kb)
     except Exception:
         bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=kb)
+
+
+# Pending pull model state: {chat_id: True}
+_pending_ollama_pull: dict[int, bool] = {}
+
+
+def _handle_ollama_pull_start(chat_id: int) -> None:
+    """Prompt admin for a model name to pull."""
+    _pending_ollama_pull[chat_id] = True
+    _st._user_mode[chat_id] = "ollama_pull"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("❌ Cancel", callback_data="ollama_llm_menu"))
+    bot.send_message(
+        chat_id,
+        "➕ *Pull Ollama Model*\n\n"
+        "Enter the model name to pull (e.g. `qwen2:0.5b`, `gemma2:2b`):",
+        parse_mode="Markdown", reply_markup=kb,
+    )
+
+
+def _handle_ollama_pull_done(chat_id: int, model_name: str) -> None:
+    """Execute ollama pull in a background thread."""
+    import threading
+    _pending_ollama_pull.pop(chat_id, None)
+    _st._user_mode.pop(chat_id, None)
+    model_name = model_name.strip()
+    if not model_name:
+        bot.send_message(chat_id, "❌ Empty model name.")
+        _handle_ollama_llm_menu(chat_id)
+        return
+
+    status_msg = bot.send_message(chat_id, f"⏳ Pulling `{model_name}`... This may take a while.")
+
+    def _pull():
+        import urllib.request as _ureq
+        try:
+            body = json.dumps({"name": model_name, "stream": False}).encode()
+            req = _ureq.Request(
+                f"{OLLAMA_URL.rstrip('/')}/api/pull",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            resp = _ureq.urlopen(req, timeout=600)
+            result = json.loads(resp.read().decode())
+            status = result.get("status", "success")
+            bot.edit_message_text(
+                f"✅ *Pull complete:* `{model_name}`\n\nStatus: {status}",
+                chat_id, status_msg.message_id, parse_mode="Markdown",
+            )
+        except Exception as exc:
+            log.warning(f"[LLM] ollama pull failed: {exc}")
+            try:
+                bot.edit_message_text(
+                    f"❌ *Pull failed:* `{model_name}`\n\n`{str(exc)[:200]}`",
+                    chat_id, status_msg.message_id, parse_mode="Markdown",
+                )
+            except Exception:
+                pass
+        _handle_ollama_llm_menu(chat_id)
+
+    threading.Thread(target=_pull, daemon=True).start()
+
+
+def list_ollama_models() -> list[dict]:
+    """Public API: Return list of installed Ollama models [{name, size_gb, family}]."""
+    return _get_ollama_models_from_api()
+
+
+# ── Per-User Ollama Model Preference (Feature §29.1) ─────────────────────────
+
+def _handle_user_model_menu(chat_id: int) -> None:
+    """Show per-user model picker for the calling user (admin or self)."""
+    from core.bot_db import get_store
+    store = get_store()
+    current_pref = store.get_user_pref(chat_id, "ollama_model", default="")
+    models = _get_ollama_models_from_api()
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    if models:
+        for m in models:
+            name = m["name"]
+            icon = "✅" if name == current_pref else "⬜"
+            size = f"  ({m['size_gb']:.1f} GB)" if m.get("size_gb") else ""
+            kb.add(InlineKeyboardButton(
+                f"{icon} {name}{size}",
+                callback_data=f"user_model_set:{name}",
+            ))
+    kb.add(InlineKeyboardButton("🔄 Reset to default", callback_data="user_model_set:"))
+    kb.add(InlineKeyboardButton("🔙  Ollama models", callback_data="ollama_llm_menu"))
+
+    from core.bot_llm import _resolve_ollama_model
+    effective = _resolve_ollama_model(chat_id)
+    text = (
+        "🎯 *Your LLM Model Preference*\n\n"
+        f"*Your setting:* `{current_pref or '(default)'}`\n"
+        f"*Effective model:* `{effective}`\n\n"
+        "_Select a model for your conversations. Reset clears your preference._"
+    )
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_user_model_set(chat_id: int, model: str) -> None:
+    """Set or clear per-user Ollama model preference."""
+    from core.bot_db import get_store
+    store = get_store()
+    model = model.strip()
+    store.set_user_pref(chat_id, "ollama_model", model)
+    if model:
+        log.info(f"[LLM] user {chat_id} set personal model to '{model}'")
+        bot.send_message(chat_id, f"✅ Your model preference set to `{model}`", parse_mode="Markdown")
+    else:
+        log.info(f"[LLM] user {chat_id} cleared personal model preference")
+        bot.send_message(chat_id, "✅ Model preference cleared — using system default.")
+    _handle_user_model_menu(chat_id)
 
 
 def _handle_admin_llm_fallback_menu(chat_id: int) -> None:

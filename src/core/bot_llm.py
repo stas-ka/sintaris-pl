@@ -86,6 +86,48 @@ def set_ollama_model(model: str) -> None:
     log.info(f"[LLM] Ollama model switched at runtime → {_runtime_ollama_model or '(default)'}")
 
 
+def _resolve_ollama_model(chat_id: int | None = None) -> str:
+    """Resolve the Ollama model for a specific user (Feature §29.1).
+
+    Priority: 1) per-user pref (user_prefs key='ollama_model')
+              2) role-based default (ROLE_DEFAULT_OLLAMA_MODEL)
+              3) global runtime override / OLLAMA_MODEL
+    """
+    if chat_id:
+        try:
+            from core.bot_db import get_store
+            store = get_store()
+            user_model = store.get_user_pref(chat_id, "ollama_model", default="")
+            if user_model:
+                return user_model
+            # Role-based default
+            from core.bot_config import ROLE_DEFAULT_OLLAMA_MODEL
+            if ROLE_DEFAULT_OLLAMA_MODEL:
+                role = _get_user_role(chat_id)
+                role_model = ROLE_DEFAULT_OLLAMA_MODEL.get(role, "")
+                if role_model:
+                    return role_model
+        except Exception:
+            pass
+    return get_ollama_model()
+
+
+def _get_user_role(chat_id: int) -> str:
+    """Return user role string for model-preference resolution."""
+    try:
+        from core.bot_config import ADMIN_IDS
+        if chat_id in ADMIN_IDS:
+            return "admin"
+        from core.bot_db import get_store
+        store = get_store()
+        u = store.get_user(chat_id)
+        if u and u.get("role"):
+            return u["role"]
+    except Exception:
+        pass
+    return "user"
+
+
 def _effective_temperature() -> float:
     """Return runtime LLM temperature from rag_settings; falls back to LOCAL_TEMPERATURE."""
     try:
@@ -370,7 +412,7 @@ def _ask_local(prompt: str, timeout: int) -> str:
     return result["choices"][0]["message"]["content"].strip()
 
 
-def _ask_ollama(prompt: str, timeout: int) -> str:
+def _ask_ollama(prompt: str, timeout: int, *, chat_id: int | None = None) -> str:
     """Call local Ollama server via native /api/chat endpoint.
 
     Uses ``think: false`` to suppress extended-thinking tokens (qwen3 family).
@@ -383,10 +425,11 @@ def _ask_ollama(prompt: str, timeout: int) -> str:
     Config:  OLLAMA_URL=http://127.0.0.1:11434  OLLAMA_MODEL=qwen2:0.5b
     GPU:     Set HSA_OVERRIDE_GFX_VERSION in Ollama service for AMD iGPU (Radeon 890M gfx1150).
     """
+    model = _resolve_ollama_model(chat_id)
     url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
     headers = {"Content-Type": "application/json"}
     body: dict = {
-        "model": get_ollama_model(),
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "think": OLLAMA_THINK,
@@ -429,6 +472,13 @@ def _ask_openclaw(prompt: str, timeout: int) -> str:
     try:
         data = json.loads(raw)
         text = (data.get("content") or data.get("text") or data.get("response") or "").strip()
+        # §29.3: detect skill_result in openclaw response
+        skill_result = data.get("skill_result")
+        if skill_result and isinstance(skill_result, dict):
+            from ui.render_telegram import render_skill_result
+            rendered = render_skill_result(skill_result)
+            if rendered:
+                return f"{text}\n\n{rendered}" if text else rendered
         if not text:
             raise ValueError("no content key in openclaw JSON response")
         return text
@@ -601,7 +651,8 @@ def _format_history_as_text(messages: list) -> str:
 
 def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "chat",
                           _no_history_fallback: bool = False,
-                          _force_provider: str = "") -> str:
+                          _force_provider: str = "",
+                          chat_id: int | None = None) -> str:
     """Call the configured LLM with a full conversation history.
 
     ``messages`` is a list of ``{"role": "user"|"assistant", "content": str}``
@@ -706,7 +757,7 @@ def ask_llm_with_history(messages: list, timeout: int = 60, *, use_case: str = "
             _url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
             _headers = {"Content-Type": "application/json"}
             _body: dict = {
-                "model": get_ollama_model(),
+                "model": _resolve_ollama_model(chat_id),
                 "messages": messages,
                 "stream": False,
                 "think": OLLAMA_THINK,

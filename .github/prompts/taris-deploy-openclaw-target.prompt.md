@@ -1,6 +1,6 @@
 ---
 mode: agent
-description: Deploy the OpenClaw variant of taris to TariStation2 (local engineering) and TariStation1/SintAItion (production). TariStation2 is always deployed first; TariStation1 requires explicit owner confirmation.
+description: Deploy the OpenClaw variant of taris to TariStation2 (local engineering), TariStation1/SintAItion (home production), or VPS-Supertaris (agents.sintaris.net, internet-facing production). TariStation2 is always deployed first; TariStation1 and VPS-Supertaris each require separate explicit owner confirmation. VPS-Supertaris is the highest-risk target — shared public internet VPS with N8N, PostgreSQL, Nginx, and other bots.
 ---
 
 # Deploy OpenClaw Target (`/taris-deploy-openclaw-target`)
@@ -9,22 +9,39 @@ description: Deploy the OpenClaw variant of taris to TariStation2 (local enginee
 
 | Parameter | Values | Default |
 |---|---|---|
-| `target` | `ts2` \| `ts1` \| `both` | `ts2` (TariStation2 only) |
+| `target` | `ts2` \| `ts1` \| `vps` \| `all` | `ts2` (TariStation2 only) |
+
+| Target ID | Host | Notes |
+|---|---|---|
+| `ts2` | TariStation2 / IniCoS-1 | Engineering — local LAN, any branch |
+| `ts1` | TariStation1 / SintAItion | Home production — master branch, confirm required |
+| `vps` | VPS-Supertaris / agents.sintaris.net | Internet production — 🔴 highest risk, separate confirm + pre-VPS checklist |
+
+---
+
+## 🚨 TariStation1 and VPS-Supertaris are Shared Production Hosts
+
+**TariStation1 (SintAItion):** hosts Ollama LLM and accesses shared PostgreSQL via tunnel.  
+**VPS-Supertaris (`agents.sintaris.net`):** public internet VPS hosting PostgreSQL, N8N, Nginx, and other bots. Any system operation here can affect ALL co-hosted services. Brief taris restarts are visible publicly.
+
+**Every operation on TariStation1 or VPS-Supertaris** — including service restarts, service file changes, package installs, database migrations, and system config changes — requires **explicit confirmation from the user (stas) before execution.**  
+Do NOT bundle multiple operations into a single confirmation; ask separately for each distinct action type.  
+For VPS-Supertaris: present the mandatory pre-VPS checklist (from SKILL.md) before ANY operation.
 
 ---
 
 ## Read context first
 
 Before executing any deploy step, read:
-1. `.env` in workspace root — `OPENCLAW1_HOST`, `OPENCLAW1_USER`, `OPENCLAW1PWD`
-2. `.github/skills/taris-deploy-openclaw-target/SKILL.md` — full procedure reference
+1. `.env` in workspace root — `OPENCLAW1_HOST`, `OPENCLAW1_USER`, `OPENCLAW1PWD`, `VPS_HOST`, `VPS_USER`, `VPS_PWD`
+2. `.github/skills/taris-deploy-openclaw-target/SKILL.md` — full procedure reference (VPS safety rules + checklists)
 3. `doc/quick-ref.md` — module map and deploy pipeline rules
 
-**TariStation2-first rule**: ALWAYS deploy to TariStation2 (local) first and verify before deploying to TariStation1 (SintAItion).
+**TariStation2-first rule**: ALWAYS deploy to TariStation2 (local) first and verify before deploying to TariStation1 or VPS-Supertaris.
 
-**TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives code from the **`master` branch**. Before deploying to TariStation1, confirm `git branch --show-current` shows `master`. If on a feature branch, abort TariStation1 deploy and inform the user.
+**Branch rule**: TariStation1 and VPS-Supertaris only receive code from the **`master` branch**. Confirm `git branch --show-current` shows `master` before any TS1/VPS operation. If on a feature branch, abort and inform the user.
 
-**TariStation1 confirmation rule**: After TariStation2 is verified, **STOP and explicitly ask the user** before proceeding to TariStation1. Never auto-deploy to TariStation1.
+**Confirmation rule**: After TariStation2 is verified, **STOP and explicitly ask the user** before proceeding to TariStation1. After TariStation1 (or TS2 if skipping TS1), ask **separately** for VPS-Supertaris. Never auto-deploy to TariStation1 or VPS-Supertaris.
 
 ---
 
@@ -140,24 +157,28 @@ DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
 
 ---
 
-## Step 5 — Confirmation gate before TariStation1
+## Step 5 — Confirmation gate before TariStation1 / VPS-Supertaris
 
-After TariStation2 passes all checks, **STOP and ask the user**:
+After TariStation2 passes all checks, **STOP and present this checklist to the user**:
 
-> "✅ TariStation2 deployment verified (v2026.X.Y, tests pass).  
-> 
-> Shall I also:  
-> 1. Commit and push to git?  
-> 2. Deploy to **TariStation1 (SintAItion)**? *(requires explicit confirmation)*"
+> "✅ TariStation2 deployment verified (v2026.X.Y, tests pass).
+>
+> Shall I also:
+> 1. Commit and push to git?
+> 2. **Deploy to TariStation1 (SintAItion)?** *(shared home production — requires confirmation)*
+> 3. **Deploy to VPS-Supertaris (agents.sintaris.net)?** *(🔴 shared public internet VPS — requires separate confirmation + pre-VPS checklist)*"
 
-**Do NOT proceed to TariStation1 without the user's explicit approval.**
+**Do NOT execute any command on TariStation1 until the user explicitly answers "yes" to option 2.**  
+**Do NOT execute any command on VPS-Supertaris until the user explicitly answers "yes" to option 3 — then present the full pre-VPS checklist from SKILL.md before each individual operation.**
 
-Also verify branch before TariStation1:
+If the deploy includes service file changes, migrations, or package installs on either TS1 or VPS — ask for a **separate confirmation** for each after the user says yes to code deploy.
+
+Also verify branch before TariStation1 or VPS:
 
 ```bash
 git branch --show-current
 # Must print: master
-# If it prints anything else — inform the user and abort TariStation1 deploy
+# If it prints anything else — inform the user and abort TS1/VPS deploy
 ```
 
 ---
@@ -236,12 +257,54 @@ Same pass criteria as Step 3. If startup fails, restore from the backup made in 
 
 ---
 
-## Step 9 — Post-deploy report
+## Step 9 — VPS-Supertaris Deploy (only after separate user confirmation)
+
+> 🔴 Run only after explicit user confirmation for VPS-Supertaris. Present the pre-VPS checklist from SKILL.md first.
+
+**Backup VPS before deploying:**
+
+```bash
+source /home/stas/projects/sintaris-pl/.env
+TS=$(date +%Y%m%d_%H%M%S)
+VER=$(sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "grep BOT_VERSION ~/.taris/core/bot_config.py | head -1 | cut -d'\"' -f2")
+BNAME="taris_backup_VPS_v${VER}_${TS}"
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "tar czf /tmp/${BNAME}.tar.gz -C ~/.taris \
+   --exclude='vosk-model-*' --exclude='*.onnx' --exclude='ggml-*.bin' --exclude='*/__pycache__' \
+   . 2>/dev/null && echo BACKUP_OK"
+mkdir -p /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $VPS_USER@$VPS_HOST:/tmp/${BNAME}.tar.gz \
+  /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}/
+echo "Local backup: backup/snapshots/${BNAME}/"
+```
+
+**Deploy to VPS** (see Step 2c in SKILL.md for full commands).
+
+**[SEPARATE CONFIRMATION] Restart on VPS:**
+
+```bash
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "systemctl --user restart taris-telegram taris-web && sleep 4 && \
+   journalctl --user -u taris-telegram -n 15 --no-pager"
+```
+
+**Verify public URL:**
+```bash
+curl -s -o /dev/null -w "HTTP %{http_code}\n" https://agents.sintaris.net/supertaris/
+```
+
+---
+
+## Step 10 — Post-deploy report
 
 ```
 ✅ OpenClaw Deployment Complete
-   TariStation2 (local)         :  Version 2026.X.Y — telegram ✅  web ✅
-   TariStation1 (SintAItion)    :  Version 2026.X.Y — telegram ✅  web ✅
+   TariStation2 (local)                :  Version 2026.X.Y — telegram ✅  web ✅
+   TariStation1 (SintAItion)           :  Version 2026.X.Y — telegram ✅  web ✅
+   VPS-Supertaris (agents.sintaris.net):  Version 2026.X.Y — telegram ✅  web ✅  public ✅
 ```
 
 Then ask:
@@ -256,7 +319,8 @@ Then ask:
 - **Never skip TariStation2** — it is the engineering target. All changes must be validated there first.
 - **TariStation2 = local machine** — uses `cp` and `systemctl --user`, no SSH.
 - **TariStation1 = SintAItion** — uses `sshpass + scp/ssh`, `systemctl --user` on the remote host.
-- **No `sudo` needed** — both targets use `systemctl --user` (user-level systemd).
+- **VPS-Supertaris = agents.sintaris.net** — public internet VPS; taris runs at `/supertaris/` behind Nginx. `ROOT_PATH=/supertaris` must be set in `~/.taris/bot.env` on the VPS.
+- **No `sudo` needed** for taris services — all targets use `systemctl --user` (user-level systemd). Nginx/system changes DO require `sudo` and therefore explicit confirmation.
 - **Models stay on device** — Piper `.onnx` and Whisper `.bin` models are NOT deployed. Run setup scripts only when model files need updating.
 - **`bot_ui.py` is critical** — always sync `src/ui/bot_ui.py` together with any file that imports `UserContext`. Silent mismatch causes `TypeError` on startup.
-- **`.env` vars**: `OPENCLAW1_HOST`, `OPENCLAW1_USER`, `OPENCLAW1PWD` must be set in project `.env` before TariStation1 operations.
+- **`.env` vars**: `OPENCLAW1_HOST`, `OPENCLAW1_USER`, `OPENCLAW1PWD` for TS1; `VPS_HOST`, `VPS_USER`, `VPS_PWD` for VPS-Supertaris.

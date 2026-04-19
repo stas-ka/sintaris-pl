@@ -219,6 +219,100 @@ def render_screen(screen: Screen, chat_id: int, bot: "TeleBot",
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Skill Result Rendering — Feature §29.3
+# Converts structured skill_result dicts from OpenClaw into Markdown text.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Registry of known skill_type → render function
+_SKILL_RENDERERS: dict[str, callable] = {}
+
+
+def _render_table(data: dict) -> str:
+    """Render a table skill result as Markdown."""
+    title = data.get("title", "")
+    headers = data.get("headers", [])
+    rows = data.get("rows", [])
+    lines = []
+    if title:
+        lines.append(f"*{title}*\n")
+    if headers and rows:
+        lines.append("| " + " | ".join(str(h) for h in headers) + " |")
+        lines.append("| " + " | ".join("---" for _ in headers) + " |")
+        for row in rows:
+            lines.append("| " + " | ".join(str(c) for c in row) + " |")
+    elif rows:
+        for row in rows:
+            lines.append("• " + " | ".join(str(c) for c in row))
+    return "\n".join(lines)
+
+
+def _render_list(data: dict) -> str:
+    """Render a list skill result."""
+    title = data.get("title", "")
+    items = data.get("items", [])
+    lines = []
+    if title:
+        lines.append(f"*{title}*\n")
+    for item in items:
+        if isinstance(item, dict):
+            lines.append(f"• *{item.get('label', '')}:* {item.get('value', '')}")
+        else:
+            lines.append(f"• {item}")
+    return "\n".join(lines)
+
+
+def _render_card(data: dict) -> str:
+    """Render a card skill result."""
+    title = data.get("title", "")
+    fields = data.get("fields", {})
+    lines = []
+    if title:
+        lines.append(f"*{title}*\n")
+    for k, v in fields.items():
+        lines.append(f"*{k}:* {v}")
+    return "\n".join(lines)
+
+
+def _render_status(data: dict) -> str:
+    """Render a status skill result."""
+    ok = data.get("ok", data.get("success", True))
+    msg = data.get("message", data.get("text", ""))
+    icon = "✅" if ok else "❌"
+    return f"{icon} {msg}" if msg else f"{icon} {'OK' if ok else 'Failed'}"
+
+
+_SKILL_RENDERERS.update({
+    "table": _render_table,
+    "list": _render_list,
+    "card": _render_card,
+    "status": _render_status,
+})
+
+
+def render_skill_result(skill_result: dict) -> str:
+    """Render a structured skill_result dict into Markdown text.
+
+    Accepts {"type": "table|list|card|status", ...data...}
+    Falls back to JSON dump for unknown types.
+    """
+    skill_type = (skill_result.get("type") or "").lower()
+    renderer = _SKILL_RENDERERS.get(skill_type)
+    if renderer:
+        try:
+            return renderer(skill_result)
+        except Exception as exc:
+            log.warning("[render] skill_result render error for type '%s': %s", skill_type, exc)
+
+    # Fallback: format as key-value pairs
+    lines = []
+    for k, v in skill_result.items():
+        if k == "type":
+            continue
+        lines.append(f"*{k}:* {v}")
+    return "\n".join(lines) if lines else ""
+
+
 def _escape_md(text: str) -> str:
     """Escape Markdown v1 special characters: * _ ` ["""
     for ch in ("*", "_", "`", "["):

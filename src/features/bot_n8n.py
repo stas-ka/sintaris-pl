@@ -302,3 +302,94 @@ def process_callback(event_type: str, payload: dict) -> bool:
             return False
     log.warning("[webhook] no handler for event '%s'", event_type)
     return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Inbound Event Router — Feature §28.3
+# Dispatch table mapping event_type → handler.
+# Each handler receives the raw payload dict.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_lead_created(payload: dict) -> None:
+    """Handle lead_created event from CRM: create or update a taris contact."""
+    from core.bot_db import get_store
+    store = get_store()
+
+    name  = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+
+    if not name and not email:
+        log.warning("[n8n] lead_created: missing name and email — skipped")
+        return
+
+    # Dedupe by email if present
+    if email:
+        existing = store.search_contacts(email, limit=1)
+        if existing:
+            log.info("[n8n] lead_created: contact exists for email=%s — skipping", email)
+            return
+
+    # Find an admin chat_id to own this contact
+    admin_id = _get_admin_chat_id()
+    if not admin_id:
+        log.warning("[n8n] lead_created: no admin chat_id found — cannot create contact")
+        return
+
+    contact_data = {
+        "name": name or email,
+        "phone": phone,
+        "email": email,
+        "notes": f"Imported from CRM via N8N lead_created",
+    }
+    store.add_contact(admin_id, contact_data)
+    log.info("[n8n] lead_created: created contact '%s' for admin %s", name or email, admin_id)
+
+
+def _handle_contact_updated(payload: dict) -> None:
+    """Handle contact_updated event from CRM."""
+    log.info("[n8n] contact_updated event received: %s", payload.get("email", "?"))
+    # Future: match by email and update fields
+
+
+def _get_admin_chat_id() -> int | None:
+    """Find any admin chat_id to own imported contacts."""
+    from core.bot_config import ADMIN_IDS
+    if ADMIN_IDS:
+        return ADMIN_IDS[0]
+    return None
+
+
+# Auto-registered event handlers
+_N8N_EVENT_HANDLERS: dict[str, Any] = {
+    "lead_created": _handle_lead_created,
+    "contact_updated": _handle_contact_updated,
+}
+
+
+def dispatch_inbound_event(payload: dict) -> dict:
+    """Route an inbound N8N/webhook event based on event_type field.
+
+    Returns {"ok": True, "event_type": ...} or {"error": "..."}.
+    """
+    from core.bot_config import N8N_INBOUND_EVENTS_ENABLED
+    if not N8N_INBOUND_EVENTS_ENABLED:
+        return {"error": "Inbound events are disabled"}
+
+    event_type = (payload.get("event_type") or payload.get("event") or "").strip()
+    if not event_type:
+        return {"error": "Missing event_type field"}
+
+    handler = _N8N_EVENT_HANDLERS.get(event_type)
+    if not handler:
+        # Try the dynamic callback registry as fallback
+        if process_callback(event_type, payload):
+            return {"ok": True, "event_type": event_type, "source": "callback"}
+        return {"error": f"Unknown event_type: {event_type}"}
+
+    try:
+        handler(payload)
+        return {"ok": True, "event_type": event_type}
+    except Exception as e:
+        log.error("[n8n] event handler error for '%s': %s", event_type, e)
+        return {"error": f"Handler error: {str(e)[:200]}"}

@@ -7,7 +7,7 @@ These reusable task prompts live in `.github/prompts/`. Invoke them with `/skill
 | `/skill-name` | What it does |
 |---|---|
 | `/taris-deploy-to_target` | Copy changed files to Pi, restart service, verify journal |
-| `/taris-deploy-openclaw-target` | Deploy OpenClaw variant locally to TariStation2 (engineering) and remote TariStation1/SintAItion (production) |
+| `/taris-deploy-openclaw-target` | Deploy OpenClaw variant locally to TariStation2 (engineering) and remote TariStation1/SintAItion (production) or VPS-Supertaris (agents.sintaris.net, internet-facing) |
 | `/taris-backup-target` | Backup a Raspberry Pi target (data, software, system config, binaries, or all) |
 | `/taris-performancetest` | Run taris performance benchmarks (storage ops, menu navigation) locally and/or on Pi targets, merge results, and print a cross-platform comparison |
 | `/taris-test-run-tests` | Run voice regression T01–T41 on Pi, report results |
@@ -64,6 +64,42 @@ taris is a Raspberry Pi–based Telegram bot + offline voice assistant (Russian/
 | Web UI (FastAPI, routes, auth, Screen DSL) | [`doc/architecture/web-ui.md`](../doc/architecture/web-ui.md) | Modifying `bot_web.py` or templates |
 | LLM providers, multi-turn, tiered memory | [`doc/architecture/llm-providers.md`](../doc/architecture/llm-providers.md) | Modifying `bot_llm.py` or adding providers |
 
+## Deployment Variants — Always Know Which Stack You're Working On
+
+Taris runs on **two hardware variants** selected by `DEVICE_VARIANT` in `~/.taris/bot.env`. Before implementing any feature touching STT, LLM, storage, REST API, or voice, check which variant applies. The full reference with all packages, binaries, and env vars is in **`doc/quick-ref.md` §"Deployment Variants"** (always-read first).
+
+| Layer | PicoClaw — Raspberry Pi | OpenClaw — x86_64 laptop/PC |
+|---|---|---|
+| `DEVICE_VARIANT` | `picoclaw` | `openclaw` |
+| **Hosts** | OpenClawPI2 (dev) · OpenClawPI (prod) | TariStation2 · TariStation1 · VPS-Supertaris |
+| **STT commands** | `vosk` (Vosk small-ru) | `faster_whisper` (CTranslate2, base/small int8) |
+| **TTS** | Piper ONNX `irina-medium` | Piper ONNX `irina-medium` |
+| **LLM default** | `taris` CLI → OpenRouter | `ollama` → Qwen3 local (:11434) |
+| **LLM fallback** | `openai` gpt-4o-mini | `openai` gpt-4o-mini |
+| **Local LLM binary** | `picoclaw` CLI / llama.cpp (:8081) | `ollama` 0.18+ (:11434) |
+| **AI gateway** | ❌ | `sintaris-openclaw` Node.js (skills, MCP) |
+| **Storage** | SQLite + FTS5 (`store_sqlite.py`) | PostgreSQL 14 (`store_postgres.py`) |
+| **Embeddings / RAG** | sqlite-vec 384-dim | pgvector 1536-dim HNSW |
+| **REST API** | ❌ | ✅ `/api/status` · `/api/chat` (Bearer) |
+| **N8N** | ❌ | ✅ `bot_n8n.py` + `/webhook/n8n` |
+| **OpenClaw-only packages** | — | `faster-whisper`, `scipy`, `psycopg2-binary`, `pgvector`, `sentence-transformers` |
+
+**Variant-aware coding rules:**
+- **Storage:** `get_store()` in `core/bot_db.py` returns the right adapter automatically.
+- **LLM calls:** `ask_llm_with_history(chat_id, prompt)` in `core/bot_llm.py` routes per `LLM_PROVIDER`.
+- **STT / voice:** guard OpenClaw-specific code with `if DEVICE_VARIANT == "openclaw"`.
+- **REST endpoints:** expose new `/api/*` routes only on OpenClaw.
+- **Embeddings:** pgvector `vec_embeddings` table on OpenClaw; SQLite FTS5 on PicoClaw.
+- **UI parity:** Telegram UI changes must also be reflected in Web UI templates.
+
+Full variant docs (read only the relevant section):
+- [`doc/architecture/overview.md`](../doc/architecture/overview.md) — capability comparison table
+- [`doc/architecture/openclaw-integration.md`](../doc/architecture/openclaw-integration.md) — OpenClaw STT/LLM/REST/pgvector details
+- [`doc/architecture/picoclaw.md`](../doc/architecture/picoclaw.md) — Pi voice pipeline, systemd, hardware
+- [`doc/architecture/stacks.md`](../doc/architecture/stacks.md) — full package/binary/model/service inventory
+
+---
+
 ### Architecture Doc Style Rules (enforced when writing or updating arch docs)
 
 These rules ensure docs stay useful as Copilot navigation tools and don't waste tokens:
@@ -118,6 +154,8 @@ taris/
 - **Docs:** update the relevant `doc/architecture/<topic>.md` file and `README.md` in the same commit as the code change.
 - **TODO.md:** keep current; collapse completed items to `✅ Implemented (vX.Y.Z)`.
 - **Deployment pipeline:** ALL changes MUST be deployed and tested on the engineering target **PI2** (`OpenClawPI2`) first. Only after tests pass and the change is committed and pushed to git may it be deployed to the production target **PI1** (`OpenClawPI`). Never deploy directly to PI1 without prior PI2 validation.
+- **TariStation1 (SintAItion) is a shared production VPS** — hosts PostgreSQL, N8N, Nginx, and other bots/services. ALL operations on TariStation1 (code deploy, service restarts, service file changes, package installs, database migrations, system config changes) require **explicit confirmation from the user before execution**. Present the VPS pre-checklist (see SKILL.md) before any TS1 action. Never bundle multiple TS1 operation types into a single confirmation — ask separately for each.
+- **VPS-Supertaris (`agents.sintaris.net`) is a shared public internet VPS** — 🔴 HIGHEST RISK. Hosts N8N, PostgreSQL (shared DB), Nginx (reverse proxy for all bots/apps), and other services. taris runs there at `/supertaris/`. ALL operations require **separate explicit confirmation from the user** with the mandatory pre-VPS checklist before execution. Forbidden without confirmation: `apt upgrade/install`, Nginx config changes, PostgreSQL DDL, shared service restarts, firewall changes.
 - **Continuous test improvement:** Every bug fix MUST add a regression test that would have caught the bug. Every new feature MUST add tests covering the happy path and the main failure modes. Tests live in `src/tests/test_voice_regression.py` (T-numbered) for voice/config/LLM; add new test IDs sequentially. Update `doc/test-suite.md` with the new test IDs in the same commit. No exceptions.
 
 ## Secrets & Configuration Security — MANDATORY

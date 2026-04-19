@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     email      TEXT        DEFAULT '',
     address    TEXT        DEFAULT '',
     notes      TEXT        DEFAULT '',
+    telegram   TEXT        DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -655,14 +656,15 @@ class PostgresStore:
         with self._pool.connection() as conn:
             conn.execute(
                 """INSERT INTO contacts
-                   (id, chat_id, name, phone, email, address, notes)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                   (id, chat_id, name, phone, email, address, notes, telegram)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (id) DO UPDATE SET
                        name       = EXCLUDED.name,
                        phone      = EXCLUDED.phone,
                        email      = EXCLUDED.email,
                        address    = EXCLUDED.address,
                        notes      = EXCLUDED.notes,
+                       telegram   = EXCLUDED.telegram,
                        updated_at = NOW()""",
                 (
                     cid, chat_id,
@@ -671,6 +673,7 @@ class PostgresStore:
                     contact.get("email", ""),
                     contact.get("address", ""),
                     contact.get("notes", ""),
+                    contact.get("telegram", ""),
                 ),
             )
             conn.commit()
@@ -739,13 +742,18 @@ class PostgresStore:
             )
             conn.commit()
 
-    def list_documents(self, chat_id: int) -> list[dict]:
+    def list_documents(self, chat_id: int, is_admin: bool = False) -> list[dict]:
         with self._pool.connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM documents WHERE chat_id = %s OR is_shared = 1"
-                " ORDER BY created_at DESC",
-                (chat_id,),
-            ).fetchall()
+            if is_admin:
+                rows = conn.execute(
+                    "SELECT * FROM documents ORDER BY created_at DESC",
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM documents WHERE chat_id = %s OR is_shared >= 1"
+                    " ORDER BY created_at DESC",
+                    (chat_id,),
+                ).fetchall()
         result = []
         for r in rows:
             d = dict(r)

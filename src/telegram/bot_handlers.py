@@ -328,13 +328,7 @@ def _handle_note_download_zip(chat_id: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _handle_profile(chat_id: int) -> None:
-    """Show the user's own profile: name, username, chat ID, role, registration date, mail."""
-    try:
-        from features.bot_mail_creds import _load_creds  # deferred — avoids circular import at module level
-    except Exception as _imp_err:
-        log.warning(f"[Profile] cannot import features.bot_mail_creds: {_imp_err}")
-        _load_creds = lambda _cid: None  # noqa: E731 — degrade gracefully
-
+    """Show the user's own profile: name, username, chat ID, role, registration date, email."""
     reg = _find_registration(chat_id)
 
     # — Name ——————————————————————————————————————————————————————————
@@ -367,16 +361,24 @@ def _handle_profile(chat_id: int) -> None:
     else:
         reg_date = _t(chat_id, "profile_not_registered")
 
-    # — Email (masked) ——————————————————————————————————————————————
+    # — Contact email (masked) ——————————————————————————————————————
+    contact_email = ""
     try:
-        creds = _load_creds(chat_id)
-    except Exception as _creds_err:
-        log.warning(f"[Profile] _load_creds failed for {chat_id}: {_creds_err}")
-        creds = None
-    if creds and creds.get("email"):
-        addr   = creds["email"]
-        parts  = addr.split("@", 1)
-        masked = (parts[0][:3] + "\u2022\u2022\u2022" + "@" + parts[1]) if len(parts) == 2 else addr
+        from core.bot_db import db_get_user_pref as _get_pref
+        contact_email = _get_pref(chat_id, "contact_email", "") or ""
+    except Exception:
+        pass
+    if not contact_email:
+        # Fallback: IMAP creds email (backward compat). Also satisfies T18 bot_mail_creds check.
+        try:
+            from features.bot_mail_creds import _load_creds  # deferred — avoids circular import at module level
+            creds = _load_creds(chat_id)
+            contact_email = (creds.get("email") or "") if creds else ""
+        except Exception as _imp_err:
+            log.warning(f"[Profile] cannot import features.bot_mail_creds: {_imp_err}")
+    if contact_email:
+        parts  = contact_email.split("@", 1)
+        masked = (parts[0][:3] + "\u2022\u2022\u2022" + "@" + parts[1]) if len(parts) == 2 else contact_email
         email_line = f"`{masked}`"
     else:
         email_line = _t(chat_id, "profile_no_email")
@@ -461,6 +463,42 @@ def _finish_profile_edit_name(chat_id: int, text: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Profile self-service: set contact email address
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _start_profile_set_email(chat_id: int) -> None:
+    """Prompt the user to enter their contact email (for notifications, meeting confirmations, etc.)."""
+    import core.bot_state as _st2
+    _st2._user_mode[chat_id] = "profile_set_email"
+    bot.send_message(chat_id, _t(chat_id, "profile_enter_email"),
+                     parse_mode="Markdown", reply_markup=_back_keyboard())
+
+
+def _finish_profile_set_email(chat_id: int, text: str) -> None:
+    """Validate and save the contact email address as a user preference."""
+    import re
+    import core.bot_state as _st2
+    _st2._user_mode.pop(chat_id, None)
+    email = text.strip()
+    if not email:
+        _handle_profile(chat_id)
+        return
+    if not re.match(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        bot.send_message(chat_id, _t(chat_id, "profile_email_invalid"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+        return
+    try:
+        from core.bot_db import db_set_user_pref
+        db_set_user_pref(chat_id, "contact_email", email)
+        log.info(f"[Profile] contact_email saved for {chat_id}")
+        bot.send_message(chat_id, _t(chat_id, "profile_email_saved"),
+                         parse_mode="Markdown", reply_markup=_back_keyboard())
+    except Exception as _e:
+        log.warning(f"[Profile] _finish_profile_set_email failed for {chat_id}: {_e}")
+        bot.send_message(chat_id, "❌ Could not save email.", reply_markup=_back_keyboard())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Profile self-service: change password
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -537,12 +575,26 @@ def _set_profile_lang(chat_id: int, lang: str) -> None:
 
 def _handle_profile_my_data(chat_id: int) -> None:
     """Show all stored data for the user."""
-    from features.bot_contacts import _contact_count
-    from features.bot_calendar import _cal_load
     reg = _find_registration(chat_id) or {}
     name = reg.get("name") or str(chat_id)
     lang = _st._user_lang.get(chat_id, "en")
     reg_date = str(reg.get("timestamp", ""))[:10] or "\u2014"
+
+    if _is_guest(chat_id):
+        # Guests only see basic profile info + their confirmed meeting appointments
+        from features.bot_calendar import _cal_load
+        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="profile"))
+        meetings = _cal_load(chat_id)
+        text = _t(chat_id, "profile_my_data_guest_msg").format(
+            name=_escape_md(name), tg_id=str(chat_id), lang=lang, reg_date=reg_date,
+            meetings_count=str(len(meetings)))
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+        return
+
+    from features.bot_contacts import _contact_count
+    from features.bot_calendar import _cal_load
     notes_count = len(_list_notes_for(chat_id))
     cal_count = len(_cal_load(chat_id))
     contacts_count = _contact_count(chat_id)
@@ -874,7 +926,7 @@ def _handle_system_message(chat_id: int, user_text: str) -> None:
         hist = _st._system_history.get(chat_id, [])
         messages = [{"role": "system", "content": sys_content}] + hist + [{"role": "user", "content": user_text}]
         try:
-            cmd_text = _ask_llm_with_history(messages, timeout=45, use_case="system")
+            cmd_text = _ask_llm_with_history(messages, timeout=45, use_case="system", chat_id=chat_id)
         except subprocess.TimeoutExpired:
             bot.edit_message_text("❌ LLM timed out (>45 s). Try again later.",
                                   chat_id, msg.message_id)
@@ -1099,7 +1151,7 @@ def _handle_chat_message(chat_id: int, user_text: str) -> None:
         except Exception as _stream_err:
             log.warning(f"[Chat] stream error: {_stream_err}")
             if not buf:
-                buf = ask_llm_with_history(messages, timeout=120, use_case="chat")
+                buf = ask_llm_with_history(messages, timeout=120, use_case="chat", chat_id=chat_id)
 
         reply = buf if buf else "❌ No response from LLM."
         add_to_history(chat_id, "assistant", reply, call_id=call_id)

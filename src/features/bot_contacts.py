@@ -23,7 +23,7 @@ from core.store import store as _store
 _pending_contact: dict[int, dict] = {}
 
 # Steps for contact creation flow
-_ADD_STEPS = ["name", "phone", "email", "address", "notes"]
+_ADD_STEPS = ["name", "phone", "email", "address", "notes", "telegram"]
 
 # ── NL extraction prompt ──────────────────────────────────────────────────────
 _CONTACT_EXTRACT_PROMPT = (
@@ -36,10 +36,12 @@ _CONTACT_EXTRACT_PROMPT = (
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _contact_add(chat_id: int, name: str, phone: str = None, email: str = None,
-                 address: str = None, notes: str = None) -> str:
+                 address: str = None, notes: str = None,
+                 telegram: str = None) -> str:
     """Insert a new contact and return its id."""
     contact = {"name": name.strip(), "phone": phone or "", "email": email or "",
-               "address": address or "", "notes": notes or ""}
+               "address": address or "", "notes": notes or "",
+               "telegram": telegram or ""}
     return _store.save_contact(chat_id, contact)
 
 
@@ -51,7 +53,7 @@ def _contact_get(chat_id: int, cid: str) -> dict | None:
 
 
 def _contact_update(chat_id: int, cid: str, **fields) -> bool:
-    allowed = {"name", "phone", "email", "address", "notes"}
+    allowed = {"name", "phone", "email", "address", "notes", "telegram"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
@@ -123,6 +125,13 @@ def _contact_detail_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "contact_btn_edit"),   callback_data=f"contact_edit:{cid}"),
         InlineKeyboardButton(_t(chat_id, "contact_btn_delete"), callback_data=f"contact_del:{cid}"),
     )
+    # CRM sync button — only if webhook is configured
+    from core.bot_config import CRM_SYNC_WEBHOOK_URL
+    if CRM_SYNC_WEBHOOK_URL:
+        kb.add(InlineKeyboardButton(
+            _t(chat_id, "cnt_sync_crm_btn"),
+            callback_data=f"cnt_sync_crm:{cid}",
+        ))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="contact_list"))
     return kb
 
@@ -130,11 +139,12 @@ def _contact_detail_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup:
 def _contact_edit_field_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup:
     """Choose which field to edit."""
     fields = [
-        ("name",    "✏️ " + _t(chat_id, "contact_field_name")),
-        ("phone",   "📞 " + _t(chat_id, "contact_field_phone")),
-        ("email",   "📧 " + _t(chat_id, "contact_field_email")),
-        ("address", "🏠 " + _t(chat_id, "contact_field_address")),
-        ("notes",   "📝 " + _t(chat_id, "contact_field_notes")),
+        ("name",     "✏️ " + _t(chat_id, "contact_field_name")),
+        ("phone",    "📞 " + _t(chat_id, "contact_field_phone")),
+        ("email",    "📧 " + _t(chat_id, "contact_field_email")),
+        ("address",  "🏠 " + _t(chat_id, "contact_field_address")),
+        ("notes",    "📝 " + _t(chat_id, "contact_field_notes")),
+        ("telegram", "📱 " + _t(chat_id, "contact_field_telegram")),
     ]
     kb = InlineKeyboardMarkup(row_width=1)
     for key, label in fields:
@@ -155,6 +165,8 @@ def _format_contact(c: dict, chat_id: int) -> str:
         lines.append(f"🏠 {c['address']}")
     if c.get("notes"):
         lines.append(f"📝 {c['notes']}")
+    if c.get("telegram"):
+        lines.append(f"📱 Telegram ID: `{c['telegram']}`")
     created = c.get("created_at", "")[:10]
     lines.append(f"\n_{_t(chat_id, 'contact_added')} {created}_")
     return "\n".join(lines)
@@ -237,6 +249,7 @@ def _finish_contact_add(chat_id: int, text: str) -> None:
             email=state.get("email"),
             address=state.get("address"),
             notes=state.get("notes"),
+            telegram=state.get("telegram"),
         )
         bot.send_message(chat_id, _t(chat_id, "contact_saved", name=state.get("name", "")))
         _handle_contact_open(chat_id, cid)
@@ -345,3 +358,39 @@ def _finish_contact_search(chat_id: int, query: str) -> None:
                      _t(chat_id, "contact_search_results", q=query, n=len(results)),
                      parse_mode="Markdown",
                      reply_markup=kb)
+
+
+# ── CRM Sync (Feature §28.4) ─────────────────────────────────────────────────
+
+def _handle_contact_sync_crm(chat_id: int, cid: str) -> None:
+    """Sync a contact to CRM via N8N webhook."""
+    from core.bot_config import CRM_SYNC_WEBHOOK_URL
+    from features.bot_n8n import call_webhook
+
+    c = _contact_get(chat_id, cid)
+    if not c:
+        bot.send_message(chat_id, _t(chat_id, "contact_not_found"))
+        return
+
+    if not CRM_SYNC_WEBHOOK_URL:
+        bot.send_message(chat_id, _t(chat_id, "cnt_sync_crm_err"))
+        return
+
+    payload = {
+        "action": "sync_contact",
+        "contact": {
+            "name": c.get("name", ""),
+            "phone": c.get("phone", ""),
+            "email": c.get("email", ""),
+            "address": c.get("address", ""),
+            "notes": c.get("notes", ""),
+        },
+    }
+    result = call_webhook(CRM_SYNC_WEBHOOK_URL, payload)
+    if "error" in result:
+        log.warning("[contacts] CRM sync failed for %s: %s", cid, result["error"])
+        bot.send_message(chat_id, _t(chat_id, "cnt_sync_crm_err"))
+    else:
+        log.info("[contacts] CRM sync OK for contact %s", cid)
+        bot.send_message(chat_id, _t(chat_id, "cnt_sync_crm_ok", name=c.get("name", "")))
+    _handle_contact_open(chat_id, cid)

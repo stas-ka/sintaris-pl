@@ -15,7 +15,7 @@ widgets:
   - type: button_row
     buttons:
       - label_key: profile_btn_mailbox
-        action: mail_settings
+        action: profile_set_email
       - label_key: web_link_btn
         action: web_link
 

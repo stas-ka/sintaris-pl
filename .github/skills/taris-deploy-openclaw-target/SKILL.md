@@ -1,11 +1,13 @@
 ---
 name: taris-deploy-openclaw-target
 description: >
-  Deploy the OpenClaw variant of taris to VPS (feature branches / staging),
-  TariStation2 (local engineering), or TariStation1 / SintAItion (production).
-  Default for feature branches: VPS only. TariStation2 for integration testing.
-  TariStation1 requires explicit user/owner confirmation on master branch only.
-argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and target (vps/ts2/ts1)'
+  Deploy the OpenClaw variant of taris to local target TariStation2 (engineering)
+  and remote target TariStation1 / SintAItion (production). Use when: deploying
+  bot updates, pushing new features, deploying service files, restarting services,
+  verifying deployment, running post-deploy tests, full module deploy, release
+  version bump. TariStation2 is always deployed first; TariStation1 requires
+  explicit user/owner confirmation after TariStation2 tests pass.
+argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and target (ts2/ts1/both)'
 ---
 
 # Deploy to Target — OpenClaw Variant
@@ -24,74 +26,116 @@ argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and ta
 
 ## ⚠️ Target Priority Rule — MANDATORY
 
-**Default for feature branches → VPS. TariStation2 for local integration. TariStation1 (SintAItion) requires explicit confirmation on `master` only.**
+**ALWAYS deploy to TariStation2 first. TariStation1 (SintAItion) requires explicit confirmation from user/owner (stas) AFTER TariStation2 tests pass. VPS-Supertaris requires a separate explicit confirmation and is the highest-risk target.**
 
-| Target | Alias | Type | Transport | Branch rule |
-|---|---|---|---|---|
-| **VPS** (staging/feature) | `dev2null.de` | Docker (`pscp` + `plink`) | remote SSH | **any branch** — default for feature branches |
-| TariStation2 (engineering) | local machine | `cp` + `systemctl --user` | local filesystem | any branch |
-| TariStation1 (SintAItion, production) | `SintAItion` | `scp` + `ssh` | remote SSH | `master` only |
-
-> **Feature branch rule**: When on any branch OTHER than `master`, deploy to **VPS by default**.  
-> Do NOT deploy feature branches to TariStation1 (production).
+| Target | Alias | Type | Transport | Branch rule | Risk |
+|---|---|---|---|---|---|
+| TariStation2 (engineering) | local machine | `cp` + `systemctl --user` | local filesystem | any branch | Low |
+| TariStation1 (SintAItion, production) | `SintAItion` | `scp` + `ssh` | remote SSH | `master` only | Medium |
+| VPS-Supertaris (internet production) | `agents.sintaris.net` | `scp`/`ssh` | remote SSH | `master` only | 🔴 HIGH |
 
 > ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
-> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.
+> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.  
+> If on a feature branch — **STOP**. Do not deploy to TariStation1. Inform the user to merge to `master` first.
 
-> ⚠️ **TariStation1 confirmation rule**: After VPS/TariStation2 tests pass, **STOP and ask the user**:  
-> `"VPS deployment verified ✅. Shall I also deploy to TariStation1 (SintAItion)?"`  
+> ⚠️ **TariStation1 confirmation rule**: After TariStation2 tests pass, **STOP and ask the user**:  
+> `"TariStation2 deployment verified ✅. Shall I also deploy to TariStation1 (SintAItion)?"`  
 > Deploy to TariStation1 **only after explicit "yes" from the user/owner**.
+
+> 🔴 **VPS-Supertaris confirmation rule**: VPS-Supertaris is an internet-facing shared production server. After TariStation1 (or TariStation2) is verified, **STOP and ask the user separately**:  
+> `"Shall I also deploy to VPS-Supertaris (agents.sintaris.net)?"`  
+> **NEVER auto-deploy to VPS-Supertaris. Every individual operation type requires its own confirmation.**
 
 ---
 
-## VPS Deploy (feature branches — default)
+## 🚨 TariStation1 VPS Safety Rules — MANDATORY
 
-The VPS runs taris in Docker at `/opt/taris-docker/`. Source is volume-mounted from `/opt/taris-docker/app/src/`.  
-Credentials: `VPS_HOST`, `VPS_USER`, `VPS_PWD` from `.env`.
+> **TariStation1 (SintAItion) is a shared production machine.**  
+> It runs other bots, databases, and services beyond taris. Any system-level change can affect those services.
 
-### Upload all changed packages (Windows, using pscp/plink)
+### What is on this machine besides taris
 
-```powershell
-# Load credentials
-$envContent = Get-Content .env -Encoding UTF8
-$VPS_HOST = ($envContent | Select-String "^VPS_HOST=").ToString().Split("=",2)[1].Trim()
-$VPS_USER = ($envContent | Select-String "^VPS_USER=").ToString().Split("=",2)[1].Trim()
-$VPS_PWD  = ($envContent | Select-String "^VPS_PWD=").ToString().Split("=",2)[1].Trim()
-$REMOTE   = "${VPS_USER}@${VPS_HOST}:/opt/taris-docker/app/src"
+- PostgreSQL database (shared, used by multiple services via SSH tunnel to VPS)
+- N8N access via Tailscale
+- Ollama LLM (local, for taris)
 
-# Full sync (recommended — avoids stale file errors on VPS)
-pscp -pw "$VPS_PWD" -q src\core\*.py     "${REMOTE}/core/"
-pscp -pw "$VPS_PWD" -q src\telegram\*.py "${REMOTE}/telegram/"
-pscp -pw "$VPS_PWD" -q src\features\*.py "${REMOTE}/features/"
-pscp -pw "$VPS_PWD" -q src\ui\*.py       "${REMOTE}/ui/"
-pscp -pw "$VPS_PWD" -q src\security\*.py "${REMOTE}/security/"
-pscp -pw "$VPS_PWD" -q src\telegram_menu_bot.py src\bot_web.py src\voice_assistant.py "${REMOTE}/"
-pscp -pw "$VPS_PWD" -q src\strings.json src\release_notes.json src\prompts.json "${REMOTE}/"
+### TariStation1 operation rules
+
+| Operation | Rule |
+|---|---|
+| **Code deploy** (`scp` Python files) | Requires TS2-verified + explicit user confirmation |
+| **Service restart** (`systemctl --user restart`) | Requires explicit user confirmation per service |
+| **Service file change** (`.service` deploy) | Requires **separate** explicit confirmation — state exactly what changes |
+| **Database migration** (`migrate_to_db.py`) | Requires **separate** explicit confirmation + pre-migration backup |
+| **Package install** (`pip install`, `apt install`) | Requires **separate** explicit confirmation |
+
+---
+
+## 🔴 VPS-Supertaris Safety Rules — MANDATORY (HIGHEST RISK)
+
+> **VPS-Supertaris (`agents.sintaris.net`) is a PUBLIC INTERNET VPS hosting critical shared infrastructure.**  
+> It serves multiple bots, N8N, PostgreSQL, and the Nginx reverse proxy for ALL apps.  
+> A misconfigured Nginx restart or broken PostgreSQL query affects EVERY application on this server.  
+> taris runs as `systemctl --user taris-telegram taris-web` behind `/supertaris/` sub-path.
+
+### What is on this VPS besides taris
+
+- PostgreSQL database — shared by multiple applications (N8N, other bots, CRM)
+- N8N workflow engine (production campaigns, webhooks)
+- Nginx reverse proxy — serves ALL bots and apps via sub-paths (`/supertaris/`, `/taris/`, `/taris2/`, etc.)
+- Other bots and web services (outages here are publicly visible)
+- SSL certificates (Let's Encrypt via Certbot)
+
+### Mandatory pre-VPS checklist (present and wait for "yes" before ANY VPS operation)
+
+```
+🔴 About to execute on VPS-Supertaris (agents.sintaris.net) — public internet VPS:
+
+  [ ] 1. Change type: <code deploy | service restart | service file | migration | package install | nginx | system config>
+  [ ] 2. taris services affected: taris-telegram, taris-web
+  [ ] 3. Shared services potentially impacted: <PostgreSQL / Nginx / N8N / other bots — list>
+  [ ] 4. Downtime: visible at https://agents.sintaris.net/supertaris/ (~N seconds)
+  [ ] 5. Data at risk: <yes/no — what data, backup confirmed locally?>
+  [ ] 6. Rollback plan: <backup name + exact restore command>
+
+Shall I proceed? (yes/no)
 ```
 
-### Restart and verify
+**Never bundle multiple VPS operation types into one confirmation — ask separately for each.**
 
-```powershell
-plink -pw "$VPS_PWD" -batch ${VPS_USER}@${VPS_HOST} @"
-sudo docker restart taris-vps-telegram taris-vps-web
-sleep 5
-docker logs taris-vps-telegram 2>&1 | grep -E 'Version|Polling|ERROR|ImportError' | tail -5
-docker ps --format 'table {{.Names}}\t{{.Status}}' | grep taris
-"@
+### Forbidden autonomous actions on VPS-Supertaris
+
+- ❌ `apt upgrade`, `apt dist-upgrade`, `pip install --upgrade` — NEVER without confirmation
+- ❌ Nginx config change (`/etc/nginx/`) — affects ALL apps on VPS
+- ❌ PostgreSQL DDL (CREATE/DROP/ALTER/TRUNCATE TABLE) — always show SQL first, confirm + backup
+- ❌ Restart shared services (PostgreSQL, Nginx, N8N) — confirm separately for each
+- ❌ Firewall changes (`ufw`, `iptables`) — confirm separately
+- ❌ `systemctl --user restart taris-*` — confirm separately (brief public downtime)
+- ❌ Cron / systemd timer changes — confirm separately
+- ❌ Any `sudo` command — state exact command and reason, confirm before running
+
+### VPS environment variables (from `.env`)
+
+| Variable | Purpose |
+|---|---|
+| `VPS_HOST` | VPS hostname or IP (`agents.sintaris.net`) |
+| `VPS_USER` | SSH user on VPS |
+| `VPS_PWD` | SSH password |
+| `VPS_HOSTKEY` | SSH hostkey fingerprint (SHA256) |
+
+### VPS SSH/SCP commands
+
+```bash
+source /home/stas/projects/sintaris-pl/.env
+
+# SSH
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no -o "FingerprintHash=sha256" $VPS_USER@$VPS_HOST "<cmd>"
+
+# SCP
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/core/*.py $VPS_USER@$VPS_HOST:/home/$VPS_USER/.taris/core/
 ```
 
-**Pass criteria:**  
-- `[INFO] Version      : 2026.X.Y` ✅  
-- `[INFO] Polling Telegram` ✅  
-- No `ImportError` or `ERROR` lines in the NEW startup section
-
-### VPS bot.env location
-
-`/opt/taris-docker/bot.env` — edit to set new env vars (e.g. `AUTO_GUEST_ENABLED=1`):
-
-```powershell
-plink -pw "$VPS_PWD" -batch ${VPS_USER}@${VPS_HOST} "echo 'AUTO_GUEST_ENABLED=1' >> /opt/taris-docker/bot.env"
-```
+---
 
 ---
 
@@ -99,51 +143,40 @@ plink -pw "$VPS_PWD" -batch ${VPS_USER}@${VPS_HOST} "echo 'AUTO_GUEST_ENABLED=1'
 
 | Variable | Purpose |
 |---|---|
-| `VPS_HOST` | VPS hostname (e.g. `dev2null.de`) — staging / feature branches |
-| `VPS_USER` | SSH user on VPS (default: `stas`) |
-| `VPS_PWD` | SSH password for VPS |
 | `OPENCLAW1_HOST` | TariStation1 hostname or IP (e.g. `SintAItion`) |
 | `OPENCLAW1_USER` | SSH user on TariStation1 (default: `stas`) |
 | `OPENCLAW1PWD` | SSH password for TariStation1 |
 
 TariStation2 is the local machine — no SSH credentials needed.
 
-> ⚠️ **TariStation1 branch rule**: TariStation1 (`SintAItion`) only receives deployments from the **`master` branch**.  
-> Before deploying to TariStation1, run `git branch --show-current` and confirm it shows `master`.  
-> If on a feature branch — **STOP**. Use VPS instead.
-
 ---
 
 ## 🚀 Quick Deploy via Script (Recommended)
 
-All deployment operations use the unified `taris_deploy.sh` script. **Run from TariStation2 (Linux) or WSL.**
+All deployment operations use the unified `taris_deploy.sh` script:
 
 ```bash
-# ── FEATURE BRANCH DEFAULT: deploy to VPS ────────────────────────────────────
-bash src/setup/taris_deploy.sh --action deploy --target vps
-
-# Verify VPS Docker containers after deploy
-bash src/setup/taris_deploy.sh --action verify --target vps
-
-# Restart VPS containers only
-bash src/setup/taris_deploy.sh --action restart --target vps
-
-# Patch specific files on VPS (fast iteration)
-bash src/setup/taris_deploy.sh --action patch --target vps \
-  --files "core/bot_llm.py,telegram_menu_bot.py"
-
-# ── INTEGRATION: deploy to TariStation2 (local engineering) ──────────────────
+# Deploy to TariStation2 (local engineering target) — ALWAYS first
 bash src/setup/taris_deploy.sh --action deploy --target ts2
 
-# ── PRODUCTION: deploy to TariStation1 (master branch only, user confirmed) ──
+# Deploy to TariStation1 (remote production) — only after TS2 verified + user confirmed
 bash src/setup/taris_deploy.sh --action deploy --target ts1
 
+# Patch specific files only (fast iteration)
+bash src/setup/taris_deploy.sh --action patch --target ts2 \
+  --files "core/bot_llm.py,telegram_menu_bot.py"
+
 # Backup only (before risky changes)
-bash src/setup/taris_deploy.sh --action backup --target vps --backup-type data
 bash src/setup/taris_deploy.sh --action backup --target ts2 --backup-type all
 
 # Run migration only (after schema change)
 bash src/setup/taris_deploy.sh --action migrate --target ts2
+
+# Verify service status + journal
+bash src/setup/taris_deploy.sh --action verify --target ts2
+
+# Restart services only
+bash src/setup/taris_deploy.sh --action restart --target ts2
 
 # Full install (first-time setup on new TariStation machine)
 bash src/setup/taris_deploy.sh --action install --target ts2
@@ -151,13 +184,13 @@ bash src/setup/taris_deploy.sh --action install --target ts2
 # Options:
 #   --yes            Non-interactive (CI mode)
 #   --no-backup      Skip pre-deploy backup (rapid iteration only)
-#   --no-tests       Skip post-deploy smoke tests
+#   --no-tests       Skip smoke tests
 #   --no-migrate     Skip migration step
 #   --force-restart  Restart even if no change detected
 #   --git-ref TAG    Checkout specific commit/tag before deploy
 ```
 
-The script handles: backup → data check → deploy all packages → service files (skipped for VPS/Docker) → restart → journal/docker-logs verify → smoke tests → summary.
+The script handles: backup → data check → deploy all packages → service files → migration → restart → journal verify → smoke tests → summary.
 
 > **Legacy wrappers** (backward compat, delegate to taris_deploy.sh):
 > - `bash src/setup/update_openclaw.sh --target ts2`
@@ -356,7 +389,8 @@ If ANY pass criterion is missing — **STOP. Do not proceed to TariStation1.**
 ## Step 2b — Incremental Deploy (TariStation1 / SintAItion)
 
 > ⚠️ **Only run this after TariStation2 is verified AND user/owner has confirmed.**  
-> ⚠️ **Only run on the `master` branch** (`git branch --show-current` must show `master`).
+> ⚠️ **Only run on the `master` branch** (`git branch --show-current` must show `master`).  
+> ⚠️ **Present the VPS pre-TS1 checklist above and wait for "yes" before executing any command.**
 
 ```bash
 source /home/stas/projects/sintaris-pl/.env
@@ -484,6 +518,8 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $U@$H \
    journalctl --user -u ${SVCNAME} -n 10 --no-pager"
 ```
 
+> ⚠️ **Service file changes on TariStation1 require a separate explicit confirmation** — before running the above, tell the user exactly what changed in the `.service` file and wait for "yes".
+
 ---
 
 ## Safe Update with Backup
@@ -514,6 +550,59 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $U@$H \
   "systemctl --user start taris-telegram taris-web && sleep 4 && journalctl --user -u taris-telegram -n 12 --no-pager"
 ```
 
+> ⚠️ **Migration on TariStation1 requires a separate explicit confirmation** — state the schema changes and confirm backup is local before running.
+
+---
+
+## Step 2c — Incremental Deploy (VPS-Supertaris / agents.sintaris.net)
+
+> 🔴 **Only run AFTER TariStation1 (or TariStation2) is verified AND user/owner has explicitly confirmed VPS deploy.**  
+> 🔴 **Only on `master` branch.** (`git branch --show-current` must show `master`).  
+> 🔴 **Present the mandatory pre-VPS checklist above and wait for "yes" before any command.**  
+> 🔴 **Ask for separate confirmation for code deploy, service restart, service file changes, and migrations — never bundle.**
+
+```bash
+source /home/stas/projects/sintaris-pl/.env
+U=$VPS_USER; H=$VPS_HOST; PROJECT=/home/stas/projects/sintaris-pl
+
+# Create target package dirs (idempotent)
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $U@$H \
+  "mkdir -p ~/.taris/core ~/.taris/telegram ~/.taris/features ~/.taris/ui ~/.taris/security ~/.taris/screens ~/.taris/web/templates ~/.taris/web/static ~/.taris/n8n/workflows && \
+   touch ~/.taris/core/__init__.py ~/.taris/telegram/__init__.py ~/.taris/features/__init__.py ~/.taris/ui/__init__.py ~/.taris/security/__init__.py"
+
+# Deploy Python packages
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/core/*.py       $U@$H:~/.taris/core/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/telegram/*.py   $U@$H:~/.taris/telegram/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/features/*.py   $U@$H:~/.taris/features/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/ui/*.py         $U@$H:~/.taris/ui/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/security/*.py   $U@$H:~/.taris/security/
+
+# Entry points + data + screens
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/bot_web.py $PROJECT/src/telegram_menu_bot.py \
+  $PROJECT/src/voice_assistant.py $PROJECT/src/gmail_digest.py \
+  $PROJECT/src/strings.json $PROJECT/src/release_notes.json \
+  $U@$H:~/.taris/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/screens/*.yaml $PROJECT/src/screens/screen.schema.json $U@$H:~/.taris/screens/
+
+# Web assets
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no -r $PROJECT/src/web/templates/ $U@$H:~/.taris/web/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no -r $PROJECT/src/web/static/    $U@$H:~/.taris/web/
+```
+
+**[SEPARATE CONFIRMATION REQUIRED]** Restart taris services on VPS (brief public downtime):
+
+```bash
+# Ask user for separate "yes" before running this
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "systemctl --user restart taris-telegram taris-web && sleep 4 && \
+   journalctl --user -u taris-telegram -n 15 --no-pager"
+```
+
+**Pass criteria:** same as Steps 2a/2b — `Version: 2026.X.Y`, `DB init OK`, `Polling Telegram…`
+
 ---
 
 ## Step 3 — Verify Deployment
@@ -527,6 +616,13 @@ grep BOT_VERSION ~/.taris/core/bot_config.py
 source /home/stas/projects/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "systemctl --user is-active taris-telegram taris-web && grep BOT_VERSION ~/.taris/core/bot_config.py"
+
+# VPS-Supertaris (agents.sintaris.net)
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "systemctl --user is-active taris-telegram taris-web && grep BOT_VERSION ~/.taris/core/bot_config.py"
+# Also verify public URL is reachable:
+curl -s -o /dev/null -w "%{http_code}" https://agents.sintaris.net/supertaris/  # expect 200 or 302
 ```
 
 ✅ **Pass criteria:**
@@ -715,9 +811,11 @@ After every successful TariStation2 deployment, ask:
 > "Deployment to TariStation2 verified ✅. Shall I also:  
 > 1. Commit and push to git? (if not already done)  
 > 2. Update `release_notes.json` with a new version entry?  
-> 3. **Deploy to TariStation1 (SintAItion)?** *(only after your confirmation)*"
+> 3. **Deploy to TariStation1 (SintAItion)?** *(only after your confirmation)*  
+> 4. **Deploy to VPS-Supertaris (agents.sintaris.net)?** *(only after your separate confirmation — highest risk)*"
 
-**Do not deploy to TariStation1 until the user explicitly confirms option 3.**
+**Do not deploy to TariStation1 until the user explicitly confirms option 3.**  
+**Do not deploy to VPS-Supertaris until the user explicitly confirms option 4 — then also present the pre-VPS checklist.**
 
 ---
 
@@ -744,6 +842,18 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
 # TariStation1 — check errors
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "journalctl --user -u taris-telegram -n 30 --no-pager | grep -i error"
+
+# VPS-Supertaris — service status
+source /home/stas/projects/sintaris-pl/.env
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "systemctl --user status taris-telegram taris-web --no-pager"
+
+# VPS-Supertaris — check errors
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "journalctl --user -u taris-telegram -n 30 --no-pager | grep -i error"
+
+# VPS-Supertaris — public URL health check
+curl -s -o /dev/null -w "HTTP %{http_code}\n" https://agents.sintaris.net/supertaris/
 ```
 
 ---

@@ -1,5 +1,106 @@
 [
   {
+    "version": "2026.4.68",
+    "date": "2026-04-19",
+    "title": "OpenClaw extensions: per-user Ollama model, N8N events, CRM sync, skill rendering",
+    "notes": "- Per-user Ollama model preference (role defaults + UI picker)\n- N8N inbound event router with lead_created handler\n- Contact CRM sync button (Telegram + Web API)\n- Ollama pull model UI + Web API endpoints\n- Skill result rendering for OpenClaw gateway responses\n- RAG config constants (VOICE_RAG_ENABLED, RAG_VECTOR_TOP_K)\n- 8 new regression tests (T200-T207)"
+  },
+  {
+    "version": "2026.4.67",
+    "date": "2026-04-21",
+    "title": "Schema: contacts.telegram column + deploy bot_notify agent to VPS",
+    "notes": "Added telegram column to contacts table in bot_db.py (SQLite) and store_postgres.py (Postgres). Updated save_contact() in both store_postgres.py and store_sqlite.py to persist the telegram field. Ran ALTER TABLE migration on VPS taris_vps DB. Deployed bot_notify.py (Notifications to Users agent) to VPS docker."
+  },
+  {
+    "version": "2026.4.66",
+    "date": "2026-04-21",
+    "title": "Fix: guest conversation limit set to unlimited (was 5/hour)",
+    "notes": "GUEST_MSG_HOURLY_LIMIT and GUEST_MSG_DAILY_LIMIT defaults changed from 5/20 to 0 (unlimited). Rate-limit check now treats 0 as unlimited so guests can chat freely. Limits remain configurable via bot.env (0=unlimited, N=cap per hour/day)."
+  },
+  {
+    "version": "2026.4.65",
+    "date": "2026-04-21",
+    "title": "Feature: Notifications to Users agent - send Telegram notifications from contact book",
+    "notes": "New 'Notifications to Users' agent accessible from the Agents menu. Sends Telegram messages directly to contacts from the Taris contact book (requires Telegram chat_id on the contact). DB-stored notification templates (add/view/edit/delete). Send flow: choose template or write custom message, choose recipients (all with Telegram or filtered by name/email/notes), preview, confirm, send. Contacts extended with optional Telegram ID field for agent integration. Full RU/EN/DE string support."
+  },
+  {
+    "version": "2026.4.64",
+    "date": "2026-04-20",
+    "title": "Fix: Russian-language guests no longer receive English LLM responses",
+    "notes": "Root causes fixed: (1) LLM system prompt now places {lang_instruction} immediately after the security preamble (before the English bot-config block) for all roles, so the model sees the language directive early rather than buried at the end of an all-English context. (2) Russian lang instruction strengthened to unambiguous mandatory form. (3) Guest auto-registration now persists the detected Telegram language to the DB via _set_reg_lang(), ensuring correct language survives bot restarts without relying on Telegram language_code each time."
+  },
+  {
+    "version": "2026.4.63",
+    "date": "2026-04-20",
+    "title": "Fix: Consistent guest menu across all entry points",
+    "notes": "Guest menu is now identical regardless of entry point (/start, /menu command, Back button): Chat, Request Appointment, Calendar (read-only view of own appointments), Profile, Help. Fixed main_menu.yaml showing Mail Digest to guests and missing Request Appointment button. Fixed calendar: guests can now view their confirmed/requested appointments but cannot add, edit, delete, or use Console mode."
+  },
+  {
+    "version": "2026.4.62",
+    "date": "2026-04-20",
+    "title": "Fix: Admin can now see and share all documents in web UI and Telegram",
+    "notes": "Admins now see ALL documents (including other users private docs and system docs with chat_id=0) in the web Documents list and Telegram docs menu. Share toggle works for any document regardless of owner. list_documents() now accepts is_admin=True to return all docs."
+  },
+  {
+    "version": "2026.4.61",
+    "date": "2026-04-19",
+    "title": "Admin: Voice Settings submenu, auto-add contacts, web UI sync",
+    "notes": "Merged Voice Options + Voice Config into single Voice Settings submenu in Telegram admin. Auto-add newly approved users to every admin contact book. Web admin role badges now show Guest/User/Admin. Web admin Voice section renamed Voice Settings with STT/TTS config info."
+  },
+  {
+    "version": "2026.4.60",
+    "date": "2026-04-19",
+    "title": "Tests: add T158-T161 guest appointment regression tests",
+    "changes": [
+      "T158: guest calendar dual-save on confirm (inv_confirm_dual_save + guard)",
+      "T159: guest My Data loads _cal_load + passes meetings_count",
+      "T160: full invitation flow functions present in bot_calendar.py",
+      "T161: all invitation strings + {meetings_count} placeholder in ru/en/de"
+    ]
+  },
+  {
+    "version": "2026.4.59",
+    "date": "2026-04-19",
+    "title": "Meeting confirmation: save appointment to guest calendar; show count in My Data",
+    "changes": [
+      "When expert confirms meeting, event is now saved to guest's calendar (was only in expert's)",
+      "My Data for guests now shows confirmed meetings count instead of empty section"
+    ]
+  },
+  {
+    "version": "2026.4.58",
+    "date": "2026-04-19",
+    "title": "My Data: hide notes/events/contacts/mail from guests",
+    "changes": [
+      "Guests see only basic profile info (name, TG ID, lang, reg date) in My Data",
+      "Notes, events, contacts and mail status rows are hidden for guests"
+    ]
+  },
+  {
+    "version": "2026.4.57",
+    "date": "2026-04-18",
+    "title": "Profile contact email: set address without IMAP; block guests from mail digest",
+    "notes": "- feat: all users (incl. guests) can set a contact email address in profile (📧 button)\n- feat: contact email stored as user preference, used for meeting invitations and newsletters\n- feat: email displayed in profile with masking (backward compat: falls back to IMAP creds email)\n- fix: guests blocked from mail digest (handle_digest_auth, handle_mail_consent, handle_mail_settings)\n- fix: profile mailbox button now leads to simple email setter instead of IMAP wizard"
+  },
+  {
+    "version": "2026.4.56",
+    "date": "2026-04-18",
+    "title": "Meeting flow: expert selection + multi-day navigation + localized weekday names",
+    "notes": "- feat: show consultant/expert selector if multiple admins exist\n- feat: per-day slot picker with ← Prev day / Next day → navigation\n- feat: weekday names localized (ru/en/de) using user language\n- fix: removed single-day limitation — now navigates all free business days in next 30 days\n- fix: callback format changed to cal_meet_expert/cal_meet_day/cal_meet_slot"
+  },
+  {
+    "version": "2026.4.55",
+    "date": "2026-04-18",
+    "title": "Fix: Meeting request button now works — missing module-level state and helpers added",
+    "notes": "- fix: add _pending_meeting and _pending_invitations module-level dicts to bot_calendar.py\n- fix: add _get_free_slots() helper (weekday business hours, conflict check)\n- fix: add _handle_inv_confirm/_handle_inv_decline imports and cal_inv_ok/cal_inv_no callbacks\n- feat: add all missing i18n strings (guest_inv_notify_admin, guest_inv_btn_*, guest_inv_*_admin/guest) in ru/en/de"
+  },
+  {
+    "version": "2026.4.54",
+    "date": "2026-04-18",
+    "title": "Meeting request in main menu for all users; Mail hidden from guests",
+    "notes": "- feat: Request Meeting button in main menu for all allowed users (guests + full users)\n- fix: Mail/Digest button hidden from guest users in main menu\n- feat: guest_meeting_topic flow + cal_inv_slot time slot picker\n- chore: VPS-Supertaris documented as 3rd OpenClaw deploy target"
+  },
+  {
     "version": "2026.4.53",
     "date": "2026-04-17",
     "title": "Admin user management submenu + two-step role picker",

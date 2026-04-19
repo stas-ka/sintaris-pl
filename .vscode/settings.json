@@ -14,5 +14,6 @@
         ]
       }
     ]
-  }
+  },
+  "markdown.validate.enabled": true
 }

@@ -53,6 +53,7 @@ from telegram.bot_users import (
     _upsert_registration, _is_blocked_reg, _is_pending_reg,
     _get_pending_registrations,
     _slug, _load_note_text, _save_note_file,
+    _set_reg_lang,
 )
 
 # ─── Voice pipeline ───────────────────────────────────────────────────────────
@@ -78,7 +79,10 @@ from telegram.bot_admin import (
     _handle_openai_llm_menu, _handle_llm_setkey_prompt, _handle_save_llm_key,
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
     _handle_ollama_llm_menu, _handle_ollama_set_model, _handle_ollama_persist_model,
+    _handle_ollama_pull_start, _handle_ollama_pull_done, _pending_ollama_pull,
+    _handle_user_model_menu, _handle_user_model_set,
     _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
+    _handle_admin_voice_menu,
     _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
     _handle_admin_rag_settings, _handle_admin_rag_stats, _handle_admin_doc_stats,
     _start_admin_rag_set, _finish_admin_rag_set,
@@ -101,6 +105,9 @@ from telegram.bot_admin import (
 # ─── Campaign Agent ───────────────────────────────────────────────────────────
 import features.bot_campaign as _campaign
 
+# ─── Notify Agent ────────────────────────────────────────────────────────────
+import features.bot_notify as _notify
+
 # ─── User handlers ────────────────────────────────────────────────────────────
 from telegram.bot_handlers import (
     _handle_digest, _refresh_digest,
@@ -116,6 +123,7 @@ from telegram.bot_handlers import (
     _handle_profile,
     _handle_web_link,
     _start_profile_edit_name, _finish_profile_edit_name,
+    _start_profile_set_email, _finish_profile_set_email,
     _start_profile_change_pw, _finish_profile_change_pw,
     _handle_profile_lang, _set_profile_lang, _handle_profile_my_data,
     _handle_profile_clear_memory, _handle_profile_clear_memory_confirmed,
@@ -126,7 +134,7 @@ from telegram.bot_handlers import (
 
 # ─── Calendar ─────────────────────────────────────────────────────────────────
 from features.bot_calendar import (
-    _handle_calendar_menu, _handle_cal_event_detail,
+    _handle_calendar_menu, _handle_cal_event_detail, _handle_guest_cal_event_detail,
     _start_cal_add, _finish_cal_add, _handle_cal_cancel_event,
     _cal_do_confirm_save, _show_cal_confirm,
     _cal_prompt_edit_field, _cal_handle_edit_input,
@@ -137,6 +145,9 @@ from features.bot_calendar import (
     _show_cal_confirm_multi, _cal_multi_save_one, _cal_multi_skip, _cal_multi_save_all,
     _handle_cal_delete_request, _handle_cal_delete_confirmed,
     _handle_calendar_query, _start_cal_console, _handle_cal_console,
+    _start_guest_meeting, _finish_guest_meeting_topic, _finish_guest_meeting_slot,
+    _handle_inv_confirm, _handle_inv_decline,
+    _handle_expert_selected, _handle_day_nav,
 )
 
 # ─── Mail credentials ──────────────────────────────────────────────────────────
@@ -165,6 +176,7 @@ from features.bot_contacts import (
     _start_contact_edit, _start_contact_edit_field, _finish_contact_edit,
     _handle_contact_delete, _handle_contact_delete_confirmed,
     _start_contact_search, _finish_contact_search,
+    _handle_contact_sync_crm,
     _pending_contact,
 )
 
@@ -243,8 +255,10 @@ def cmd_start(message):
             _upsert_registration(cid, username=username, name=name,
                                  status="guest",
                                  first_name=first, last_name=last)
+            # Persist the detected language so it survives bot restarts
+            _set_reg_lang(cid, _lang(cid))
             _st._dynamic_guests.add(cid)
-            log.info("[Guest] auto-registered chat_id=%s username=%s", cid, username)
+            log.info("[Guest] auto-registered chat_id=%s username=%s lang=%s", cid, username, _lang(cid))
             bot.send_message(cid, _t(cid, "guest_welcome"),
                              parse_mode="Markdown",
                              reply_markup=_menu_keyboard(cid))
@@ -419,6 +433,36 @@ def callback_handler(call):
         screen = load_screen("screens/help.yaml", ctx,
                              t_func=lambda _lang_arg, key: _t(cid, key))
         render_screen(screen, cid, bot)
+
+    # ── Meeting request (all allowed users) ────────────────────────────────
+    elif data == "guest_meeting":
+        _start_guest_meeting(cid)
+    elif data.startswith("cal_meet_expert:"):
+        try:
+            _handle_expert_selected(cid, int(data.split(":", 1)[1]))
+        except (ValueError, IndexError):
+            pass
+    elif data.startswith("cal_meet_day:"):
+        # format: cal_meet_day:<expert_id>:<YYYY-MM-DD>
+        parts = data.split(":", 2)
+        try:
+            _handle_day_nav(cid, int(parts[1]), parts[2])
+        except (ValueError, IndexError):
+            pass
+    elif data.startswith("cal_meet_slot:"):
+        # format: cal_meet_slot:<expert_id>:<YYYY-MM-DD>:<hour>
+        parts = data.split(":", 3)
+        try:
+            _finish_guest_meeting_slot(cid, int(parts[1]), parts[2], int(parts[3]))
+        except (ValueError, IndexError):
+            pass
+    elif data.startswith("cal_inv_ok:"):
+        inv_id = data.split(":", 1)[1]
+        _handle_inv_confirm(cid, inv_id)
+    elif data.startswith("cal_inv_no:"):
+        inv_id = data.split(":", 1)[1]
+        _handle_inv_decline(cid, inv_id)
+
     # ── User profile ───────────────────────────────────────────────────────────
     elif data == "profile":
         if not _is_allowed(cid): return _deny(cid)
@@ -429,6 +473,9 @@ def callback_handler(call):
     elif data == "profile_edit_name":
         if not _is_allowed(cid): return _deny(cid)
         _start_profile_edit_name(cid)
+    elif data == "profile_set_email":
+        # All users (including guests) may set their contact email
+        _start_profile_set_email(cid)
     elif data == "profile_change_pw":
         if not _is_allowed(cid): return _deny(cid)
         _start_profile_change_pw(cid)
@@ -582,6 +629,24 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    elif data == "ollama_pull_start":
+        if _is_admin(cid):
+            _handle_ollama_pull_start(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "user_model_menu":
+        if _is_admin(cid):
+            _handle_user_model_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("user_model_set:"):
+        if _is_admin(cid):
+            _handle_user_model_set(cid, data[len("user_model_set:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     elif data == "llm_setkey_openai":
         if _is_admin(cid):
             _handle_llm_setkey_prompt(cid)
@@ -618,6 +683,12 @@ def callback_handler(call):
     elif data == "admin_voice_config":
         if _is_admin(cid):
             _handle_admin_voice_config(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_voice_menu":
+        if _is_admin(cid):
+            _handle_admin_voice_menu(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -847,6 +918,89 @@ def callback_handler(call):
     elif data == "campaign_cancel":
         _campaign.cancel(cid)
         bot.send_message(cid, _t(cid, "campaign_cancelled"))
+
+    # ── Notify Agent ───────────────────────────────────────────────────────────
+    elif data == "notify_menu":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.show_notify_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_tpl_menu":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.show_tpl_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_tpl_add":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_tpl_add(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_view:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.show_tpl_view(cid, data[len("notify_tpl_view:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_edit:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_tpl_edit(cid, data[len("notify_tpl_edit:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_del:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.confirm_tpl_delete(cid, data[len("notify_tpl_del:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_del_confirm:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.do_tpl_delete(cid, data[len("notify_tpl_del_confirm:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_send":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_send(cid, owner_chat_id=cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_pick:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.on_tpl_picked(cid, data[len("notify_tpl_pick:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_custom_msg":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_custom_msg(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_recipients_all":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.on_recipients_all(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_recipients_filter":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_filter_input(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_confirm_send":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.confirm_send(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_cancel":
+        _notify.cancel(cid)
+        bot.send_message(cid, _t(cid, "notify_cancelled"))
 
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
@@ -1089,12 +1243,13 @@ def callback_handler(call):
         if not _is_guest(cid):
             _handle_contact_delete_confirmed(cid, data[len("contact_del_confirm:"):])
 
+    elif data.startswith("cnt_sync_crm:"):
+        if not _is_guest(cid):
+            _handle_contact_sync_crm(cid, data[len("cnt_sync_crm:"):])
+
     # ── Calendar ───────────────────────────────────────────────────────────
     elif data == "menu_calendar":
-        if not _is_guest(cid):
-            _handle_calendar_menu(cid)
-        else:
-            bot.send_message(cid, _t(cid, "admin_only"))
+        _handle_calendar_menu(cid)  # guest: shows own events, read-only keyboard (no Add/Console)
 
     elif data == "cal_add":
         if not _is_guest(cid):
@@ -1106,7 +1261,7 @@ def callback_handler(call):
         if not _is_guest(cid):
             _handle_cal_event_detail(cid, data[len("cal_event:"):])
         else:
-            bot.send_message(cid, _t(cid, "admin_only"))
+            _handle_guest_cal_event_detail(cid, data[len("cal_event:"):])
 
     elif data.startswith("cal_del:"):
         if not _is_guest(cid):
@@ -1241,6 +1396,9 @@ def _handle_agents_menu(chat_id: int) -> None:
             _t(chat_id, "agents_btn_campaign"), callback_data="campaign_start"
         ),
         InlineKeyboardButton(
+            _t(chat_id, "agents_btn_notify"), callback_data="notify_menu"
+        ),
+        InlineKeyboardButton(
             _t(chat_id, "agents_btn_back"), callback_data="menu"
         ),
     )
@@ -1300,6 +1458,11 @@ def text_handler(message):
 
     mode = _st._user_mode.get(cid)
 
+    # ── Meeting topic input — all allowed users ─────────────────────────────
+    if mode == "guest_meeting_topic":
+        _finish_guest_meeting_topic(cid, message.text)
+        return
+
     # ── Campaign agent text input — must be checked BEFORE mode fallback to chat ──
     if _campaign.is_active(cid):
         if _is_admin(cid) or _is_advanced(cid):
@@ -1308,6 +1471,15 @@ def text_handler(message):
                 return
         else:
             _campaign.cancel(cid)
+
+    # ── Notify agent text input ────────────────────────────────────────────────
+    if _notify.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            consumed = _notify.handle_message(cid, message.text)
+            if consumed:
+                return
+        else:
+            _notify.cancel(cid)
 
     if mode is None:
         # Default to chat mode — don't force menu on every unrouted text
@@ -1318,6 +1490,10 @@ def text_handler(message):
     # ── Profile self-service text flows ────────────────────────────────────────
     if mode == "profile_edit_name":
         _finish_profile_edit_name(cid, message.text)
+        return
+
+    if mode == "profile_set_email":
+        _finish_profile_set_email(cid, message.text)
         return
 
     if mode == "profile_change_pw":
@@ -1578,6 +1754,14 @@ def text_handler(message):
         else:
             _st._user_mode.pop(cid, None)
             _docs_pending_rename.pop(cid, None)
+        return
+
+    if mode == "ollama_pull":
+        if _is_admin(cid):
+            _handle_ollama_pull_done(cid, message.text)
+        else:
+            _st._user_mode.pop(cid, None)
+            _pending_ollama_pull.pop(cid, None)
         return
 
     if mode == "dev_chat":

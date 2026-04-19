@@ -34,7 +34,7 @@ from core.bot_config import CALENDAR_DIR, log
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS, fmt_prompt
 from telegram.bot_access import (
-    _t, _escape_md, _back_keyboard, _send_menu, _is_allowed,
+    _t, _escape_md, _back_keyboard, _send_menu, _is_allowed, _is_guest, _lang,
 )
 from core.bot_llm import ask_llm
 from telegram.bot_users import _resolve_storage_id
@@ -46,6 +46,40 @@ from core.store import store
 # ─────────────────────────────────────────────────────────────────────────────
 
 _pending_cal: dict[int, dict] = {}   # chat_id → {"step": "input"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Meeting invitation state
+# ─────────────────────────────────────────────────────────────────────────────
+
+_pending_meeting: dict = {}       # chat_id → {"step", "topic", "expert_id"}
+_pending_invitations: dict = {}   # inv_id  → {"guest_chat_id", "expert_id", "topic", "dt_iso"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Meeting UI — localised day/month names
+# ─────────────────────────────────────────────────────────────────────────────
+
+_WEEKDAYS_LOC = {
+    "ru": ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"],
+    "en": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    "de": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+}
+_MONTHS_LOC = {
+    "ru": ["января", "февраля", "марта", "апреля", "мая", "июня",
+           "июля", "августа", "сентября", "октября", "ноября", "декабря"],
+    "en": ["January", "February", "March", "April", "May", "June",
+           "July", "August", "September", "October", "November", "December"],
+    "de": ["Januar", "Februar", "März", "April", "Mai", "Juni",
+           "Juli", "August", "September", "Oktober", "November", "Dezember"],
+}
+
+
+def _fmt_meeting_date(day, lang: str) -> str:
+    """Localised weekday + date: 'Понедельник, 20 апреля'"""
+    if isinstance(day, datetime):
+        day = day.date()
+    wd = _WEEKDAYS_LOC.get(lang, _WEEKDAYS_LOC["en"])[day.weekday()]
+    mo = _MONTHS_LOC.get(lang, _MONTHS_LOC["en"])[day.month - 1]
+    return f"{wd}, {day.day} {mo}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -191,8 +225,9 @@ def _calendar_keyboard(chat_id: int, events: list) -> InlineKeyboardMarkup:
         dt_str = dt.strftime("%d.%m %H:%M")
         label = f"🗓 {ev['title']} · {dt_str}  {cdown}"
         kb.add(InlineKeyboardButton(label, callback_data=f"cal_event:{ev['id']}"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_add"), callback_data="cal_add"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_console"), callback_data="cal_console"))
+    if not _is_guest(chat_id):
+        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_add"), callback_data="cal_add"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_console"), callback_data="cal_console"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="menu"))
     return kb
 
@@ -275,6 +310,23 @@ def _handle_cal_event_detail(chat_id: int, ev_id: str) -> None:
             f"📅 {dt.strftime('%d.%m.%Y %H:%M')}\n{cdown}")
     bot.send_message(chat_id, text, parse_mode="Markdown",
                      reply_markup=_cal_event_keyboard(chat_id, ev_id))
+
+
+def _handle_guest_cal_event_detail(chat_id: int, ev_id: str) -> None:
+    """Read-only event detail for guests — shows title/date, Back only (no edit/delete)."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    events = _cal_load(chat_id)
+    ev = next((e for e in events if e.get("id") == ev_id), None)
+    if not ev:
+        _handle_calendar_menu(chat_id)
+        return
+    dt = datetime.fromisoformat(ev["dt_iso"])
+    cdown = _fmt_countdown(dt, lang)
+    text = (f"🗓 *{_escape_md(ev['title'])}*\n"
+            f"📅 {dt.strftime('%d.%m.%Y %H:%M')}\n{cdown}")
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="menu_calendar"))
+    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1105,3 +1157,288 @@ def _cal_morning_briefing_loop() -> None:
 
             except Exception as e:
                 log.debug(f"[Cal] Morning briefing error for {fp}: {e}")
+
+def _get_free_slots_for_date(expert_id: int, day) -> list:
+    """Return free 1-hour slots on a specific calendar date (Mon–Fri, 09:00–16:00)."""
+    if isinstance(day, datetime):
+        day = day.date()
+    events = _cal_load(expert_id)
+    busy = []
+    for ev in events:
+        try:
+            busy.append(datetime.fromisoformat(ev["dt_iso"]))
+        except Exception:
+            pass
+    now = datetime.now()
+    slots = []
+    for h in range(9, 17):
+        candidate = datetime(day.year, day.month, day.day, h, 0)
+        if candidate > now and not any(
+            abs((candidate - b).total_seconds()) < 3600 for b in busy
+        ):
+            slots.append(candidate)
+    return slots
+
+
+def _find_day_with_slots(expert_id: int, from_date, direction: int = 1,
+                         max_search: int = 30):
+    """Return nearest business day (Mon–Fri) with ≥1 free slot. direction=1 forward, -1 back."""
+    if isinstance(from_date, datetime):
+        from_date = from_date.date()
+    elif isinstance(from_date, str):
+        from_date = datetime.fromisoformat(from_date).date()
+    current = from_date + timedelta(days=direction)
+    for _ in range(max_search):
+        if current.weekday() <= 4 and _get_free_slots_for_date(expert_id, current):
+            return current
+        current += timedelta(days=direction)
+    return None
+
+
+def _get_free_slots(expert_id: int, days: int = 14, max_slots: int = 5) -> list:
+    """Legacy helper: return up to max_slots free slots across next 'days' calendar days."""
+    now = datetime.now()
+    slots: list = []
+    for d in range(1, days + 1):
+        day = (now + timedelta(days=d)).date()
+        if day.weekday() <= 4:
+            slots.extend(_get_free_slots_for_date(expert_id, day))
+            if len(slots) >= max_slots:
+                break
+    return slots[:max_slots]
+
+
+def _show_meeting_day_slots(chat_id: int, expert_id: int, day) -> None:
+    """Send slot-picker message for a specific day with ← prev / next → day navigation."""
+    if isinstance(day, str):
+        day = datetime.fromisoformat(day).date()
+    elif isinstance(day, datetime):
+        day = day.date()
+    lang = _lang(chat_id)
+    day_label = _fmt_meeting_date(day, lang)
+    day_iso = day.isoformat()
+    slots = _get_free_slots_for_date(expert_id, day)
+    kb = InlineKeyboardMarkup(row_width=2)
+    for slot in slots:
+        kb.add(InlineKeyboardButton(
+            slot.strftime("%H:%M"),
+            callback_data=f"cal_meet_slot:{expert_id}:{day_iso}:{slot.hour}"
+        ))
+    nav: list = []
+    prev_day = _find_day_with_slots(expert_id, day, direction=-1)
+    next_day = _find_day_with_slots(expert_id, day, direction=1)
+    if prev_day:
+        nav.append(InlineKeyboardButton(
+            _t(chat_id, "guest_meeting_btn_prev_day"),
+            callback_data=f"cal_meet_day:{expert_id}:{prev_day.isoformat()}"
+        ))
+    if next_day:
+        nav.append(InlineKeyboardButton(
+            _t(chat_id, "guest_meeting_btn_next_day"),
+            callback_data=f"cal_meet_day:{expert_id}:{next_day.isoformat()}"
+        ))
+    if nav:
+        kb.row(*nav)
+    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+    if slots:
+        header = _t(chat_id, "guest_meeting_day_header", weekday=day_label)
+    else:
+        header = _t(chat_id, "guest_meeting_no_slots_day", weekday=day_label)
+    bot.send_message(chat_id, header, parse_mode="Markdown", reply_markup=kb)
+
+
+def _start_guest_meeting(chat_id: int) -> None:
+    """Entry point — show expert selector, or skip to topic if only one expert."""
+    from core.bot_config import ADMIN_USERS
+    experts = list(ADMIN_USERS)
+    if not experts:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+        return
+    _pending_meeting[chat_id] = {"step": "expert"}
+    if len(experts) == 1:
+        _pending_meeting[chat_id]["expert_id"] = experts[0]
+        _pending_meeting[chat_id]["step"] = "topic"
+        _st._user_mode[chat_id] = "guest_meeting_topic"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
+                         parse_mode="Markdown", reply_markup=kb)
+    else:
+        kb = InlineKeyboardMarkup(row_width=1)
+        for eid in experts:
+            try:
+                from telegram.bot_users import _find_registration
+                reg = _find_registration(eid)
+                name = (reg.get("name") or reg.get("first_name") or str(eid)) if reg else str(eid)
+            except Exception:
+                name = str(eid)
+            kb.add(InlineKeyboardButton(f"👤 {name}",
+                                        callback_data=f"cal_meet_expert:{eid}"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_select_expert"),
+                         parse_mode="Markdown", reply_markup=kb)
+
+
+def _handle_expert_selected(chat_id: int, expert_id: int) -> None:
+    """Expert chosen — prompt for meeting topic."""
+    state = _pending_meeting.get(chat_id, {})
+    state["expert_id"] = expert_id
+    state["step"] = "topic"
+    _pending_meeting[chat_id] = state
+    _st._user_mode[chat_id] = "guest_meeting_topic"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+    bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
+                     parse_mode="Markdown", reply_markup=kb)
+
+
+def _finish_guest_meeting_topic(chat_id: int, topic: str) -> None:
+    """User typed meeting topic — find first free business day and show slot picker."""
+    _st._user_mode.pop(chat_id, None)
+    topic = topic.strip()[:200]
+    if not topic:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
+                         parse_mode="Markdown")
+        _st._user_mode[chat_id] = "guest_meeting_topic"
+        return
+    state = _pending_meeting.get(chat_id, {})
+    expert_id = state.get("expert_id")
+    if not expert_id:
+        from core.bot_config import ADMIN_USERS
+        experts = list(ADMIN_USERS)
+        if not experts:
+            bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+            _pending_meeting.pop(chat_id, None)
+            return
+        expert_id = experts[0]
+    state["topic"]     = topic
+    state["expert_id"] = expert_id
+    state["step"]      = "pick_slot"
+    _pending_meeting[chat_id] = state
+    today = datetime.now().date()
+    first_day = today if _get_free_slots_for_date(expert_id, today) \
+        else _find_day_with_slots(expert_id, today, direction=1)
+    if not first_day:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+        _pending_meeting.pop(chat_id, None)
+        return
+    _show_meeting_day_slots(chat_id, expert_id, first_day)
+
+
+def _handle_day_nav(chat_id: int, expert_id: int, day_iso: str) -> None:
+    """Navigate to a specific day's slot picker."""
+    try:
+        day = datetime.fromisoformat(day_iso).date()
+    except Exception:
+        return
+    _show_meeting_day_slots(chat_id, expert_id, day)
+
+
+def _finish_guest_meeting_slot(chat_id: int, expert_id: int,
+                               day_iso: str, hour: int) -> None:
+    """Guest chose a time slot — create invitation and notify admin."""
+    try:
+        from datetime import date as _d  # noqa: F401
+        day = datetime.fromisoformat(day_iso).date()
+        dt = datetime(day.year, day.month, day.day, hour, 0)
+    except Exception:
+        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+        return
+    state = _pending_meeting.pop(chat_id, {})
+    topic  = state.get("topic", "—")
+    dt_iso = dt.strftime("%Y-%m-%dT%H:%M")
+    inv_id = str(uuid.uuid4())[:8]
+    _pending_invitations[inv_id] = {
+        "guest_chat_id": chat_id,
+        "expert_id":     expert_id,
+        "topic":         topic,
+        "dt_iso":        dt_iso,
+    }
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "guest_meeting_requested",
+           topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M")),
+        parse_mode="Markdown",
+    )
+    if expert_id:
+        from telegram.bot_users import _find_registration
+        reg = _find_registration(chat_id)
+        guest_name = (reg.get("name") or reg.get("first_name") or str(chat_id)) if reg else str(chat_id)
+        text = _t(expert_id, "guest_inv_notify_admin",
+                  name=guest_name, topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M"))
+        kb = InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            InlineKeyboardButton("✅ " + _t(expert_id, "guest_inv_btn_confirm"),
+                                 callback_data=f"cal_inv_ok:{inv_id}"),
+            InlineKeyboardButton("❌ " + _t(expert_id, "guest_inv_btn_decline"),
+                                 callback_data=f"cal_inv_no:{inv_id}"),
+        )
+        try:
+            bot.send_message(expert_id, text, parse_mode="Markdown", reply_markup=kb)
+        except Exception as e:
+            log.warning("[CalInv] Failed to notify expert %s: %s", expert_id, e)
+    log.info("[CalInv] Created inv=%s guest=%s expert=%s dt=%s topic=%r",
+             inv_id, chat_id, expert_id, dt_iso, topic)
+
+
+def _handle_inv_confirm(admin_chat_id: int, inv_id: str) -> None:
+    """Admin confirmed the meeting — create event in admin's calendar + notify guest."""
+    inv = _pending_invitations.pop(inv_id, None)
+    if not inv:
+        bot.send_message(admin_chat_id, "⚠️ Invitation not found (already handled?).")
+        return
+
+    topic     = inv["topic"]
+    dt_iso    = inv["dt_iso"]
+    guest_id  = inv["guest_chat_id"]
+    dt        = datetime.fromisoformat(dt_iso)
+
+    ev = _cal_add_event(admin_chat_id, topic, dt, remind_before_min=15)
+    _schedule_reminder(admin_chat_id, ev)
+
+    # Also save the confirmed appointment in the guest's calendar
+    try:
+        guest_ev = _cal_add_event(guest_id, topic, dt, remind_before_min=15)
+        _schedule_reminder(guest_id, guest_ev)
+    except Exception as e:
+        log.warning("[CalInv] Failed to save event to guest %s calendar: %s", guest_id, e)
+
+    bot.send_message(
+        admin_chat_id,
+        _t(admin_chat_id, "guest_inv_confirmed_admin",
+           topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M")),
+        parse_mode="Markdown",
+    )
+    try:
+        bot.send_message(
+            guest_id,
+            _t(guest_id, "guest_inv_confirmed_guest",
+               topic=topic, dt=dt.strftime("%d.%m.%Y %H:%M")),
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        log.warning("[CalInv] Failed to notify guest %s: %s", guest_id, e)
+
+    log.info("[CalInv] Confirmed inv=%s expert=%s guest=%s dt=%s",
+             inv_id, admin_chat_id, guest_id, dt_iso)
+
+
+def _handle_inv_decline(admin_chat_id: int, inv_id: str) -> None:
+    """Admin declined the meeting — notify guest."""
+    inv = _pending_invitations.pop(inv_id, None)
+    if not inv:
+        bot.send_message(admin_chat_id, "⚠️ Invitation not found (already handled?).")
+        return
+
+    topic    = inv["topic"]
+    guest_id = inv["guest_chat_id"]
+
+    bot.send_message(admin_chat_id, _t(admin_chat_id, "guest_inv_declined_admin", topic=topic),
+                     parse_mode="Markdown")
+    try:
+        bot.send_message(guest_id, _t(guest_id, "guest_inv_declined_guest", topic=topic),
+                         parse_mode="Markdown")
+    except Exception as e:
+        log.warning("[CalInv] Failed to notify guest %s: %s", guest_id, e)
+
+    log.info("[CalInv] Declined inv=%s expert=%s guest=%s", inv_id, admin_chat_id, guest_id)

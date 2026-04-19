@@ -19,6 +19,93 @@ ui/bot_actions ← ui/render_telegram · bot_web
 
 ---
 
+## Deployment Variants — Component Quick Reference
+
+> **Read this before implementing any feature that touches STT, LLM, storage, voice, or REST API.**  
+> Use `DEVICE_VARIANT` (set in `bot.env`) to select behavior. Check it in `src/core/bot_config.py`.
+
+| Layer | PicoClaw (Raspberry Pi) | OpenClaw (x86_64 laptop/PC) |
+|---|---|---|
+| `DEVICE_VARIANT` | `picoclaw` (default) | `openclaw` |
+| **Target hosts** | OpenClawPI2 (dev) · OpenClawPI (prod) | TariStation2 (dev) · TariStation1 SintAItion (prod) · VPS-Supertaris |
+| **STT hotword** | Vosk small-ru 48 MB | Vosk small-ru 48 MB |
+| **STT commands** | Vosk small-ru (streaming) | **faster-whisper** base/small int8 (CTranslate2) |
+| **TTS** | Piper ONNX (irina-medium) | Piper ONNX (irina-medium) |
+| **LLM default** | `taris` CLI → OpenRouter (cloud) | `ollama` → Qwen3/Qwen2 local (:11434) |
+| **LLM fallback** | `openai` gpt-4o-mini | `openai` gpt-4o-mini |
+| **Local offline LLM** | llama.cpp `taris-llm.service` (:8081) | Ollama 0.18+ (:11434) — `qwen3:8b` preferred |
+| **LLM dispatch key** | `_DISPATCH["taris"]` → `_ask_taris()` | `_DISPATCH["ollama"]` → `_ask_ollama()` |
+| **AI gateway** | ❌ | `sintaris-openclaw` Node.js gateway (skills, MCP) |
+| **Storage** | SQLite + FTS5 · `store_sqlite.py` | PostgreSQL 14 · `store_postgres.py` |
+| **Embeddings** | `sqlite-vec` 384-dim (sentence-transformers MiniLM) | `pgvector` 1536-dim, HNSW index |
+| **RAG** | SQLite FTS5 keyword search | pgvector semantic search (⏳ wiring phase B) |
+| **REST API** | ❌ | ✅ `/api/status` · `/api/chat` (Bearer token) |
+| **N8N integration** | ❌ | ✅ `/webhook/n8n` + `bot_n8n.py` |
+| **Session context** | Stateless | ✅ `--session-id taris` (gateway) |
+| **GPU** | ❌ | Optional CUDA / AMD ROCm (HSA) |
+| **systemd scope** | system (`taris-telegram.service` etc.) | user (`~/.config/systemd/user/`) |
+| **Config file** | `~/.taris/bot.env` | `~/.taris/bot.env` (same keys) |
+
+### Python Packages — by Variant
+
+| Package | PicoClaw | OpenClaw | Purpose |
+|---|:---:|:---:|---|
+| `pyTelegramBotAPI` 4.x | ✅ | ✅ | Telegram bot |
+| `fastapi` + `uvicorn` | ✅ | ✅ | Web UI server |
+| `python-jose[cryptography]` | ✅ | ✅ | JWT auth |
+| `vosk` 0.3.45 | ✅ | ✅ | Hotword STT |
+| `webrtcvad` 2.0.10 | ✅ | ✅ | VAD |
+| `requests` | ✅ | ✅ | HTTP (LLM APIs) |
+| `openai` 1.x | ✅ | ✅ | OpenAI API + Ollama REST |
+| `pdfminer.six` / `PyMuPDF` | ✅ | ✅ | PDF extraction |
+| `python-docx` | ✅ | ✅ | DOCX extraction |
+| `psutil` | ✅ | ✅ | RAM detection |
+| `sqlite3` (stdlib) | ✅ | ✅ | SQLite FTS5 (all variants) |
+| `faster-whisper` | ❌ | ✅ | CTranslate2 Whisper STT |
+| `scipy` | ❌ | ✅ | Audio resampling |
+| `sentence-transformers` | ❌ | ✅ | Embeddings (MiniLM) |
+| `psycopg2-binary` | ❌ | ✅ | PostgreSQL driver |
+| `pgvector` 0.2+ | ❌ | ✅ | pgvector Python binding |
+
+### System Binaries — by Variant
+
+| Binary | PicoClaw | OpenClaw | Purpose |
+|---|:---:|:---:|---|
+| `piper` | ✅ | ✅ | TTS synthesis |
+| `ffmpeg` | ✅ | ✅ | OGG↔PCM encode/decode |
+| `pw-record` (PipeWire) | ✅ | ✅ | Mic capture |
+| `picoclaw` (binary) | ✅ | ❌ | LLM CLI → OpenRouter |
+| `ollama` | ❌ | ✅ | Local LLM server |
+| `openclaw` (Node.js gateway) | ❌ | ✅ | Skills + MCP proxy |
+
+### Key env vars that differ per variant
+
+```bash
+# PicoClaw                         # OpenClaw
+DEVICE_VARIANT=picoclaw             DEVICE_VARIANT=openclaw
+LLM_PROVIDER=taris                  LLM_PROVIDER=ollama
+STT_PROVIDER=vosk                   STT_PROVIDER=faster_whisper
+DB_BACKEND=sqlite                   DB_BACKEND=postgres
+DATABASE_URL=                       DATABASE_URL=postgresql://...
+FASTER_WHISPER_MODEL=               FASTER_WHISPER_MODEL=small
+OLLAMA_HOST=                        OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=                       OLLAMA_MODEL=qwen3:8b
+TARIS_API_TOKEN=                    TARIS_API_TOKEN=<bearer for /api/*>
+```
+
+### When implementing a new feature — variant checklist
+
+- **Storage:** use `get_store()` from `core/bot_db.py` — returns SQLite or Postgres adapter automatically.
+- **LLM call:** use `ask_llm_with_history(chat_id, prompt)` in `core/bot_llm.py` — routes per `LLM_PROVIDER`.
+- **STT/voice:** check `DEVICE_VARIANT == "openclaw"` before using faster-whisper APIs.
+- **REST endpoints:** only expose new `/api/*` routes when `DEVICE_VARIANT == "openclaw"`.
+- **Embeddings:** on OpenClaw use `vec_embeddings` (pgvector, 1536-dim); on PicoClaw use SQLite FTS5.
+- **UI parity:** any Telegram UI change must also be reflected in Web UI templates (`src/web/templates/`).
+
+Full variant docs → [doc/architecture/overview.md](architecture/overview.md) · [doc/architecture/openclaw-integration.md](architecture/openclaw-integration.md) · [doc/architecture/picoclaw.md](architecture/picoclaw.md) · [doc/architecture/stacks.md](architecture/stacks.md)
+
+---
+
 ## Key Functions by Task
 
 | Task | Module | Function |

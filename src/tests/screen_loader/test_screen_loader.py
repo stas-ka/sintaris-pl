@@ -646,16 +646,16 @@ class TestMainMenuYaml:
         assert len(admin_screen.widgets) > len(user_screen.widgets)
 
     def test_main_menu_user_sees_8_widgets(self):
-        """User should see 8 widgets (11 total minus 3 admin-only rows)."""
+        """User should see 9 widgets (12 total minus 3 admin-only rows)."""
         self._skip_if_missing()
         screen = load_screen(self.SCREEN_PATH, _user("user"), variables={}, t_func=_t)
-        assert len(screen.widgets) == 8
+        assert len(screen.widgets) == 9
 
     def test_main_menu_admin_sees_11_widgets(self):
-        """Admin should see all 11 widgets (includes Agents button added v2026.4.x)."""
+        """Admin should see all 12 widgets (includes Agents + Digest buttons)."""
         self._skip_if_missing()
         screen = load_screen(self.SCREEN_PATH, _user("admin"), variables={}, t_func=_t)
-        assert len(screen.widgets) == 11
+        assert len(screen.widgets) == 12
 
 
 # ===========================================================================

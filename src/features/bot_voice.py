@@ -1277,7 +1277,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         # Resolve the actual provider so the log is accurate (per_func["voice"] → LLM_PROVIDER)
         _voice_provider = get_per_func_provider("voice") or LLM_PROVIDER
         log.info(f"[Voice] LLM call start: provider={_voice_provider} text_len={len(text)} history={len(_history_msgs)}")
-        response = ask_llm_with_history(_messages, timeout=90, use_case="voice")
+        response = ask_llm_with_history(_messages, timeout=90, use_case="voice", chat_id=chat_id)
         _timing["LLM"] = time.time() - _ts
         log.info(f"[Voice] LLM done: {_timing['LLM']:.1f}s resp_len={len(response or '')}")
 

@@ -402,14 +402,15 @@ class SQLiteStore:
         db = self._db()
         db.execute(
             """INSERT INTO contacts
-               (id, chat_id, name, phone, email, address, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+               (id, chat_id, name, phone, email, address, notes, telegram)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    name       = excluded.name,
                    phone      = excluded.phone,
                    email      = excluded.email,
                    address    = excluded.address,
                    notes      = excluded.notes,
+                   telegram   = excluded.telegram,
                    updated_at = datetime('now')""",
             (
                 cid,
@@ -419,6 +420,7 @@ class SQLiteStore:
                 contact.get("email", ""),
                 contact.get("address", ""),
                 contact.get("notes", ""),
+                contact.get("telegram", ""),
             ),
         )
         db.commit()
@@ -481,12 +483,17 @@ class SQLiteStore:
         )
         db.commit()
 
-    def list_documents(self, chat_id: int) -> list[dict]:
-        rows = self._db().execute(
-            "SELECT * FROM documents WHERE chat_id = ? OR is_shared = 1"
-            " ORDER BY created_at DESC",
-            (chat_id,),
-        ).fetchall()
+    def list_documents(self, chat_id: int, is_admin: bool = False) -> list[dict]:
+        if is_admin:
+            rows = self._db().execute(
+                "SELECT * FROM documents ORDER BY created_at DESC",
+            ).fetchall()
+        else:
+            rows = self._db().execute(
+                "SELECT * FROM documents WHERE chat_id = ? OR is_shared >= 1"
+                " ORDER BY created_at DESC",
+                (chat_id,),
+            ).fetchall()
         result = []
         for r in rows:
             d = dict(r)

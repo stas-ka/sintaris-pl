@@ -198,6 +198,10 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T113 | `postgres_live_data` | When `STORE_BACKEND=postgres`, all 5 core tables (users, calendar_events, notes_index, chat_history, conversation_summaries) have ≥1 row. SKIP if not on Postgres or `STORE_PG_DSN` not set. | After SQLite → Postgres migration to verify data was populated |
 | T114 | `admin_page_datetime_safe` | `bot_web.py` admin page uses `str(a.get('created', ''))[:10]` to safely handle `datetime.datetime` objects returned by Postgres backend. | After editing `bot_web.py` admin page handler |
 | T115 | `bot_capabilities_tag_fix` | `prompts.json` rule 5 must NOT contain the phrase that caused LLM to output `[BOT CAPABILITIES]` literally; must warn against reproducing block markers. | After editing `prompts.json` security preamble |
+| T158 | `inv_confirm_dual_save` | `_handle_inv_confirm()` in `bot_calendar.py` calls `_cal_add_event` for BOTH `admin_chat_id` and `guest_id`; guest save wrapped in try/except. Regression guard for v2026.4.59 fix. | After editing `_handle_inv_confirm()` in `bot_calendar.py` |
+| T159 | `guest_my_data_meetings_count` | `bot_handlers.py` guest My Data branch calls `_cal_load(chat_id)` and passes `meetings_count=str(len(meetings))` — ensures confirmed meetings appear in guest profile. | After editing guest My Data handler in `bot_handlers.py` |
+| T160 | `cal_inv_flow_functions` | `bot_calendar.py` has all required invitation functions: `_finish_guest_meeting_slot`, `_handle_inv_confirm`, `_handle_inv_decline`, `_pending_invitations`, `_schedule_reminder(guest_id`. | After editing `bot_calendar.py` invitation flow |
+| T161 | `inv_strings_completeness` | All 9 invitation + guest-profile strings in all 3 languages (ru/en/de); `profile_my_data_guest_msg` contains `{meetings_count}` placeholder. | After editing `strings.json` invitation or guest profile keys |
 | T116 | `admin_only_rag_access` | Full retrieval stack has `is_admin` param: `load_system_docs._ingest` uses `is_shared=2` for admin guide; `store_sqlite`/`store_postgres` `search_fts`/`search_similar` accept `is_admin`; `bot_rag.retrieve_context` propagates it; `bot_access._docs_rag_context` calls `_is_admin(chat_id)`. | After editing RAG retrieval stack or doc sharing logic |
 | T117 | `gemma4_thinking_mode_fix` | `benchmark_ollama_models.py` `_run_prompt()` must list `gemma4` in `is_thinking_model` tags; Gemma4:e2b/e4b in `CANDIDATE_MODELS`; `--host` flag present. | After editing `benchmark_ollama_models.py` or adding LLM models |
 | T118 | `gemma4_ollama_config` | `bot_llm.py` passes `think:OLLAMA_THINK` to Ollama API; `bot_config.py` defaults `OLLAMA_THINK=False`. Ensures Gemma4 thinking suppressed in production. | After editing `bot_llm.py` or `bot_config.py` LLM constants |
@@ -321,6 +325,9 @@ Run with: `python src/tests/test_campaign.py` (offline) or deploy to target and 
 | After editing any menu YAML (`main_menu.yaml`, `admin_menu.yaml`) or `_menu_keyboard()` | T48 (`--test t_system_chat_admin_menu_only`) |
 | After editing `bot_campaign.py` state machine or `call_webhook()` | T130–T137 (`python src/tests/test_campaign.py`) |
 | After changing `OLLAMA_MODEL` in bot.env on TariStation2 | T135 (`python src/tests/test_campaign.py`) |
+| After editing `bot_calendar.py` invitation flow (`_handle_inv_confirm`, `_finish_guest_meeting_slot`) | T158–T161 (`--test guest_appointment`) |
+| After editing guest My Data handler in `bot_handlers.py` | T159 (`--test guest_appointment`) |
+| After editing invitation strings in `strings.json` | T161 (`--test guest_appointment`) |
 | After editing campaign callbacks or `handle_message()` routing in `telegram_menu_bot.py` | T137a, T137b (`python src/tests/test_campaign.py`) |
 | After editing guest user constants, `_is_guest()`, `_get_prompt_role_key()`, or `prompts.json` role prompts | T140–T149 (`--test t_guest_user_feature`) |
 | After editing `bot_n8n.py`, `store_crm.py`, `bot_crm.py`, `bot_admin.py` role management, or N8N workflows | T150–T155 (`--test t_crm_n8n_advanced_user`) |
