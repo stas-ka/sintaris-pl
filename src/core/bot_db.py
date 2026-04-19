@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     email       TEXT,
     address     TEXT,
     notes       TEXT,
+    telegram    TEXT,
     created_at  TEXT    DEFAULT (datetime('now')),
     updated_at  TEXT    DEFAULT (datetime('now'))
 );

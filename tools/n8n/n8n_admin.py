@@ -13,6 +13,7 @@ Usage:
   python tools/n8n/n8n_admin.py test-webhook <url> [json]  # test webhook POST
   python tools/n8n/n8n_admin.py executions [--wf <id>]     # list recent executions
   python tools/n8n/n8n_admin.py create-campaign            # create campaign select+send workflows
+  python tools/n8n/n8n_admin.py create-notify              # create Notify Send workflow (Notifications to Users agent)
   python tools/n8n/n8n_admin.py status                     # N8N connectivity + workflow count
 
 Credentials are read from .env in the project root (auto-detected).
@@ -769,6 +770,187 @@ def cmd_update_campaign(which: str = "send"):
             print(f"  ✅ Reactivated → {N8N_BASE}/webhook/{new_def['nodes'][0]['parameters']['path']}")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Notify Send workflow (Notifications to Users agent)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _notify_send_workflow() -> dict:
+    """N8N workflow: Taris - Notify Send.
+
+    Receives: {recipients: [{chat_id: int, name: str, message: str}]}
+    Sends Telegram message to each recipient via Bot API HTTP Request.
+    Returns: {sent: N, failed: N, errors: ["name: reason", ...]}
+
+    The bot_token is read from the BOT_TOKEN env var set in the N8N environment,
+    or passed in the request as {bot_token: "..."} (fallback for testing).
+    """
+    js_expand = r"""
+try {
+  const body = $('Webhook').first().json.body || $('Webhook').first().json;
+
+  if (!body || !Array.isArray(body.recipients) || body.recipients.length === 0) {
+    return [{ json: { _error: true, step: "Expand", detail: "No recipients provided" } }];
+  }
+
+  const botToken = body.bot_token || $env.BOT_TOKEN || '';
+  if (!botToken) {
+    return [{ json: { _error: true, step: "Expand", detail: "bot_token not provided and BOT_TOKEN env not set" } }];
+  }
+
+  return body.recipients.map(r => ({
+    json: {
+      chat_id: r.chat_id || r.telegram_id,
+      name: r.name || String(r.chat_id || ''),
+      message: r.message || body.message || '',
+      bot_token: botToken
+    }
+  })).filter(r => r.json.chat_id && r.json.message);
+} catch(e) {
+  return [{ json: { _error: true, step: "Expand", detail: e.message } }];
+}
+"""
+
+    js_summary = r"""
+try {
+  if (items.length === 1 && items[0].json._error === true) {
+    return [{ json: items[0].json }];
+  }
+
+  const sent   = items.filter(i => i.json._ok === true).length;
+  const failed = items.filter(i => i.json._ok !== true).length;
+  const errors = items
+    .filter(i => i.json._ok !== true)
+    .map(i => `${i.json.name || i.json.chat_id}: ${i.json._err || 'send failed'}`)
+    .slice(0, 10);
+
+  return [{ json: { sent, failed, total: items.length, errors } }];
+} catch(e) {
+  return [{ json: { _error: true, step: "Summary", detail: e.message } }];
+}
+"""
+
+    js_mark_result = r"""
+try {
+  const item = items[0].json;
+  // item.statusCode is set by the HTTP Request node on success/failure
+  const ok = item.ok === true;
+  const name = $('Expand').item.json.name || '';
+  const chat_id = $('Expand').item.json.chat_id || '';
+  return [{
+    json: {
+      chat_id,
+      name,
+      _ok: ok,
+      _err: ok ? null : (item.description || item.error_code || 'Telegram API error')
+    }
+  }];
+} catch(e) {
+  return [{ json: { chat_id: '', name: '', _ok: false, _err: e.message } }];
+}
+"""
+
+    return {
+        "name": "Taris - Notify Send",
+        "nodes": [
+            {
+                "id": "n-webhook-notify",
+                "name": "Webhook",
+                "type": "n8n-nodes-base.webhook",
+                "typeVersion": 2,
+                "position": [200, 300],
+                "webhookId": "taris-notify-send-wh",
+                "parameters": {
+                    "httpMethod": "POST",
+                    "path": "taris-notify-send",
+                    "responseMode": "responseNode",
+                    "options": {}
+                }
+            },
+            {
+                "id": "n-expand-notify",
+                "name": "Expand",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [450, 300],
+                "parameters": {
+                    "mode": "runOnceForAllItems",
+                    "jsCode": js_expand
+                }
+            },
+            {
+                "id": "n-tg-send",
+                "name": "Send Telegram",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [700, 300],
+                "onError": "continueRegularOutput",
+                "parameters": {
+                    "method": "POST",
+                    "url": "=https://api.telegram.org/bot{{ $json.bot_token }}/sendMessage",
+                    "sendBody": True,
+                    "specifyBody": "json",
+                    "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.message, parse_mode: 'HTML' }) }}",
+                    "options": {"response": {"response": {"responseFormat": "json"}}}
+                }
+            },
+            {
+                "id": "n-mark-result",
+                "name": "Mark Result",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [950, 300],
+                "parameters": {
+                    "mode": "runOnceForEachItem",
+                    "jsCode": js_mark_result
+                }
+            },
+            {
+                "id": "n-summary-notify",
+                "name": "Summary",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [1200, 300],
+                "parameters": {
+                    "mode": "runOnceForAllItems",
+                    "jsCode": js_summary
+                }
+            },
+            {
+                "id": "n-respond-notify",
+                "name": "Respond",
+                "type": "n8n-nodes-base.respondToWebhook",
+                "typeVersion": 1,
+                "position": [1450, 300],
+                "parameters": {
+                    "respondWith": "json",
+                    "responseBody": '={{ $json._error === true ? JSON.stringify({ error: $json.detail || "Workflow error" }) : JSON.stringify({ sent: $json.sent, failed: $json.failed, total: $json.total, errors: $json.errors }) }}',
+                    "options": {"responseCode": 200}
+                }
+            }
+        ],
+        "connections": {
+            "Webhook":       {"main": [[{"node": "Expand",         "type": "main", "index": 0}]]},
+            "Expand":        {"main": [[{"node": "Send Telegram",  "type": "main", "index": 0}]]},
+            "Send Telegram": {"main": [[{"node": "Mark Result",    "type": "main", "index": 0}]]},
+            "Mark Result":   {"main": [[{"node": "Summary",        "type": "main", "index": 0}]]},
+            "Summary":       {"main": [[{"node": "Respond",        "type": "main", "index": 0}]]},
+        },
+        "settings": {"executionOrder": "v1"}
+    }
+
+
+def cmd_create_notify():
+    """Create and activate the Taris Notify Send workflow."""
+    print("Creating Taris Notify Send workflow...")
+    wf = _notify_send_workflow()
+    resp = _req("POST", "/workflows", json=wf)
+    wf_id = resp["id"]
+    _req("POST", f"/workflows/{wf_id}/activate")
+    print(f"  ✅ id={wf_id}  webhook={N8N_BASE}/webhook/taris-notify-send")
+
+    print()
+    print("Add to /opt/taris-docker/bot.env:")
+    print(f"  N8N_NOTIFY_SEND_WH={N8N_BASE}/webhook/taris-notify-send")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -812,6 +994,8 @@ def main():
 
     sub.add_parser("create-campaign")
 
+    sub.add_parser("create-notify")
+
     p_fix = sub.add_parser("fix-unicode", help="Decode \\uXXXX sequences in workflow node code")
     p_fix.add_argument("id", help="Workflow ID (from 'list')")
 
@@ -837,6 +1021,7 @@ def main():
         elif args.cmd == "executions":    cmd_executions(args.wf, args.limit)
         elif args.cmd == "put-workflow":       cmd_put_workflow(args.id, args.file, activate=not args.no_activate)
         elif args.cmd == "create-campaign":   cmd_create_campaign()
+        elif args.cmd == "create-notify":      cmd_create_notify()
         elif args.cmd == "fix-unicode":        cmd_fix_unicode(args.id)
         elif args.cmd == "update-campaign":    cmd_update_campaign(args.which)
         else:

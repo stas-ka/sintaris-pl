@@ -402,14 +402,15 @@ class SQLiteStore:
         db = self._db()
         db.execute(
             """INSERT INTO contacts
-               (id, chat_id, name, phone, email, address, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+               (id, chat_id, name, phone, email, address, notes, telegram)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    name       = excluded.name,
                    phone      = excluded.phone,
                    email      = excluded.email,
                    address    = excluded.address,
                    notes      = excluded.notes,
+                   telegram   = excluded.telegram,
                    updated_at = datetime('now')""",
             (
                 cid,
@@ -419,6 +420,7 @@ class SQLiteStore:
                 contact.get("email", ""),
                 contact.get("address", ""),
                 contact.get("notes", ""),
+                contact.get("telegram", ""),
             ),
         )
         db.commit()

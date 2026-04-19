@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.67",
+    "date": "2026-04-21",
+    "title": "Schema: contacts.telegram column + deploy bot_notify agent to VPS",
+    "notes": "Added telegram column to contacts table in bot_db.py (SQLite) and store_postgres.py (Postgres). Updated save_contact() in both store_postgres.py and store_sqlite.py to persist the telegram field. Ran ALTER TABLE migration on VPS taris_vps DB. Deployed bot_notify.py (Notifications to Users agent) to VPS docker."
+  },
+  {
     "version": "2026.4.66",
     "date": "2026-04-21",
     "title": "Fix: guest conversation limit set to unlimited (was 5/hour)",
