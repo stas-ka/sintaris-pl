@@ -122,8 +122,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb.add(
         InlineKeyboardButton(_t(chat_id, "admin_btn_users_menu"), callback_data="admin_users_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_switch_llm"), callback_data="admin_llm_menu"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
-        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_config"), callback_data="admin_voice_config"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_menu"), callback_data="admin_voice_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_release_notes"), callback_data="admin_changelog"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_logs"),       callback_data="admin_logs_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_rag"),         callback_data="admin_rag_menu"),
@@ -171,6 +170,27 @@ def _handle_admin_users_menu(chat_id: int) -> None:
         _t(chat_id, "admin_users_menu_title"),
         parse_mode="Markdown",
         reply_markup=_admin_users_keyboard(chat_id),
+    )
+
+
+def _admin_voice_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
+    """Submenu keyboard merging Voice Options and Voice Config."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_opts"), callback_data="voice_opts_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_voice_config"), callback_data="admin_voice_config"),
+        InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"),
+    )
+    return kb
+
+
+def _handle_admin_voice_menu(chat_id: int) -> None:
+    """Show the Voice Settings submenu."""
+    bot.send_message(
+        chat_id,
+        _t(chat_id, "admin_voice_menu_title"),
+        parse_mode="Markdown",
+        reply_markup=_admin_voice_keyboard(chat_id),
     )
 
 
@@ -321,6 +341,10 @@ def _finish_admin_add_user(admin_id: int, text: str) -> None:
     else:
         dyn.add(uid)
         _save_dynamic_users()
+        # auto-add to contacts if we have registration info
+        reg = _find_registration(uid)
+        if reg:
+            _auto_add_contact_for_admins(reg)
         log.info(f"Admin {admin_id} added user {uid}")
         bot.send_message(admin_id, _t(admin_id, "user_added", uid=uid),
                          parse_mode="Markdown", reply_markup=_admin_users_keyboard(admin_id))
@@ -399,6 +423,26 @@ def _handle_admin_pending_users(chat_id: int) -> None:
             bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
 
 
+def _auto_add_contact_for_admins(reg: dict) -> None:
+    """Auto-add a newly approved/registered user to every admin's contact book."""
+    try:
+        from features.bot_contacts import _contact_add, _contact_list
+        first = reg.get("first_name", "") or ""
+        last  = reg.get("last_name",  "") or ""
+        name  = (reg.get("name") or f"{first} {last}".strip() or str(reg.get("chat_id", "?")))
+        notes_parts = [f"Telegram ID: {reg.get('chat_id', '')}"]
+        if reg.get("username"):
+            notes_parts.append(f"@{reg['username']}")
+        notes = ", ".join(notes_parts)
+        for admin_id in ADMIN_USERS:
+            existing = _contact_list(admin_id, limit=500)
+            if not any(c.get("name", "").strip().lower() == name.strip().lower() for c in existing):
+                _contact_add(admin_id, name=name, notes=notes)
+                log.info(f"[Reg] Auto-added '{name}' to contacts of admin {admin_id}")
+    except Exception as exc:
+        log.warning(f"[Reg] Auto-add contact failed: {exc}")
+
+
 def _do_approve_registration(admin_id: int, target_id: int) -> None:
     """Approve a pending registration: add to guests and notify user."""
     from telegram.bot_access import _menu_keyboard
@@ -414,6 +458,7 @@ def _do_approve_registration(admin_id: int, target_id: int) -> None:
     _set_reg_status(target_id, "approved")
     _dynamic_users().add(target_id)
     _save_dynamic_users()
+    _auto_add_contact_for_admins(reg)
     name_disp = f" \u2014 {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id}")
     bot.send_message(admin_id, f"✅ User `{target_id}`{name_disp} approved and added.",
@@ -440,6 +485,7 @@ def _do_approve_as_guest(admin_id: int, target_id: int) -> None:
         return
     _set_reg_status(target_id, "guest")
     _st._dynamic_guests.add(target_id)
+    _auto_add_contact_for_admins(reg)
     name_disp = f" — {reg.get('name')}" if reg.get("name") else ""
     log.info(f"[Reg] Admin {admin_id} approved user {target_id} as GUEST")
     bot.send_message(admin_id,
@@ -550,7 +596,7 @@ def _handle_voice_opts_menu(chat_id: int) -> None:
 
     for key, label in opts_rows:
         kb.add(InlineKeyboardButton(label, callback_data=f"voice_opt_toggle:{key}"))
-    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+    kb.add(InlineKeyboardButton("🔙  Voice Settings", callback_data="admin_voice_menu"))
 
     active  = [k for k, v in opts.items() if v]
     status  = ("Active: " + ", ".join(active)) if active else "All OFF — stable defaults"
@@ -661,7 +707,7 @@ def _handle_admin_voice_config(chat_id: int) -> None:
             icon = "✅" if fw_model == model_name else "◻️"
             kb.add(InlineKeyboardButton(f"{icon} {model_name}", callback_data=f"admin_fw_model:{model_name}"))
 
-    kb.add(InlineKeyboardButton("🔙  Admin", callback_data="admin_menu"))
+    kb.add(InlineKeyboardButton("🔙  Voice Settings", callback_data="admin_voice_menu"))
 
     try:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
@@ -682,9 +728,9 @@ def _handle_admin_stt_set(chat_id: int, provider: str) -> None:
     _save_voice_opts()
     log.info(f"[VoiceCfg] admin {chat_id} switched STT → {provider}")
     try:
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_voice_keyboard(chat_id))
     except Exception:
-        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_voice_keyboard(chat_id))
 
 
 def _handle_admin_fw_model_set(chat_id: int, model_name: str) -> None:
@@ -698,9 +744,9 @@ def _handle_admin_fw_model_set(chat_id: int, model_name: str) -> None:
         "_Note: restart voice service to apply model change (`systemctl --user restart taris-voice`)._"
     )
     try:
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=_admin_voice_keyboard(chat_id))
     except Exception:
-        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_keyboard(chat_id))
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", msg), reply_markup=_admin_voice_keyboard(chat_id))
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load_release_notes() -> list[dict]:

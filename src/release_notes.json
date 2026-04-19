@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.61",
+    "date": "2026-04-19",
+    "title": "Admin: Voice Settings submenu, auto-add contacts, web UI sync",
+    "notes": "Merged Voice Options + Voice Config into single Voice Settings submenu in Telegram admin. Auto-add newly approved users to every admin contact book. Web admin role badges now show Guest/User/Admin. Web admin Voice section renamed Voice Settings with STT/TTS config info."
+  },
+  {
     "version": "2026.4.60",
     "date": "2026-04-19",
     "title": "Tests: add T158-T161 guest appointment regression tests",

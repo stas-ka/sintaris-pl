@@ -2726,15 +2726,20 @@ async def admin_page(request: Request):
         raise HTTPException(403, detail="Admin only")
 
     accounts = list_accounts()
+    _ROLE_BADGE = {"admin": "badge-ok", "guest": "badge-warn", "user": "badge-info"}
+    _ROLE_LABEL = {"admin": "Admin", "guest": "Guest", "user": "User"}
     admin_users = []
     for a in accounts:
-        role = a.get("role", "user").capitalize()
+        raw_role = a.get("role", "user").lower()
+        role_label = _ROLE_LABEL.get(raw_role, raw_role.capitalize())
+        role_badge = _ROLE_BADGE.get(raw_role, "badge-info")
         admin_users.append({
             "username":    a.get("username", "?"),
             "display_name": a.get("display_name", a.get("username", "?")),
             "user_id":     a.get("user_id", ""),
-            "role":        role,
-            "badge":       "purple" if role == "Admin" else "blue",
+            "role":        role_label,
+            "role_badge":  role_badge,
+            "badge":       "purple" if raw_role == "admin" else "blue",
             "chat_id":     a.get("telegram_chat_id"),
             "created":     str(a.get("created", ""))[:10] if a.get("created") else "—",
             "status":      a.get("status", "active"),
@@ -2763,6 +2768,17 @@ async def admin_page(request: Request):
             "enabled":     vopts.get(key, False),  # template uses opt.enabled
         })
 
+    # Voice config info for admin page
+    import os as _os_tmp
+    piper_model_name = Path(PIPER_MODEL).name if PIPER_MODEL else "—"
+    voice_config = {
+        "stt":      _STT_UI_LABEL,
+        "stt_model": FASTER_WHISPER_MODEL if STT_PROVIDER == "faster_whisper" else "",
+        "stt_device": FASTER_WHISPER_DEVICE if STT_PROVIDER == "faster_whisper" else "",
+        "tts":      "Piper",
+        "tts_model": piper_model_name,
+    }
+
     system_status = _system_status()
     msg   = request.query_params.get("msg", "")
     error = request.query_params.get("error", "")
@@ -2778,6 +2794,7 @@ async def admin_page(request: Request):
         users=admin_users,
         llm_models=llm_models,
         voice_opts=voice_opts,
+        voice_config=voice_config,
         release_notes=release_notes,
         msg=msg,
         error=error,

@@ -79,6 +79,7 @@ from telegram.bot_admin import (
     _handle_admin_llm_fallback_menu, _handle_admin_llm_fallback_toggle,
     _handle_ollama_llm_menu, _handle_ollama_set_model, _handle_ollama_persist_model,
     _handle_admin_voice_config, _handle_admin_stt_set, _handle_admin_fw_model_set,
+    _handle_admin_voice_menu,
     _handle_admin_rag_menu, _handle_admin_rag_toggle, _handle_admin_rag_log,
     _handle_admin_rag_settings, _handle_admin_rag_stats, _handle_admin_doc_stats,
     _start_admin_rag_set, _finish_admin_rag_set,
@@ -655,6 +656,12 @@ def callback_handler(call):
     elif data == "admin_voice_config":
         if _is_admin(cid):
             _handle_admin_voice_config(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_voice_menu":
+        if _is_admin(cid):
+            _handle_admin_voice_menu(cid)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
