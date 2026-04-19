@@ -466,25 +466,110 @@ action_backup() {
 
   # data (always included in 'all')
   if [[ "$BACKUP_TYPE" == "data" || "$BACKUP_TYPE" == "all" ]]; then
-    # VPS: data lives in /opt/taris-docker/ (bot.env, registrations.json etc)
-    DATA_DIR="${IS_DOCKER:+${DOCKER_DATA_HOME:-/opt/taris-docker}}"
-    DATA_DIR="${DATA_DIR:-${TARIS_HOME}}"
-    TAR_CMD="tar czf /tmp/${BNAME}_data.tar.gz \
-      -C ${DATA_DIR} \
-      --exclude='*/__pycache__' --exclude='*.pyc' --exclude='*.onnx' \
-      --exclude='*.bin' --exclude='*.log' --exclude='vosk-model-*' \
-      $(ls ${DATA_DIR}/*.json ${DATA_DIR}/*.db ${DATA_DIR}/bot.env 2>/dev/null | xargs -I{} basename {} | tr '\n' ' ') \
-      2>/dev/null; echo BACKUP_OK"
-    _exec "$TAR_CMD" | grep -q BACKUP_OK || fail "Data backup tar failed"
-    if [[ "$IS_LOCAL" == true ]]; then
-      cp "/tmp/${BNAME}_data.tar.gz" "${BACKUP_LOCAL}/"
-      rm -f "/tmp/${BNAME}_data.tar.gz"
+    if [[ "$IS_DOCKER" == true ]]; then
+      # ── Docker target (VPS): data lives inside container at /root/.taris/ ──
+      # 1. Container runtime data (JSON, calendar, web_secret.key)
+      _exec "docker exec ${DOCKER_CONTAINERS[0]} tar czf /tmp/${BNAME}_container.tar.gz \
+        -C /root/.taris \
+        --exclude='__pycache__' --exclude='*.pyc' --exclude='*.log' \
+        . 2>/dev/null; echo BACKUP_OK" | grep -q BACKUP_OK || warn "Container data tar had warnings"
+      _exec "docker cp ${DOCKER_CONTAINERS[0]}:/tmp/${BNAME}_container.tar.gz /tmp/${BNAME}_container.tar.gz 2>/dev/null; \
+        docker exec ${DOCKER_CONTAINERS[0]} rm -f /tmp/${BNAME}_container.tar.gz; echo OK"
+      cp "/tmp/${BNAME}_container.tar.gz" "${BACKUP_LOCAL}/" 2>/dev/null && \
+        rm -f "/tmp/${BNAME}_container.tar.gz"
+      ok "Container data: ${BACKUP_LOCAL}/${BNAME}_container.tar.gz"
+
+      # 2. Host-mounted userdata (notes, docs, mail_creds)
+      UDATA="${DOCKER_DATA_HOME}/userdata"
+      if [[ -d "$UDATA" ]]; then
+        tar czf "/tmp/${BNAME}_userdata.tar.gz" -C "${DOCKER_DATA_HOME}" userdata/ 2>/dev/null && \
+          mv "/tmp/${BNAME}_userdata.tar.gz" "${BACKUP_LOCAL}/" && \
+          ok "Userdata: ${BACKUP_LOCAL}/${BNAME}_userdata.tar.gz" || \
+          warn "Userdata backup had warnings"
+      fi
+
+      # 3. bot.env from host
+      [[ -f "${DOCKER_DATA_HOME}/bot.env" ]] && \
+        cp "${DOCKER_DATA_HOME}/bot.env" "${BACKUP_LOCAL}/${BNAME}_bot.env" && \
+        ok "bot.env: ${BACKUP_LOCAL}/${BNAME}_bot.env"
+
+      # 4. PostgreSQL dumps (all DSNs from bot.env)
+      _docker_pg_dump() {
+        local dsn="$1" label="$2"
+        # parse postgresql://user:pass@host:port/dbname
+        local user pass host port dbname
+        user=$(echo "$dsn" | sed -E 's|postgresql://([^:]+):.*|\1|')
+        pass=$(echo "$dsn" | sed -E 's|postgresql://[^:]+:([^@]+)@.*|\1|')
+        host=$(echo "$dsn" | sed -E 's|.*@([^:/]+)[:/].*|\1|')
+        port=$(echo "$dsn" | sed -E 's|.*:([0-9]+)/.*|\1|')
+        dbname=$(echo "$dsn" | sed -E 's|.*/([^/]+)$|\1|')
+        PGPASSWORD="$pass" pg_dump -h "$host" -p "$port" -U "$user" -Fc "$dbname" \
+          > "${BACKUP_LOCAL}/${BNAME}_${label}.dump" 2>/dev/null && \
+          ok "PostgreSQL dump (${label}): ${BACKUP_LOCAL}/${BNAME}_${label}.dump" || \
+          warn "PostgreSQL dump failed for ${label} (${dbname})"
+      }
+      STORE_DSN=$(grep -E '^STORE_PG_DSN=' "${DOCKER_DATA_HOME}/bot.env" 2>/dev/null | cut -d= -f2-)
+      CRM_DSN=$(grep -E '^CRM_PG_DSN=' "${DOCKER_DATA_HOME}/bot.env" 2>/dev/null | cut -d= -f2-)
+      [[ -n "$STORE_DSN" ]] && _docker_pg_dump "$STORE_DSN" "postgres_main"
+      [[ -n "$CRM_DSN"   ]] && _docker_pg_dump "$CRM_DSN"   "postgres_crm"
     else
-      sshpass -p "$REMOTE_PASS" scp -o StrictHostKeyChecking=no \
-        "${REMOTE_USER}@${REMOTE_HOST}:/tmp/${BNAME}_data.tar.gz" "${BACKUP_LOCAL}/"
-      _exec "rm -f /tmp/${BNAME}_data.tar.gz"
+      # ── Non-Docker target (ts1, ts2): JSON data at TARIS_HOME ──
+      DATA_DIR="${TARIS_HOME}"
+      TAR_CMD="tar czf /tmp/${BNAME}_data.tar.gz \
+        -C ${DATA_DIR} \
+        --exclude='__pycache__' --exclude='*.pyc' --exclude='*.onnx' \
+        --exclude='*.bin' --exclude='*.log' --exclude='vosk-model-*' \
+        \$(ls ${DATA_DIR}/*.json ${DATA_DIR}/*.db ${DATA_DIR}/bot.env ${DATA_DIR}/web_secret.key 2>/dev/null | xargs -I{} basename {} | tr '\n' ' ') \
+        2>/dev/null; echo BACKUP_OK"
+      _exec "$TAR_CMD" | grep -q BACKUP_OK || warn "Data backup tar had warnings"
+      if [[ "$IS_LOCAL" == true ]]; then
+        cp "/tmp/${BNAME}_data.tar.gz" "${BACKUP_LOCAL}/"
+        rm -f "/tmp/${BNAME}_data.tar.gz"
+      else
+        sshpass -p "$REMOTE_PASS" scp -o StrictHostKeyChecking=no \
+          "${REMOTE_USER}@${REMOTE_HOST}:/tmp/${BNAME}_data.tar.gz" "${BACKUP_LOCAL}/"
+        _exec "rm -f /tmp/${BNAME}_data.tar.gz"
+      fi
+      ok "Data backup: ${BACKUP_LOCAL}/${BNAME}_data.tar.gz"
+
+      # PostgreSQL dump for OpenClaw targets (STORE_BACKEND=postgres)
+      _pg_dump_remote() {
+        local dsn="$1" label="$2"
+        local user pass host port dbname
+        user=$(echo "$dsn" | sed -E 's|postgresql://([^:]+):.*|\1|')
+        pass=$(echo "$dsn" | sed -E 's|postgresql://[^:]+:([^@]+)@.*|\1|')
+        host=$(echo "$dsn" | sed -E 's|.*@([^:/]+)[:/].*|\1|')
+        port=$(echo "$dsn" | sed -E 's|.*:([0-9]+)/.*|\1|')
+        dbname=$(echo "$dsn" | sed -E 's|.*/([^/]+)$|\1|')
+        local dump_cmd="PGPASSWORD='${pass}' pg_dump -h ${host} -p ${port} -U ${user} -Fc ${dbname}"
+        if [[ "$IS_LOCAL" == true ]]; then
+          eval "$dump_cmd" > "${BACKUP_LOCAL}/${BNAME}_${label}.dump" 2>/dev/null && \
+            ok "PostgreSQL dump (${label}): ${BACKUP_LOCAL}/${BNAME}_${label}.dump" || \
+            warn "PostgreSQL dump failed for ${label}"
+        else
+          _exec "$dump_cmd > /tmp/${BNAME}_${label}.dump 2>/dev/null; echo BACKUP_OK" | grep -q BACKUP_OK || \
+            warn "PostgreSQL dump failed for ${label}"
+          sshpass -p "$REMOTE_PASS" scp -o StrictHostKeyChecking=no \
+            "${REMOTE_USER}@${REMOTE_HOST}:/tmp/${BNAME}_${label}.dump" "${BACKUP_LOCAL}/" 2>/dev/null && \
+            ok "PostgreSQL dump (${label}): ${BACKUP_LOCAL}/${BNAME}_${label}.dump" || true
+          _exec "rm -f /tmp/${BNAME}_${label}.dump" || true
+        fi
+      }
+      # Detect STORE_BACKEND from target's bot.env
+      if [[ "$IS_LOCAL" == true ]]; then
+        REMOTE_STORE_BACKEND=$(grep -E '^STORE_BACKEND=' "${TARIS_HOME}/bot.env" 2>/dev/null | cut -d= -f2-)
+        REMOTE_STORE_DSN=$(grep -E '^STORE_PG_DSN=' "${TARIS_HOME}/bot.env" 2>/dev/null | cut -d= -f2-)
+        REMOTE_CRM_DSN=$(grep -E '^CRM_PG_DSN=' "${TARIS_HOME}/bot.env" 2>/dev/null | cut -d= -f2-)
+      else
+        REMOTE_STORE_BACKEND=$(_exec "grep -E '^STORE_BACKEND=' ${TARIS_HOME}/bot.env 2>/dev/null | cut -d= -f2-" || true)
+        REMOTE_STORE_DSN=$(_exec "grep -E '^STORE_PG_DSN=' ${TARIS_HOME}/bot.env 2>/dev/null | cut -d= -f2-" || true)
+        REMOTE_CRM_DSN=$(_exec "grep -E '^CRM_PG_DSN=' ${TARIS_HOME}/bot.env 2>/dev/null | cut -d= -f2-" || true)
+      fi
+      if [[ "$REMOTE_STORE_BACKEND" == "postgres" ]]; then
+        [[ -n "$REMOTE_STORE_DSN" ]] && _pg_dump_remote "$REMOTE_STORE_DSN" "postgres_main"
+        [[ -n "$REMOTE_CRM_DSN"   ]] && _pg_dump_remote "$REMOTE_CRM_DSN"   "postgres_crm"
+      fi
     fi
-    ok "Data backup: ${BACKUP_LOCAL}/${BNAME}_data.tar.gz"
   fi
 
   # software
