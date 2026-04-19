@@ -167,8 +167,12 @@ class DataStore(Protocol):
         """Store document metadata (file content lives on disk)."""
         ...
 
-    def list_documents(self, chat_id: int) -> list[dict]:
-        """Return [{doc_id, title, file_path, doc_type, metadata, created_at}] newest-first."""
+    def list_documents(self, chat_id: int, is_admin: bool = False) -> list[dict]:
+        """Return [{doc_id, title, file_path, doc_type, metadata, created_at}] newest-first.
+
+        is_admin=True returns ALL documents (for admin management / sharing).
+        is_admin=False (default) returns own docs + shared docs (is_shared >= 1).
+        """
         ...
 
     def delete_document(self, doc_id: str) -> None:

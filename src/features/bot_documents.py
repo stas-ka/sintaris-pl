@@ -18,7 +18,7 @@ from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 from core.bot_config import log, DOCS_DIR, MAX_DOC_SIZE_MB
 from core.bot_instance import bot
 from core.store import store
-from telegram.bot_access import _is_guest, _t
+from telegram.bot_access import _is_admin, _is_guest, _t
 from core.bot_config import RAG_CHUNK_SIZE
 import core.bot_state as _st
 
@@ -135,7 +135,7 @@ def _handle_docs_menu(chat_id: int) -> None:
         bot.send_message(chat_id, _t(chat_id, "docs_no_vector_search"))
         return
     try:
-        docs = store.list_documents(chat_id)
+        docs = store.list_documents(chat_id, is_admin=_is_admin(chat_id))
     except Exception as e:
         log.error("[Docs] list_documents failed: %s", e)
         docs = []
@@ -155,7 +155,7 @@ def _handle_docs_menu(chat_id: int) -> None:
 def _handle_doc_detail(chat_id: int, doc_id: str) -> None:
     """Show document detail card with action buttons."""
     try:
-        docs = store.list_documents(chat_id)
+        docs = store.list_documents(chat_id, is_admin=_is_admin(chat_id))
         d = next((x for x in docs if x["doc_id"] == doc_id), None)
     except Exception:
         d = None
@@ -236,7 +236,7 @@ def _handle_doc_rename_done(chat_id: int, new_title: str) -> None:
 def _handle_doc_share_toggle(chat_id: int, doc_id: str) -> None:
     """Toggle is_shared flag on a document."""
     try:
-        docs = store.list_documents(chat_id)
+        docs = store.list_documents(chat_id, is_admin=_is_admin(chat_id))
         d = next((x for x in docs if x["doc_id"] == doc_id), None)
         if not d:
             return
@@ -410,7 +410,7 @@ def _handle_doc_keep_both(chat_id: int) -> None:
 def _handle_doc_delete(chat_id: int, doc_id: str) -> None:
     """Show delete confirmation for a document."""
     try:
-        docs = store.list_documents(chat_id)
+        docs = store.list_documents(chat_id, is_admin=_is_admin(chat_id))
         title = next((d["title"] for d in docs if d["doc_id"] == doc_id), doc_id)
     except Exception:
         title = doc_id

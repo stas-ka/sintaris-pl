@@ -1,18 +1,34 @@
 # Main menu — role-filtered buttons (matches _menu_keyboard in bot_access.py)
-# Title uses "choose" key: "👋 Выберите режим:" / "👋 Choose a mode:" / "👋 Wähle einen Modus:"
+# Guest menu: Chat → Request Appointment → Calendar (view) → Profile → Help
+# User menu: Chat → Mail Digest → Notes → Calendar → Contacts → Documents → Meeting Request → Profile → Help
 title_key: choose
 parse_mode: Markdown
 
 widgets:
   - type: button_row
     buttons:
-      - label_key: btn_digest
-        action: digest
-
-  - type: button_row
-    buttons:
       - label_key: btn_chat
         action: mode_chat
+
+  # ── Guest-only items ─────────────────────────────────────────────────────
+  - type: button_row
+    visible_roles: [guest]
+    buttons:
+      - label_key: btn_guest_meeting
+        action: guest_meeting
+
+  - type: button_row
+    visible_roles: [guest]
+    buttons:
+      - label_key: btn_calendar
+        action: menu_calendar
+
+  # ── Full-user items (admin / developer / user only) ───────────────────────
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_digest
+        action: digest
 
   - type: button_row
     visible_roles: [admin, developer, user]
@@ -38,6 +54,13 @@ widgets:
       - label_key: btn_docs
         action: menu_docs
 
+  - type: button_row
+    visible_roles: [admin, developer, user]
+    buttons:
+      - label_key: btn_guest_meeting
+        action: guest_meeting
+
+  # ── Common items ──────────────────────────────────────────────────────────
   - type: button_row
     buttons:
       - label_key: btn_profile

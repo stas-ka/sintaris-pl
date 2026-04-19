@@ -1630,20 +1630,24 @@ async def docs_page(request: Request, msg: str = "", error: str = ""):
     if not user:
         return _redir("/login", status_code=302)
     chat_id = _docs_chat_id(user)
+    is_admin = user.get("role") == "admin"
     docs: list[dict] = []
     rag_available = False
     try:
         if _store:
             rag_available = _store.has_document_search()
             if rag_available:
-                docs = _store.list_documents(chat_id) if chat_id else []
+                if is_admin:
+                    docs = _store.list_documents(chat_id, is_admin=True)
+                elif chat_id:
+                    docs = _store.list_documents(chat_id)
     except Exception as e:
         log.warning("[Docs/Web] list_documents failed: %s", e)
     return templates.TemplateResponse(
         request, "docs.html",
         _ctx(request, user, "docs",
              docs=docs, rag_available=rag_available,
-             no_telegram=(chat_id == 0), msg=msg, error=error),
+             no_telegram=(chat_id == 0 and not is_admin), msg=msg, error=error),
     )
 
 
@@ -1701,7 +1705,8 @@ async def docs_toggle_share(request: Request, doc_id: str):
     if _store:
         try:
             chat_id = _docs_chat_id(user)
-            docs = _store.list_documents(chat_id) if chat_id else []
+            is_admin = user.get("role") == "admin"
+            docs = _store.list_documents(chat_id, is_admin=is_admin) if (chat_id or is_admin) else []
             d = next((x for x in docs if x["doc_id"] == doc_id), None)
             if d:
                 _store.update_document_field(doc_id, is_shared=0 if d.get("is_shared") else 1)

@@ -739,13 +739,18 @@ class PostgresStore:
             )
             conn.commit()
 
-    def list_documents(self, chat_id: int) -> list[dict]:
+    def list_documents(self, chat_id: int, is_admin: bool = False) -> list[dict]:
         with self._pool.connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM documents WHERE chat_id = %s OR is_shared = 1"
-                " ORDER BY created_at DESC",
-                (chat_id,),
-            ).fetchall()
+            if is_admin:
+                rows = conn.execute(
+                    "SELECT * FROM documents ORDER BY created_at DESC",
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM documents WHERE chat_id = %s OR is_shared >= 1"
+                    " ORDER BY created_at DESC",
+                    (chat_id,),
+                ).fetchall()
         result = []
         for r in rows:
             d = dict(r)
