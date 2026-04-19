@@ -1,6 +1,6 @@
 # Taris — LLM Provider Abstraction
 
-**Version:** `2026.4.23`  
+**Version:** `2026.4.68`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -50,7 +50,7 @@ ask_llm(prompt, timeout=60)
 | `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `claude-3-5-haiku-20241022` | Anthropic Claude |
 | `local` | `LLAMA_CPP_URL` (default `http://127.0.0.1:8081`) | *(as loaded in llama-server)* | Fully offline; requires `taris-llm.service` |
 | `openclaw` | `OPENCLAW_BIN` (default `~/.local/bin/openclaw`) | via OpenClaw gateway | **OpenClaw only**; subprocess call with `--session-id taris` |
-| `ollama` | `OLLAMA_URL` (default `http://127.0.0.1:11434`), `OLLAMA_MODEL` | `qwen2:0.5b` | **OpenClaw default**; local offline; install via `setup_llm_openclaw.sh` |
+| `ollama` | `OLLAMA_URL` (default `http://127.0.0.1:11434`), `OLLAMA_MODEL` | `qwen2:0.5b` | **OpenClaw default**; local offline; install via `setup_llm_openclaw.sh`; supports per-user model override |
 
 ### 19.3 Offline Fallback (Feature 3.2)
 
@@ -181,6 +181,30 @@ The admin panel can route individual use-cases to different providers **without 
 | `set_per_func_provider(use_case, provider)` | Admin panel writes; `""` clears override |
 
 > ⚠️ Voice calls pass `use_case="voice"` to `ask_llm_with_history()` (v2026.4.23+). Before this fix, the default `use_case="chat"` caused voice to use the chat override (e.g. Ollama) silently even when `LLM_PROVIDER=openai`.
+
+### 19.7b Per-User Ollama Model (v2026.4.68)
+
+When `LLM_PROVIDER=ollama`, each user can have a personal Ollama model preference. Resolution priority:
+
+1. **Per-user preference** — stored in `user_prefs` table, key `ollama_model`
+2. **Role-based default** — `ROLE_DEFAULT_OLLAMA_MODEL` dict in `bot_config.py` (e.g. `{"admin": "qwen3:8b", "user": "qwen3:0.6b"}`)
+3. **Global runtime override** — `get_ollama_model()` → `OLLAMA_MODEL`
+
+**Key functions** (`src/core/bot_llm.py`):
+
+| Function | Purpose |
+|---|---|
+| `get_ollama_model()` | Global model: runtime override → `OLLAMA_MODEL` env var |
+| `_resolve_ollama_model(chat_id)` | Per-user resolution (priority order above) |
+
+**Config constants** (`src/core/bot_config.py`):
+
+| Constant | Default | Description |
+|---|---|---|
+| `OLLAMA_MODEL` | `qwen2:0.5b` | Global default Ollama model |
+| `ROLE_DEFAULT_OLLAMA_MODEL` | `{}` | Dict of role → model defaults (optional) |
+
+Admins can pull new models from the Admin panel (🦙 Ollama → Pull model). This calls `ollama pull <model>` via the Ollama REST API and streams progress to the Telegram chat.
 
 
 

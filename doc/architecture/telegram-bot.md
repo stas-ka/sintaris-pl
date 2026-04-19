@@ -1,6 +1,6 @@
 # Taris — Telegram Bot Architecture
 
-**Version:** `2026.4.10`  
+**Version:** `2026.4.68`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -43,12 +43,16 @@ bot_actions ← bot_web         ← Web renderer (reads bot_actions output via J
 | `bot_email.py` | "Send as email" SMTP for notes, digest, and calendar events |
 | `bot_error_protocol.py` | Error protocol: collect text/voice/photo → save dir → email |
 | `telegram_menu_bot.py` | Entry point: handler registration + callback dispatcher + `main()` |
-| `bot_llm.py` | Pluggable LLM backend abstraction — shared by Telegram + Web channels |
+| `bot_llm.py` | Pluggable LLM backend abstraction — shared by Telegram + Web channels; `_resolve_ollama_model(chat_id)` for per-user model |
 | `bot_auth.py` | JWT/bcrypt authentication, `accounts.json` — used by Web UI |
 | `bot_ui.py` | Screen DSL dataclasses: `Screen`, `Button`, `Card`, `Toggle`, `Spinner`, etc. |
 | `bot_actions.py` | Action handlers returning `Screen` objects — shared logic layer |
-| `render_telegram.py` | Renders `Screen` → Telegram `send_message` / `InlineKeyboardMarkup` |
+| `render_telegram.py` | Renders `Screen` → Telegram `send_message` / `InlineKeyboardMarkup`; `render_skill_result()` for skill output |
 | `bot_web.py` | FastAPI application: all HTTP routes, Jinja2 templates, HTMX endpoints |
+| `bot_campaign.py` | Campaign email agent: multi-step flow, N8N webhook integration |
+| `bot_contacts.py` | Contact CRUD, CRM sync (`_handle_contact_sync_crm`), REST API |
+| `bot_n8n.py` | N8N webhook calls + inbound event router (`dispatch_inbound_event`) |
+| `bot_notify.py` | User notification templates CRUD + send flow |
 
 ### 3.2 Main Menu — User Functions
 

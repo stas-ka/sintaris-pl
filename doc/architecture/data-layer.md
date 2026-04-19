@@ -1,6 +1,6 @@
 # Taris — Data Layer
 
-**Version:** `2026.4.31`  
+**Version:** `2026.4.68`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -65,9 +65,9 @@ All backends implement the `DataStore` Protocol. New methods must be added to `s
 | `chat_history` | Conversation turns | `chat_id, role, content, created_at` |
 | `conversation_summaries` | Tiered memory | `chat_id, tier (mid/long), summary, msg_count, created_at` |
 | `notes_index` | Note metadata + content | `slug, chat_id, title, content, updated_at` |
-| `contacts` | Contact book | `chat_id, name, phone, email` |
+| `contacts` | Contact book | `chat_id, name, phone, email, address, notes, telegram` |
 | `rag_log` | RAG retrieval audit | `chat_id, query, query_type, n_chunks, chars_injected, latency_ms, created_at` |
-| `user_prefs` | Per-user settings | `chat_id, key, value` |
+| `user_prefs` | Per-user settings | `chat_id, key, value` — known keys: `ollama_model` (per-user Ollama model override) |
 | `security_events` | Security audit log | `chat_id, event_type, detail, created_at` |
 | `llm_calls` | LLM call trace | `chat_id, model, prompt_chars, response_chars, latency_ms, rag_chunks, context_snapshot` |
 | `voice_opts` | Per-user TTS/STT flags | `chat_id, silence_strip, ...` |

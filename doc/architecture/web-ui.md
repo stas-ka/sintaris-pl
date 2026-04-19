@@ -1,6 +1,6 @@
 # Taris — Web UI & Screen DSL Architecture
 
-**Version:** `2026.4.24`  
+**Version:** `2026.4.68`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -108,9 +108,14 @@ The Web UI channel provides a browser-based interface with the same features as 
 | `POST` | `/admin/user/{user_id}/block` | Block user | ✅ admin |
 | `POST` | `/admin/user/{user_id}/reset-password` | Reset user password | ✅ admin |
 | `GET` | `/screen/{screen_id}` | Screen DSL renderer (YAML screen by ID) | ✅ |
-| `POST` | `/mcp/search` | MCP RAG search (Bearer token, RRF-ranked chunks) | Bearer |
-| `GET` | `/api/status` | Service health JSON | — |
-| `GET` | `/api/version` | Bot version JSON | — |
+| `POST` | `/api/contacts/{cid}/sync` | Session | Sync single contact to CRM via N8N |
+| `POST` | `/api/n8n/callback` | Bearer | Inbound N8N event router (`dispatch_inbound_event`) |
+| `GET` | `/api/crm/contacts` | Bearer | List all contacts as JSON (CRM REST) |
+| `GET` | `/api/crm/stats` | Bearer | Contact count + CRM sync stats |
+| `POST` | `/api/crm/contacts` | Bearer | Create contact via CRM REST API |
+| `POST` | `/mcp/search` | Bearer | MCP RAG search (RRF-ranked chunks) |
+| `GET` | `/api/status` | — | Service health JSON |
+| `GET` | `/api/version` | — | Bot version JSON |
 
 ### 17.4 Telegram↔Web Account Linking
 
@@ -224,6 +229,10 @@ bot_actions.py → action_note_list(ctx) → Screen(
 | `Spinner` | `bot.send_message("⏳ …")` — edited on completion |
 | `Confirm` | Two-button ✅/❌ keyboard |
 | `Redirect` | Immediately calls the target action handler |
+
+**Skill result renderer (`render_telegram.py`, v2026.4.68):**
+
+`render_skill_result(skill_result: dict) → str` at line 293 — formats the structured JSON dict returned by OpenClaw skill calls into human-readable Telegram markdown. Called after skill execution to present results to the user.
 
 **Web renderer (Jinja2 + HTMX):**
 

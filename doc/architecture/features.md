@@ -1,6 +1,6 @@
 # Taris — Feature Domains
 
-**Version:** `2026.4.50`  
+**Version:** `2026.4.68`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -366,3 +366,86 @@ CAMPAIGN_DEMO_MODE     = os.environ.get("CAMPAIGN_DEMO_MODE", "false").lower() =
 
 Only `advanced` and `admin` users can access the Agents menu and campaign workflows.  
 Role set by admin via Admin Panel → Users → Set Role.
+
+---
+
+## 14. N8N Inbound Event Router (`bot_n8n.py`) ✅ v2026.4.68
+
+**When to read:** When adding N8N→taris webhook callbacks, extending inbound event handling, or debugging `/api/n8n/callback`.
+
+### 14.1 Inbound Event Flow
+
+```
+N8N Workflow → POST /api/n8n/callback (Bearer token) → dispatch_inbound_event(payload)
+  payload: {event: str, chat_id: int, data: dict}
+  → routes to handler by event name → sends Telegram message to user
+```
+
+### 14.2 Key Functions
+
+| Function | File | Purpose |
+|---|---|---|
+| `dispatch_inbound_event(payload)` | `src/features/bot_n8n.py:370` | Route inbound N8N event to handler; returns `{ok, message}` |
+
+### 14.3 Auth
+
+Bearer token from `N8N_CALLBACK_TOKEN` env var. Returns 401 if missing or invalid.
+
+### 14.4 Registered Events
+
+| Event name | Action |
+|---|---|
+| `campaign_status` | Forwards campaign delivery status to user's Telegram chat |
+| (extensible) | Add new event handlers inside `dispatch_inbound_event()` |
+
+---
+
+## 15. User Notifications (`bot_notify.py`) ✅ v2026.4.68
+
+**When to read:** When modifying notification templates, adding new notification types, or touching the notify menu.
+
+### 15.1 Module: `src/features/bot_notify.py`
+
+Provides a CRUD UI for reusable Telegram message templates and a send flow.
+
+### 15.2 Key Functions
+
+| Function | Purpose |
+|---|---|
+| `show_notify_menu(chat_id)` | Display main notifications menu |
+| `show_tpl_menu(chat_id)` | List notification templates |
+| `show_tpl_view(chat_id, tpl_id)` | Show single template detail |
+| `start_tpl_add(chat_id)` | Begin add-template flow (multi-step) |
+| `on_tpl_add_name(chat_id, text)` | Receive template name input |
+| `on_tpl_add_body(chat_id, text)` | Receive template body; save to DB |
+| `start_tpl_edit(chat_id, tpl_id)` | Begin edit-template flow |
+| `on_tpl_edit_name(chat_id, text)` | Receive edited name; save |
+
+### 15.3 Access
+
+`advanced` and `admin` roles only. Templates stored in `notification_templates` table.
+
+---
+
+## 16. CRM Contact Sync (`bot_contacts.py`) ✅ v2026.4.68
+
+**When to read:** When modifying CRM sync, contacts REST API, or `telegram` field handling.
+
+### 16.1 New Function
+
+| Function | File | Purpose |
+|---|---|---|
+| `_handle_contact_sync_crm(chat_id, cid)` | `src/features/bot_contacts.py:365` | Push contact to CRM via N8N webhook; returns sync status |
+
+### 16.2 REST API (OpenClaw only)
+
+| Method | Route | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/crm/contacts` | Bearer | List all contacts (JSON) |
+| `GET` | `/api/crm/stats` | Bearer | Contact count + sync stats |
+| `POST` | `/api/crm/contacts` | Bearer | Create contact via API |
+| `POST` | `/api/contacts/{cid}/sync` | Session | Sync single contact to CRM |
+
+### 16.3 Schema Change
+
+`contacts` table now includes `telegram` column (varchar, nullable). See [data-layer.md](data-layer.md) §schema.

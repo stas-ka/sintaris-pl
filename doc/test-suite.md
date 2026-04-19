@@ -391,6 +391,9 @@ py -m pytest src/tests/ui/ -v
 | `TestProfile` | 4 tests | Profile page, account info, display name form, unauthenticated redirect |
 | `TestSettings` | 4 tests | Settings page, language buttons, password form, unauthenticated redirect |
 | `TestContacts` | 5 tests | Contacts list, search form, new contact form, create flow, unauthenticated redirect |
+| `TestN8NCallback` | 3 tests | POST `/api/n8n/callback`: auth (401/403), valid payload accepted (200) |
+| `TestCRMApi` | 4 tests | GET `/api/crm/contacts`, GET `/api/crm/stats`, POST `/api/crm/contacts`, auth guard (401) |
+| `TestCampaignWebUI` | 3 tests | Campaign is Telegram-only — verify Web UI does NOT expose campaign routes |
 
 ### 3.4 When to run
 

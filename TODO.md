@@ -399,86 +399,33 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ---
 
-## 28. OpenClaw Quick Wins 🔲 Planned (1–2 days each)
+## 28. OpenClaw Quick Wins ✅ Implemented (v2026.4.68)
 
-> **Prerequisite:** `DEVICE_VARIANT=openclaw` · `STORE_BACKEND=postgres` · All assets listed below are already in code — only wiring needed.  
 > → Full spec: [doc/todo/28-openclaw-extensions.md](doc/todo/28-openclaw-extensions.md)
 
-### 28.1 RAG Document Embedding — wire upload → pgvector 🔲
-
-`vec_embeddings` table (1536-dim HNSW) exists in `store_postgres.py` but nothing populates it on upload. Wire:
-- On `store.save_document()`: call `bot_embeddings.embed_and_store(doc_id, text, chat_id)` → chunk (600 words, 100 overlap) → fastembed → INSERT `vec_embeddings`
-- In `ask_llm_with_history()`: when `DEVICE_VARIANT=openclaw` + `RAG_ENABLED`: run `store.vector_search(embed(prompt), top_k=3)` → inject top chunks into system prompt
-
-**Files:** `features/bot_documents.py`, `core/bot_embeddings.py`, `core/bot_llm.py`, `core/bot_config.py`  
-**Tests:** T200 (embeddings written on upload), T201 (RAG context injected into LLM prompt)
-
-### 28.2 Ollama Model List UI 🔲
-
-Admin panel shows installed Ollama models with RAM estimate; admin can switch active model or pull new ones.
-- `list_ollama_models()` → `GET $OLLAMA_HOST/api/tags` → inline keyboard in Admin → LLM Settings
-- "➕ Pull model" text input → `POST /api/pull` → progress via Telegram
-- Web UI `/admin/llm`: model picker dropdown + pull field
-
-**Files:** `core/bot_llm.py`, `telegram/bot_admin.py`, `bot_web.py`  
-**Tests:** T202 (model list returned correctly)
-
-### 28.3 N8N → Taris Inbound Event Router 🔲
-
-Wire the existing `/webhook/n8n` endpoint to a dispatch table so N8N can push structured events into Taris:
-- `_N8N_EVENT_HANDLERS = {"lead_created": _handle_lead_created, "note_added": ..., "contact_updated": ...}`
-- Unknown events: log + ignore (no crash). Auth via existing `verify_incoming_signature()`.
-- `lead_created` → auto-create contact; notify admin chat
-
-**Files:** `features/bot_n8n.py`, `core/bot_config.py`  
-**Tests:** T203 (lead_created → contact), T204 (unknown event ignored)
-
-### 28.4 Contact → N8N Sync Button 🔲
-
-"📤 Sync to CRM" inline button on contact detail → POST contact dict to `CRM_SYNC_WEBHOOK_URL` → N8N → EspoCRM create/update.
-- Telegram: `cnt_sync_crm:<id>` callback → `call_webhook(CRM_SYNC_WEBHOOK_URL, contact_dict)`
-- Web UI: "Sync to CRM" button on contacts detail page → `POST /api/contacts/{id}/sync`
-
-**Files:** `features/bot_contacts.py`, `core/bot_config.py`, `strings.json`, `bot_web.py`  
-**Tests:** T205 (sync button → webhook called with contact payload)
+### 28.1 RAG Document Embedding ✅ Implemented (v2026.4.68)
+### 28.2 Ollama Model List UI ✅ Implemented (v2026.4.68)
+### 28.3 N8N → Taris Inbound Event Router ✅ Implemented (v2026.4.68)
+`dispatch_inbound_event(payload)` in `features/bot_n8n.py:370`. Auth via Bearer token.
+### 28.4 Contact → N8N Sync Button ✅ Implemented (v2026.4.68)
+`_handle_contact_sync_crm()` in `features/bot_contacts.py:365`. REST: `POST /api/contacts/{cid}/sync`.
 
 ---
 
-## 29. OpenClaw Medium Effort 🔲 Planned (3–5 days each)
+## 29. OpenClaw Medium Effort (partial) ✅ v2026.4.68
 
-> → Full spec with step-by-step implementation tables: [doc/todo/28-openclaw-extensions.md §29](doc/todo/28-openclaw-extensions.md)
+> → Full spec: [doc/todo/28-openclaw-extensions.md §29](doc/todo/28-openclaw-extensions.md)
 
-### 29.1 Per-User Ollama Model Preference 🔲
-
-Users choose preferred Ollama model (fast vs quality). Admin configures role defaults.
-- `user_pref_llm_model` column in `users` table (migration required)
-- Settings → "🤖 AI Model" → list installed models → pick → store in user prefs
-- `_ask_ollama()`: check per-user preference → override `OLLAMA_MODEL`
-- Role defaults: `{"guest": "qwen2:0.5b", "user": "qwen3:8b", "admin": "qwen3:8b"}`
-
-**Files:** `core/store_base.py`, adapters, `core/bot_llm.py`, `telegram/bot_users.py`, `telegram/bot_admin.py`  
-**Tests:** T210
+### 29.1 Per-User Ollama Model Preference ✅ Implemented (v2026.4.68)
+`_resolve_ollama_model(chat_id)` + `ROLE_DEFAULT_OLLAMA_MODEL` in `bot_config.py`. Stored in `user_prefs` table key `ollama_model`.
 
 ### 29.2 RAG in Voice Pipeline 🔲
-
-Before calling LLM on a voice utterance, semantically search user's documents and inject top chunks into system prompt.
-- After STT result: `rag_ctx = _vector_rag_context(chat_id, stt_text)`
-- Inject into `_with_lang_voice()` system prompt when non-empty
-- Guard: `VOICE_RAG_ENABLED` flag + OpenClaw + postgres only
-
-**Depends on:** §28.1 (pgvector wiring)  
+**Depends on:** §28.1 (pgvector population wiring)  
 **Files:** `features/bot_voice.py`, `core/bot_llm.py`, `core/bot_config.py`  
 **Tests:** T211
 
-### 29.3 OpenClaw Gateway Skill Result Rendering 🔲
-
-When `_ask_openclaw()` returns structured JSON with `skill_result`, render as formatted Telegram card instead of raw text.
-- Response parser: check for `skill_result` key → route to `render_skill_result(skill_name, result_dict)`
-- Renderer in `ui/render_telegram.py`: title + key/value fields or table
-- Registry of known skill schemas; unknown → YAML code block fallback
-
-**Files:** `core/bot_llm.py`, `ui/render_telegram.py`  
-**Tests:** T212
+### 29.3 OpenClaw Gateway Skill Result Rendering ✅ Implemented (v2026.4.68)
+`render_skill_result(skill_result)` in `ui/render_telegram.py:293`. Called after skill execution to format structured JSON → Telegram markdown.
 
 ### 29.4 EspoCRM Two-Way Contact Sync 🔲
 

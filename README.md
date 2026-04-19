@@ -50,6 +50,12 @@ On PicoClaw it listens for the wake word **"Пико"**, sends your Russian voic
 - **Developer Menu** — `bot_dev.py`: 🛠 Dev button (developer role only); Dev Chat, Restart Bot, View Log, Last Error, File List, Security Log; `security_events` DB table with `log_security_event()` + `log_access_denied()` (v2026.3.32)
 - **3-layer prompt injection guard** — input scan (L1), user input delimiting (L2), security preamble (L3)
 - **3-language i18n** — Russian, English, German UI strings via `strings.json`; auto-detected from Telegram `language_code`; admin panel buttons fully localized (v2026.3.43)
+- **Campaign Email Agent** — multi-step flow: pick template, select recipients via N8N/Google Sheets, confirm, send via N8N; accessible to `advanced`/`admin` roles from Agents menu (v2026.4.50)
+- **N8N inbound event router** — `POST /api/n8n/callback` (Bearer auth); `dispatch_inbound_event()` routes N8N events to per-type handlers; extensible dispatch table (v2026.4.68)
+- **CRM Contact Sync** — "📤 Sync to CRM" on contact detail → N8N → EspoCRM; REST API `/api/crm/contacts` for external access; `telegram` field added to contact schema (v2026.4.68)
+- **Per-user Ollama model** — users can set a preferred Ollama model; admin configures role defaults via `ROLE_DEFAULT_OLLAMA_MODEL`; resolution: user pref → role default → global `OLLAMA_MODEL` (v2026.4.68)
+- **Skill result rendering** — `render_skill_result()` in `render_telegram.py` formats structured JSON from OpenClaw skill calls into readable Telegram markdown (v2026.4.68)
+- **User Notifications** — `bot_notify.py`: CRUD UI for reusable message templates; send flow with template picker; `advanced`/`admin` roles (v2026.4.68)
 - **SQLite data layer** — all user data (notes, calendar, contacts, etc.) stored in `taris.db`; adapter pattern via `store_sqlite.py` supports dual SQLite and PostgreSQL backends (PostgreSQL + pgvector for OpenClaw)
 - **sqlite-vec vector search** — optional SQLite extension enabling KNN embedding search and local RAG; installed via `pip3 install sqlite-vec`; enabled automatically when present (see `src/setup/install_sqlite_vec.sh`)
 - **Embedding service** — `src/core/bot_embeddings.py` (`EmbeddingService`): fastembed-first with sentence-transformers fallback; `EMBED_MODEL` / `EMBED_DIMENSION` constants; wired into document upload pipeline
