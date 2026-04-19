@@ -53,6 +53,7 @@ from telegram.bot_users import (
     _upsert_registration, _is_blocked_reg, _is_pending_reg,
     _get_pending_registrations,
     _slug, _load_note_text, _save_note_file,
+    _set_reg_lang,
 )
 
 # ─── Voice pipeline ───────────────────────────────────────────────────────────
@@ -102,6 +103,9 @@ from telegram.bot_admin import (
 # ─── Campaign Agent ───────────────────────────────────────────────────────────
 import features.bot_campaign as _campaign
 
+# ─── Notify Agent ────────────────────────────────────────────────────────────
+import features.bot_notify as _notify
+
 # ─── User handlers ────────────────────────────────────────────────────────────
 from telegram.bot_handlers import (
     _handle_digest, _refresh_digest,
@@ -128,7 +132,7 @@ from telegram.bot_handlers import (
 
 # ─── Calendar ─────────────────────────────────────────────────────────────────
 from features.bot_calendar import (
-    _handle_calendar_menu, _handle_cal_event_detail,
+    _handle_calendar_menu, _handle_cal_event_detail, _handle_guest_cal_event_detail,
     _start_cal_add, _finish_cal_add, _handle_cal_cancel_event,
     _cal_do_confirm_save, _show_cal_confirm,
     _cal_prompt_edit_field, _cal_handle_edit_input,
@@ -248,8 +252,10 @@ def cmd_start(message):
             _upsert_registration(cid, username=username, name=name,
                                  status="guest",
                                  first_name=first, last_name=last)
+            # Persist the detected language so it survives bot restarts
+            _set_reg_lang(cid, _lang(cid))
             _st._dynamic_guests.add(cid)
-            log.info("[Guest] auto-registered chat_id=%s username=%s", cid, username)
+            log.info("[Guest] auto-registered chat_id=%s username=%s lang=%s", cid, username, _lang(cid))
             bot.send_message(cid, _t(cid, "guest_welcome"),
                              parse_mode="Markdown",
                              reply_markup=_menu_keyboard(cid))
@@ -892,6 +898,89 @@ def callback_handler(call):
         _campaign.cancel(cid)
         bot.send_message(cid, _t(cid, "campaign_cancelled"))
 
+    # ── Notify Agent ───────────────────────────────────────────────────────────
+    elif data == "notify_menu":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.show_notify_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_tpl_menu":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.show_tpl_menu(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_tpl_add":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_tpl_add(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_view:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.show_tpl_view(cid, data[len("notify_tpl_view:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_edit:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_tpl_edit(cid, data[len("notify_tpl_edit:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_del:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.confirm_tpl_delete(cid, data[len("notify_tpl_del:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_del_confirm:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.do_tpl_delete(cid, data[len("notify_tpl_del_confirm:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_send":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_send(cid, owner_chat_id=cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("notify_tpl_pick:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.on_tpl_picked(cid, data[len("notify_tpl_pick:"):])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_custom_msg":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_custom_msg(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_recipients_all":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.on_recipients_all(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_recipients_filter":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.start_filter_input(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_confirm_send":
+        if _is_admin(cid) or _is_advanced(cid):
+            _notify.confirm_send(cid)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "notify_cancel":
+        _notify.cancel(cid)
+        bot.send_message(cid, _t(cid, "notify_cancelled"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -1135,10 +1224,7 @@ def callback_handler(call):
 
     # ── Calendar ───────────────────────────────────────────────────────────
     elif data == "menu_calendar":
-        if not _is_guest(cid):
-            _handle_calendar_menu(cid)
-        else:
-            bot.send_message(cid, _t(cid, "admin_only"))
+        _handle_calendar_menu(cid)  # guest: shows own events, read-only keyboard (no Add/Console)
 
     elif data == "cal_add":
         if not _is_guest(cid):
@@ -1150,7 +1236,7 @@ def callback_handler(call):
         if not _is_guest(cid):
             _handle_cal_event_detail(cid, data[len("cal_event:"):])
         else:
-            bot.send_message(cid, _t(cid, "admin_only"))
+            _handle_guest_cal_event_detail(cid, data[len("cal_event:"):])
 
     elif data.startswith("cal_del:"):
         if not _is_guest(cid):
@@ -1285,6 +1371,9 @@ def _handle_agents_menu(chat_id: int) -> None:
             _t(chat_id, "agents_btn_campaign"), callback_data="campaign_start"
         ),
         InlineKeyboardButton(
+            _t(chat_id, "agents_btn_notify"), callback_data="notify_menu"
+        ),
+        InlineKeyboardButton(
             _t(chat_id, "agents_btn_back"), callback_data="menu"
         ),
     )
@@ -1357,6 +1446,15 @@ def text_handler(message):
                 return
         else:
             _campaign.cancel(cid)
+
+    # ── Notify agent text input ────────────────────────────────────────────────
+    if _notify.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            consumed = _notify.handle_message(cid, message.text)
+            if consumed:
+                return
+        else:
+            _notify.cancel(cid)
 
     if mode is None:
         # Default to chat mode — don't force menu on every unrouted text

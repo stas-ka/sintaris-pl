@@ -23,7 +23,7 @@ from core.store import store as _store
 _pending_contact: dict[int, dict] = {}
 
 # Steps for contact creation flow
-_ADD_STEPS = ["name", "phone", "email", "address", "notes"]
+_ADD_STEPS = ["name", "phone", "email", "address", "notes", "telegram"]
 
 # ── NL extraction prompt ──────────────────────────────────────────────────────
 _CONTACT_EXTRACT_PROMPT = (
@@ -36,10 +36,12 @@ _CONTACT_EXTRACT_PROMPT = (
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _contact_add(chat_id: int, name: str, phone: str = None, email: str = None,
-                 address: str = None, notes: str = None) -> str:
+                 address: str = None, notes: str = None,
+                 telegram: str = None) -> str:
     """Insert a new contact and return its id."""
     contact = {"name": name.strip(), "phone": phone or "", "email": email or "",
-               "address": address or "", "notes": notes or ""}
+               "address": address or "", "notes": notes or "",
+               "telegram": telegram or ""}
     return _store.save_contact(chat_id, contact)
 
 
@@ -51,7 +53,7 @@ def _contact_get(chat_id: int, cid: str) -> dict | None:
 
 
 def _contact_update(chat_id: int, cid: str, **fields) -> bool:
-    allowed = {"name", "phone", "email", "address", "notes"}
+    allowed = {"name", "phone", "email", "address", "notes", "telegram"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
@@ -130,11 +132,12 @@ def _contact_detail_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup:
 def _contact_edit_field_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup:
     """Choose which field to edit."""
     fields = [
-        ("name",    "✏️ " + _t(chat_id, "contact_field_name")),
-        ("phone",   "📞 " + _t(chat_id, "contact_field_phone")),
-        ("email",   "📧 " + _t(chat_id, "contact_field_email")),
-        ("address", "🏠 " + _t(chat_id, "contact_field_address")),
-        ("notes",   "📝 " + _t(chat_id, "contact_field_notes")),
+        ("name",     "✏️ " + _t(chat_id, "contact_field_name")),
+        ("phone",    "📞 " + _t(chat_id, "contact_field_phone")),
+        ("email",    "📧 " + _t(chat_id, "contact_field_email")),
+        ("address",  "🏠 " + _t(chat_id, "contact_field_address")),
+        ("notes",    "📝 " + _t(chat_id, "contact_field_notes")),
+        ("telegram", "📱 " + _t(chat_id, "contact_field_telegram")),
     ]
     kb = InlineKeyboardMarkup(row_width=1)
     for key, label in fields:
@@ -155,6 +158,8 @@ def _format_contact(c: dict, chat_id: int) -> str:
         lines.append(f"🏠 {c['address']}")
     if c.get("notes"):
         lines.append(f"📝 {c['notes']}")
+    if c.get("telegram"):
+        lines.append(f"📱 Telegram ID: `{c['telegram']}`")
     created = c.get("created_at", "")[:10]
     lines.append(f"\n_{_t(chat_id, 'contact_added')} {created}_")
     return "\n".join(lines)
@@ -237,6 +242,7 @@ def _finish_contact_add(chat_id: int, text: str) -> None:
             email=state.get("email"),
             address=state.get("address"),
             notes=state.get("notes"),
+            telegram=state.get("telegram"),
         )
         bot.send_message(chat_id, _t(chat_id, "contact_saved", name=state.get("name", "")))
         _handle_contact_open(chat_id, cid)

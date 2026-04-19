@@ -7,6 +7,16 @@ Use this to analyse cost (time, requests) per feature over time.
 
 | 07:53 | Add drawio to git; create roles-overview.md (full feature matrix per role); create doc/todo/1.2-guest-users.md (guest user concept + impl plan P1–P6, T140–T144); update TODO.md §1.2, security.md, copilot-instructions | 2 | 2 | claude-sonnet-4.6 | doc/users/roles-overview.md (new), doc/todo/1.2-guest-users.md (new), doc/users/*.drawio, TODO.md, security.md, copilot-instructions.md | done |
 
+### Session — 2026-04-20 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 12:00 UTC | Fix v2026.4.62: admin can now see and share ALL documents (incl. other users private docs) in web Documents UI and Telegram docs menu; add is_admin param to list_documents() in store_base/postgres/sqlite | 2 | 4 | claude-sonnet-4.6 | store_base.py, store_postgres.py, store_sqlite.py, bot_documents.py, bot_web.py, bot_config.py, release_notes.json | done |
+| 12:30 UTC | Fix v2026.4.63: guest menu inconsistency — same menu regardless of entry point (/start vs Back button); guest now sees Chat+Request Appointment+Calendar(read-only)+Profile+Help; fixed main_menu.yaml (digest visible to guests, meeting button missing, calendar missing); added _handle_guest_cal_event_detail read-only event view | 3 | 4 | claude-sonnet-4.6 | bot_access.py, main_menu.yaml, telegram_menu_bot.py, bot_calendar.py, bot_config.py, release_notes.json | done |
+| 13:00 UTC | Fix v2026.4.64: Russian-language guests received English LLM responses (e.g. "Please specify what you would like to do!"). Root cause: {lang_instruction} was placed last in an all-English system prompt — LLM ignored it. Fix: moved {lang_instruction} to right after security_preamble in ALL role_system_prompts templates; strengthened Russian/German/English lang instructions with mandatory framing; persist detected language to DB on guest auto-registration via _set_reg_lang() | 2 | 2 | claude-sonnet-4.6 | src/prompts.json, src/telegram_menu_bot.py, src/core/bot_config.py, src/release_notes.json | done |
+| 13:30 UTC | Feature v2026.4.65: New "Notifications to Users" agent in Agents menu — send Telegram notifications to contacts from Taris contact book; DB-stored templates (add/view/edit/delete); send flow (choose template / custom message → recipients all/filter → preview → confirm → send); Contacts extended with optional Telegram ID field | 3 | 3 | claude-sonnet-4.6 | src/features/bot_notify.py (new), src/features/bot_contacts.py, src/telegram_menu_bot.py, src/strings.json, src/core/bot_config.py, src/release_notes.json | done |
+| 14:00 UTC | Fix v2026.4.66: guest conversation limit set to unlimited — GUEST_MSG_HOURLY_LIMIT/GUEST_MSG_DAILY_LIMIT defaults changed from 5/20 to 0 (unlimited); rate-limit check treats 0 as unlimited | 1 | 1 | claude-sonnet-4.6 | src/core/bot_config.py, src/telegram/bot_access.py, src/release_notes.json | done |
+
 ### Session — 2026-04-18 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |

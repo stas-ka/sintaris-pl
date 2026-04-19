@@ -117,9 +117,9 @@ def _check_guest_rate_limit(chat_id: int) -> tuple[bool, str]:
         counts["day"] = 0
         counts["day_ts"] = now
 
-    if counts["hour"] >= GUEST_MSG_HOURLY_LIMIT:
+    if GUEST_MSG_HOURLY_LIMIT > 0 and counts["hour"] >= GUEST_MSG_HOURLY_LIMIT:
         return False, "hourly"
-    if counts["day"] >= GUEST_MSG_DAILY_LIMIT:
+    if GUEST_MSG_DAILY_LIMIT > 0 and counts["day"] >= GUEST_MSG_DAILY_LIMIT:
         return False, "daily"
 
     counts["hour"] += 1
@@ -708,13 +708,17 @@ def _menu_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     """Main menu keyboard filtered by the caller's role."""
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_chat"),    callback_data="mode_chat"))
-    if not _is_guest(chat_id):
+    if _is_guest(chat_id):
+        # Guest menu: Chat → Request Appointment → Calendar (view only) → Profile → Help
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_guest_meeting"), callback_data="guest_meeting"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_calendar"), callback_data="menu_calendar"))
+    else:
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_digest"),   callback_data="digest"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_notes"),    callback_data="menu_notes"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_calendar"), callback_data="menu_calendar"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_contacts"), callback_data="menu_contacts"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_docs"),     callback_data="menu_docs"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "btn_guest_meeting"), callback_data="guest_meeting"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_guest_meeting"), callback_data="guest_meeting"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_profile"),  callback_data="profile"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_help"),     callback_data="help"))
     if _is_admin(chat_id):

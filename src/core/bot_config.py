@@ -308,7 +308,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.61"
+BOT_VERSION        = "2026.4.66"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Guest / auto-registration
@@ -323,8 +323,8 @@ BOT_VERSION        = "2026.4.61"
 # ─────────────────────────────────────────────────────────────────────────────
 AUTO_GUEST_ENABLED     = int(os.environ.get("AUTO_GUEST_ENABLED",     "0"))
 AUTO_USER_ENABLED      = int(os.environ.get("AUTO_USER_ENABLED",      "0"))
-GUEST_MSG_DAILY_LIMIT  = int(os.environ.get("GUEST_MSG_DAILY_LIMIT",  "20"))
-GUEST_MSG_HOURLY_LIMIT = int(os.environ.get("GUEST_MSG_HOURLY_LIMIT", "5"))
+GUEST_MSG_DAILY_LIMIT  = int(os.environ.get("GUEST_MSG_DAILY_LIMIT",  "0"))  # 0 = unlimited
+GUEST_MSG_HOURLY_LIMIT = int(os.environ.get("GUEST_MSG_HOURLY_LIMIT", "0"))  # 0 = unlimited
 GUEST_MAX_TOKENS       = int(os.environ.get("GUEST_MAX_TOKENS",       "500"))
 SHARED_DOCS_OWNER      = os.environ.get("SHARED_DOCS_OWNER",          "")
 

@@ -34,7 +34,7 @@ from core.bot_config import CALENDAR_DIR, log
 from core.bot_instance import bot
 from core.bot_prompts import PROMPTS, fmt_prompt
 from telegram.bot_access import (
-    _t, _escape_md, _back_keyboard, _send_menu, _is_allowed, _lang,
+    _t, _escape_md, _back_keyboard, _send_menu, _is_allowed, _is_guest, _lang,
 )
 from core.bot_llm import ask_llm
 from telegram.bot_users import _resolve_storage_id
@@ -225,8 +225,9 @@ def _calendar_keyboard(chat_id: int, events: list) -> InlineKeyboardMarkup:
         dt_str = dt.strftime("%d.%m %H:%M")
         label = f"🗓 {ev['title']} · {dt_str}  {cdown}"
         kb.add(InlineKeyboardButton(label, callback_data=f"cal_event:{ev['id']}"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_add"), callback_data="cal_add"))
-    kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_console"), callback_data="cal_console"))
+    if not _is_guest(chat_id):
+        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_add"), callback_data="cal_add"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_console"), callback_data="cal_console"))
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="menu"))
     return kb
 
@@ -309,6 +310,23 @@ def _handle_cal_event_detail(chat_id: int, ev_id: str) -> None:
             f"📅 {dt.strftime('%d.%m.%Y %H:%M')}\n{cdown}")
     bot.send_message(chat_id, text, parse_mode="Markdown",
                      reply_markup=_cal_event_keyboard(chat_id, ev_id))
+
+
+def _handle_guest_cal_event_detail(chat_id: int, ev_id: str) -> None:
+    """Read-only event detail for guests — shows title/date, Back only (no edit/delete)."""
+    lang = _st._user_lang.get(chat_id, "ru")
+    events = _cal_load(chat_id)
+    ev = next((e for e in events if e.get("id") == ev_id), None)
+    if not ev:
+        _handle_calendar_menu(chat_id)
+        return
+    dt = datetime.fromisoformat(ev["dt_iso"])
+    cdown = _fmt_countdown(dt, lang)
+    text = (f"🗓 *{_escape_md(ev['title'])}*\n"
+            f"📅 {dt.strftime('%d.%m.%Y %H:%M')}\n{cdown}")
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="menu_calendar"))
+    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

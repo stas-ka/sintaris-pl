@@ -1,5 +1,35 @@
 [
   {
+    "version": "2026.4.66",
+    "date": "2026-04-21",
+    "title": "Fix: guest conversation limit set to unlimited (was 5/hour)",
+    "notes": "GUEST_MSG_HOURLY_LIMIT and GUEST_MSG_DAILY_LIMIT defaults changed from 5/20 to 0 (unlimited). Rate-limit check now treats 0 as unlimited so guests can chat freely. Limits remain configurable via bot.env (0=unlimited, N=cap per hour/day)."
+  },
+  {
+    "version": "2026.4.65",
+    "date": "2026-04-21",
+    "title": "Feature: Notifications to Users agent - send Telegram notifications from contact book",
+    "notes": "New 'Notifications to Users' agent accessible from the Agents menu. Sends Telegram messages directly to contacts from the Taris contact book (requires Telegram chat_id on the contact). DB-stored notification templates (add/view/edit/delete). Send flow: choose template or write custom message, choose recipients (all with Telegram or filtered by name/email/notes), preview, confirm, send. Contacts extended with optional Telegram ID field for agent integration. Full RU/EN/DE string support."
+  },
+  {
+    "version": "2026.4.64",
+    "date": "2026-04-20",
+    "title": "Fix: Russian-language guests no longer receive English LLM responses",
+    "notes": "Root causes fixed: (1) LLM system prompt now places {lang_instruction} immediately after the security preamble (before the English bot-config block) for all roles, so the model sees the language directive early rather than buried at the end of an all-English context. (2) Russian lang instruction strengthened to unambiguous mandatory form. (3) Guest auto-registration now persists the detected Telegram language to the DB via _set_reg_lang(), ensuring correct language survives bot restarts without relying on Telegram language_code each time."
+  },
+  {
+    "version": "2026.4.63",
+    "date": "2026-04-20",
+    "title": "Fix: Consistent guest menu across all entry points",
+    "notes": "Guest menu is now identical regardless of entry point (/start, /menu command, Back button): Chat, Request Appointment, Calendar (read-only view of own appointments), Profile, Help. Fixed main_menu.yaml showing Mail Digest to guests and missing Request Appointment button. Fixed calendar: guests can now view their confirmed/requested appointments but cannot add, edit, delete, or use Console mode."
+  },
+  {
+    "version": "2026.4.62",
+    "date": "2026-04-20",
+    "title": "Fix: Admin can now see and share all documents in web UI and Telegram",
+    "notes": "Admins now see ALL documents (including other users private docs and system docs with chat_id=0) in the web Documents list and Telegram docs menu. Share toggle works for any document regardless of owner. list_documents() now accepts is_admin=True to return all docs."
+  },
+  {
     "version": "2026.4.61",
     "date": "2026-04-19",
     "title": "Admin: Voice Settings submenu, auto-add contacts, web UI sync",
