@@ -1568,3 +1568,5 @@ Every ~3 months, measure baseline health:
 | 20:00 UTC | Run /taris-test-ui VPS: fixed 8 selector failures caused by ROOT_PATH=/supertaris-vps (href/hx-post/action use *=contains; tests must run via nginx not :8090 direct); result 71/71 PASS; Telegram: Version 2026.4.68 + Polling ✅ | 3 | 8 | claude-sonnet-4.6 | src/tests/ui/test_ui.py, src/tests/ui/conftest.py | done |
 
 | 07:36 UTC | | 07:00 UTC | | 07:36 UTC | 36 | WSL SSH Quick Start guide + NTLM proxy (cntlm) fix documented | 1 | 3 | claude-sonnet-4.6 | doc/research/vps-ssh-client-setup.md | done |
+
+| 08:15 UTC | | 08:00 UTC | | 08:15 UTC | 15 | /taris-update-doc all: sync 8 docs to v2026.4.68 (§28-29.3 OpenClaw extensions); added per-user Ollama model, N8N router, bot_notify, CRM sync, render_skill_result, 3 new test classes (71 total), collapsed §28-29.3 in TODO.md | 2 | 1 | claude-sonnet-4.6 | doc/architecture/llm-providers.md, doc/architecture/features.md, doc/architecture/web-ui.md, doc/architecture/data-layer.md, doc/architecture/telegram-bot.md, doc/test-suite.md, README.md, TODO.md | done |
