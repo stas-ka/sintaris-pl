@@ -650,6 +650,20 @@ action_backup() {
 # =============================================================================
 action_migrate() {
   hdr "Migrate — run migrate_to_db.py"
+  if [[ "$IS_DOCKER" == true ]]; then
+    # VPS: run migration inside the Docker container so bot_config.py can
+    # find bot.env at /root/.taris/bot.env (mounted from /opt/taris-docker/bot.env)
+    CONTAINER="${DOCKER_CONTAINERS[0]}"
+    RESULT=$(docker exec "$CONTAINER" \
+      sh -c "PYTHONPATH=/app/src python3 /app/src/setup/migrate_to_db.py" 2>&1 | tail -6 || true)
+    echo "$RESULT"
+    if echo "$RESULT" | grep -qi "traceback\|runtimeerror"; then
+      warn "Migration had warnings inside container — check output above"
+    else
+      ok "Migration complete (Docker)"
+    fi
+    return
+  fi
   MIGRATE_SCRIPT="${TARIS_HOME}/setup/migrate_to_db.py"
   MIGRATE_CMD="PYTHONPATH=${TARIS_HOME} python3 ${MIGRATE_SCRIPT}"
   if _exec "test -f ${MIGRATE_SCRIPT}" 2>/dev/null; then
