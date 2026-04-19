@@ -1,6 +1,6 @@
 # Taris — Software Stacks
 
-**Version:** `2026.3.32`  
+**Version:** `2026.4.68`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ## When to read this file
@@ -82,7 +82,7 @@ flowchart TB
 
     subgraph DATA["💾 Data Store"]
         SQLITE["SQLite + FTS5\n+ sqlite-vec 384-dim\n🔵 PicoClaw"]:::pc
-        PG["PostgreSQL 14\n+ pgvector ⏳ planned\n🟢 OpenClaw"]:::oc
+        PG["PostgreSQL 14\n+ pgvector (1536-dim HNSW)\n🟢 OpenClaw"]:::oc
         FILES["~/.taris/ files\nJSON fallback\nboth variants"]:::both
     end
 
@@ -201,9 +201,10 @@ flowchart LR
 | PicoClaw | `taris` / OpenRouter | `openrouter/openai/gpt-4o-mini` | cloud | Default; requires internet |
 | PicoClaw | `local` (llama.cpp) | Any GGUF | ≥4 GB | Pi 4/5 only; Pi 3 too slow |
 | PicoClaw | `openai` | `gpt-4o-mini` | cloud | Direct OpenAI API |
-| OpenClaw | `openai` (primary) | `gpt-4o-mini` | cloud | Fast, accurate |
-| OpenClaw | `ollama` (fallback) | `qwen2:0.5b` default | ~1 GB | Offline fallback |
-| OpenClaw | `ollama` | `qwen3:8b` | ~5 GB | Better reasoning (requires 8+ GB RAM) |
+| OpenClaw | `ollama` (primary) | `qwen3:8b` | ~5 GB | **Default; offline local LLM** |
+| OpenClaw | `ollama` | `qwen3.5:latest` | ~6 GB | SintAItion production (AMD ROCm GPU) |
+| OpenClaw | `ollama` | `qwen2:0.5b` / `qwen3.5:0.8b` | ~1 GB | Low-RAM fallback (TariStation2) |
+| OpenClaw | `openai` | `gpt-4o-mini` | cloud | Cloud fallback (`LLM_FALLBACK_PROVIDER`) |
 
 ---
 
@@ -219,6 +220,7 @@ flowchart LR
 | `de_DE-thorsten-medium.onnx` | Both (opt) | German | 63 MB | `~/.taris/de_DE-thorsten-medium.onnx` |
 | `ggml-base.bin` | PicoClaw (opt) | Multi | 142 MB | `~/.taris/whisper/ggml-base.bin` |
 | `faster-whisper base` | OpenClaw | Multi | 300 MB | `~/.cache/huggingface/...` |
+| `faster-whisper small` | OpenClaw (SintAItion) | Multi | 500 MB | `~/.cache/huggingface/...` — recommended for SintAItion |
 
 ---
 

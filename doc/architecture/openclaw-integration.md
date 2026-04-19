@@ -1,6 +1,6 @@
 # Taris — OpenClaw Variant
 
-**Version:** `2026.4.23` · **Last updated:** April 2026  
+**Version:** `2026.4.68` · **Last updated:** April 2026  
 → Architecture index: [architecture.md](../architecture.md)  
 → System overview: [overview.md](overview.md)  
 → PicoClaw variant: [picoclaw.md](picoclaw.md)  
@@ -357,7 +357,59 @@ Copilot skill: `.github/prompts/taris-openclaw-setup.prompt.md`
 | `skill-taris` in sintaris-openclaw | ✅ | `~/projects/sintaris-openclaw/skills/skill-taris/` |
 | `sintaris-openclaw-local-deploy` | ✅ | `~/projects/sintaris-openclaw-local-deploy/` |
 | `migrate_sqlite_to_pg.py` | 🔲 Planned | §25.7 in TODO.md |
-| pgvector HNSW RAG pipeline | 🔲 Planned | §25.6 Phase B in TODO.md |
+| pgvector HNSW RAG pipeline — wired at upload | 🔲 Planned | §28.1 in TODO.md |
+| pgvector RAG injected into LLM prompt | 🔲 Planned | §28.1 in TODO.md |
+| Ollama model list + pull UI | 🔲 Planned | §28.2 in TODO.md |
+| N8N inbound event router | 🔲 Planned | §28.3 in TODO.md |
+| Contact → N8N CRM sync | 🔲 Planned | §28.4 in TODO.md |
+| Per-user Ollama model preference | 🔲 Planned | §29.1 in TODO.md |
+| RAG context in voice pipeline | 🔲 Planned | §29.2 in TODO.md |
+| Gateway skill result rendering | 🔲 Planned | §29.3 in TODO.md |
+| LLM provider plugin extraction | 🔲 Planned | §30.1 in TODO.md |
+| STT provider protocol | 🔲 Planned | §30.2 in TODO.md |
+| `VariantConfig` dataclass | 🔲 Planned | §30.3 in TODO.md |
+
+---
+
+## Extension Roadmap
+
+> Full spec with implementation steps, file targets, and test IDs: [doc/todo/28-openclaw-extensions.md](../todo/28-openclaw-extensions.md)
+
+### Unconnected assets (already in code, not yet wired)
+
+| Asset | Location | Missing link |
+|---|---|---|
+| `vec_embeddings` table (pgvector 1536-dim HNSW) | `store_postgres.py` | Nothing calls embed-on-upload; no RAG injection |
+| `/webhook/n8n` inbound handler | `bot_n8n.py` | Receives payload; no event dispatch table |
+| `MCP_SERVER_ENABLED`, `MCP_REMOTE_URL` | `bot_config.py` | Constants exist; no endpoints |
+| `get_ollama_model()` / `set_ollama_model()` | `bot_llm.py` | Works; no model list UI |
+| `bot_embeddings.py` — fastembed wrapper | `bot_embeddings.py` | Exists; not called at upload time |
+
+### Quick wins (§28) — 1–2 days each
+
+| Item | What it does | Key files |
+|---|---|---|
+| **28.1** RAG embedding wiring | Upload → chunk → embed → `vec_embeddings`; LLM call → vector search → inject | `bot_documents.py`, `bot_embeddings.py`, `bot_llm.py` |
+| **28.2** Ollama model list UI | Admin sees installed models; switch/pull without restart | `bot_llm.py`, `bot_admin.py`, `bot_web.py` |
+| **28.3** N8N inbound event router | `/webhook/n8n` → dispatch table → `lead_created` → auto-create contact | `bot_n8n.py` |
+| **28.4** Contact → N8N sync | "📤 Sync to CRM" button → `call_webhook(CRM_SYNC_WH, contact)` | `bot_contacts.py`, `bot_web.py` |
+
+### Medium effort (§29) — 3–5 days each
+
+| Item | What it does | Depends on |
+|---|---|---|
+| **29.1** Per-user Ollama model | User preference stored in DB; fast vs quality model per user | — |
+| **29.2** RAG in voice pipeline | After STT: semantic search → inject into voice LLM system prompt | 28.1 |
+| **29.3** Skill result rendering | `_ask_openclaw()` JSON → formatted Telegram card | — |
+| **29.4** EspoCRM two-way sync | Taris ↔ N8N ↔ EspoCRM bidirectional contact sync | 28.3, 28.4 |
+
+### Architecture flexibility (§30) — incremental / background
+
+| Item | What it does | Risk |
+|---|---|---|
+| **30.1** LLM provider plugins | `core/llm_providers/*.py` — each provider a module with Protocol | Low |
+| **30.2** STT provider protocol | `core/stt_providers/*.py` — `VoskSTT` / `FasterWhisperSTT` swappable | Low |
+| **30.3** `VariantConfig` dataclass | Replace `if DEVICE_VARIANT==` checks with typed config object | Low |
 | Screen DSL `visible_variants` | 🔲 Planned | §21.6 in TODO.md |
 
 ---
