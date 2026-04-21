@@ -46,6 +46,11 @@ widgets:
 
   - type: button_row
     buttons:
+      - label_key: admin_btn_appt
+        action: admin_appt_menu
+
+  - type: button_row
+    buttons:
       - label_key: admin_btn_release_notes
         action: admin_changelog
 
