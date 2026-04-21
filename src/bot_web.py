@@ -2837,6 +2837,60 @@ async def admin_page(request: Request):
     ))
 
 
+@app.get("/admin/appointment", response_class=HTMLResponse)
+async def admin_appointment_page(request: Request):
+    """Admin page: appointment routing settings (read-only, configure via Telegram bot)."""
+    user = _get_current_user(request)
+    if not user:
+        return _redir("/login", status_code=302)
+    if user.get("role") != "admin":
+        raise HTTPException(403, detail="Admin only")
+
+    from telegram.bot_admin import (
+        _get_appt_mode, _get_appt_single_uid,
+        _get_appt_visible_roles, _get_appt_expert_users,
+    )
+    mode = _get_appt_mode()
+    single_uid = _get_appt_single_uid()
+    visible_roles = _get_appt_visible_roles()
+    experts = _get_appt_expert_users()
+
+    # Build a simple expert display: uid → name fallback to uid
+    expert_map = {str(uid): name for uid, name in experts}
+    receiver_name = expert_map.get(str(single_uid), str(single_uid)) if single_uid else "—"
+
+    rows = "".join(
+        f"<tr><td>{html.escape(str(uid))}</td><td>{html.escape(name)}</td></tr>"
+        for uid, name in experts
+    ) if experts else "<tr><td colspan='2'>No experts configured</td></tr>"
+
+    roles_html = ", ".join(html.escape(r) for r in visible_roles) or "—"
+
+    body = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Appointment Routing Settings</title>
+<style>body{{font-family:sans-serif;padding:2em;max-width:700px;margin:auto}}
+h1{{font-size:1.4em}}table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #ccc;padding:.5em .8em;text-align:left}}
+.badge{{display:inline-block;padding:.2em .6em;border-radius:.3em;font-size:.85em}}
+.badge-single{{background:#d1ecf1;color:#0c5460}}
+.badge-select{{background:#d4edda;color:#155724}}</style>
+</head><body>
+<h1>Appointment Routing Settings</h1>
+<p><a href="{html.escape(_ROOT_PATH + '/admin')}">&larr; Back to Admin</a></p>
+<table>
+<tr><th>Setting</th><th>Value</th></tr>
+<tr><td>Mode</td><td><span class="badge badge-{html.escape(mode)}">{html.escape(mode)}</span></td></tr>
+<tr><td>Single receiver</td><td>{html.escape(receiver_name)}</td></tr>
+<tr><td>Visible roles</td><td>{roles_html}</td></tr>
+</table>
+<h2>Expert users (selectable receivers)</h2>
+<table><tr><th>User ID</th><th>Name</th></tr>{rows}</table>
+<p><em>To change these settings, use the Telegram Admin menu → Appointment Routing.</em></p>
+</body></html>"""
+    return HTMLResponse(content=body)
+
+
 @app.post("/admin/llm/{model_name}")
 async def admin_set_llm(request: Request, model_name: str):
     user = _get_current_user(request)
