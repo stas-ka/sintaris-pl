@@ -2608,7 +2608,10 @@ def _handle_admin_appt_single_menu(chat_id: int) -> None:
 
 
 def _handle_admin_appt_single_set(chat_id: int, uid: int) -> None:
-    """Set the single appointment receiver and confirm."""
+    """Set the single appointment receiver, notify old and new receiver."""
+    old_uid_str = db_get_system_setting(_APPT_SINGLE_UID_KEY, "")
+    old_uid = int(old_uid_str) if old_uid_str and old_uid_str.isdigit() else None
+
     db_set_system_setting(_APPT_SINGLE_UID_KEY, str(uid))
     try:
         reg = _find_registration(uid)
@@ -2616,6 +2619,21 @@ def _handle_admin_appt_single_set(chat_id: int, uid: int) -> None:
     except Exception:
         name = str(uid)
     log.info(f"[Appt] admin {chat_id} set single receiver → {uid} ({name})")
+
+    # Notify old receiver (if different)
+    if old_uid and old_uid != uid and old_uid != chat_id:
+        try:
+            bot.send_message(old_uid, _t(old_uid, "admin_appt_notify_old_receiver"))
+        except Exception as e:
+            log.warning(f"[Appt] Cannot notify old receiver {old_uid}: {e}")
+
+    # Notify new receiver (if not the admin doing the setting)
+    if uid != chat_id:
+        try:
+            bot.send_message(uid, _t(uid, "admin_appt_notify_new_receiver"))
+        except Exception as e:
+            log.warning(f"[Appt] Cannot notify new receiver {uid}: {e}")
+
     bot.send_message(chat_id, _t(chat_id, "admin_appt_receiver_set", name=name),
                      parse_mode="Markdown")
     _handle_admin_appt_menu(chat_id)
