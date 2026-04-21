@@ -1248,34 +1248,55 @@ def _show_meeting_day_slots(chat_id: int, expert_id: int, day) -> None:
 
 
 def _start_guest_meeting(chat_id: int) -> None:
-    """Entry point — show expert selector, or skip to topic if only one expert."""
-    from core.bot_config import ADMIN_USERS
-    experts = list(ADMIN_USERS)
-    if not experts:
-        bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
-        return
+    """Entry point — show expert selector based on admin's appointment routing settings."""
+    from core.bot_db import db_get_system_setting
+    from telegram.bot_admin import _get_appt_mode, _get_appt_single_uid, _get_appt_expert_users
+
+    mode = _get_appt_mode()
     _pending_meeting[chat_id] = {"step": "expert"}
-    if len(experts) == 1:
-        _pending_meeting[chat_id]["expert_id"] = experts[0]
+
+    if mode == "select":
+        # Show list of users from the configured visible roles
+        experts = _get_appt_expert_users()
+        if not experts:
+            # Fall back to single mode if no users match the configured roles
+            mode = "single"
+        else:
+            if len(experts) == 1:
+                _pending_meeting[chat_id]["expert_id"] = experts[0][0]
+                _pending_meeting[chat_id]["step"] = "topic"
+                _st._user_mode[chat_id] = "guest_meeting_topic"
+                kb = InlineKeyboardMarkup()
+                kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+                bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
+                                 parse_mode="Markdown", reply_markup=kb)
+                return
+            kb = InlineKeyboardMarkup(row_width=1)
+            for eid, name in experts:
+                kb.add(InlineKeyboardButton(f"👤 {name}",
+                                            callback_data=f"cal_meet_expert:{eid}"))
+            kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
+            bot.send_message(chat_id, _t(chat_id, "guest_meeting_select_expert"),
+                             parse_mode="Markdown", reply_markup=kb)
+            return
+
+    # Single mode (or fallback): use configured single receiver, else first admin
+    if mode == "single":
+        from core.bot_config import ADMIN_USERS
+        single_uid = _get_appt_single_uid()
+        if single_uid is None:
+            experts_fallback = list(ADMIN_USERS)
+            single_uid = experts_fallback[0] if experts_fallback else None
+        if not single_uid:
+            bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
+            _pending_meeting.pop(chat_id, None)
+            return
+        _pending_meeting[chat_id]["expert_id"] = single_uid
         _pending_meeting[chat_id]["step"] = "topic"
         _st._user_mode[chat_id] = "guest_meeting_topic"
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
         bot.send_message(chat_id, _t(chat_id, "guest_meeting_topic_prompt"),
-                         parse_mode="Markdown", reply_markup=kb)
-    else:
-        kb = InlineKeyboardMarkup(row_width=1)
-        for eid in experts:
-            try:
-                from telegram.bot_users import _find_registration
-                reg = _find_registration(eid)
-                name = (reg.get("name") or reg.get("first_name") or str(eid)) if reg else str(eid)
-            except Exception:
-                name = str(eid)
-            kb.add(InlineKeyboardButton(f"👤 {name}",
-                                        callback_data=f"cal_meet_expert:{eid}"))
-        kb.add(InlineKeyboardButton(_t(chat_id, "cal_btn_cancel"), callback_data="cancel"))
-        bot.send_message(chat_id, _t(chat_id, "guest_meeting_select_expert"),
                          parse_mode="Markdown", reply_markup=kb)
 
 
@@ -1304,13 +1325,14 @@ def _finish_guest_meeting_topic(chat_id: int, topic: str) -> None:
     state = _pending_meeting.get(chat_id, {})
     expert_id = state.get("expert_id")
     if not expert_id:
+        from core.bot_db import db_get_system_setting
+        from telegram.bot_admin import _get_appt_single_uid
         from core.bot_config import ADMIN_USERS
-        experts = list(ADMIN_USERS)
-        if not experts:
+        expert_id = _get_appt_single_uid() or (list(ADMIN_USERS)[0] if ADMIN_USERS else None)
+        if not expert_id:
             bot.send_message(chat_id, _t(chat_id, "guest_meeting_no_slots"))
             _pending_meeting.pop(chat_id, None)
             return
-        expert_id = experts[0]
     state["topic"]     = topic
     state["expert_id"] = expert_id
     state["step"]      = "pick_slot"

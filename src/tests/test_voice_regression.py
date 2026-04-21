@@ -8393,6 +8393,137 @@ def t_guest_appointment_flow(**_) -> list[TestResult]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T162–T167 — Appointment routing settings (admin panel + _start_guest_meeting)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_appt_routing_settings(**_) -> list[TestResult]:
+    """T162-T167: Admin appointment routing — mode/receiver/roles settings, _start_guest_meeting uses them."""
+    import time as _time
+    import json as _json
+    results: list[TestResult] = []
+    t0 = _time.time()
+
+    admin_src   = SRC_ROOT / "telegram" / "bot_admin.py"
+    cal_src     = SRC_ROOT / "features" / "bot_calendar.py"
+    menu_src    = SRC_ROOT / "telegram_menu_bot.py"
+    strings_src = SRC_ROOT / "strings.json"
+
+    admin_text = admin_src.read_text(encoding="utf-8") if admin_src.exists() else ""
+    cal_text   = cal_src.read_text(encoding="utf-8") if cal_src.exists() else ""
+    menu_text  = menu_src.read_text(encoding="utf-8") if menu_src.exists() else ""
+    try:
+        strings = _json.loads(strings_src.read_text(encoding="utf-8"))
+    except Exception:
+        strings = {}
+
+    # ── T162: Admin handler functions present in bot_admin.py ─────────────────
+    admin_fns = [
+        ("handle_admin_appt_menu",        "def _handle_admin_appt_menu("),
+        ("handle_admin_appt_mode_toggle", "def _handle_admin_appt_mode_toggle("),
+        ("handle_admin_appt_single_menu", "def _handle_admin_appt_single_menu("),
+        ("handle_admin_appt_single_set",  "def _handle_admin_appt_single_set("),
+        ("handle_admin_appt_roles_menu",  "def _handle_admin_appt_roles_menu("),
+        ("handle_admin_appt_role_toggle", "def _handle_admin_appt_role_toggle("),
+        ("get_appt_mode",                 "def _get_appt_mode("),
+        ("get_appt_single_uid",           "def _get_appt_single_uid("),
+        ("get_appt_visible_roles",        "def _get_appt_visible_roles("),
+        ("get_appt_expert_users",         "def _get_appt_expert_users("),
+    ]
+    for name, needle in admin_fns:
+        ok = needle in admin_text
+        results.append(TestResult(
+            f"appt_admin_fn_{name}", "PASS" if ok else "FAIL", _time.time() - t0,
+            f"{name} present in bot_admin.py" if ok
+            else f"MISSING: {needle} in bot_admin.py",
+        ))
+
+    # ── T163: DB keys defined as constants ────────────────────────────────────
+    db_keys = [
+        ("appt_mode_key",          "_APPT_MODE_KEY"),
+        ("appt_single_uid_key",    "_APPT_SINGLE_UID_KEY"),
+        ("appt_visible_roles_key", "_APPT_VISIBLE_ROLES_KEY"),
+    ]
+    for name, needle in db_keys:
+        ok = needle in admin_text
+        results.append(TestResult(
+            f"appt_db_key_{name}", "PASS" if ok else "FAIL", _time.time() - t0,
+            f"{needle} constant defined" if ok
+            else f"MISSING: {needle} constant in bot_admin.py",
+        ))
+
+    # ── T164: admin_btn_appt in admin_keyboard ────────────────────────────────
+    ok_btn = "admin_btn_appt" in admin_text and "admin_appt_menu" in admin_text
+    results.append(TestResult(
+        "appt_admin_keyboard_btn", "PASS" if ok_btn else "FAIL", _time.time() - t0,
+        "admin_btn_appt button present in _admin_keyboard" if ok_btn
+        else "MISSING: admin_btn_appt or admin_appt_menu in _admin_keyboard",
+    ))
+
+    # ── T165: telegram_menu_bot.py routes all appt callbacks ─────────────────
+    appt_callbacks = [
+        "admin_appt_menu",
+        "admin_appt_mode_toggle",
+        "admin_appt_single_menu",
+        "admin_appt_single_set:",
+        "admin_appt_roles_menu",
+        "admin_appt_role_toggle:",
+    ]
+    for cb in appt_callbacks:
+        ok = cb in menu_text
+        results.append(TestResult(
+            f"appt_callback_{cb.replace(':', '').replace(' ', '_')}",
+            "PASS" if ok else "FAIL", _time.time() - t0,
+            f"callback '{cb}' routed in telegram_menu_bot.py" if ok
+            else f"MISSING callback '{cb}' in telegram_menu_bot.py",
+        ))
+
+    # ── T166: _start_guest_meeting reads appt_mode from DB ───────────────────
+    ok_mode  = "_get_appt_mode()" in cal_text
+    ok_uid   = "_get_appt_single_uid()" in cal_text
+    ok_roles = "_get_appt_expert_users()" in cal_text
+    results.append(TestResult(
+        "appt_start_uses_mode", "PASS" if ok_mode else "FAIL", _time.time() - t0,
+        "_get_appt_mode() called in _start_guest_meeting" if ok_mode
+        else "MISSING: _get_appt_mode() in bot_calendar.py",
+    ))
+    results.append(TestResult(
+        "appt_start_uses_single_uid", "PASS" if ok_uid else "FAIL", _time.time() - t0,
+        "_get_appt_single_uid() used in bot_calendar.py" if ok_uid
+        else "MISSING: _get_appt_single_uid() in bot_calendar.py",
+    ))
+    results.append(TestResult(
+        "appt_start_uses_expert_users", "PASS" if ok_roles else "FAIL", _time.time() - t0,
+        "_get_appt_expert_users() used in bot_calendar.py" if ok_roles
+        else "MISSING: _get_appt_expert_users() in bot_calendar.py",
+    ))
+
+    # ── T167: strings.json has all admin_appt_* keys in ru/en/de ─────────────
+    appt_string_keys = [
+        "admin_btn_appt",
+        "admin_appt_menu_title",
+        "admin_appt_mode_single",
+        "admin_appt_mode_select",
+        "admin_appt_switch_to_select",
+        "admin_appt_switch_to_single",
+        "admin_appt_single_label",
+        "admin_appt_visible_roles_label",
+        "admin_appt_set_receiver",
+        "admin_appt_select_receiver",
+        "admin_appt_receiver_set",
+        "admin_appt_roles_title",
+    ]
+    for key in appt_string_keys:
+        for lang in ("ru", "en", "de"):
+            ok = key in strings.get(lang, {})
+            results.append(TestResult(
+                f"appt_string_{key}_{lang}", "PASS" if ok else "FAIL", _time.time() - t0,
+                f"{key} present in strings[{lang}]" if ok
+                else f"MISSING: {key} in strings.json[{lang}]",
+            ))
+
+    return results
+
+
 # T200–T212: OpenClaw Extensions §28–29 regression tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -8927,6 +9058,8 @@ TEST_FUNCTIONS = [
     t_admin_users_submenu,
     # Guest appointment flow: dual-save on confirm, My Data meetings count, inv flow, strings (T158–T161)
     t_guest_appointment_flow,
+    # Appointment routing settings: admin panel, mode/receiver/roles, _start_guest_meeting (T162–T167)
+    t_appt_routing_settings,
     # RAG embeddings written on upload, hybrid search wired (T200)
     t_rag_embedding_wired,
     # Ollama pull model UI + list_ollama_models API (T201)

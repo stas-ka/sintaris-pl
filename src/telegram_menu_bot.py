@@ -99,6 +99,9 @@ from telegram.bot_admin import (
     _handle_admin_security_policy, _handle_admin_syschat_block_remove,
     _handle_admin_syschat_block_add_prompt, handle_admin_syschat_block_add_input,
     _pending_syschat_block_add,
+    _handle_admin_appt_menu, _handle_admin_appt_mode_toggle,
+    _handle_admin_appt_single_menu, _handle_admin_appt_single_set,
+    _handle_admin_appt_roles_menu, _handle_admin_appt_role_toggle,
     _admin_keyboard,
 )
 
@@ -896,6 +899,38 @@ def callback_handler(call):
                 _handle_admin_syschat_block_remove(cid, idx)
             except (ValueError, IndexError):
                 pass
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    # ── Appointment routing settings ──────────────────────────────────────────
+    elif data == "admin_appt_menu":
+        if _is_admin(cid): _handle_admin_appt_menu(cid)
+        else: bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_appt_mode_toggle":
+        if _is_admin(cid): _handle_admin_appt_mode_toggle(cid)
+        else: bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_appt_single_menu":
+        if _is_admin(cid): _handle_admin_appt_single_menu(cid)
+        else: bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_appt_single_set:"):
+        if _is_admin(cid):
+            try:
+                _handle_admin_appt_single_set(cid, int(data.split(":", 1)[1]))
+            except (ValueError, IndexError):
+                pass
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "admin_appt_roles_menu":
+        if _is_admin(cid): _handle_admin_appt_roles_menu(cid)
+        else: bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_appt_role_toggle:"):
+        if _is_admin(cid):
+            _handle_admin_appt_role_toggle(cid, data.split(":", 1)[1])
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

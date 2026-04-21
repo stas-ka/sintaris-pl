@@ -130,6 +130,7 @@ def _admin_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
         InlineKeyboardButton(_t(chat_id, "admin_btn_reload_screens"), callback_data="reload_screens"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_n8n"),         callback_data="admin_n8n_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_crm"),         callback_data="admin_crm_menu"),
+        InlineKeyboardButton(_t(chat_id, "admin_btn_appt"),        callback_data="admin_appt_menu"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_security_policy"), callback_data="admin_security_policy"),
         InlineKeyboardButton(_t(chat_id, "admin_btn_restart"),         callback_data="admin_restart"),
         InlineKeyboardButton(_t(chat_id, "btn_back"),             callback_data="menu"),
@@ -2342,9 +2343,12 @@ def _handle_admin_role_notify(admin_id: int, target_uid: int, role: str, channel
 
     if channel in ("tg", "both"):
         try:
+            from telegram.bot_access import _menu_keyboard
             # Use guest_welcome for guest role, reg_approved for all others
             msg_key = "guest_welcome" if role == "guest" else "reg_approved"
-            bot.send_message(target_uid, _t(target_uid, msg_key), parse_mode="Markdown")
+            bot.send_message(target_uid, _t(target_uid, msg_key),
+                             parse_mode="Markdown",
+                             reply_markup=_menu_keyboard(target_uid))
             results.append(_t(admin_id, "admin_roles_notify_sent_tg"))
         except Exception as e:
             results.append(f"⚠️ Telegram: {e}")
@@ -2470,3 +2474,177 @@ def handle_admin_syschat_block_add_input(chat_id: int, text: str) -> bool:
         bot.send_message(chat_id, _t(chat_id, "admin_syschat_block_added", cmd=cmd), parse_mode="Markdown")
     _handle_admin_security_policy(chat_id)
     return True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Appointment routing settings
+# ─────────────────────────────────────────────────────────────────────────────
+
+_APPT_MODE_KEY          = "appt_mode"           # "single" | "select"
+_APPT_SINGLE_UID_KEY    = "appt_single_uid"      # str(user_id)
+_APPT_VISIBLE_ROLES_KEY = "appt_visible_roles"   # comma-separated role names
+_APPT_ALL_ROLES         = ["user", "advanced", "admin", "developer"]
+
+
+def _get_appt_mode() -> str:
+    return db_get_system_setting(_APPT_MODE_KEY, "single")
+
+
+def _get_appt_single_uid() -> int | None:
+    raw = db_get_system_setting(_APPT_SINGLE_UID_KEY, "")
+    try:
+        return int(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def _get_appt_visible_roles() -> list[str]:
+    raw = db_get_system_setting(_APPT_VISIBLE_ROLES_KEY, "user,advanced,admin")
+    return [r.strip() for r in raw.split(",") if r.strip()]
+
+
+def _get_appt_expert_users() -> list[tuple[int, str]]:
+    """Return (uid, name) pairs for users in the currently configured visible roles."""
+    visible = set(_get_appt_visible_roles())
+    all_ids: list[int] = sorted(
+        set(ADMIN_USERS) | set(DEVELOPER_USERS) | set(ALLOWED_USERS)
+        | set(_st._dynamic_users) | set(_st._advanced_users)
+        | set(_st._dynamic_admins) | set(_st._dynamic_devs)
+    )
+    result: list[tuple[int, str]] = []
+    for uid in all_ids:
+        # Determine effective role
+        if uid in ADMIN_USERS or uid in _st._dynamic_admins:
+            role = "admin"
+        elif uid in DEVELOPER_USERS or uid in _st._dynamic_devs:
+            role = "developer"
+        elif uid in _st._advanced_users:
+            role = "advanced"
+        else:
+            role = "user"
+        if role not in visible:
+            continue
+        try:
+            reg = _find_registration(uid)
+            name = (reg.get("name") or reg.get("first_name") or str(uid)) if reg else str(uid)
+        except Exception:
+            name = str(uid)
+        result.append((uid, name))
+    return result
+
+
+def _handle_admin_appt_menu(chat_id: int) -> None:
+    """Show appointment routing configuration panel."""
+    mode    = _get_appt_mode()
+    s_uid   = _get_appt_single_uid()
+    visible = _get_appt_visible_roles()
+
+    # Resolve single-user name
+    if s_uid:
+        try:
+            reg = _find_registration(s_uid)
+            s_name = (reg.get("name") or reg.get("first_name") or str(s_uid)) if reg else str(s_uid)
+        except Exception:
+            s_name = str(s_uid)
+    else:
+        # Fall back to first admin
+        first_admin = next(iter(ADMIN_USERS), None)
+        s_name = str(first_admin) if first_admin else "—"
+
+    mode_icon = "1️⃣" if mode == "single" else "👥"
+    mode_label = _t(chat_id, "admin_appt_mode_single") if mode == "single" \
+        else _t(chat_id, "admin_appt_mode_select")
+
+    text = (
+        _t(chat_id, "admin_appt_menu_title") + "\n\n"
+        + f"*{_t(chat_id, 'admin_appt_current_mode')}* {mode_icon} {mode_label}\n"
+        + f"*{_t(chat_id, 'admin_appt_single_label')}* `{s_name}`\n"
+        + f"*{_t(chat_id, 'admin_appt_visible_roles_label')}* {', '.join(visible) or '—'}"
+    )
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    toggle_label = _t(chat_id, "admin_appt_switch_to_select") if mode == "single" \
+        else _t(chat_id, "admin_appt_switch_to_single")
+    kb.add(InlineKeyboardButton(toggle_label, callback_data="admin_appt_mode_toggle"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_appt_set_receiver"), callback_data="admin_appt_single_menu"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "admin_appt_roles_title"), callback_data="admin_appt_roles_menu"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_menu"))
+    try:
+        bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+    except Exception as e:
+        log.warning(f"[Appt] menu send failed: {e}")
+        bot.send_message(chat_id, _re.sub(r"[*_`]", "", text), reply_markup=kb)
+
+
+def _handle_admin_appt_mode_toggle(chat_id: int) -> None:
+    """Toggle between 'single' and 'select' appointment routing modes."""
+    cur = _get_appt_mode()
+    new = "select" if cur == "single" else "single"
+    db_set_system_setting(_APPT_MODE_KEY, new)
+    log.info(f"[Appt] admin {chat_id} toggled mode → {new}")
+    _handle_admin_appt_menu(chat_id)
+
+
+def _handle_admin_appt_single_menu(chat_id: int) -> None:
+    """Show user picker for the single appointment receiver."""
+    cur_uid = _get_appt_single_uid()
+    all_ids: list[int] = sorted(
+        set(ADMIN_USERS) | set(DEVELOPER_USERS) | set(ALLOWED_USERS)
+        | set(_st._dynamic_users) | set(_st._advanced_users)
+        | set(_st._dynamic_admins) | set(_st._dynamic_devs)
+    )
+    kb = InlineKeyboardMarkup(row_width=1)
+    for uid in all_ids:
+        try:
+            reg = _find_registration(uid)
+            name = (reg.get("name") or reg.get("first_name") or str(uid)) if reg else str(uid)
+        except Exception:
+            name = str(uid)
+        icon = "✅" if uid == cur_uid else "◻️"
+        kb.add(InlineKeyboardButton(f"{icon} {name} ({uid})",
+                                    callback_data=f"admin_appt_single_set:{uid}"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_appt_menu"))
+    bot.send_message(chat_id, _t(chat_id, "admin_appt_select_receiver"), reply_markup=kb)
+
+
+def _handle_admin_appt_single_set(chat_id: int, uid: int) -> None:
+    """Set the single appointment receiver and confirm."""
+    db_set_system_setting(_APPT_SINGLE_UID_KEY, str(uid))
+    try:
+        reg = _find_registration(uid)
+        name = (reg.get("name") or reg.get("first_name") or str(uid)) if reg else str(uid)
+    except Exception:
+        name = str(uid)
+    log.info(f"[Appt] admin {chat_id} set single receiver → {uid} ({name})")
+    bot.send_message(chat_id, _t(chat_id, "admin_appt_receiver_set", name=name),
+                     parse_mode="Markdown")
+    _handle_admin_appt_menu(chat_id)
+
+
+def _handle_admin_appt_roles_menu(chat_id: int) -> None:
+    """Show role visibility toggles for 'select' mode."""
+    visible = set(_get_appt_visible_roles())
+    kb = InlineKeyboardMarkup(row_width=1)
+    for role in _APPT_ALL_ROLES:
+        icon = "✅" if role in visible else "◻️"
+        kb.add(InlineKeyboardButton(f"{icon} {role}",
+                                    callback_data=f"admin_appt_role_toggle:{role}"))
+    kb.add(InlineKeyboardButton(_t(chat_id, "btn_back"), callback_data="admin_appt_menu"))
+    bot.send_message(chat_id, _t(chat_id, "admin_appt_roles_title"), reply_markup=kb)
+
+
+def _handle_admin_appt_role_toggle(chat_id: int, role: str) -> None:
+    """Toggle a role in the visible roles list for 'select' mode."""
+    if role not in _APPT_ALL_ROLES:
+        return
+    visible = set(_get_appt_visible_roles())
+    if role in visible:
+        visible.discard(role)
+    else:
+        visible.add(role)
+    if not visible:
+        # Ensure at least one role remains visible
+        visible = {"user"}
+    db_set_system_setting(_APPT_VISIBLE_ROLES_KEY, ",".join(sorted(visible)))
+    log.info(f"[Appt] admin {chat_id} toggled role '{role}' → visible={visible}")
+    _handle_admin_appt_roles_menu(chat_id)

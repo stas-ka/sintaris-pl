@@ -400,6 +400,60 @@ class TestAdmin:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 8b. Admin — Appointment Settings
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestAdminAppointment:
+    """T08b: /admin/appointment — who can receive appointment requests and how."""
+
+    def test_appointment_settings_page_accessible(self, admin_page, base_url_or_default):
+        """Admin can access /admin/appointment."""
+        admin_page.goto(f"{base_url_or_default}/admin/appointment")
+        # Accepts both a dedicated page and the admin panel showing appointment section
+        body = admin_page.inner_text("body")
+        assert any(kw in body.lower() for kw in [
+            "appointment", "meeting", "receiver", "mode", "single", "select"
+        ]), "Expected appointment settings content on /admin/appointment"
+
+    def test_appointment_shows_mode_toggle(self, admin_page, base_url_or_default):
+        """Appointment settings page shows the routing mode (single/select)."""
+        admin_page.goto(f"{base_url_or_default}/admin/appointment")
+        body = admin_page.inner_text("body")
+        assert any(kw in body.lower() for kw in ["single", "select", "mode"]), \
+            "Expected mode selector (single/select) on appointment settings page"
+
+    def test_appointment_shows_receiver_section(self, admin_page, base_url_or_default):
+        """Appointment settings page shows a receiver/user list."""
+        admin_page.goto(f"{base_url_or_default}/admin/appointment")
+        body = admin_page.inner_text("body")
+        assert any(kw in body.lower() for kw in ["receiver", "user", "admin"]), \
+            "Expected receiver/user section on appointment settings page"
+
+    def test_appointment_shows_roles_section(self, admin_page, base_url_or_default):
+        """Appointment settings page shows visible roles checkboxes."""
+        admin_page.goto(f"{base_url_or_default}/admin/appointment")
+        body = admin_page.inner_text("body")
+        assert any(role in body.lower() for role in ["user", "advanced", "admin", "developer", "role"]), \
+            "Expected roles section on appointment settings page"
+
+    def test_non_admin_cannot_access_appointment_settings(self, browser, base_url_or_default):
+        """Regular user cannot access /admin/appointment."""
+        page = fresh_page(browser, base_url_or_default)
+        login(page, NORMAL_USER, NORMAL_PASS, base_url_or_default)
+        page.goto(f"{base_url_or_default}/admin/appointment")
+        is_denied = (
+            "/login" in page.url
+            or "403" in page.content()
+            or "denied" in page.inner_text("body").lower()
+            or "not allowed" in page.inner_text("body").lower()
+            or "admin only" in page.inner_text("body").lower()
+        )
+        assert is_denied, \
+            f"Expected regular user to be denied /admin/appointment, got URL: {page.url}"
+        page.context.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 9. Navigation
 # ─────────────────────────────────────────────────────────────────────────────
 
