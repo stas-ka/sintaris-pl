@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS notes_index (
     slug        TEXT,
     chat_id     BIGINT,
     title       TEXT        NOT NULL,
+    content     TEXT        NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     updated_at  TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (slug, chat_id)
@@ -334,6 +335,8 @@ class PostgresStore:
             "ALTER TABLE llm_calls ADD COLUMN IF NOT EXISTS rag_context_chars INTEGER DEFAULT 0",
             "ALTER TABLE llm_calls ADD COLUMN IF NOT EXISTS response_preview TEXT DEFAULT ''",
             "ALTER TABLE llm_calls ADD COLUMN IF NOT EXISTS context_snapshot TEXT DEFAULT ''",
+            # notes content stored in DB (not .md files) since v2026.4.72
+            "ALTER TABLE notes_index ADD COLUMN IF NOT EXISTS content TEXT NOT NULL DEFAULT ''",
         ]
         for mig in _migrations:
             try:
@@ -426,41 +429,33 @@ class PostgresStore:
         return os.path.join(NOTES_DIR, str(chat_id))
 
     def save_note(self, chat_id: int, slug: str, title: str, content: str) -> None:
-        note_dir = self._notes_storage_dir(chat_id)
-        os.makedirs(note_dir, exist_ok=True)
-        note_path = os.path.join(note_dir, f"{slug}.md")
-        with open(note_path, "w", encoding="utf-8") as fh:
-            fh.write(content)
-
         with self._pool.connection() as conn:
             conn.execute(
-                """INSERT INTO notes_index (slug, chat_id, title, updated_at)
-                   VALUES (%s, %s, %s, NOW())
+                """INSERT INTO notes_index (slug, chat_id, title, content, updated_at)
+                   VALUES (%s, %s, %s, %s, NOW())
                    ON CONFLICT (slug, chat_id) DO UPDATE SET
-                       title = EXCLUDED.title, updated_at = NOW()""",
-                (slug, chat_id, title),
+                       title      = EXCLUDED.title,
+                       content    = EXCLUDED.content,
+                       updated_at = NOW()""",
+                (slug, chat_id, title, content),
             )
             conn.commit()
 
     def load_note(self, chat_id: int, slug: str) -> dict:
         with self._pool.connection() as conn:
             row = conn.execute(
-                "SELECT * FROM notes_index WHERE slug = %s AND chat_id = %s",
+                "SELECT slug, chat_id, title, content, updated_at FROM notes_index"
+                " WHERE slug = %s AND chat_id = %s",
                 (slug, chat_id),
             ).fetchone()
-
-        result = dict(row) if row else {"slug": slug, "chat_id": chat_id, "title": slug}
-        note_path = os.path.join(self._notes_storage_dir(chat_id), f"{slug}.md")
-        try:
-            result["content"] = open(note_path, encoding="utf-8").read()
-        except FileNotFoundError:
-            result["content"] = ""
-        return result
+        if not row:
+            return {"slug": slug, "chat_id": chat_id, "title": slug, "content": ""}
+        return dict(row)
 
     def list_notes(self, chat_id: int) -> list[dict]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT slug, title, updated_at FROM notes_index "
+                "SELECT slug, title, content, updated_at FROM notes_index "
                 "WHERE chat_id = %s ORDER BY updated_at DESC",
                 (chat_id,),
             ).fetchall()
@@ -473,12 +468,6 @@ class PostgresStore:
                 (slug, chat_id),
             )
             conn.commit()
-
-        path = os.path.join(self._notes_storage_dir(chat_id), f"{slug}.md")
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
         return (cur.rowcount or 0) > 0
 
     # ── Calendar ──────────────────────────────────────────────────────────────

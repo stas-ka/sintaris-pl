@@ -1,6 +1,6 @@
 # Taris — Data Layer
 
-**Version:** `2026.4.68`  
+**Version:** `2026.4.72`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ---
@@ -16,7 +16,9 @@ Changing data storage, adding a new table column, switching SQLite↔Postgres, m
 |---|---|---|---|
 | **Layer 1** | `core/store.py` singleton | Users, notes, calendar, history, contacts, documents, vectors, RAG, voice_opts, mail_creds, **web_accounts**, **link_codes**, **reset_tokens** | Both (SQLite or Postgres) |
 | **Layer 2** | `core/bot_db.py` wrappers | llm_calls, tts_pending, conversation_summaries, user_prefs, security_events — delegated to Layer 1 when `STORE_BACKEND=postgres` | Both |
-| **Layer 3** | File system | `system_settings.json`, `web_secret.key`, `bot.env`, note `.md` files | Both |
+| **Layer 3** | File system | `system_settings.json`, `web_secret.key`, `bot.env` | Both |
+
+> **Notes are stored in the DB (Layer 1), not as files.** `store.save_note / load_note / list_notes / delete_note` are the only note I/O paths. No `.md` files are written at runtime.
 
 **Rule:** All caller code imports only `from core.store import store` (Layer 1) or calls `bot_db.*` helpers (Layer 2). Never import `store_sqlite` or `store_postgres` directly.
 
@@ -24,12 +26,15 @@ Changing data storage, adding a new table column, switching SQLite↔Postgres, m
 
 ## Backend Selection
 
-| `STORE_BACKEND` | Backend | Variant |
-|---|---|---|
-| `sqlite` (default) | `core/store_sqlite.py` + FTS5 | PicoClaw (Pi), lightweight |
-| `postgres` | `core/store_postgres.py` + pgvector | OpenClaw (TariStation) |
+| `STORE_BACKEND` | Backend | Variant | When to use |
+|---|---|---|---|
+| `sqlite` | `core/store_sqlite.py` + FTS5 | **PicoClaw only** (Raspberry Pi) | Low-RAM embedded; single-user |
+| `postgres` | `core/store_postgres.py` + pgvector | **OpenClaw + VPS-Supertaris** (all x86_64 targets) | Multi-user, production, Docker |
 
-**Change:** Set `STORE_BACKEND=postgres` + `DATABASE_URL=postgresql://...` in `~/.taris/bot.env`. Restart service.
+> **SQLite is the PicoClaw-only backend.** All OpenClaw targets (TariStation2, TariStation1/SintAItion, VPS-Supertaris Docker) use `STORE_BACKEND=postgres`.  
+> On VPS-Supertaris, the PostgreSQL DSN is `postgresql://taris:…@127.0.0.1:5432/taris_vps` (host network inside Docker container).
+
+**Change:** Set `STORE_BACKEND=postgres` + `DATABASE_URL=postgresql://...` in `~/.taris/bot.env` (or `/opt/taris-docker/bot.env` for VPS Docker). Restart service.
 
 ---
 

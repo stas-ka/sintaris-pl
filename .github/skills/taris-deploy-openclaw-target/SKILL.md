@@ -76,7 +76,7 @@ argument-hint: 'Which files changed? (e.g. all, bot_web.py, strings.json) and ta
 > **VPS-Supertaris (`agents.sintaris.net`) is a PUBLIC INTERNET VPS hosting critical shared infrastructure.**  
 > It serves multiple bots, N8N, PostgreSQL, and the Nginx reverse proxy for ALL apps.  
 > A misconfigured Nginx restart or broken PostgreSQL query affects EVERY application on this server.  
-> taris runs as `systemctl --user taris-telegram taris-web` behind `/supertaris/` sub-path.
+> taris runs in **Docker** (`taris-vps-telegram`, `taris-vps-web` containers) at `/opt/taris-docker/`; sub-path `/supertaris-vps/`. **NOT systemctl --user.**
 
 ### What is on this VPS besides taris
 
@@ -110,7 +110,8 @@ Shall I proceed? (yes/no)
 - ❌ PostgreSQL DDL (CREATE/DROP/ALTER/TRUNCATE TABLE) — always show SQL first, confirm + backup
 - ❌ Restart shared services (PostgreSQL, Nginx, N8N) — confirm separately for each
 - ❌ Firewall changes (`ufw`, `iptables`) — confirm separately
-- ❌ `systemctl --user restart taris-*` — confirm separately (brief public downtime)
+- ❌ `docker compose restart taris-telegram taris-web` — confirm separately (brief public downtime)
+- ❌ `systemctl --user restart taris-*` — does NOT apply to VPS-Supertaris (uses Docker, not systemd)
 - ❌ Cron / systemd timer changes — confirm separately
 - ❌ Any `sudo` command — state exact command and reason, confirm before running
 
@@ -126,7 +127,7 @@ Shall I proceed? (yes/no)
 ### VPS SSH/SCP commands
 
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 
 # SSH
 sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no -o "FingerprintHash=sha256" $VPS_USER@$VPS_HOST "<cmd>"
@@ -244,9 +245,9 @@ tar czf /tmp/${BNAME}.tar.gz \
   . 2>/dev/null && echo "BACKUP_OK: /tmp/${BNAME}.tar.gz"
 
 # Download to project backup dir
-mkdir -p /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}
-cp /tmp/${BNAME}.tar.gz /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}/
-ls -lh /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}/
+mkdir -p /home/stas/projects/sintaris/sintaris-pl/backup/snapshots/${BNAME}
+cp /tmp/${BNAME}.tar.gz /home/stas/projects/sintaris/sintaris-pl/backup/snapshots/${BNAME}/
+ls -lh /home/stas/projects/sintaris/sintaris-pl/backup/snapshots/${BNAME}/
 ```
 
 Expected: `BACKUP_OK`. **Do not proceed without a local backup copy.**
@@ -254,7 +255,7 @@ Expected: `BACKUP_OK`. **Do not proceed without a local backup copy.**
 ### TariStation1 (SintAItion) — before Step 5b
 
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 TS=$(date +%Y%m%d_%H%M%S)
 VER=$(sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "grep BOT_VERSION ~/.taris/core/bot_config.py | head -1 | cut -d'\"' -f2")
@@ -266,10 +267,10 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
    --exclude='vosk-model-*' --exclude='*.onnx' --exclude='ggml-*.bin' --exclude='*/__pycache__' \
    . 2>/dev/null && echo BACKUP_OK"
 
-mkdir -p /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}
+mkdir -p /home/stas/projects/sintaris/sintaris-pl/backup/snapshots/${BNAME}
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no \
   ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST}:/tmp/${BNAME}.tar.gz \
-  /home/stas/projects/sintaris-pl/backup/snapshots/${BNAME}/
+  /home/stas/projects/sintaris/sintaris-pl/backup/snapshots/${BNAME}/
 echo "Local backup: backup/snapshots/${BNAME}/"
 ```
 
@@ -298,7 +299,7 @@ python3 -c "import sqlite3; c=sqlite3.connect(os.path.expanduser('~/.taris/taris
 ### TariStation1 (SintAItion)
 
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "for d in calendar notes docs mail_creds error_protocols screens; do echo \"=== \$d ===\"; ls -la ~/.taris/\$d/ 2>/dev/null || echo MISSING; done && ls -la ~/.taris/taris.db ~/.taris/bot.env 2>/dev/null || echo SOME_FILES_MISSING"
 ```
@@ -326,7 +327,7 @@ Replace `<package>` and `<file>` with changed paths:
 
 ```bash
 # Sync changed files — adjust to which packages changed
-PROJECT=/home/stas/projects/sintaris-pl
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
 
 # Core package
 cp $PROJECT/src/core/*.py ~/.taris/core/
@@ -358,7 +359,7 @@ cp $PROJECT/src/n8n/workflows/*.json ~/.taris/n8n/workflows/ 2>/dev/null || true
 **Verify sync before restart** (prevents stale deployment bugs):
 
 ```bash
-PROJECT=/home/stas/projects/sintaris-pl
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
 for f in src/bot_web.py src/core/bot_config.py src/core/bot_llm.py src/ui/bot_ui.py; do
   diff "$PROJECT/$f" ~/.taris/"${f#src/}" > /dev/null 2>&1 && echo "OK $f" || echo "DIFF $f — NOT SYNCED"
 done
@@ -393,10 +394,10 @@ If ANY pass criterion is missing — **STOP. Do not proceed to TariStation1.**
 > ⚠️ **Present the VPS pre-TS1 checklist above and wait for "yes" before executing any command.**
 
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 HOST=${OPENCLAW1_HOST}
 USER=${OPENCLAW1_USER:-stas}
-PROJECT=/home/stas/projects/sintaris-pl
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
 
 # Create target package dirs (idempotent)
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $USER@$HOST \
@@ -443,18 +444,18 @@ When only `src/screens/*.yaml` or `src/screens/screen.schema.json` changed:
 
 **TariStation2:**
 ```bash
-cp /home/stas/projects/sintaris-pl/src/screens/*.yaml ~/.taris/screens/
-cp /home/stas/projects/sintaris-pl/src/screens/screen.schema.json ~/.taris/screens/
+cp /home/stas/projects/sintaris/sintaris-pl/src/screens/*.yaml ~/.taris/screens/
+cp /home/stas/projects/sintaris/sintaris-pl/src/screens/screen.schema.json ~/.taris/screens/
 systemctl --user restart taris-telegram taris-web && sleep 4
 journalctl --user -u taris-telegram -n 10 --no-pager
 ```
 
 **TariStation1:**
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no \
-  /home/stas/projects/sintaris-pl/src/screens/*.yaml \
-  /home/stas/projects/sintaris-pl/src/screens/screen.schema.json \
+  /home/stas/projects/sintaris/sintaris-pl/src/screens/*.yaml \
+  /home/stas/projects/sintaris/sintaris-pl/src/screens/screen.schema.json \
   ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST}:~/.taris/screens/
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no \
   ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
@@ -469,7 +470,7 @@ When `src/bot_web.py`, templates, or static assets changed:
 
 **TariStation2:**
 ```bash
-PROJECT=/home/stas/projects/sintaris-pl
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
 cp $PROJECT/src/bot_web.py ~/.taris/
 cp -r $PROJECT/src/web/templates/. ~/.taris/web/templates/
 cp -r $PROJECT/src/web/static/. ~/.taris/web/static/
@@ -480,8 +481,8 @@ journalctl --user -u taris-web -n 5 --no-pager
 
 **TariStation1:**
 ```bash
-source /home/stas/projects/sintaris-pl/.env
-U=${OPENCLAW1_USER:-stas}; H=$OPENCLAW1_HOST; PROJECT=/home/stas/projects/sintaris-pl
+source /home/stas/projects/sintaris/sintaris-pl/.env
+U=${OPENCLAW1_USER:-stas}; H=$OPENCLAW1_HOST; PROJECT=/home/stas/projects/sintaris/sintaris-pl
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/bot_web.py $U@$H:~/.taris/
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no -r $PROJECT/src/web/templates/ $U@$H:~/.taris/web/
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no -r $PROJECT/src/web/static/ $U@$H:~/.taris/web/
@@ -498,7 +499,7 @@ Required after any change to `src/services/*.service`.
 **TariStation2:**
 ```bash
 SVCNAME=taris-telegram   # change as needed
-cp /home/stas/projects/sintaris-pl/src/services/${SVCNAME}.service \
+cp /home/stas/projects/sintaris/sintaris-pl/src/services/${SVCNAME}.service \
    /home/stas/.config/systemd/user/${SVCNAME}.service
 systemctl --user daemon-reload
 systemctl --user restart ${SVCNAME}
@@ -507,9 +508,9 @@ journalctl --user -u ${SVCNAME} -n 10 --no-pager
 
 **TariStation1:**
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 SVCNAME=taris-telegram
-U=${OPENCLAW1_USER:-stas}; H=$OPENCLAW1_HOST; PROJECT=/home/stas/projects/sintaris-pl
+U=${OPENCLAW1_USER:-stas}; H=$OPENCLAW1_HOST; PROJECT=/home/stas/projects/sintaris/sintaris-pl
 sshpass -p "$OPENCLAW1PWD" scp -o StrictHostKeyChecking=no \
   $PROJECT/src/services/${SVCNAME}.service $U@$H:/tmp/${SVCNAME}.service
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $U@$H \
@@ -539,7 +540,7 @@ journalctl --user -u taris-telegram -n 12 --no-pager
 
 **TariStation1 — same protocol via SSH:**
 ```bash
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 U=${OPENCLAW1_USER:-stas}; H=$OPENCLAW1_HOST
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $U@$H \
   "systemctl --user stop taris-telegram taris-web && echo STOPPED"
@@ -559,49 +560,67 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $U@$H \
 > 🔴 **Only run AFTER TariStation1 (or TariStation2) is verified AND user/owner has explicitly confirmed VPS deploy.**  
 > 🔴 **Only on `master` branch.** (`git branch --show-current` must show `master`).  
 > 🔴 **Present the mandatory pre-VPS checklist above and wait for "yes" before any command.**  
-> 🔴 **Ask for separate confirmation for code deploy, service restart, service file changes, and migrations — never bundle.**
+> 🔴 **Ask for separate confirmation for code deploy, service restart — never bundle.**
+
+> **VPS-Supertaris uses Docker**, NOT systemctl. Project path: `/home/stas/projects/sintaris/sintaris-pl`  
+> Docker compose project: `/opt/taris-docker/`  
+> Source volume: `/opt/taris-docker/app/src` → mounted as `/app:ro` inside containers  
+> Config: `/opt/taris-docker/bot.env` (env_file for both containers)  
+> Containers: `taris-vps-telegram`, `taris-vps-web` (image: `taris-vps:latest`)  
+> Web UI: port 8090, ROOT_PATH=/supertaris-vps  
+
+**[SEPARATE CONFIRMATION REQUIRED]** Copy source files to Docker volume (no restart needed yet):
 
 ```bash
-source /home/stas/projects/sintaris-pl/.env
-U=$VPS_USER; H=$VPS_HOST; PROJECT=/home/stas/projects/sintaris-pl
+source /home/stas/projects/sintaris/sintaris-pl/.env
+U=$VPS_USER; H=$VPS_HOST; PROJECT=/home/stas/projects/sintaris/sintaris-pl
+APP=/opt/taris-docker/app/src
 
-# Create target package dirs (idempotent)
-sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $U@$H \
-  "mkdir -p ~/.taris/core ~/.taris/telegram ~/.taris/features ~/.taris/ui ~/.taris/security ~/.taris/screens ~/.taris/web/templates ~/.taris/web/static ~/.taris/n8n/workflows && \
-   touch ~/.taris/core/__init__.py ~/.taris/telegram/__init__.py ~/.taris/features/__init__.py ~/.taris/ui/__init__.py ~/.taris/security/__init__.py"
+# SSH into VPS and copy files directly (VPS is local — we are ON the VPS)
+# Run the following commands on the VPS:
+cd $PROJECT
 
-# Deploy Python packages
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/core/*.py       $U@$H:~/.taris/core/
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/telegram/*.py   $U@$H:~/.taris/telegram/
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/features/*.py   $U@$H:~/.taris/features/
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/ui/*.py         $U@$H:~/.taris/ui/
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/security/*.py   $U@$H:~/.taris/security/
+# Copy all packages (on VPS, $PROJECT is already there)
+cp $PROJECT/src/core/*.py $APP/core/
+cp $PROJECT/src/telegram/*.py $APP/telegram/
+cp $PROJECT/src/telegram_menu_bot.py $APP/
+cp $PROJECT/src/release_notes.json $APP/
+cp $PROJECT/src/strings.json $APP/
 
-# Entry points + data + screens
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
-  $PROJECT/src/bot_web.py $PROJECT/src/telegram_menu_bot.py \
-  $PROJECT/src/voice_assistant.py $PROJECT/src/gmail_digest.py \
-  $PROJECT/src/strings.json $PROJECT/src/release_notes.json \
-  $U@$H:~/.taris/
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
-  $PROJECT/src/screens/*.yaml $PROJECT/src/screens/screen.schema.json $U@$H:~/.taris/screens/
+# Features — some files may be root-owned, use sudo for those
+for f in $PROJECT/src/features/*.py; do
+  fname=$(basename $f)
+  cp "$f" "$APP/features/$fname" 2>/dev/null || sudo cp "$f" "$APP/features/$fname"
+done && echo "features OK"
 
 # Web assets
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no -r $PROJECT/src/web/templates/ $U@$H:~/.taris/web/
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no -r $PROJECT/src/web/static/    $U@$H:~/.taris/web/
+cp $PROJECT/src/bot_web.py $APP/
+cp -r $PROJECT/src/web/templates/. $APP/web/templates/ 2>/dev/null || true
+cp -r $PROJECT/src/web/static/. $APP/web/static/ 2>/dev/null || true
 ```
 
-**[SEPARATE CONFIRMATION REQUIRED]** Restart taris services on VPS (brief public downtime):
+> **Note:** If working from a remote dev machine, use `scp` to copy files to `$VPS_USER@$VPS_HOST:/opt/taris-docker/app/src/` instead.  
+> If any file is root-owned (`ls -la` shows `root root`), run: `sudo chown -R stas:stas /opt/taris-docker/app/src/`
+
+**Verify files match before restarting:**
+
+```bash
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
+APP=/opt/taris-docker/app/src
+for f in telegram_menu_bot.py core/bot_config.py features/bot_contacts.py telegram/bot_handlers.py; do
+  diff "$PROJECT/src/$f" "$APP/$f" > /dev/null 2>&1 && echo "OK  $f" || echo "DIFF $f — NOT SYNCED"
+done
+```
+
+**[SEPARATE CONFIRMATION REQUIRED]** Restart Docker containers on VPS (brief public downtime):
 
 ```bash
 # Ask user for separate "yes" before running this
-source /home/stas/projects/sintaris-pl/.env
-sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
-  "systemctl --user restart taris-telegram taris-web && sleep 4 && \
-   journalctl --user -u taris-telegram -n 15 --no-pager"
+cd /opt/taris-docker && docker compose restart taris-telegram taris-web && sleep 8
+docker logs taris-vps-telegram --tail=20
 ```
 
-**Pass criteria:** same as Steps 2a/2b — `Version: 2026.X.Y`, `DB init OK`, `Polling Telegram…`
+**Pass criteria:** `Version: 2026.X.Y`, `DB init OK`, `Polling Telegram…`
 
 ---
 
@@ -613,16 +632,20 @@ systemctl --user is-active taris-telegram taris-web
 grep BOT_VERSION ~/.taris/core/bot_config.py
 
 # TariStation1 (SintAItion)
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "systemctl --user is-active taris-telegram taris-web && grep BOT_VERSION ~/.taris/core/bot_config.py"
 
-# VPS-Supertaris (agents.sintaris.net)
-source /home/stas/projects/sintaris-pl/.env
+# VPS-Supertaris (agents.sintaris.net) — uses Docker, NOT systemctl
+# Run directly on VPS:
+docker ps | grep taris-vps
+docker logs taris-vps-telegram --tail=5
+# Or from remote dev machine:
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
-  "systemctl --user is-active taris-telegram taris-web && grep BOT_VERSION ~/.taris/core/bot_config.py"
+  "docker ps | grep taris-vps && docker logs taris-vps-telegram --tail=5"
 # Also verify public URL is reachable:
-curl -s -o /dev/null -w "%{http_code}" https://agents.sintaris.net/supertaris/  # expect 200 or 302
+curl -s -o /dev/null -w "%{http_code}" https://agents.sintaris.net/supertaris-vps/  # expect 200 or 302
 ```
 
 ✅ **Pass criteria:**
@@ -638,11 +661,11 @@ curl -s -o /dev/null -w "%{http_code}" https://agents.sintaris.net/supertaris/  
 
 ```bash
 # TariStation2 (local)
-DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
-  python3 /home/stas/projects/sintaris-pl/src/tests/test_voice_regression.py
+DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris/sintaris-pl/src \
+  python3 /home/stas/projects/sintaris/sintaris-pl/src/tests/test_voice_regression.py
 
 # TariStation1 (SintAItion)
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 ~/.taris/tests/test_voice_regression.py"
 ```
@@ -653,10 +676,10 @@ T29/T30 must PASS. T27/T28 SKIP if packages not installed (OK).
 
 ```bash
 # Local (TariStation2) — unit + integration
-DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
-  python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/test_n8n_crm.py -v
-DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
-  python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/test_campaign.py -v -k "not live"
+DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris/sintaris-pl/src \
+  python3 -m pytest /home/stas/projects/sintaris/sintaris-pl/src/tests/test_n8n_crm.py -v
+DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris/sintaris-pl/src \
+  python3 -m pytest /home/stas/projects/sintaris/sintaris-pl/src/tests/test_campaign.py -v -k "not live"
 ```
 
 T130–T140 campaign tests must PASS (live N8N tests SKIP if webhooks not reachable).
@@ -664,8 +687,8 @@ T130–T140 campaign tests must PASS (live N8N tests SKIP if webhooks not reacha
 ### Screen DSL tests (mandatory if screens changed)
 
 ```bash
-DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris-pl/src \
-  python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/screen_loader/ -v
+DEVICE_VARIANT=openclaw PYTHONPATH=/home/stas/projects/sintaris/sintaris-pl/src \
+  python3 -m pytest /home/stas/projects/sintaris/sintaris-pl/src/tests/screen_loader/ -v
 ```
 
 All 64 tests must PASS.
@@ -673,7 +696,7 @@ All 64 tests must PASS.
 ### Web UI tests (mandatory if web files changed)
 
 ```bash
-python3 -m pytest /home/stas/projects/sintaris-pl/src/tests/ui/test_ui.py -v \
+python3 -m pytest /home/stas/projects/sintaris/sintaris-pl/src/tests/ui/test_ui.py -v \
   --base-url http://localhost:8080 --browser chromium
 ```
 
@@ -714,7 +737,7 @@ CRM_PG_DSN=postgresql://taris:***@127.0.0.1:15432/taris   # VPS_POSTGRES_PASSWOR
 pip3 install "psycopg[binary,pool]" --quiet
 
 # TariStation1 (via SSH)
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "pip3 install 'psycopg[binary,pool]' --quiet && python3 -c 'import psycopg; print(psycopg.__version__)'"
 ```
@@ -758,7 +781,7 @@ print('MIGRATION_OK')
 "
 
 # On TariStation1 (via SSH):
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 -c \"
 import sqlite3, os, sys
@@ -781,7 +804,7 @@ DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 -c \
   "from core.store_crm import is_available, count_contacts; print('CRM:', is_available(), '| contacts:', count_contacts())"
 
 # TariStation1
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 -c \
   'from core.store_crm import is_available, count_contacts; print(\"CRM:\", is_available(), \"| contacts:\", count_contacts())'"
@@ -835,7 +858,7 @@ systemctl --user list-units taris-* --no-pager
 cd ~/.taris && python3 -c "from core.bot_config import BOT_VERSION; print(BOT_VERSION)"
 
 # TariStation1 — service status
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@${OPENCLAW1_HOST} \
   "systemctl --user status taris-telegram taris-web --no-pager"
 
@@ -844,7 +867,7 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-sta
   "journalctl --user -u taris-telegram -n 30 --no-pager | grep -i error"
 
 # VPS-Supertaris — service status
-source /home/stas/projects/sintaris-pl/.env
+source /home/stas/projects/sintaris/sintaris-pl/.env
 sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
   "systemctl --user status taris-telegram taris-web --no-pager"
 

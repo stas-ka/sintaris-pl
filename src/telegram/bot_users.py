@@ -203,67 +203,28 @@ def _notes_user_dir(chat_id: int) -> Path:
 
 
 def _list_notes_for(chat_id: int) -> list[dict]:
-    """Return [{slug, title, mtime}] sorted by modification time (newest first).
-
-    Reads from the DB index (store.list_notes) if available; falls back to
-    scanning .md files for backward compatibility with non-migrated data.
-    """
-    try:
-        db_notes = store.list_notes(chat_id)
-        if db_notes:
-            return [{"slug": n["slug"], "title": n["title"],
-                     "mtime": 0} for n in db_notes]
-    except Exception as _e:
-        log.debug("[Notes] store.list_notes failed (%s), using file scan", _e)
-
-    # File-based fallback: scan notes directory
-    d = _notes_user_dir(chat_id)
-    notes = []
-    for f in sorted(d.glob("*.md"), key=lambda x: -x.stat().st_mtime):
-        try:
-            first_line = f.read_text(encoding="utf-8").splitlines()[0].lstrip("# ").strip()
-        except Exception:
-            first_line = f.stem
-        notes.append({"slug": f.stem, "title": first_line, "mtime": f.stat().st_mtime})
-    return notes
+    """Return [{slug, title, mtime}] sorted newest-first. DB-only (store.list_notes)."""
+    db_notes = store.list_notes(chat_id)
+    return [{"slug": n["slug"], "title": n["title"], "mtime": 0} for n in db_notes]
 
 
 def _load_note_text(chat_id: int, slug: str) -> Optional[str]:
-    """Return note contents: reads from store (DB) first, falls back to .md file."""
-    try:
-        from core.store import store as _st
-        note = _st.load_note(chat_id, slug)
-        if note and note.get("content"):
-            return note["content"]
-    except Exception as _e:
-        log.debug("[Notes] store.load_note failed (%s), using file fallback", _e)
-    # File fallback (backward compat / non-migrated)
-    p = _notes_user_dir(chat_id) / f"{slug}.md"
-    return p.read_text(encoding="utf-8") if p.exists() else None
+    """Return note contents from the DB store."""
+    note = store.load_note(chat_id, slug)
+    return note.get("content") if note else None
 
 
 def _save_note_file(chat_id: int, slug: str, content: str) -> None:
-    """Write note file (creates or overwrites) and update store + DB index."""
-    p = _notes_user_dir(chat_id) / f"{slug}.md"
-    p.write_text(content, encoding="utf-8")
-    log.info(f"[Notes] saved '{slug}' for user {chat_id}")
+    """Save note to the DB store."""
     _title = (content.splitlines()[0].lstrip("# ").strip()
               if content.strip() else slug.replace("_", " "))
-    try:
-        store.save_note(chat_id, slug, _title, content)
-    except Exception as _e:
-        log.warning("[Notes] store.save_note failed: %s", _e)
+    store.save_note(chat_id, slug, _title, content)
+    log.info(f"[Notes] saved '{slug}' for user {chat_id}")
 
 
 def _delete_note_file(chat_id: int, slug: str) -> bool:
-    """Delete a note file. Returns True if deleted, False if not found."""
-    p = _notes_user_dir(chat_id) / f"{slug}.md"
-    if p.exists():
-        p.unlink()
+    """Delete note from the DB store. Returns True if deleted."""
+    deleted = store.delete_note(chat_id, slug)
+    if deleted:
         log.info(f"[Notes] deleted '{slug}' for user {chat_id}")
-        try:
-            store.delete_note(chat_id, slug)
-        except Exception as _e:
-            log.warning("[Notes] store.delete_note failed: %s", _e)
-        return True
-    return False
+    return bool(deleted)

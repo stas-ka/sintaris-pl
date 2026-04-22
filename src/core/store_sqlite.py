@@ -180,20 +180,16 @@ class SQLiteStore:
                   content: str) -> None:
         db = self._db()
         db.execute(
-            """INSERT INTO notes_index (slug, chat_id, title,
+            """INSERT INTO notes_index (slug, chat_id, title, content,
                                         created_at, updated_at)
-               VALUES (?, ?, ?, datetime('now'), datetime('now'))
+               VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
                ON CONFLICT(slug, chat_id) DO UPDATE SET
                    title      = excluded.title,
+                   content    = excluded.content,
                    updated_at = datetime('now')""",
-            (slug, chat_id, title),
+            (slug, chat_id, title, content),
         )
         db.commit()
-        # Content stays in .md file (mirrors bot_users._save_note_file)
-        user_dir = os.path.join(NOTES_DIR, str(chat_id))
-        os.makedirs(user_dir, exist_ok=True)
-        with open(os.path.join(user_dir, f"{slug}.md"), "w", encoding="utf-8") as fh:
-            fh.write(f"# {title}\n\n{content}")
 
     def load_note(self, chat_id: int, slug: str) -> dict | None:
         row = self._db().execute(
@@ -203,20 +199,21 @@ class SQLiteStore:
         if not row:
             return None
         result = dict(row)
-        path = os.path.join(NOTES_DIR, str(chat_id), f"{slug}.md")
-        try:
-            with open(path, encoding="utf-8") as fh:
-                raw = fh.read()
-            # Strip "# title\n\n" header if present
-            parts = raw.split("\n\n", 1)
-            result["content"] = parts[1] if len(parts) > 1 else raw
-        except FileNotFoundError:
-            result["content"] = ""
+        if not result.get("content"):
+            # Fallback: read from .md file for notes migrated before DB content storage
+            path = os.path.join(NOTES_DIR, str(chat_id), f"{slug}.md")
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    raw = fh.read()
+                parts = raw.split("\n\n", 1)
+                result["content"] = parts[1] if len(parts) > 1 else raw
+            except FileNotFoundError:
+                result["content"] = ""
         return result
 
     def list_notes(self, chat_id: int) -> list[dict]:
         rows = self._db().execute(
-            "SELECT slug, title, updated_at FROM notes_index "
+            "SELECT slug, title, content, updated_at FROM notes_index "
             "WHERE chat_id = ? ORDER BY updated_at DESC",
             (chat_id,),
         ).fetchall()
@@ -229,11 +226,6 @@ class SQLiteStore:
             (slug, chat_id),
         )
         db.commit()
-        path = os.path.join(NOTES_DIR, str(chat_id), f"{slug}.md")
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
         return cur.rowcount > 0
 
     # ── Calendar ──────────────────────────────────────────────────────────────

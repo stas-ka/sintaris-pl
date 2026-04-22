@@ -54,7 +54,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core.bot_config import (
-    BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG, NOTES_DIR,
+    BOT_VERSION, BOT_NAME, TARIS_BIN, TARIS_CONFIG,
     ACTIVE_MODEL_FILE, RELEASE_NOTES_FILE, TARIS_API_TOKEN, LLM_PROVIDER,
     DEVICE_VARIANT, TARIS_DIR, log,
     STT_PROVIDER, STT_FALLBACK_PROVIDER,
@@ -337,64 +337,59 @@ def _ctx(request: Request, user: dict, page: str, **extra) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Data helpers — Notes
+# Data helpers — Notes (DB-backed via store; no file I/O)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _notes_dir_for(user_id: str) -> Path:
-    """Return the notes directory for a web user.
+def _web_chat_id(user_id: str) -> int:
+    """Resolve web account user_id → telegram chat_id integer for store calls.
 
-    Priority: if the account has a linked telegram_chat_id and that notes
-    directory already exists (created by the Telegram bot), use it so web and
-    Telegram share the same notes.  Otherwise fall back to the web user_id dir.
+    If the account has a linked Telegram chat, use that.  Otherwise derive a
+    stable synthetic integer from the UUID so web-only users still get a
+    consistent key (negative to avoid collisions with real Telegram IDs).
     """
     account = find_account_by_id(user_id)
     if account:
-        chat_id = account.get("telegram_chat_id")
-        if chat_id:
-            tg_dir = Path(NOTES_DIR) / str(chat_id)
-            if tg_dir.exists():
-                return tg_dir
-    d = Path(NOTES_DIR) / user_id
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+        cid = account.get("telegram_chat_id")
+        if cid:
+            return int(cid)
+    # Synthetic stable key for web-only accounts (no Telegram link)
+    return -(abs(hash(user_id)) % (2 ** 31))
 
 
 def _list_notes(user_id: str) -> list[dict]:
-    d = _notes_dir_for(user_id)
-    notes = []
-    for f in sorted(d.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
-        title = f.stem.replace("_", " ").title()
-        text = f.read_text(encoding="utf-8", errors="replace")
-        preview = text[:80].replace("\n", " ")
-        mtime = datetime.fromtimestamp(f.stat().st_mtime)
-        notes.append({
-            "slug": f.stem,
-            "title": title,
+    cid = _web_chat_id(user_id)
+    rows = _store.list_notes(cid) if _store else []
+    result = []
+    for n in rows:
+        content = n.get("content", "")
+        preview = content[:80].replace("\n", " ")
+        result.append({
+            "slug": n["slug"],
+            "title": n.get("title") or n["slug"].replace("_", " ").title(),
             "preview": preview,
-            "date": mtime.strftime("%Y-%m-%d %H:%M"),
-            "content": text,
+            "date": n.get("updated_at", ""),
+            "content": content,
         })
-    return notes
+    return result
 
 
 def _load_note(user_id: str, slug: str) -> Optional[str]:
-    p = _notes_dir_for(user_id) / f"{slug}.md"
-    if p.exists():
-        return p.read_text(encoding="utf-8", errors="replace")
-    return None
+    cid = _web_chat_id(user_id)
+    note = _store.load_note(cid, slug) if _store else None
+    return note.get("content") if note else None
 
 
-def _save_note(user_id: str, slug: str, content: str) -> None:
-    p = _notes_dir_for(user_id) / f"{slug}.md"
-    p.write_text(content, encoding="utf-8")
+def _save_note(user_id: str, slug: str, content: str, title: str = "") -> None:
+    cid = _web_chat_id(user_id)
+    _title = title or (content.splitlines()[0].lstrip("# ").strip() if content.strip()
+                       else slug.replace("_", " ").title())
+    if _store:
+        _store.save_note(cid, slug, _title, content)
 
 
 def _delete_note(user_id: str, slug: str) -> bool:
-    p = _notes_dir_for(user_id) / f"{slug}.md"
-    if p.exists():
-        p.unlink()
-        return True
-    return False
+    cid = _web_chat_id(user_id)
+    return bool(_store.delete_note(cid, slug)) if _store else False
 
 
 def _slugify(title: str) -> str:
@@ -1110,14 +1105,15 @@ async def note_save(request: Request, slug: str, content: str = Form(...), title
     if title:
         new_slug = _slugify(title)
         if new_slug and new_slug != slug:
-            old_path = _notes_dir_for(uid) / f"{slug}.md"
-            new_path = _notes_dir_for(uid) / f"{new_slug}.md"
-            if old_path.exists() and not new_path.exists():
-                old_path.rename(new_path)
-                slug_changed = True
+            # Check for slug conflict in DB
+            existing = _load_note(uid, new_slug)
+            if existing is not None:
+                new_slug = slug  # keep old slug on conflict
             else:
-                new_slug = slug  # keep old slug if conflict
-    _save_note(uid, new_slug, content)
+                # Delete old key before saving under new slug
+                _delete_note(uid, slug)
+                slug_changed = True
+    _save_note(uid, new_slug, content, title or "")
     # Slug changed → redirect so the sidebar re-renders with the new slug/title
     if slug_changed:
         return Response(headers={"HX-Redirect": f"{_ROOT_PATH}/notes"})

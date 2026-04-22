@@ -307,11 +307,10 @@ def _migrate_calendar(conn: sqlite3.Connection, dry_run: bool) -> int:
 
 
 def _migrate_notes_index(conn: sqlite3.Connection, dry_run: bool) -> int:
-    """notes/<storage_id>/*.md → notes_index table.
+    """notes/<storage_id>/*.md → notes_index table (slug, title, content).
 
-    Note content stays on disk; we only migrate the index metadata.
-    Title is extracted from the first `# ` heading in the file, or falls back
-    to the filename stem.
+    Both title and full content are stored in the DB.
+    Title is extracted from the first `# ` heading; content is the full file text.
     """
     notes_root = Path(NOTES_DIR)
     if not notes_root.exists():
@@ -332,8 +331,8 @@ def _migrate_notes_index(conn: sqlite3.Connection, dry_run: bool) -> int:
 
         for md_file in user_dir.glob("*.md"):
             slug = md_file.stem
-            # Extract title from first # heading
             title = slug.replace("_", " ").title()
+            content = ""
             try:
                 text = md_file.read_text(encoding="utf-8", errors="replace")
                 for line in text.splitlines():
@@ -341,6 +340,7 @@ def _migrate_notes_index(conn: sqlite3.Connection, dry_run: bool) -> int:
                     if line.startswith("# "):
                         title = line[2:].strip()
                         break
+                content = text
             except Exception as exc:
                 log.warning(f"    [notes] could not read {md_file}: {exc}")
 
@@ -348,15 +348,15 @@ def _migrate_notes_index(conn: sqlite3.Connection, dry_run: bool) -> int:
             import datetime
             created_at = datetime.datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
 
-            log.info(f"  [notes] chat_id={chat_id} slug={slug!r} title={title!r}")
+            log.info(f"  [notes] chat_id={chat_id} slug={slug!r} title={title!r} content_len={len(content)}")
             if not dry_run:
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO notes_index
-                        (slug, chat_id, title, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                        (slug, chat_id, title, content, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (slug, chat_id, title, created_at, created_at),
+                    (slug, chat_id, title, content, created_at, created_at),
                 )
             count += 1
 
