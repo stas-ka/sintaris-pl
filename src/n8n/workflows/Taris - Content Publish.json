@@ -1,0 +1,98 @@
+{
+  "name": "Taris - Content Publish",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taris-content-publish",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300],
+      "webhookId": "taris-content-publish-wh"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const body = $('Webhook').first().json.body || $('Webhook').first().json;\n  const channel = body.channel || '';\n  const content = body.content || '';\n  if (!channel) {\n    return [{ json: { _error: true, error: 'channel is required' } }];\n  }\n  if (!content) {\n    return [{ json: { _error: true, error: 'content is required' } }];\n  }\n  return [{ json: { channel, content } }];\n} catch(e) {\n  return [{ json: { _error: true, error: 'Prepare error: ' + e.message } }];\n}"
+      },
+      "id": "n-prepare",
+      "name": "Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.channel }}",
+        "text": "={{ $json.content }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "n-telegram",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [540, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Taris Bot Telegram"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const result = items[0].json;\n  if (result.error || result._error) {\n    return [{ json: { error: result.error || result._error } }];\n  }\n  const msgId = result.result?.message_id || result.message_id || null;\n  return [{ json: { success: true, message_id: msgId } }];\n} catch(e) {\n  return [{ json: { error: 'Parse publish response error: ' + e.message } }];\n}"
+      },
+      "id": "n-parse",
+      "name": "Parse Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "n-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [980, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Prepare", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare": {
+      "main": [
+        [{ "node": "Telegram", "type": "main", "index": 0 }]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        [{ "node": "Parse Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Result": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.69",
+    "date": "2026-04-22",
+    "title": "Content Strategy Agent: content plan + post generation via N8N+OpenAI",
+    "notes": "- New agent: Content Strategy (Agents menu → 📝 Content Strategy)\n- Modes: 7-day content plan or single post\n- 3-question flow: topic/niche/goal, platform, knowledge base opt-in\n- RAG integration: user notes, docs, conversation memory as context\n- Preview → Correct / Save / Download / Publish flow\n- N8N workflows: Taris-Content-Generate (OpenAI gpt-4o-mini) + Taris-Content-Publish (Telegram)\n- 21 unit tests (T_CS_01–T_CS_20)\n- All platforms: Telegram, Instagram, VK, Facebook, Website"
+  },
+  {
     "version": "2026.4.68",
     "date": "2026-04-19",
     "title": "OpenClaw extensions: per-user Ollama model, N8N events, CRM sync, skill rendering",

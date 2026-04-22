@@ -1,0 +1,151 @@
+{
+  "name": "Taris - Content Generate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taris-content-generate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        300
+      ],
+      "webhookId": "taris-content-generate-wh"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const body = $('Webhook').first().json.body || $('Webhook').first().json;\n  const mode = body.mode || 'plan';\n  const q1 = body.q1 || '';\n  const q2 = body.q2 || 'Telegram';\n  const kbContext = body.kb_context || '';\n  const correction = body.correction || '';\n  const lang = body.lang || 'ru';\n\n  const PLAN_PROMPT = `Ты контент-менеджер с 10-летним опытом. Создай оригинальный контент-план на 7 публикаций для следующего запроса.\n\nЗапрос пользователя:\nНиша/тема/аудитория/цель: ${q1}\nПлатформа: ${q2}\n${kbContext ? '\\nКонтекст из базы знаний пользователя:\\n' + kbContext : ''}\n${correction ? '\\nПожелания по корректировке: ' + correction : ''}\n\nТребования:\n- 7 дней, по одной публикации в день\n- 30% вовлекающий контент, 30% экспертный, 20% продающий, 20% развлекательный\n- Цепляющие заголовки, никаких хэштегов\n- Формат адаптирован под платформу: ${q2}\n- Markdown для Telegram (звёздочки для жирного), до 3800 символов\n\nФормат каждого блока:\n*День N*\n*Формат:* [тип контента]\n*Заголовок:* [заголовок]\n*Суть:* [краткое описание]\n'━━━ 🌿 ━━━'\n\nНе задавай вопросов, не добавляй хэштеги, создай финальный результат.`;\n\n  const POST_PROMPT = `Ты профессиональный копирайтер с 10-летним опытом. Напиши пост по запросу пользователя.\n\nЗапрос пользователя:\nТип/тема/аудитория: ${q1}\nПлатформа: ${q2}\n${kbContext ? '\\nКонтекст из базы знаний пользователя:\\n' + kbContext : ''}\n${correction ? '\\nПожелания по корректировке: ' + correction : ''}\n\nТребования:\n- Объём 2500–3800 символов\n- Цепляющий заголовок, сторителлинг, призыв к действию\n- Формат адаптирован под платформу: ${q2}\n- Markdown для Telegram, до 3800 символов\n- Не добавляй хэштеги\n\nФормат:\n*Заголовок*\n[Основной текст поста]\n\nСоздай финальный результат без вопросов.`;\n\n  const prompt = mode === 'post' ? POST_PROMPT : PLAN_PROMPT;\n  return [{ json: { prompt, mode, q1, q2, lang } }];\n} catch(e) {\n  return [{ json: { _error: true, error: 'Prepare prompt error: ' + e.message } }];\n}"
+      },
+      "id": "n-prepare",
+      "name": "Prepare Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "prompt": {
+          "messages": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "simplifyOutput": false,
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        },
+        "requestOptions": {}
+      },
+      "id": "n-openai",
+      "name": "OpenAI Generate",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.1,
+      "position": [
+        540,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "MHkmfl85kwu22LT8",
+          "name": "OpenAI SINTARIS"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const input = items[0].json;\n  if (input._error || input.error) {\n    return [{ json: { error: input.error || input._error } }];\n  }\n  // Extract content from OpenAI response\n  let content = '';\n  if (input.message && input.message.content) {\n    content = input.message.content;\n  } else if (input.choices && input.choices[0]) {\n    content = input.choices[0].message?.content || input.choices[0].text || '';\n  } else if (typeof input.content === 'string') {\n    content = input.content;\n  } else {\n    content = JSON.stringify(input);\n  }\n  return [{ json: { content: content.trim() } }];\n} catch(e) {\n  return [{ json: { error: 'Parse response error: ' + e.message } }];\n}"
+      },
+      "id": "n-parse",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "n-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        980,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Generate": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

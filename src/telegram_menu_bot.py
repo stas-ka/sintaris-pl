@@ -107,6 +107,8 @@ from telegram.bot_admin import (
 
 # ─── Campaign Agent ───────────────────────────────────────────────────────────
 import features.bot_campaign as _campaign
+# ─── Content Strategy Agent ──────────────────────────────────────────────────
+import features.bot_content as _content
 
 # ─── Notify Agent ────────────────────────────────────────────────────────────
 import features.bot_notify as _notify
@@ -962,6 +964,47 @@ def callback_handler(call):
         _campaign.cancel(cid)
         bot.send_message(cid, _t(cid, "campaign_cancelled"))
 
+    # ── Content Strategy Agent ─────────────────────────────────────────────────
+    elif data == "content_start":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _content.is_configured():
+                bot.send_message(cid, _t(cid, "content_not_configured"))
+            else:
+                _content.show_menu(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("content_mode:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            mode = data[len("content_mode:"):]
+            _content.start_mode(cid, mode, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("content_platform:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            platform = data[len("content_platform:"):]
+            _content.on_platform_selected(cid, platform, bot, _t)
+
+    elif data.startswith("content_kb:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            use_kb = data[len("content_kb:"):] == "yes"
+            _content.on_kb_selected(cid, use_kb, bot, _t)
+
+    elif data.startswith("content_action:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            action = data[len("content_action:"):]
+            _content.on_action(cid, action, bot, _t)
+
+    elif data.startswith("content_publish:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            decision = data[len("content_publish:"):]
+            _content.on_publish_decision(cid, decision, bot, _t)
+
+    elif data == "content_cancel":
+        _content.cancel(cid)
+        bot.send_message(cid, _t(cid, "content_cancelled"))
+
     # ── Notify Agent ───────────────────────────────────────────────────────────
     elif data == "notify_menu":
         if _is_admin(cid) or _is_advanced(cid):
@@ -1439,6 +1482,9 @@ def _handle_agents_menu(chat_id: int) -> None:
             _t(chat_id, "agents_btn_campaign"), callback_data="campaign_start"
         ),
         InlineKeyboardButton(
+            _t(chat_id, "agents_btn_content"), callback_data="content_start"
+        ),
+        InlineKeyboardButton(
             _t(chat_id, "agents_btn_notify"), callback_data="notify_menu"
         ),
         InlineKeyboardButton(
@@ -1514,6 +1560,15 @@ def text_handler(message):
                 return
         else:
             _campaign.cancel(cid)
+
+    # ── Content Strategy agent text input ─────────────────────────────────────
+    if _content.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            consumed = _content.handle_message(cid, message.text, bot, _t)
+            if consumed:
+                return
+        else:
+            _content.cancel(cid)
 
     # ── Notify agent text input ────────────────────────────────────────────────
     if _notify.is_active(cid):

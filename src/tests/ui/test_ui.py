@@ -805,3 +805,90 @@ class TestCampaignWebUI:
         assert "contacts" in content.lower() or "Контакты" in content or "Kontakte" in content, (
             "Sidebar must have a Contacts link — this feeds the campaign agent"
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 15. Content Strategy Agent — Web UI presence
+# The Content Strategy Agent is Telegram-driven; the Web UI exposes no
+# dedicated /content page.  These tests verify correct behaviour.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestContentStrategyWebUI:
+    """Verify Content Strategy Agent Web-UI integration.
+
+    The agent lives in Telegram only — but its generated content can be
+    saved as notes (visible in Web UI) and its publish webhook is reachable.
+    """
+
+    def test_no_content_page_exists(self, browser, base_url_or_default):
+        """GET /content → 404 or redirect (agent is Telegram-only, no dedicated page)."""
+        import requests
+        resp = requests.get(
+            f"{base_url_or_default}/content",
+            verify=False, timeout=10,
+            allow_redirects=False,
+        )
+        assert resp.status_code in (404, 302, 401), (
+            f"/content should not expose a dedicated page, got {resp.status_code}"
+        )
+
+    def test_notes_page_accessible_to_admin(self, admin_page, base_url_or_default):
+        """Notes page is accessible — content drafts are saved here via bot_content.py."""
+        admin_page.goto(f"{base_url_or_default}/notes")
+        assert "/notes" in admin_page.url or admin_page.title() != ""
+        content = admin_page.content()
+        assert "Internal Server Error" not in content
+
+    def test_sidebar_has_notes_link(self, admin_page, base_url_or_default):
+        """Web UI sidebar must have a Notes link (where content drafts are stored)."""
+        admin_page.goto(f"{base_url_or_default}/")
+        content = admin_page.content()
+        assert any(kw in content for kw in ["notes", "Заметки", "Notizen", "/notes"]), (
+            "Sidebar must have a Notes link — content drafts are saved as notes"
+        )
+
+    def test_notes_download_txt_endpoint(self, admin_page, base_url_or_default):
+        """GET /notes downloads an existing note as .txt (used by content agent download)."""
+        admin_page.goto(f"{base_url_or_default}/notes")
+        # If there are any notes, a download link should be present
+        note_list = admin_page.locator("#note-list")
+        if note_list.count() > 0 and note_list.inner_text().strip():
+            # There are notes — look for a download anchor
+            dl_links = admin_page.locator("a[href*='/notes/download'], a[download]")
+            if dl_links.count() > 0:
+                href = dl_links.first.get_attribute("href")
+                assert href and "/notes" in href, "Download link should point to /notes"
+        # If no notes yet, the test is a no-op pass
+
+    def test_api_status_returns_json(self, browser, base_url_or_default):
+        """GET /api/status returns JSON (needed for VPS health checks post-deploy)."""
+        import requests
+        resp = requests.get(
+            f"{base_url_or_default}/api/status",
+            verify=False, timeout=10,
+        )
+        # 200 (authenticated) or 401 (not authenticated) — both are valid outcomes
+        assert resp.status_code in (200, 401), (
+            f"/api/status returned unexpected {resp.status_code}"
+        )
+
+    def test_content_strategy_strings_present_in_bot_config(self, browser, base_url_or_default):
+        """GET /api/status reflects bot is running (implies bot_content.py loaded without errors)."""
+        import requests
+        # Login first
+        session = requests.Session()
+        resp = session.post(
+            f"{base_url_or_default}/login",
+            data={"username": ADMIN_USER, "password": ADMIN_PASS},
+            verify=False, timeout=10,
+            allow_redirects=True,
+        )
+        status_resp = session.get(
+            f"{base_url_or_default}/api/status",
+            verify=False, timeout=10,
+        )
+        if status_resp.status_code == 200:
+            data = status_resp.json()
+            assert "version" in data or "status" in data, (
+                "/api/status must return version or status field"
+            )

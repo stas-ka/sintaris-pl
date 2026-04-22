@@ -189,6 +189,18 @@ N8N_CAMPAIGN_TIMEOUT   = int(os.environ.get("N8N_CAMPAIGN_TIMEOUT", "90"))
 CAMPAIGN_DEMO_MODE     = os.environ.get("CAMPAIGN_DEMO_MODE", "false").lower() == "true"
 CAMPAIGN_FROM_EMAIL    = os.environ.get("CAMPAIGN_FROM_EMAIL", "info@sintaris.net")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# N8N Content Strategy Agent
+# N8N_CONTENT_GENERATE_WH: webhook URL for content generation (OpenAI via N8N)
+# N8N_CONTENT_PUBLISH_WH:  webhook URL to post content to Telegram channel
+# CONTENT_TG_CHANNEL_ID:   default target channel (can be overridden per-session)
+# N8N_CONTENT_TIMEOUT:     max seconds to wait for N8N generate response
+# ─────────────────────────────────────────────────────────────────────────────
+N8N_CONTENT_GENERATE_WH = os.environ.get("N8N_CONTENT_GENERATE_WH", "")
+N8N_CONTENT_PUBLISH_WH  = os.environ.get("N8N_CONTENT_PUBLISH_WH", "")
+CONTENT_TG_CHANNEL_ID   = os.environ.get("CONTENT_TG_CHANNEL_ID", "")
+N8N_CONTENT_TIMEOUT     = int(os.environ.get("N8N_CONTENT_TIMEOUT", "60"))
+
 ACTIVE_MODEL_FILE   = os.environ.get("ACTIVE_MODEL_FILE",
                           _th("active_model.txt"))
 LLM_PER_FUNC_FILE   = _th("llm_per_func.json")     # per-function LLM overrides (system/chat)
@@ -335,7 +347,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.68"
+BOT_VERSION        = "2026.4.69"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Guest / auto-registration
