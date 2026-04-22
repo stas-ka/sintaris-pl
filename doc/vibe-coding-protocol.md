@@ -5,6 +5,17 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-22 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 06:55 UTC | Content Strategy Agent: implement, test, deploy to VPS-Supertaris, fix T_CS_17 test | 4 | ~30 | claude-sonnet-4-5 | bot_content.py, bot_config.py, strings.json, telegram_menu_bot.py, 2 N8N workflows, test_content_strategy.py, test_ui.py, .env.example, release_notes.json | done |
+| 05:10 UTC | Add integration + UI tests for Content Strategy Agent: N8N webhook tests (T_CN_01-T_CN_12) and Web UI Playwright tests (T_CW_01-T_CW_14); fix conftest.py login() for ROOT_PATH deployments (inject cookie via requests, bypass broken form action); fix all _api_url() ROOT_PATH stripping; copy tests to Docker | 3 | 22 | claude-sonnet-4.6 | src/tests/test_content_n8n.py, src/tests/ui/test_ui.py, src/tests/ui/conftest.py | done |
+| 05:41 UTC | Content Strategy Agent v2: stored plans (DB, max 2), per-post generation (choose #1-7 from plan), separate N8N payloads (mode=plan vs mode=post+plan_content), max 10 posts, cleanup menu with LLM summarise→long-term memory before deletion, 17 new i18n strings RU/EN/DE, commit 64b3e6d, deploy v2026.4.70 to VPS Docker | 4 | 3 | claude-sonnet-4.6 | src/features/bot_content.py, src/telegram_menu_bot.py, src/strings.json, src/core/bot_config.py, src/release_notes.json | done |
+| 05:45 UTC | fix: admin user language preference not persisting after profile change — admin not in registrations.json so _set_reg_lang silently did nothing; fixed by also persisting to user_prefs DB (ui_lang key) and reading it back in _set_lang | 2 | 2 | claude-sonnet-4.6 | src/telegram/bot_access.py, src/telegram/bot_handlers.py | done |
+
+---
+
 ### Session — 2026-04-19 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
@@ -27,6 +38,15 @@ Use this to analyse cost (time, requests) per feature over time.
 | 08:36 | Install sshwifty (WebSocket SSH client) on VPS; replace shellinabox at shell.dev2null.de; works through corporate HTTPS-inspection proxies | 2 | 4 | claude-sonnet-4.6 | deploy/system-configs/vps/sshwifty.service, sshwifty.conf.json, nginx/shell.dev2null.de.conf | done |
 | 07:53 | Add drawio to git; create roles-overview.md (full feature matrix per role); create doc/todo/1.2-guest-users.md (guest user concept + impl plan P1–P6, T140–T144); update TODO.md §1.2, security.md, copilot-instructions | 2 | 2 | claude-sonnet-4.6 | doc/users/roles-overview.md (new), doc/todo/1.2-guest-users.md (new), doc/users/*.drawio, TODO.md, security.md, copilot-instructions.md | done |
 | 06:20 | Implement SSH-over-443 on VPS via nginx stream: install libnginx-mod-stream, add stream block to nginx.conf, route port 443 (no-TLS→sshd:22, TLS→nginx:8443); nginx -t OK; reload; SSH via port 443 verified from Windows | 3 | 5 | claude-sonnet-4.6 | deploy/nginx-stream-setup.sh, deploy/ssh-tunnel.conf, .env.example, .env | done |
+
+### Session — 2026-04-21 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 08:00 UTC | Fix: after assigning "advanced" role, promoted user couldn't see Agents menu — _handle_admin_role_notify sent text-only message without reply_markup; fix: pass _menu_keyboard(target_uid) in notification | 1 | 2 | claude-sonnet-4.6 | src/telegram/bot_admin.py | done |
+| 08:10 UTC | Feature v2026.4.68: Appointment routing admin panel — admin configures single receiver or user-selectable list; role visibility filter; _start_guest_meeting reads DB settings (appt_mode/appt_single_uid/appt_visible_roles); T162–T167 regression tests (59 assertions) + TestAdminAppointment UI tests (5 tests); deployed to TS2 + VPS | 4 | 15 | claude-sonnet-4.6 | src/telegram/bot_admin.py, src/features/bot_calendar.py, src/telegram_menu_bot.py, src/strings.json, src/tests/test_voice_regression.py, src/tests/ui/test_ui.py | done |
+
+---
 
 ### Session — 2026-04-20 (UTC)
 
@@ -1581,3 +1601,4 @@ Every ~3 months, measure baseline health:
 | 20:31 UTC | | 19:55 UTC | | 20:31 UTC | 36 | Research Russian article strategy for Sintaris: platforms, SEO/AI indexing, 10 expert article topics for Hybrid RAG, n8n, Taris, AI data safety, vibe coding | 3 | 1 turn | gpt-5-codex | doc/marketing/article_topics_ru_research.md, doc/vibe-coding-protocol.md | done |
 | 20:33 UTC | | 20:32 UTC | | 20:33 UTC | 1 | Commit and push marketing article research document | 1 | 1 turn | gpt-5-codex | doc/marketing/article_topics_ru_research.md, doc/vibe-coding-protocol.md | done |
 | 02:58 UTC | | 02:56 UTC | | 02:58 UTC | 2 | Push current branch to git; remote already up to date, then log protocol row | 1 | 1 turn | gpt-5-codex | doc/vibe-coding-protocol.md | done |
+| 15:59 UTC | Notes fully stored in Postgres DB (not .md files); backfilled 14/17 notes from .md files; Docker deploy + git push | 4 | 12 | claude-sonnet-4-6 | store_postgres.py, store_sqlite.py, bot_users.py, bot_web.py, migrate_to_db.py, T102 test, data-layer.md, SKILL.md, copilot-instructions.md | done |
