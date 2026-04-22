@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.71",
+    "date": "2026-04-22",
+    "title": "Content Strategy Agent: per-user publish config (bot token + channel)",
+    "notes": "- Publish button in post preview is now disabled until per-user config is set\n- New ⚙️ Configure publishing button in Content Agent main menu\n- User sets own Telegram bot token (via @BotFather) and target channel/group ID\n- Config stored in user_prefs DB (keys: content_pub_token, content_pub_channel)\n- Publishing uses direct Telegram Bot API call with user's token (no N8N dependency)\n- Config status shown in agent menu: green check when configured, setup prompt otherwise\n- Token displayed as masked (••••last4chars) in settings screen\n- After publish: if plan flow, returns to plan view; if standalone, ends session\n- New callbacks: content_pub_config, content_pub_set:token|channel\n- 10 new i18n strings per language (RU/EN/DE)"
+  },
+  {
     "version": "2026.4.70",
     "date": "2026-04-22",
     "title": "Content Strategy Agent v2: stored plans, per-post generation, storage limits + long-term memory",

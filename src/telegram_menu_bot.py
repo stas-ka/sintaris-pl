@@ -1032,6 +1032,15 @@ def callback_handler(call):
             decision = data[len("content_publish:"):]
             _content.on_publish_decision(cid, decision, bot, _t)
 
+    elif data == "content_pub_config":
+        if _is_admin(cid) or _is_advanced(cid):
+            _content.show_pub_config(cid, bot, _t)
+
+    elif data.startswith("content_pub_set:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            field = data[len("content_pub_set:"):]
+            _content.on_pub_set(cid, field, bot, _t)
+
     # Legacy callback (pre-v2 sessions) — just cancel
     elif data.startswith("content_action:"):
         _content.cancel(cid)

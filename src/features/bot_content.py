@@ -55,6 +55,7 @@ _POST_PREFIX = "post_"
 #        → generating_post → post_preview → correcting_post
 #        → ask_channel → confirming_publish
 #        → cleanup_plans | cleanup_posts (limit enforcement)
+#        → config_pub_token → config_pub_channel  (per-user publish settings)
 # ─────────────────────────────────────────────────────────────────────────────
 _sessions: dict[int, dict] = {}
 
@@ -77,6 +78,39 @@ def is_configured() -> bool:
 
 def _session(chat_id: int) -> dict:
     return _sessions.setdefault(chat_id, {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-user publish configuration (stored in user_prefs DB)
+# Keys: content_pub_token, content_pub_channel
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PUB_TOKEN_KEY   = "content_pub_token"
+_PUB_CHANNEL_KEY = "content_pub_channel"
+
+
+def _get_pub_config(chat_id: int) -> dict:
+    """Return {'token': str, 'channel': str} from user_prefs. Empty strings when not set."""
+    try:
+        from core.bot_db import db_get_user_pref
+        return {
+            "token":   db_get_user_pref(chat_id, _PUB_TOKEN_KEY,   ""),
+            "channel": db_get_user_pref(chat_id, _PUB_CHANNEL_KEY, ""),
+        }
+    except Exception as exc:
+        log.warning("[content] _get_pub_config failed: %s", exc)
+        return {"token": "", "channel": ""}
+
+
+def _set_pub_config_value(chat_id: int, key: str, value: str) -> None:
+    from core.bot_db import db_set_user_pref
+    db_set_user_pref(chat_id, key, value.strip())
+
+
+def is_publish_configured(chat_id: int) -> bool:
+    """True when both bot token and channel are set for this user."""
+    cfg = _get_pub_config(chat_id)
+    return bool(cfg["token"]) and bool(cfg["channel"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -157,10 +191,17 @@ def _new_slug(prefix: str) -> str:
 def show_menu(chat_id: int, bot: Any, t: Callable) -> None:
     """Show Content Strategist mode selection menu."""
     from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    cfg = _get_pub_config(chat_id)
+    pub_ok = bool(cfg["token"]) and bool(cfg["channel"])
+    if pub_ok:
+        cfg_label = t(chat_id, "content_btn_pub_settings_ok").format(channel=cfg["channel"])
+    else:
+        cfg_label = t(chat_id, "content_btn_pub_settings_unset")
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton(t(chat_id, "content_btn_plan"), callback_data="content_mode:plan"),
         InlineKeyboardButton(t(chat_id, "content_btn_post"), callback_data="content_mode:post"),
+        InlineKeyboardButton(cfg_label,                      callback_data="content_pub_config"),
         InlineKeyboardButton(t(chat_id, "content_btn_back"), callback_data="agents_menu"),
     )
     bot.send_message(chat_id, t(chat_id, "content_menu_title"),
@@ -501,11 +542,11 @@ def on_post_action(chat_id: int, action: str, bot: Any, t: Callable) -> None:
         _show_post_preview(chat_id, bot, t)
 
     elif action == "publish":
-        sess["step"] = "ask_channel"
-        bot.send_message(chat_id, t(chat_id, "content_ask_channel"), parse_mode="Markdown")
-        default = CONTENT_TG_CHANNEL_ID
-        if default:
-            bot.send_message(chat_id, f"_Configured default: `{default}`_", parse_mode="Markdown")
+        if not is_publish_configured(chat_id):
+            _show_publish_not_configured(chat_id, bot, t)
+            return
+        sess["step"] = "confirming_publish"
+        _ask_publish_confirm(chat_id, bot, t)
 
     elif action == "back_plan":
         sess["step"] = "plan_saved"
@@ -650,25 +691,26 @@ def on_delete_cancelled(chat_id: int, bot: Any, t: Callable) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Publish flow
+# Publish flow (uses per-user bot token + channel stored in user_prefs)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def on_channel_input(chat_id: int, channel: str, bot: Any, t: Callable) -> None:
-    sess = _sessions.get(chat_id, {})
-    if sess.get("step") != "ask_channel":
-        return
-    channel = channel.strip()
-    if not channel:
-        bot.send_message(chat_id, t(chat_id, "content_ask_channel"), parse_mode="Markdown")
-        return
-    sess["channel"] = channel
-    sess["step"] = "confirming_publish"
-    _ask_publish_confirm(chat_id, bot, t)
+def _show_publish_not_configured(chat_id: int, bot: Any, t: Callable) -> None:
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup(row_width=1)
+    back_cb = ("content_post_action:back_plan"
+               if _sessions.get(chat_id, {}).get("plan_slug")
+               else "content_post_action:new")
+    kb.add(
+        InlineKeyboardButton(t(chat_id, "content_btn_pub_configure"),  callback_data="content_pub_config"),
+        InlineKeyboardButton(t(chat_id, "content_btn_publish_cancel"), callback_data=back_cb),
+    )
+    bot.send_message(chat_id, t(chat_id, "content_publish_setup_required"),
+                     parse_mode="Markdown", reply_markup=kb)
 
 
 def _ask_publish_confirm(chat_id: int, bot: Any, t: Callable) -> None:
     from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-    channel = _sessions.get(chat_id, {}).get("channel", "?")
+    channel = _get_pub_config(chat_id)["channel"]
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
         InlineKeyboardButton(t(chat_id, "content_btn_publish_confirm"), callback_data="content_publish:confirm"),
@@ -687,11 +729,13 @@ def on_publish_decision(chat_id: int, decision: str, bot: Any, t: Callable) -> N
         sess["step"] = "post_preview"
         _show_post_preview(chat_id, bot, t)
         return
-    if not N8N_CONTENT_PUBLISH_WH:
-        bot.send_message(chat_id, t(chat_id, "content_publish_not_configured"), parse_mode="Markdown")
+    cfg = _get_pub_config(chat_id)
+    if not cfg["token"] or not cfg["channel"]:
         sess["step"] = "post_preview"
+        _show_publish_not_configured(chat_id, bot, t)
         return
-    channel = sess.get("channel", "")
+    channel = cfg["channel"]
+    token   = cfg["token"]
     content = sess.get("post_content", "")
     bot.send_message(chat_id,
         t(chat_id, "content_publishing").format(channel=channel),
@@ -699,16 +743,24 @@ def on_publish_decision(chat_id: int, decision: str, bot: Any, t: Callable) -> N
 
     def _run():
         try:
-            result = call_webhook(N8N_CONTENT_PUBLISH_WH,
-                                  {"chat_id": chat_id, "channel": channel, "content": content},
-                                  timeout=30)
-            if result.get("error"):
-                bot.send_message(chat_id,
-                    t(chat_id, "content_publish_error").format(error=result["error"]),
-                    parse_mode="Markdown")
-            else:
+            import urllib.request, urllib.parse, json as _json
+            url  = f"https://api.telegram.org/bot{token}/sendMessage"
+            data_bytes = urllib.parse.urlencode({
+                "chat_id":    channel,
+                "text":       content,
+                "parse_mode": "Markdown",
+            }).encode()
+            req = urllib.request.Request(url, data=data_bytes, method="POST")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp_data = _json.loads(resp.read().decode())
+            if resp_data.get("ok"):
                 bot.send_message(chat_id,
                     t(chat_id, "content_published").format(channel=channel),
+                    parse_mode="Markdown")
+            else:
+                err = resp_data.get("description", "Unknown error")
+                bot.send_message(chat_id,
+                    t(chat_id, "content_publish_error").format(error=err),
                     parse_mode="Markdown")
         except Exception as exc:
             log.exception("[content] publish error: %s", exc)
@@ -716,9 +768,76 @@ def on_publish_decision(chat_id: int, decision: str, bot: Any, t: Callable) -> N
                 t(chat_id, "content_publish_error").format(error=str(exc)),
                 parse_mode="Markdown")
         finally:
-            _sessions.pop(chat_id, None)
+            if sess.get("plan_slug"):
+                sess["step"] = "plan_saved"
+                _show_plan_with_post_buttons(chat_id, bot, t)
+            else:
+                _sessions.pop(chat_id, None)
 
     threading.Thread(target=_run, daemon=True).start()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Publish configuration flow (per-user token + channel)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def show_pub_config(chat_id: int, bot: Any, t: Callable) -> None:
+    """Show current publish settings with edit buttons."""
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+    cfg = _get_pub_config(chat_id)
+    token_display   = ("\u2022" * 10 + cfg["token"][-4:]) if len(cfg["token"]) > 4 else (cfg["token"] or "—")
+    channel_display = cfg["channel"] or "—"
+    text = t(chat_id, "content_pub_config_status").format(
+        token=token_display, channel=channel_display)
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(t(chat_id, "content_btn_set_token"),   callback_data="content_pub_set:token"),
+        InlineKeyboardButton(t(chat_id, "content_btn_set_channel"), callback_data="content_pub_set:channel"),
+        InlineKeyboardButton(t(chat_id, "content_btn_back"),        callback_data="content_start"),
+    )
+    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=kb)
+
+
+def on_pub_set(chat_id: int, field: str, bot: Any, t: Callable) -> None:
+    """Begin interactive input for bot token or channel."""
+    if field == "token":
+        _session(chat_id)["step"] = "config_pub_token"
+        bot.send_message(chat_id, t(chat_id, "content_ask_pub_token"), parse_mode="Markdown")
+    elif field == "channel":
+        _session(chat_id)["step"] = "config_pub_channel"
+        bot.send_message(chat_id, t(chat_id, "content_ask_pub_channel"), parse_mode="Markdown")
+
+
+def on_pub_config_input(chat_id: int, text: str, bot: Any, t: Callable) -> bool:
+    """Handle token/channel text input during config flow. Returns True if consumed."""
+    sess = _sessions.get(chat_id)
+    if not sess:
+        return False
+    step = sess.get("step")
+
+    if step == "config_pub_token":
+        value = text.strip()
+        if not value:
+            bot.send_message(chat_id, t(chat_id, "content_ask_pub_token"), parse_mode="Markdown")
+            return True
+        _set_pub_config_value(chat_id, _PUB_TOKEN_KEY, value)
+        sess.pop("step", None)
+        bot.send_message(chat_id, t(chat_id, "content_pub_token_saved"), parse_mode="Markdown")
+        show_pub_config(chat_id, bot, t)
+        return True
+
+    if step == "config_pub_channel":
+        value = text.strip()
+        if not value:
+            bot.send_message(chat_id, t(chat_id, "content_ask_pub_channel"), parse_mode="Markdown")
+            return True
+        _set_pub_config_value(chat_id, _PUB_CHANNEL_KEY, value)
+        sess.pop("step", None)
+        bot.send_message(chat_id, t(chat_id, "content_pub_channel_saved"), parse_mode="Markdown")
+        show_pub_config(chat_id, bot, t)
+        return True
+
+    return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -775,8 +894,8 @@ def handle_message(chat_id: int, text: str, bot: Any, t: Callable) -> bool:
                           correction=text.strip())
         return True
 
-    if step == "ask_channel":
-        on_channel_input(chat_id, text, bot, t)
+    # publish config input steps
+    if on_pub_config_input(chat_id, text, bot, t):
         return True
 
     return False

@@ -673,7 +673,18 @@
     "content_btn_delete_yes": "✅ Да, удалить",
     "content_btn_delete_no": "❌ Отмена",
     "content_delete_done": "🗑️ Удалено. Сводка сохранена в долгосрочную память.",
-    "content_delete_error": "❌ Ошибка при удалении."
+    "content_delete_error": "❌ Ошибка при удалении.",
+    "content_publish_setup_required": "⚙️ *Публикация не настроена*\n\nЧтобы публиковать посты в Telegram-канал, настройте бот и канал для публикации.\n\nНажмите «Настроить публикацию» ниже:",
+    "content_btn_pub_configure": "⚙️ Настроить публикацию",
+    "content_btn_pub_settings_ok": "✅ Публикация: {channel}",
+    "content_btn_pub_settings_unset": "⚙️ Настроить публикацию",
+    "content_pub_config_status": "⚙️ *Настройки публикации*\n\n🤖 *Бот-токен:* {token}\n📢 *Канал / группа:* {channel}\n\nДля публикации необходимо:\n1. Создать бота через @BotFather и скопировать токен\n2. Добавить бота администратором в ваш канал или группу\n3. Ввести ID канала (например @mychannel или -100123456789)",
+    "content_btn_set_token": "🔑 Установить токен бота",
+    "content_btn_set_channel": "📢 Установить канал / группу",
+    "content_ask_pub_token": "🔑 *Токен бота для публикации*\n\nВведите токен Telegram-бота, который будет отправлять посты.\nПолучите токен у @BotFather командой /newbot.\n\nПример: 1234567890:AABBccDDeeFFggHHiiJJ...",
+    "content_ask_pub_channel": "📢 *Канал или группа для публикации*\n\nВведите @username канала или числовой ID.\n\nПримеры:\n- @mychannel\n- -100123456789\n\nБот должен быть добавлен как администратор.",
+    "content_pub_token_saved": "✅ Токен сохранён.",
+    "content_pub_channel_saved": "✅ Канал сохранён."
   },
   "en": {
     "btn_digest": "📧  Mail Digest",
@@ -1349,7 +1360,18 @@
     "content_btn_delete_yes": "✅ Yes, delete",
     "content_btn_delete_no": "❌ Cancel",
     "content_delete_done": "🗑️ Deleted. Summary saved to long-term memory.",
-    "content_delete_error": "❌ Deletion error."
+    "content_delete_error": "❌ Deletion error.",
+    "content_publish_setup_required": "⚙️ *Publishing not configured*\n\nTo publish posts to a Telegram channel or group, set up a bot token and target channel first.\n\nTap \"Configure publishing\" below:",
+    "content_btn_pub_configure": "⚙️ Configure publishing",
+    "content_btn_pub_settings_ok": "✅ Publishing: {channel}",
+    "content_btn_pub_settings_unset": "⚙️ Configure publishing",
+    "content_pub_config_status": "⚙️ *Publishing settings*\n\n🤖 *Bot token:* {token}\n📢 *Channel / group:* {channel}\n\nTo publish you need to:\n1. Create a bot via @BotFather and copy the token\n2. Add the bot as admin to your channel or group\n3. Enter the channel ID (e.g. @mychannel or -100123456789)",
+    "content_btn_set_token": "🔑 Set bot token",
+    "content_btn_set_channel": "📢 Set channel / group",
+    "content_ask_pub_token": "🔑 *Bot token for publishing*\n\nEnter the Telegram bot token that will send posts.\nGet a token from @BotFather with /newbot.\n\nExample: 1234567890:AABBccDDeeFFggHHiiJJ...",
+    "content_ask_pub_channel": "📢 *Channel or group for publishing*\n\nEnter the channel @username or numeric ID.\n\nExamples:\n- @mychannel\n- -100123456789\n\nThe bot must be added as an administrator.",
+    "content_pub_token_saved": "✅ Token saved.",
+    "content_pub_channel_saved": "✅ Channel saved."
   },
   "de": {
     "btn_digest": "📧  E-Mail-Zusammenfassung",
@@ -2025,6 +2047,17 @@
     "content_btn_delete_yes": "✅ Ja, löschen",
     "content_btn_delete_no": "❌ Abbrechen",
     "content_delete_done": "🗑️ Gelöscht. Zusammenfassung im Langzeitgedächtnis gespeichert.",
-    "content_delete_error": "❌ Löschfehler."
+    "content_delete_error": "❌ Löschfehler.",
+    "content_publish_setup_required": "⚙️ *Veroeffentlichung nicht konfiguriert*\n\nUm Beitraege in einen Telegram-Kanal zu veroeffentlichen, richte zuerst einen Bot-Token und Zielkanal ein.\n\nTippe unten auf \"Veroeffentlichung konfigurieren\":",
+    "content_btn_pub_configure": "⚙️ Veroeffentlichung konfigurieren",
+    "content_btn_pub_settings_ok": "✅ Veroeffentlichung: {channel}",
+    "content_btn_pub_settings_unset": "⚙️ Veroeffentlichung konfigurieren",
+    "content_pub_config_status": "⚙️ *Veroeffentlichungseinstellungen*\n\n🤖 *Bot-Token:* {token}\n📢 *Kanal / Gruppe:* {channel}\n\nFuer die Veroeffentlichung benoetigt:\n1. Einen Bot via @BotFather erstellen und Token kopieren\n2. Den Bot als Administrator zum Kanal hinzufuegen\n3. Die Kanal-ID eingeben (z. B. @meinkanal oder -100123456789)",
+    "content_btn_set_token": "🔑 Bot-Token festlegen",
+    "content_btn_set_channel": "📢 Kanal / Gruppe festlegen",
+    "content_ask_pub_token": "🔑 *Bot-Token fuer Veroeffentlichung*\n\nGib den Telegram-Bot-Token ein, der Beitraege senden soll.\nToken bei @BotFather mit /newbot erhalten.\n\nBeispiel: 1234567890:AABBccDDeeFFggHHiiJJ...",
+    "content_ask_pub_channel": "📢 *Kanal oder Gruppe fuer Veroeffentlichung*\n\nGib den @username des Kanals oder die numerische ID ein.\n\nBeispiele:\n- @meinkanal\n- -100123456789\n\nDer Bot muss als Administrator hinzugefuegt sein.",
+    "content_pub_token_saved": "✅ Token gespeichert.",
+    "content_pub_channel_saved": "✅ Kanal gespeichert."
   }
 }
