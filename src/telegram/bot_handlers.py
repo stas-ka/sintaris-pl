@@ -568,7 +568,12 @@ def _set_profile_lang(chat_id: int, lang: str) -> None:
     if lang not in ("ru", "en", "de"):
         return
     _st._user_lang[chat_id] = lang
-    _set_reg_lang(chat_id, lang)
+    _set_reg_lang(chat_id, lang)  # for users in registrations.json
+    try:  # also persist to user_prefs DB (covers admin/dev not in registrations)
+        from core.bot_db import db_set_user_pref
+        db_set_user_pref(chat_id, "ui_lang", lang)
+    except Exception as _e:
+        log.warning("[Profile] db_set_user_pref(ui_lang) failed: %s", _e)
     bot.send_message(chat_id, _t(chat_id, "profile_lang_set_ok", lang=lang))
     _handle_profile(chat_id)
 

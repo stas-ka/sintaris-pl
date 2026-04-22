@@ -158,11 +158,21 @@ _STRINGS: dict[str, dict[str, str]] = _load_strings(_STRINGS_FILE)
 def _set_lang(chat_id: int, from_user) -> None:
     """Store the best-supported UI language for this user ('ru' | 'de' | 'en')."""
     # Honour manually saved language preference (beats Telegram auto-detect)
+    # 1. Check registrations.json (regular users)
     from telegram.bot_users import _find_registration
     saved = (_find_registration(chat_id) or {}).get("lang")
     if saved in ("ru", "en", "de"):
         _user_lang[chat_id] = saved
         return
+    # 2. Check user_prefs DB (covers admin/dev users not in registrations.json)
+    try:
+        from core.bot_db import db_get_user_pref
+        db_saved = db_get_user_pref(chat_id, "ui_lang", "")
+        if db_saved in ("ru", "en", "de"):
+            _user_lang[chat_id] = db_saved
+            return
+    except Exception:
+        pass
     lc = (getattr(from_user, "language_code", "") or "").lower()
     if lc.startswith("ru"):
         _user_lang[chat_id] = "ru"
