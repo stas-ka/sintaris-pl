@@ -347,7 +347,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.69"
+BOT_VERSION        = "2026.4.70"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Guest / auto-registration

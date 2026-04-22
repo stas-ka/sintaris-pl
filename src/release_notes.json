@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.70",
+    "date": "2026-04-22",
+    "title": "Content Strategy Agent v2: stored plans, per-post generation, storage limits + long-term memory",
+    "notes": "- Content plan saved to DB on Accept (note slug cp_*); max 2 plans per user\n- Post generation is now a separate step: select post #1-7 from stored plan\n- Separate N8N payloads for plan generation (mode=plan) vs post generation (mode=post, post_index, plan_content)\n- Max 10 saved posts per user; limits enforced with cleanup menu\n- Before deletion: LLM summarises content and saves to long-term memory (store.save_summary tier=long)\n- Post preview: Back to plan button, Save draft, Download, Publish\n- Quick post mode (standalone) unchanged: no plan required\n- 17 new i18n strings (RU/EN/DE): accept plan, post selection, storage limits, delete flow"
+  },
+  {
     "version": "2026.4.69",
     "date": "2026-04-22",
     "title": "Content Strategy Agent: content plan + post generation via N8N+OpenAI",

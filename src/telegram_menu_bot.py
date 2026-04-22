@@ -991,15 +991,51 @@ def callback_handler(call):
             use_kb = data[len("content_kb:"):] == "yes"
             _content.on_kb_selected(cid, use_kb, bot, _t)
 
-    elif data.startswith("content_action:"):
+    # Plan preview actions (correct / accept / download / new)
+    elif data.startswith("content_plan_action:"):
         if _is_admin(cid) or _is_advanced(cid):
-            action = data[len("content_action:"):]
-            _content.on_action(cid, action, bot, _t)
+            action = data[len("content_plan_action:"):]
+            _content.on_plan_action(cid, action, bot, _t)
+
+    # Post #N generation trigger
+    elif data.startswith("content_genpost:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            try:
+                n = int(data[len("content_genpost:"):])
+            except ValueError:
+                n = 1
+            _content.on_genpost_selected(cid, n, bot, _t)
+
+    # Post preview actions (correct / save / download / publish / back_plan / new)
+    elif data.startswith("content_post_action:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            action = data[len("content_post_action:"):]
+            _content.on_post_action(cid, action, bot, _t)
+
+    # Delete item from cleanup menu
+    elif data.startswith("content_del:"):
+        if _is_admin(cid) or _is_advanced(cid):
+            parts = data.split(":", 2)   # content_del:TYPE:SLUG
+            if len(parts) == 3:
+                _content.on_delete_request(cid, parts[1], parts[2], bot, _t)
+
+    elif data == "content_del_confirm":
+        if _is_admin(cid) or _is_advanced(cid):
+            _content.on_delete_confirmed(cid, bot, _t)
+
+    elif data == "content_del_cancel":
+        if _is_admin(cid) or _is_advanced(cid):
+            _content.on_delete_cancelled(cid, bot, _t)
 
     elif data.startswith("content_publish:"):
         if _is_admin(cid) or _is_advanced(cid):
             decision = data[len("content_publish:"):]
             _content.on_publish_decision(cid, decision, bot, _t)
+
+    # Legacy callback (pre-v2 sessions) — just cancel
+    elif data.startswith("content_action:"):
+        _content.cancel(cid)
+        bot.send_message(cid, _t(cid, "content_cancelled"))
 
     elif data == "content_cancel":
         _content.cancel(cid)
