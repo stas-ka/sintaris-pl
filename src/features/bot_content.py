@@ -39,6 +39,7 @@ from core.bot_config import (
     CONTENT_TG_CHANNEL_ID,
     N8N_CONTENT_TIMEOUT,
 )
+from core.bot_llm import ask_llm_or_raise
 
 log = logging.getLogger("taris.content")
 
@@ -73,7 +74,53 @@ def cancel(chat_id: int) -> None:
 
 
 def is_configured() -> bool:
-    return bool(N8N_CONTENT_GENERATE_WH)
+    return True  # always available — N8N is optional; LLM fallback always present
+
+
+def _generate_content_with_llm(sess: dict, mode: str, post_index: int = 0,
+                               correction: str = "") -> str:
+    """Generate content plan or post using the local LLM (fallback when N8N absent)."""
+    q1   = sess.get("q1", "")
+    q2   = sess.get("q2", "Telegram")
+    lang = sess.get("lang", "ru")
+    kb   = sess.get("_kb_context", "")
+    plan = sess.get("plan_content", "")
+
+    lang_instruction = {
+        "ru": "Отвечай на русском языке.",
+        "de": "Antworte auf Deutsch.",
+        "en": "Reply in English.",
+    }.get(lang, "Reply in the same language as the request.")
+
+    if mode == "plan":
+        kb_block = f"\n\nКонтекст базы знаний:\n{kb}" if kb else ""
+        correction_block = f"\n\nПожелания по исправлению: {correction}" if correction else ""
+        prompt = (
+            f"{lang_instruction}\n\n"
+            f"Ты опытный контент-стратег. Создай контент-план из 7 постов для платформы {q2}.\n\n"
+            f"Тема / аудитория / цель:\n{q1}"
+            f"{kb_block}"
+            f"{correction_block}\n\n"
+            "Для каждого поста укажи: номер, заголовок, краткое описание, хэштеги, \n"
+            "формат (текст/видео/карточка/опрос) и рекомендуемое время публикации.\n"
+            "Оформи как нумерованный список."
+        )
+    else:  # mode == "post"
+        plan_block = f"\n\nКонтент-план:\n{plan[:1500]}" if plan else ""
+        kb_block = f"\n\nКонтекст базы знаний:\n{kb}" if kb else ""
+        correction_block = f"\n\nПожелания по исправлению: {correction}" if correction else ""
+        post_ref = f" #{post_index}" if post_index else ""
+        prompt = (
+            f"{lang_instruction}\n\n"
+            f"Ты опытный копирайтер. Напиши полный пост{post_ref} для платформы {q2}.\n\n"
+            f"Тема / аудитория / цель:\n{q1}"
+            f"{plan_block}"
+            f"{kb_block}"
+            f"{correction_block}\n\n"
+            "Пост должен быть готов к публикации: заголовок, основной текст, призыв к действию, хэштеги."
+        )
+
+    return ask_llm_or_raise(prompt, timeout=120, use_case="chat")
 
 
 def _session(chat_id: int) -> dict:
@@ -273,35 +320,43 @@ def _do_generate_plan(chat_id: int, bot: Any, t: Callable, correction: str = "")
 
     def _run():
         try:
-            if not N8N_CONTENT_GENERATE_WH:
-                bot.send_message(chat_id, t(chat_id, "content_not_configured"),
-                                 parse_mode="Markdown")
-                _sessions.pop(chat_id, None)
-                return
-            payload: dict[str, Any] = {
-                "chat_id":    chat_id,
-                "mode":       "plan",
-                "q1":         sess.get("q1", ""),
-                "q2":         sess.get("q2", ""),
-                "kb_context": _fetch_kb(chat_id, sess) if sess.get("use_kb") else "",
-                "correction": correction,
-                "lang":       sess.get("lang", "ru"),
-                "session_id": sess.get("session_id", str(uuid.uuid4())),
-            }
-            result = call_webhook(N8N_CONTENT_GENERATE_WH, payload, timeout=N8N_CONTENT_TIMEOUT)
-            if result.get("error"):
-                bot.send_message(chat_id,
-                    t(chat_id, "content_generate_error").format(error=result["error"]),
-                    parse_mode="Markdown")
-                _sessions.pop(chat_id, None)
-                return
-            content = result.get("content") or result.get("result") or ""
-            if not content:
-                bot.send_message(chat_id,
-                    t(chat_id, "content_generate_error").format(error="Empty response"),
-                    parse_mode="Markdown")
-                _sessions.pop(chat_id, None)
-                return
+            if N8N_CONTENT_GENERATE_WH:
+                payload: dict[str, Any] = {
+                    "chat_id":    chat_id,
+                    "mode":       "plan",
+                    "q1":         sess.get("q1", ""),
+                    "q2":         sess.get("q2", ""),
+                    "kb_context": _fetch_kb(chat_id, sess) if sess.get("use_kb") else "",
+                    "correction": correction,
+                    "lang":       sess.get("lang", "ru"),
+                    "session_id": sess.get("session_id", str(uuid.uuid4())),
+                }
+                result = call_webhook(N8N_CONTENT_GENERATE_WH, payload, timeout=N8N_CONTENT_TIMEOUT)
+                if result.get("error"):
+                    bot.send_message(chat_id,
+                        t(chat_id, "content_generate_error").format(error=result["error"]),
+                        parse_mode="Markdown")
+                    _sessions.pop(chat_id, None)
+                    return
+                content = result.get("content") or result.get("result") or ""
+                if not content:
+                    bot.send_message(chat_id,
+                        t(chat_id, "content_generate_error").format(error="Empty response"),
+                        parse_mode="Markdown")
+                    _sessions.pop(chat_id, None)
+                    return
+            else:
+                # Fallback: generate via local LLM
+                if sess.get("use_kb"):
+                    sess["_kb_context"] = _fetch_kb(chat_id, sess)
+                content = _generate_content_with_llm(sess, mode="plan",
+                                                      correction=correction)
+                if not content:
+                    bot.send_message(chat_id,
+                        t(chat_id, "content_generate_error").format(error="Empty response"),
+                        parse_mode="Markdown")
+                    _sessions.pop(chat_id, None)
+                    return
             sess["plan_content"] = content
             sess["step"] = "plan_preview"
             _show_plan_preview(chat_id, bot, t)
@@ -449,37 +504,46 @@ def _do_generate_post(chat_id: int, bot: Any, t: Callable,
 
     def _run():
         try:
-            if not N8N_CONTENT_GENERATE_WH:
-                bot.send_message(chat_id, t(chat_id, "content_not_configured"),
-                                 parse_mode="Markdown")
-                _recover_after_post_error(chat_id, bot, t, sess)
-                return
-            payload: dict[str, Any] = {
-                "chat_id":      chat_id,
-                "mode":         "post",
-                "q1":           sess.get("q1", ""),
-                "q2":           sess.get("q2", ""),
-                "kb_context":   _fetch_kb(chat_id, sess) if sess.get("use_kb") else "",
-                "correction":   correction,
-                "lang":         sess.get("lang", "ru"),
-                "session_id":   sess.get("session_id", str(uuid.uuid4())),
-                "post_index":   post_index,
-                "plan_content": sess.get("plan_content", ""),
-            }
-            result = call_webhook(N8N_CONTENT_GENERATE_WH, payload, timeout=N8N_CONTENT_TIMEOUT)
-            if result.get("error"):
-                bot.send_message(chat_id,
-                    t(chat_id, "content_generate_error").format(error=result["error"]),
-                    parse_mode="Markdown")
-                _recover_after_post_error(chat_id, bot, t, sess)
-                return
-            content = result.get("content") or result.get("result") or ""
-            if not content:
-                bot.send_message(chat_id,
-                    t(chat_id, "content_generate_error").format(error="Empty response"),
-                    parse_mode="Markdown")
-                _recover_after_post_error(chat_id, bot, t, sess)
-                return
+            if N8N_CONTENT_GENERATE_WH:
+                payload: dict[str, Any] = {
+                    "chat_id":      chat_id,
+                    "mode":         "post",
+                    "q1":           sess.get("q1", ""),
+                    "q2":           sess.get("q2", ""),
+                    "kb_context":   _fetch_kb(chat_id, sess) if sess.get("use_kb") else "",
+                    "correction":   correction,
+                    "lang":         sess.get("lang", "ru"),
+                    "session_id":   sess.get("session_id", str(uuid.uuid4())),
+                    "post_index":   post_index,
+                    "plan_content": sess.get("plan_content", ""),
+                }
+                result = call_webhook(N8N_CONTENT_GENERATE_WH, payload, timeout=N8N_CONTENT_TIMEOUT)
+                if result.get("error"):
+                    bot.send_message(chat_id,
+                        t(chat_id, "content_generate_error").format(error=result["error"]),
+                        parse_mode="Markdown")
+                    _recover_after_post_error(chat_id, bot, t, sess)
+                    return
+                content = result.get("content") or result.get("result") or ""
+                if not content:
+                    bot.send_message(chat_id,
+                        t(chat_id, "content_generate_error").format(error="Empty response"),
+                        parse_mode="Markdown")
+                    _recover_after_post_error(chat_id, bot, t, sess)
+                    return
+            else:
+                # Fallback: generate via local LLM
+                if sess.get("use_kb") and not sess.get("_kb_context"):
+                    sess["_kb_context"] = _fetch_kb(chat_id, sess)
+                content = _generate_content_with_llm(sess, mode="post",
+                                                      post_index=post_index,
+                                                      correction=correction)
+                if not content:
+                    bot.send_message(chat_id,
+                        t(chat_id, "content_generate_error").format(error="Empty response"),
+                        parse_mode="Markdown")
+                    _recover_after_post_error(chat_id, bot, t, sess)
+                    return
             sess["post_content"] = content
             sess["step"] = "post_preview"
             _show_post_preview(chat_id, bot, t)
