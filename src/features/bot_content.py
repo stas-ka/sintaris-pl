@@ -273,6 +273,11 @@ def _do_generate_plan(chat_id: int, bot: Any, t: Callable, correction: str = "")
 
     def _run():
         try:
+            if not N8N_CONTENT_GENERATE_WH:
+                bot.send_message(chat_id, t(chat_id, "content_not_configured"),
+                                 parse_mode="Markdown")
+                _sessions.pop(chat_id, None)
+                return
             payload: dict[str, Any] = {
                 "chat_id":    chat_id,
                 "mode":       "plan",
@@ -444,6 +449,11 @@ def _do_generate_post(chat_id: int, bot: Any, t: Callable,
 
     def _run():
         try:
+            if not N8N_CONTENT_GENERATE_WH:
+                bot.send_message(chat_id, t(chat_id, "content_not_configured"),
+                                 parse_mode="Markdown")
+                _recover_after_post_error(chat_id, bot, t, sess)
+                return
             payload: dict[str, Any] = {
                 "chat_id":      chat_id,
                 "mode":         "post",

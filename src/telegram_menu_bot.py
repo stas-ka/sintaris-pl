@@ -967,10 +967,7 @@ def callback_handler(call):
     # ── Content Strategy Agent ─────────────────────────────────────────────────
     elif data == "content_start":
         if _is_admin(cid) or _is_advanced(cid):
-            if not _content.is_configured():
-                bot.send_message(cid, _t(cid, "content_not_configured"))
-            else:
-                _content.show_menu(cid, bot, _t)
+            _content.show_menu(cid, bot, _t)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
