@@ -827,16 +827,16 @@ class TestContentStrategyWebUI:
     def _api_url(self, base_url: str, path: str) -> str:
         """Build an API URL that works both with and without ROOT_PATH prefix.
 
-        On VPS Docker, /api/* endpoints are served at the root path (no prefix)
-        even when ROOT_PATH=/supertaris-vps, so strip the ROOT_PATH for direct
-        localhost calls.
+        For localhost/direct access (port in URL), uvicorn serves routes without
+        the ROOT_PATH prefix, so we strip it.
+        For external URLs (nginx proxy), the prefix is required and must be kept.
         """
-        # If base_url ends with a ROOT_PATH segment (no port suffix), strip it
-        # e.g. http://localhost:8090/supertaris-vps → http://localhost:8090
         import re as _re
-        api_base = _re.sub(r'/[a-z][a-z0-9_-]*$', '', base_url.rstrip('/'))
-        if api_base and api_base != base_url.rstrip('/'):
-            return f"{api_base}{path}"
+        # Only strip ROOT_PATH for direct localhost access (URL has a port or is localhost)
+        if "localhost" in base_url or "127.0.0.1" in base_url or _re.search(r':\d{4,5}/', base_url):
+            api_base = _re.sub(r'/[a-z][a-z0-9_-]*$', '', base_url.rstrip('/'))
+            if api_base and api_base != base_url.rstrip('/'):
+                return f"{api_base}{path}"
         return f"{base_url.rstrip('/')}{path}"
 
     def test_T_CW_01_api_version_reflects_content_agent(self, browser, base_url_or_default):
