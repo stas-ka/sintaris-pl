@@ -78,12 +78,46 @@ def browser_context_args(browser_context_args):
 # ─── Shared page helpers ──────────────────────────────────────────────────────
 
 def login(page, username: str, password: str, base_url: str = BASE_URL):
-    """Navigate to /login, fill credentials, submit and wait for redirect."""
-    page.goto(f"{base_url}/login")
-    page.fill("input[name='username']", username)
-    page.fill("input[name='password']", password)
-    page.click("button[type='submit']")
-    page.wait_for_url(f"{base_url}/", timeout=30_000)
+    """Authenticate and set the auth cookie in the Playwright context.
+
+    Uses requests to POST /login directly (bypassing the browser form submission)
+    because the rendered form action uses ROOT_PATH prefix that may not resolve
+    on direct localhost access. The cookie is then injected into Playwright.
+    """
+    import requests
+    import urllib.parse
+
+    parsed = urllib.parse.urlparse(base_url)
+    hostname = parsed.hostname  # e.g. "localhost"
+
+    # POST credentials directly — this always works regardless of ROOT_PATH
+    resp = requests.post(
+        f"{base_url}/login",
+        data={"username": username, "password": password},
+        verify=False,
+        allow_redirects=False,
+        timeout=10,
+    )
+    if resp.status_code not in (302, 303, 200):
+        raise RuntimeError(
+            f"Login POST failed for {username!r}: HTTP {resp.status_code}"
+        )
+
+    # Inject all cookies from the response into the Playwright context
+    for cookie in resp.cookies:
+        page.context.add_cookies([{
+            "name": cookie.name,
+            "value": cookie.value,
+            "domain": hostname,
+            "path": cookie.path or "/",
+        }])
+
+    # Navigate to the app root — auth cookie is now set
+    page.goto(f"{base_url}/", wait_until="domcontentloaded", timeout=15_000)
+    if "/login" in page.url:
+        raise RuntimeError(
+            f"Login failed for {username!r} — still on login page after auth: {page.url}"
+        )
 
 
 # ─── Session-scoped authenticated contexts ───────────────────────────────────
