@@ -448,3 +448,14 @@ Per-user sliding window history stored in SQLite `chat_history` table; injected 
 - [x] **28.4 Contact → N8N Sync Button** — `_handle_contact_sync_crm()` in `features/bot_contacts.py:365`; REST: `POST /api/contacts/{cid}/sync`
 
 ---
+
+## 29. OpenClaw Medium Effort (partial) ✅ v2026.4.68
+
+> → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)  
+> §29.4 EspoCRM Two-Way Contact Sync still open → see TODO.md §29.4
+
+- [x] **29.1 Per-User Ollama Model Preference** — `_resolve_ollama_model(chat_id)` + `ROLE_DEFAULT_OLLAMA_MODEL` in `bot_config.py`; stored in `user_prefs` key `ollama_model`
+- [x] **29.2 RAG in Voice Pipeline** — `VOICE_RAG_ENABLED`, `VOICE_RAG_TOP_K` in `bot_config.py`; integrated in `features/bot_voice.py`; Tests: T211
+- [x] **29.3 OpenClaw Gateway Skill Result Rendering** — `render_skill_result(skill_result)` in `ui/render_telegram.py:293`; formats structured JSON → Telegram markdown
+
+---

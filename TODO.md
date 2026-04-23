@@ -364,18 +364,9 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ---
 
-## 29. OpenClaw Medium Effort (partial) ✅ v2026.4.68
+## 29.4 EspoCRM Two-Way Contact Sync 🔲
 
-> → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)
-
-### 29.1 Per-User Ollama Model Preference ✅ Implemented (v2026.4.68)
-`_resolve_ollama_model(chat_id)` + `ROLE_DEFAULT_OLLAMA_MODEL` in `bot_config.py`. Stored in `user_prefs` table key `ollama_model`.
-
-### 29.2 RAG in Voice Pipeline ✅ Implemented (v2026.4.68)
-`VOICE_RAG_ENABLED`, `VOICE_RAG_TOP_K` in `bot_config.py`; integrated in `features/bot_voice.py`. Tests: T211.
-
-### 29.3 OpenClaw Gateway Skill Result Rendering ✅ Implemented (v2026.4.68)
-`render_skill_result(skill_result)` in `ui/render_telegram.py:293`. Called after skill execution to format structured JSON → Telegram markdown.
+> 29.1–29.3 implemented — see DONE.md §29
 
 ### 29.4 EspoCRM Two-Way Contact Sync 🔲
 
