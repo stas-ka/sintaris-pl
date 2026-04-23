@@ -153,19 +153,28 @@ def _start_note_create(chat_id: int) -> None:
 
 
 def _handle_note_open(chat_id: int, slug: str) -> None:
-    text = _load_note_text(chat_id, slug)
-    if text is None:
-        bot.send_message(chat_id, _t(chat_id, "note_not_found"),
-                         reply_markup=_notes_menu_keyboard(chat_id))
-        return
-    slug_id = _note_cb_id(slug)     # short hash safe for callback_data
-    # Use placeholder when note file exists but is empty (0-byte file)
-    note_content = _escape_md(text) if text.strip() else _t(chat_id, "note_empty_body")
-    _render(chat_id, "screens/note_view.yaml", {
-        "note_title": _escape_md(slug.replace('_', ' ')),
-        "note_content": note_content,
-        "slug": slug_id,
-    })
+    try:
+        text = _load_note_text(chat_id, slug)
+        if text is None:
+            bot.send_message(chat_id, _t(chat_id, "note_not_found"),
+                             reply_markup=_notes_menu_keyboard(chat_id))
+            return
+        slug_id = _note_cb_id(slug)     # short hash safe for callback_data
+        # Use placeholder when note file exists but is empty (0-byte file)
+        # Truncate before escaping so escaped content never exceeds Telegram's 4096-char limit
+        note_content = _escape_md(_truncate(text)) if text.strip() else _t(chat_id, "note_empty_body")
+        _render(chat_id, "screens/note_view.yaml", {
+            "note_title": _escape_md(slug.replace('_', ' ')),
+            "note_content": note_content,
+            "slug": slug_id,
+        })
+    except Exception as _e:
+        log.error("[Notes] _handle_note_open failed slug=%s: %s", slug, _e)
+        try:
+            bot.send_message(chat_id, _t(chat_id, "error_request_failed"),
+                             reply_markup=_notes_menu_keyboard(chat_id))
+        except Exception:
+            pass
 
 
 def _handle_note_raw(chat_id: int, slug: str) -> None:

@@ -8512,6 +8512,89 @@ def t_appt_routing_settings(**_) -> list[TestResult]:
     return results
 
 
+# T168–T172 — Role-Based Prompt Templates (§1.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_prompt_templates(**_) -> list[TestResult]:
+    """T168-T172: Role-based prompt templates — voice key, bot_capabilities in templates,
+    _bot_config_block stripped of hardcoded capabilities, _with_lang role-aware,
+    _build_system_message voice_mode param.
+    """
+    import json as _json
+    t0 = time.time()
+    results: list[TestResult] = []
+
+    prompts_file = SRC_ROOT / "prompts.json"
+    try:
+        prompts = _json.loads(prompts_file.read_text(encoding="utf-8"))
+    except Exception:
+        prompts = {}
+
+    rsp = prompts.get("role_system_prompts", {})
+
+    # ── T168: voice key present in role_system_prompts ────────────────────────
+    ok = "voice" in rsp
+    results.append(TestResult(
+        "prompt_voice_key_present", "PASS" if ok else "FAIL", time.time() - t0,
+        "voice key in role_system_prompts" if ok
+        else "MISSING: role_system_prompts.voice in prompts.json",
+    ))
+
+    # ── T169: templates include {bot_capabilities} and {style_guide} ──────────
+    ok_caps  = all("{bot_capabilities}" in rsp.get(r, "") for r in ("user", "guest", "admin"))
+    ok_style = all("{style_guide}" in rsp.get(r, "") for r in ("user", "guest", "admin"))
+    results.append(TestResult(
+        "prompt_templates_have_bot_capabilities", "PASS" if ok_caps else "FAIL", time.time() - t0,
+        "{bot_capabilities} in user/guest/admin templates" if ok_caps
+        else "MISSING: {bot_capabilities} in one or more role templates",
+    ))
+    results.append(TestResult(
+        "prompt_templates_have_style_guide", "PASS" if ok_style else "FAIL", time.time() - t0,
+        "{style_guide} in user/guest/admin templates" if ok_style
+        else "MISSING: {style_guide} in one or more role templates",
+    ))
+
+    # ── T170: _bot_config_block() no longer hardcodes [BOT CAPABILITIES] ──────
+    access_src = SRC_ROOT / "telegram" / "bot_access.py"
+    access_text = access_src.read_text(encoding="utf-8") if access_src.exists() else ""
+    # Capabilities section should NOT be inside _bot_config_block()
+    # Check: the function exists but doesn't contain the old CAPABILITIES lines
+    import ast as _ast
+    capabilities_in_block = False
+    try:
+        tree = _ast.parse(access_text)
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.FunctionDef) and node.name == "_bot_config_block":
+                func_src = access_text.split("\n")[node.lineno - 1: node.end_lineno]
+                capabilities_in_block = any("[BOT CAPABILITIES]" in ln for ln in func_src)
+                break
+    except Exception:
+        pass
+    results.append(TestResult(
+        "bot_config_block_no_hardcoded_caps", "PASS" if not capabilities_in_block else "FAIL", time.time() - t0,
+        "_bot_config_block() does not hardcode [BOT CAPABILITIES]" if not capabilities_in_block
+        else "REGRESSION: [BOT CAPABILITIES] still hardcoded in _bot_config_block()",
+    ))
+
+    # ── T171: _with_lang() uses role_capabilities (role-aware) ────────────────
+    ok = "role_capabilities" in access_text and "_get_prompt_role_key" in access_text and "caps_block" in access_text
+    results.append(TestResult(
+        "with_lang_role_aware", "PASS" if ok else "FAIL", time.time() - t0,
+        "_with_lang() uses role_capabilities + caps_block" if ok
+        else "MISSING: role-aware capabilities injection in _with_lang()",
+    ))
+
+    # ── T172: _build_system_message() has voice_mode param ───────────────────
+    ok = "voice_mode" in access_text and "template_key" in access_text
+    results.append(TestResult(
+        "build_system_message_voice_mode", "PASS" if ok else "FAIL", time.time() - t0,
+        "_build_system_message() has voice_mode parameter" if ok
+        else "MISSING: voice_mode param in _build_system_message()",
+    ))
+
+    return results
+
+
 # T200–T212: OpenClaw Extensions §28–29 regression tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -9048,6 +9131,8 @@ TEST_FUNCTIONS = [
     t_guest_appointment_flow,
     # Appointment routing settings: admin panel, mode/receiver/roles, _start_guest_meeting (T162–T167)
     t_appt_routing_settings,
+    # Role-based prompt templates: voice key, {bot_capabilities}/{style_guide}, _bot_config_block stripped, voice_mode param (T168–T172)
+    t_prompt_templates,
     # RAG embeddings written on upload, hybrid search wired (T200)
     t_rag_embedding_wired,
     # Ollama pull model UI + list_ollama_models API (T201)

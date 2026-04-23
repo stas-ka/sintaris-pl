@@ -26,6 +26,7 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | `src/tests/telegram/test_telegram_bot.py` or `src/tests/telegram/conftest.py` | Telegram offline regression (Category F — all 40 tests) | Local machine |
 | `src/tests/screen_loader/` | Screen DSL loader regression (Category G — all 64 tests) | Local machine |
 | `src/tests/llm/` | LLM provider tests (Category H — all 18 tests) | Local machine |
+| **Before backup or after data migration** | Data consistency check (Category J) | Any target |
 
 ---
 
@@ -42,6 +43,7 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | **G — Screen DSL loader** | pytest (`src/tests/screen_loader/`) | Local machine | Yes |
 | **H — LLM provider tests** | pytest (`src/tests/llm/`) | Local machine | Yes |
 | **I — External internet UI tests** | Playwright (`test_external_ui.py`) | Any machine → internet | Yes |
+| **J — Data consistency check** | Python (`test_data_consistency.py`) | Any target (local or remote) | Yes — run before backup / after migration |
 
 ---
 
@@ -746,6 +748,84 @@ TARIS_ADMIN_USER=stas TARIS_ADMIN_PASS=yourpassword \
 
 ---
 
+## 6f. Category J — Data Consistency Check
+
+**File:** `src/tests/test_data_consistency.py`  
+**Deploy path:** `~/.taris/tests/test_data_consistency.py`  
+**Technology:** Standalone Python (stdlib only + optional psycopg for PostgreSQL)  
+**Backends:** SQLite (PicoClaw) and PostgreSQL (OpenClaw) — auto-detected from `STORE_BACKEND`  
+**Run on:** Any target (local or remote) with access to the database  
+**When to run:** **Before every backup** and **after every data migration**
+
+### 6f.1 What it checks
+
+| Domain | Checks |
+|---|---|
+| **users / profile** | role in valid set, language in valid set, name or username non-empty |
+| **notes** | slug and title non-empty, index ↔ filesystem sync (SQLite), orphaned `.md` files |
+| **calendar** | title non-empty, `dt_iso` parseable as ISO-8601, no duplicate event IDs |
+| **contacts** | name non-empty, ID non-empty, email format (if present) |
+| **documents** | title non-empty, doc_id non-empty, `file_path` points to existing file (if set) |
+| **conversation** | `role` in `{user, assistant, system}`, content non-empty, summary tier valid |
+| **prefs** | `user_prefs` / `voice_opts` rows reference registered users |
+| **global** | cross-table orphan detection: data rows with no matching user |
+
+### 6f.2 Run commands
+
+```bash
+# Check all users (local)
+python3 src/tests/test_data_consistency.py
+
+# Check a single user
+python3 src/tests/test_data_consistency.py --chat-id 12345
+
+# Machine-readable JSON output (for CI / scripts)
+python3 src/tests/test_data_consistency.py --json
+
+# Auto-repair fixable issues (orphaned prefs rows)
+python3 src/tests/test_data_consistency.py --fix
+
+# Run before a backup (exit 1 stops the backup pipeline)
+python3 src/tests/test_data_consistency.py && ./backup.sh
+```
+
+```bash
+# On a remote target (Pi)
+plink -pw "%HOSTPWD%" -batch stas@OpenClawPI \
+  "python3 /home/stas/.taris/tests/test_data_consistency.py"
+
+# On OpenClaw target
+ssh stas@SintAItion.local \
+  "cd ~/projects/sintaris-pl && PYTHONPATH=src python3 src/tests/test_data_consistency.py"
+```
+
+### 6f.3 Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | All checks passed — no ERRORs, no WARNs |
+| `1` | One or more ERRORs or WARNs found |
+| `2` | Runner error (DB connection failure, missing config) |
+
+### 6f.4 Output format
+
+Issues are grouped by user and colour-coded:
+- 🔴 **ERROR** — data loss risk or structural corruption (e.g. invalid role, unparseable datetime)
+- 🟡 **WARN** — inconsistency that should be reviewed (e.g. orphaned file, missing email format)
+- 🔵 **INFO** — informational only
+
+### 6f.5 Deploy
+
+```bash
+# Deploy to Pi target
+pscp -pw "%HOSTPWD%" src\tests\test_data_consistency.py stas@OpenClawPI:/home/stas/.taris/tests/
+
+# Deploy to OpenClaw target (TariStation2)
+scp src/tests/test_data_consistency.py stas@IniCoS-1:/home/stas/.taris/tests/
+```
+
+---
+
 ## 8. Regression Tests vs Fix Tests
 
 ### Regression tests
@@ -879,6 +959,8 @@ Copilot should:
 4. **Run automated tests** (Category A for voice changes, Category B for UI changes) — deploy test assets if needed.
 5. **Run hardware tests** (Category C/D) only if an audio hardware issue is suspected.
 6. **Report results** — summarize PASS/FAIL/SKIP/WARN counts, paste the test summary table.
+
+**Before backup or after migration:** always run Category J data consistency check first.
 
 **Default when nothing specific changed:** run Category E smoke tests on Pi1 + Category A voice regression suite.
 

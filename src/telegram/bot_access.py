@@ -238,7 +238,11 @@ def _resolve_lang(chat_id: int, user_text: str = "") -> str:
 
 
 def _bot_config_block() -> str:
-    """Return a concise [BOT CONFIG] block so the LLM can answer self-disclosure questions."""
+    """Return a concise [BOT CONFIG] block so the LLM can answer self-disclosure questions.
+
+    Note: the capabilities section is intentionally excluded here — it is now injected
+    per-role via PROMPTS['role_capabilities'] in _build_system_message().
+    """
     from pathlib import Path as _Path
     _llm_model = OLLAMA_MODEL if LLM_PROVIDER == "ollama" else OPENAI_MODEL
     _stt_model = FASTER_WHISPER_MODEL if STT_PROVIDER in ("faster_whisper", "fw") else STT_PROVIDER
@@ -249,15 +253,6 @@ def _bot_config_block() -> str:
         f"LLM: {LLM_PROVIDER}/{_llm_model}\n"
         f"STT: {STT_PROVIDER}/{_stt_model}\n"
         f"TTS: piper/{_piper}\n"
-        f"[BOT CAPABILITIES]\n"
-        f"- Document upload (PDF, TXT, DOCX, MD — up to 20 MB): send the file directly in chat\n"
-        f"- Documents are indexed and used as a knowledge base (RAG) during conversations\n"
-        f"- Calendar: add, view, edit and delete events via natural language or the menu\n"
-        f"- Notes: create, view, append to and delete personal notes\n"
-        f"- Voice: send a voice message and receive a spoken reply (STT → LLM → TTS)\n"
-        f"- Mail digest: summarise unread emails from a connected mailbox\n"
-        f"- Multi-language: Russian, English and German are supported\n"
-        f"[END BOT CAPABILITIES]\n"
         f"[END BOT CONFIG]\n\n"
     )
 
@@ -442,23 +437,29 @@ def _rag_debug_stats(chat_id: int, query: str) -> dict:
 
 
 def _with_lang(chat_id: int, user_text: str) -> str:
-    """Prepend security preamble + bot config + RAG context + language instruction, then wrap user text.
+    """Prepend security preamble + bot config + role capabilities + RAG context + language instruction, then wrap user text.
     Used for single-turn LLM calls (ask_llm). For multi-turn use _build_system_message + _user_turn_content.
     """
     from security.bot_security import SECURITY_PREAMBLE, _wrap_user_input
     lang = _resolve_lang(chat_id, user_text)
     lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION[_FALLBACK_LANG])
     rag_ctx = _docs_rag_context(chat_id, user_text)
-    return SECURITY_PREAMBLE + _bot_config_block() + rag_ctx + lang_instr + _wrap_user_input(user_text)
+    role_key = _get_prompt_role_key(chat_id)
+    caps = PROMPTS.get("role_capabilities", {}).get(role_key, "")
+    caps_block = f"[BOT CAPABILITIES]\n{caps}\n[END BOT CAPABILITIES]\n\n" if caps else ""
+    return SECURITY_PREAMBLE + caps_block + _bot_config_block() + rag_ctx + lang_instr + _wrap_user_input(user_text)
 
 
-def _build_system_message(chat_id: int, user_text: str = "") -> str:
+def _build_system_message(chat_id: int, user_text: str = "", voice_mode: bool = False) -> str:
     """Build the content for a role:system message in multi-turn LLM calls.
 
-    Contains: security preamble + bot config + role-specific personal data context
-    (calendar, notes, contacts — skipped for guests) + memory context note +
-    language instruction.  Role key drives which system prompt template is used
-    when 'role_system_prompts' are present in prompts.json.
+    Contains: security preamble + role style + role capabilities + bot config +
+    role-specific personal data context (calendar, notes, contacts — skipped for
+    guests) + memory context note + language instruction.
+
+    When voice_mode=True the 'voice' template key is used (concise, no markdown,
+    max 2 sentences directive).  Role key drives which system prompt template is
+    used when 'role_system_prompts' are present in prompts.json.
     """
     from security.bot_security import SECURITY_PREAMBLE
     lang = _resolve_lang(chat_id, user_text)
@@ -469,23 +470,29 @@ def _build_system_message(chat_id: int, user_text: str = "") -> str:
     )
 
     role_key = _get_prompt_role_key(chat_id)
+    template_key = "voice" if voice_mode else role_key
 
     # Personal context — omit for guests (they have no personal data)
     if role_key == "guest":
         personal_ctx = ""
+        calendar_summary = ""
     else:
         personal_ctx = _calendar_context(chat_id) + _notes_context(chat_id) + _contacts_context(chat_id)
+        calendar_summary = _calendar_context(chat_id)
 
     # Role-specific system prompt template (optional — falls back to classic assembly)
     role_prompts = PROMPTS.get("role_system_prompts", {})
-    if role_key in role_prompts:
+    if template_key in role_prompts:
         return fmt_prompt(
-            role_prompts[role_key],
+            role_prompts[template_key],
             security_preamble=SECURITY_PREAMBLE,
             bot_config_block=_bot_config_block(),
             personal_ctx=personal_ctx,
             memory_note=memory_note,
             lang_instruction=lang_instr,
+            bot_capabilities=PROMPTS.get("role_capabilities", {}).get(role_key if not voice_mode else "user", ""),
+            style_guide=PROMPTS.get("role_styles", {}).get(role_key, ""),
+            calendar_summary=calendar_summary,
         )
 
     return SECURITY_PREAMBLE + _bot_config_block() + personal_ctx + memory_note + lang_instr
@@ -719,9 +726,10 @@ def _menu_keyboard(chat_id: int = 0) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(InlineKeyboardButton(_t(chat_id, "btn_chat"),    callback_data="mode_chat"))
     if _is_guest(chat_id):
-        # Guest menu: Chat → Request Appointment → Calendar (view only) → Profile → Help
+        # Guest menu: Chat → Request Appointment → Calendar (view only) → Request Access → Profile → Help
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_guest_meeting"), callback_data="guest_meeting"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_calendar"), callback_data="menu_calendar"))
+        kb.add(InlineKeyboardButton(_t(chat_id, "btn_guest_request"), callback_data="guest_request_access"))
     else:
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_digest"),   callback_data="digest"))
         kb.add(InlineKeyboardButton(_t(chat_id, "btn_notes"),    callback_data="menu_notes"))

@@ -169,12 +169,15 @@ def _save_creds(chat_id: int, data: dict) -> None:
     except Exception as _e:
         log.warning("[Mail] store.save_mail_creds failed: %s", _e)
     # Keep file as backup copy
-    f = _creds_file(chat_id)
-    f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
-        os.chmod(f, stat.S_IRUSR | stat.S_IWUSR)   # chmod 600 — owner only
-    except Exception:
-        pass                                         # non-fatal, best-effort
+        f = _creds_file(chat_id)
+        f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            os.chmod(f, stat.S_IRUSR | stat.S_IWUSR)   # chmod 600 — owner only
+        except Exception:
+            pass                                         # non-fatal, best-effort
+    except Exception as _fe:
+        log.warning("[Mail] failed to write creds file for %s: %s", chat_id, _fe)
 
 
 def _delete_creds(chat_id: int) -> None:
@@ -473,17 +476,24 @@ def handle_mail_consent(chat_id: int) -> None:
 
 def handle_mail_consent_agree(chat_id: int) -> None:
     """User agreed — record consent + show provider selection."""
-    existing = _load_creds(chat_id) or {}
-    existing["consent_given"] = True
-    existing["consent_date"]  = datetime.now(timezone.utc).isoformat()
-    _save_creds(chat_id, existing)
+    try:
+        existing = _load_creds(chat_id) or {}
+        existing["consent_given"] = True
+        existing["consent_date"]  = datetime.now(timezone.utc).isoformat()
+        _save_creds(chat_id, existing)
 
-    bot.send_message(
-        chat_id,
-        _t(chat_id, "mail_choose_provider"),
-        parse_mode="Markdown",
-        reply_markup=_mail_provider_keyboard(chat_id),
-    )
+        bot.send_message(
+            chat_id,
+            _t(chat_id, "mail_choose_provider"),
+            parse_mode="Markdown",
+            reply_markup=_mail_provider_keyboard(chat_id),
+        )
+    except Exception as _e:
+        log.error("[Mail] handle_mail_consent_agree failed for %s: %s", chat_id, _e)
+        try:
+            bot.send_message(chat_id, _t(chat_id, "error_request_failed"), reply_markup=_back_keyboard())
+        except Exception:
+            pass
 
 
 def handle_mail_provider(chat_id: int, provider_key: str) -> None:

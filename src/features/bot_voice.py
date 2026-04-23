@@ -1252,7 +1252,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
         from core.bot_state import get_history_with_ids, add_to_history, get_memory_context
 
         # System message: security preamble + bot config + memory note + lang instruction
-        _system_content = _build_system_message(chat_id, text)
+        _system_content = _build_system_message(chat_id, text, voice_mode=True)
         try:
             from core.bot_db import db_get_user_pref
             if db_get_user_pref(chat_id, "memory_enabled", "1") == "1":

@@ -1,5 +1,17 @@
 [
   {
+    "version": "2026.4.73",
+    "date": "2026-04-23",
+    "title": "Docs: §1.5 prompt templates + §28-29 OpenClaw extensions — integrated into arch docs",
+    "notes": "- §1.5 Prompt Templates: prompts.json role_system_prompts/role_capabilities, voice template key, {style_guide}+{bot_capabilities} injection, voice_mode param in _build_system_message, T168-T172 tests\n- §28 Quick Wins (all implemented): 28.1 RAG embedding on upload, 28.2 Ollama model list UI, 28.3 N8N inbound event router, 28.4 Contact-to-CRM sync button\n- §29 Medium Effort (implemented): 29.1 per-user Ollama model, 29.2 VOICE_RAG_ENABLED, 29.3 render_skill_result\n- §1.2 Guest user: Request Access button + admin notification callback added\n- Deleted doc/todo/1.5-prompt-templates.md and doc/todo/28-openclaw-extensions.md (content integrated into arch docs)\n- Updated: doc/architecture/conversation.md, doc/architecture/openclaw-integration.md, TODO.md"
+  },
+  {
+    "version": "2026.4.72",
+    "date": "2026-04-22",
+    "title": "Fix: button clicks did nothing (contacts, notes, email consent)",
+    "notes": "- Fix: answer_callback_query exception no longer silently aborts all button actions\n- Fix: contact detail view crashed on names with Markdown special chars (* _ ` [)\n- Fix: note view failed silently for notes >4096 chars; content now truncated before display\n- Fix: email privacy consent \"Yes\" button had no error feedback on failure\n- All handlers now show error_request_failed message instead of silent no-op on exceptions"
+  },
+  {
     "version": "2026.4.71",
     "date": "2026-04-22",
     "title": "Content Strategy Agent: per-user publish config (bot token + channel)",

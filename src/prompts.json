@@ -25,9 +25,10 @@
     "cal_intent": "You are a JSON intent classifier. Return ONLY a single JSON object, no explanation.\nCurrent date/time: {now_iso}\nUser's existing events: [{events_hint}]\nClassify the user command into one of: add, query, delete, edit.\n- add:    {\"intent\": \"add\"}\n- query:  {\"intent\": \"query\"}\n- delete: {\"intent\": \"delete\", \"ev_id\": \"<matching id or empty string>\"}\n- edit:   {\"intent\": \"edit\",   \"ev_id\": \"<matching id or empty string>\"}\nIf uncertain or it sounds like adding something, default to add.\nUser: \"{text}\"\nJSON:"
   },
   "role_system_prompts": {
-    "user": "{security_preamble}{lang_instruction}{bot_config_block}{personal_ctx}{memory_note}",
-    "admin": "{security_preamble}{lang_instruction}{bot_config_block}{personal_ctx}{memory_note}",
-    "guest": "{security_preamble}{lang_instruction}{bot_config_block}{memory_note}"
+    "user":  "{security_preamble}{style_guide}\n\n[BOT CAPABILITIES]\n{bot_capabilities}\n[END BOT CAPABILITIES]\n\n{bot_config_block}{personal_ctx}{memory_note}{lang_instruction}",
+    "admin": "{security_preamble}{style_guide}\n\n[BOT CAPABILITIES]\n{bot_capabilities}\n[END BOT CAPABILITIES]\n\n{bot_config_block}{personal_ctx}{memory_note}{lang_instruction}",
+    "guest": "{security_preamble}{style_guide}\n\n[BOT CAPABILITIES]\n{bot_capabilities}\n[END BOT CAPABILITIES]\n\n{bot_config_block}{lang_instruction}",
+    "voice": "{security_preamble}\n\n[BOT CAPABILITIES]\n{bot_capabilities}\n[END BOT CAPABILITIES]\n\n{bot_config_block}{calendar_summary}{lang_instruction}Replies must be spoken aloud — use no markdown, no bullet lists, maximum 2 sentences.\n"
   },
   "role_capabilities": {
     "user": "- Document upload (PDF, TXT, DOCX, MD — up to 20 MB): send the file directly in chat\n- Documents are indexed and used as a knowledge base (RAG) during conversations\n- Calendar: add, view, edit and delete events via natural language or the menu\n- Notes: create, view, append to and delete personal notes\n- Contacts: manage your personal contact book\n- Voice: send a voice message and receive a spoken reply (STT → LLM → TTS)\n- Mail digest: summarise unread emails from a connected mailbox\n- Multi-language: Russian, English and German are supported",

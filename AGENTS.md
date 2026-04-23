@@ -30,6 +30,7 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 
 > ⚠️ **Branch Rules**: TariStation1 and VPS-Supertaris only receive deployments from the **`master` branch**. TariStation2 may receive any branch for development/testing.
 > ⚠️ **Confirmation Rules**: Deploy to TariStation1 and VPS-Supertaris ONLY after explicit user/owner confirmation. Always deploy to TariStation2 first and verify all tests pass.
+> ⚠️ **VPS-only coding rule**: When programming from VPS (code-server on agents.sintaris.net / VPS-Supertaris), TariStation2 is not reachable from the VPS network. In this case, **skip the TS2 step and deploy directly to VPS only**. Do not attempt to deploy to TariStation2 or TariStation1 from the VPS.
 
 **OpenClaw has 3 deployment targets:**
 

@@ -26,6 +26,7 @@ from core.bot_config import (
     PIPER_MODEL_TMPFS, LLM_PROVIDER, STT_PROVIDER, DEVICE_VARIANT,
     FASTER_WHISPER_PRELOAD, AUTO_GUEST_ENABLED,
     GUEST_MSG_HOURLY_LIMIT, GUEST_MSG_DAILY_LIMIT,
+    ADMIN_USERS,
     log,
 )
 import core.bot_state as _st
@@ -387,12 +388,12 @@ def callback_handler(call):
     try:
         bot.answer_callback_query(call.id)   # dismiss spinner
     except Exception as _ack_err:
-        # Callback expired (>60s old) or already answered — log and continue.
+        # Callback expired (>60s old) or already answered — log and CONTINUE.
+        # Do NOT return: skipping the action leaves the user with no response.
         # Do NOT propagate: unhandled ApiTelegramException in a worker triggers
         # raise_exceptions() in the polling loop, which doubles the poll backoff
         # (0.25s → 60s) and makes the bot appear frozen.
         log.warning("[PERF] answer_callback_query failed (data=%s): %s", data, _ack_err)
-        return
     _ack_ms = (_time.perf_counter() - _ack_t0) * 1000
     if _ack_ms > 300:
         log.warning("[PERF] answer_callback_query slow: %.0fms (data=%s)", _ack_ms, data)
@@ -442,6 +443,26 @@ def callback_handler(call):
     # ── Meeting request (all allowed users) ────────────────────────────────
     elif data == "guest_meeting":
         _start_guest_meeting(cid)
+    elif data == "guest_request_access":
+        bot.answer_callback_query(call.id)
+        bot.send_message(cid, _t(cid, "guest_access_requested"), parse_mode="Markdown")
+        uname = getattr(call.from_user, "username", None)
+        fname = getattr(call.from_user, "first_name", "") or ""
+        lname = getattr(call.from_user, "last_name", "") or ""
+        display = f"{fname} {lname}".strip() or f"@{uname}" if uname else str(cid)
+        for admin_id in ADMIN_USERS:
+            try:
+                from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+                kb = InlineKeyboardMarkup()
+                kb.add(InlineKeyboardButton("✅ Promote to User", callback_data=f"admin_promote_user:{cid}"))
+                bot.send_message(
+                    admin_id,
+                    f"🔓 *Guest access request*\n\nID: `{cid}`\nName: {display}",
+                    parse_mode="Markdown",
+                    reply_markup=kb,
+                )
+            except Exception as _e:
+                log.warning("guest_request_access: admin notify failed %s: %s", admin_id, _e)
     elif data.startswith("cal_meet_expert:"):
         try:
             _handle_expert_selected(cid, int(data.split(":", 1)[1]))
@@ -870,6 +891,16 @@ def callback_handler(call):
             parts = data.split(":", 2)
             if len(parts) == 3:
                 _handle_admin_user_set_role(cid, int(parts[1]), parts[2])
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data.startswith("admin_promote_user:"):
+        if _is_admin(cid):
+            try:
+                target_id = int(data.split(":", 1)[1])
+                _handle_admin_user_set_role(cid, target_id, "user")
+            except (ValueError, IndexError):
+                pass
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 

@@ -14,7 +14,7 @@ from core.bot_config import log
 from core.bot_instance import bot
 from telegram.bot_access import (
     _is_allowed, _is_guest, _deny, _t, _lang,
-    _ask_taris, _safe_edit, _send_menu,
+    _ask_taris, _safe_edit, _send_menu, _escape_md,
 )
 from core.store import store as _store
 
@@ -156,17 +156,17 @@ def _contact_edit_field_keyboard(chat_id: int, cid: str) -> InlineKeyboardMarkup
 # ── Formatting helpers ────────────────────────────────────────────────────────
 
 def _format_contact(c: dict, chat_id: int) -> str:
-    lines = [f"👤 *{c['name']}*"]
+    lines = [f"👤 *{_escape_md(c['name'])}*"]
     if c.get("phone"):
-        lines.append(f"📞 {c['phone']}")
+        lines.append(f"📞 {_escape_md(c['phone'])}")
     if c.get("email"):
-        lines.append(f"📧 {c['email']}")
+        lines.append(f"📧 {_escape_md(c['email'])}")
     if c.get("address"):
-        lines.append(f"🏠 {c['address']}")
+        lines.append(f"🏠 {_escape_md(c['address'])}")
     if c.get("notes"):
-        lines.append(f"📝 {c['notes']}")
+        lines.append(f"📝 {_escape_md(c['notes'])}")
     if c.get("telegram"):
-        lines.append(f"📱 Telegram ID: `{c['telegram']}`")
+        lines.append(f"📱 Telegram ID: `{_escape_md(c['telegram'])}`")
     created = c.get("created_at", "")[:10]
     lines.append(f"\n_{_t(chat_id, 'contact_added')} {created}_")
     return "\n".join(lines)
@@ -194,13 +194,21 @@ def _handle_contact_list(chat_id: int, offset: int = 0) -> None:
 
 
 def _handle_contact_open(chat_id: int, cid: str) -> None:
-    c = _contact_get(chat_id, cid)
-    if not c:
-        bot.send_message(chat_id, _t(chat_id, "contact_not_found"))
-        _handle_contacts_menu(chat_id)
-        return
-    bot.send_message(chat_id, _format_contact(c, chat_id), parse_mode="Markdown",
-                     reply_markup=_contact_detail_keyboard(chat_id, cid))
+    try:
+        c = _contact_get(chat_id, cid)
+        if not c:
+            bot.send_message(chat_id, _t(chat_id, "contact_not_found"))
+            _handle_contacts_menu(chat_id)
+            return
+        bot.send_message(chat_id, _format_contact(c, chat_id), parse_mode="Markdown",
+                         reply_markup=_contact_detail_keyboard(chat_id, cid))
+    except Exception as _e:
+        log.error("[Contacts] _handle_contact_open failed cid=%s: %s", cid, _e)
+        try:
+            bot.send_message(chat_id, _t(chat_id, "error_request_failed"),
+                             reply_markup=_contacts_menu_keyboard(chat_id))
+        except Exception:
+            pass
 
 
 # ── Add flow ──────────────────────────────────────────────────────────────────

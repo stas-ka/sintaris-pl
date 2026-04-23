@@ -1,6 +1,6 @@
 # Taris — OpenClaw Variant
 
-**Version:** `2026.4.68` · **Last updated:** April 2026  
+**Version:** `2026.4.73` · **Last updated:** April 2026  
 → Architecture index: [architecture.md](../architecture.md)  
 → System overview: [overview.md](overview.md)  
 → PicoClaw variant: [picoclaw.md](picoclaw.md)  
@@ -357,60 +357,42 @@ Copilot skill: `.github/prompts/taris-openclaw-setup.prompt.md`
 | `skill-taris` in sintaris-openclaw | ✅ | `~/projects/sintaris-openclaw/skills/skill-taris/` |
 | `sintaris-openclaw-local-deploy` | ✅ | `~/projects/sintaris-openclaw-local-deploy/` |
 | `migrate_sqlite_to_pg.py` | 🔲 Planned | §25.7 in TODO.md |
-| pgvector HNSW RAG pipeline — wired at upload | 🔲 Planned | §28.1 in TODO.md |
-| pgvector RAG injected into LLM prompt | 🔲 Planned | §28.1 in TODO.md |
-| Ollama model list + pull UI | 🔲 Planned | §28.2 in TODO.md |
-| N8N inbound event router | 🔲 Planned | §28.3 in TODO.md |
-| Contact → N8N CRM sync | 🔲 Planned | §28.4 in TODO.md |
-| Per-user Ollama model preference | 🔲 Planned | §29.1 in TODO.md |
-| RAG context in voice pipeline | 🔲 Planned | §29.2 in TODO.md |
-| Gateway skill result rendering | 🔲 Planned | §29.3 in TODO.md |
+| pgvector HNSW RAG pipeline — wired at upload | ✅ | `src/features/bot_documents.py`, `src/core/bot_embeddings.py` |
+| pgvector RAG injected into LLM prompt | ✅ | `src/core/bot_llm.py` — `RAG_VECTOR_TOP_K`, `RAG_INJECT_MAX_CHARS` |
+| Ollama model list + pull UI | ✅ | `src/telegram/bot_admin.py`, `src/core/bot_llm.py` |
+| N8N inbound event router | ✅ | `src/features/bot_n8n.py` — `_N8N_EVENT_HANDLERS`, `N8N_INBOUND_EVENTS_ENABLED` |
+| Contact → N8N CRM sync | ✅ | `src/features/bot_contacts.py` — `cnt_sync_crm:<id>`, `CRM_SYNC_WEBHOOK_URL` |
+| Per-user Ollama model preference | ✅ | `src/core/bot_config.py` — `_resolve_ollama_model()`, `ROLE_DEFAULT_OLLAMA_MODEL` |
+| RAG context in voice pipeline | ✅ | `src/core/bot_config.py` — `VOICE_RAG_ENABLED`, `VOICE_RAG_TOP_K` |
+| Gateway skill result rendering | ✅ | `src/ui/render_telegram.py` — `render_skill_result()` |
+| EspoCRM two-way contact sync | 🔲 Planned | §29.4 in TODO.md |
 | LLM provider plugin extraction | 🔲 Planned | §30.1 in TODO.md |
 | STT provider protocol | 🔲 Planned | §30.2 in TODO.md |
 | `VariantConfig` dataclass | 🔲 Planned | §30.3 in TODO.md |
 
----
+## Extension Features (§28–§29)
 
-## Extension Roadmap
+### Implemented (§28 Quick Wins + §29 Medium Effort)
 
-> Full spec with implementation steps, file targets, and test IDs: [doc/todo/28-openclaw-extensions.md](../todo/28-openclaw-extensions.md)
-
-### Unconnected assets (already in code, not yet wired)
-
-| Asset | Location | Missing link |
+| Feature | Key functions / constants | Source |
 |---|---|---|
-| `vec_embeddings` table (pgvector 1536-dim HNSW) | `store_postgres.py` | Nothing calls embed-on-upload; no RAG injection |
-| `/webhook/n8n` inbound handler | `bot_n8n.py` | Receives payload; no event dispatch table |
-| `MCP_SERVER_ENABLED`, `MCP_REMOTE_URL` | `bot_config.py` | Constants exist; no endpoints |
-| `get_ollama_model()` / `set_ollama_model()` | `bot_llm.py` | Works; no model list UI |
-| `bot_embeddings.py` — fastembed wrapper | `bot_embeddings.py` | Exists; not called at upload time |
+| **RAG on document upload** | `_embed_and_store_chunks()`, `EmbeddingService.embed_batch()`, `store.upsert_embedding()` | `src/features/bot_documents.py`, `src/core/bot_embeddings.py` |
+| **RAG in LLM prompt** | `RAG_VECTOR_TOP_K`, `RAG_INJECT_MAX_CHARS` | `src/core/bot_config.py`, `src/core/bot_llm.py` |
+| **Ollama model list UI** | Admin → LLM Settings → 🦙 Models; `list_ollama_models()` | `src/telegram/bot_admin.py`, `src/core/bot_llm.py` |
+| **N8N inbound event router** | `_N8N_EVENT_HANDLERS` dict, `/webhook/n8n` handler, `N8N_INBOUND_EVENTS_ENABLED` | `src/features/bot_n8n.py` |
+| **Contact → CRM sync button** | `cnt_sync_crm:<id>` callback, `CRM_SYNC_WEBHOOK_URL` env var | `src/features/bot_contacts.py` |
+| **Per-user Ollama model** | `_resolve_ollama_model(chat_id)`, `ROLE_DEFAULT_OLLAMA_MODEL` dict | `src/core/bot_config.py`, `src/core/bot_llm.py` |
+| **RAG in voice pipeline** | `VOICE_RAG_ENABLED`, `VOICE_RAG_TOP_K` | `src/core/bot_config.py`, `src/features/bot_voice.py` |
+| **Gateway skill result rendering** | `render_skill_result(skill_result)` — JSON → Telegram markdown | `src/ui/render_telegram.py` |
 
-### Quick wins (§28) — 1–2 days each
+### Open Items (§29.4, §30 — not yet implemented)
 
-| Item | What it does | Key files |
-|---|---|---|
-| **28.1** RAG embedding wiring | Upload → chunk → embed → `vec_embeddings`; LLM call → vector search → inject | `bot_documents.py`, `bot_embeddings.py`, `bot_llm.py` |
-| **28.2** Ollama model list UI | Admin sees installed models; switch/pull without restart | `bot_llm.py`, `bot_admin.py`, `bot_web.py` |
-| **28.3** N8N inbound event router | `/webhook/n8n` → dispatch table → `lead_created` → auto-create contact | `bot_n8n.py` |
-| **28.4** Contact → N8N sync | "📤 Sync to CRM" button → `call_webhook(CRM_SYNC_WH, contact)` | `bot_contacts.py`, `bot_web.py` |
-
-### Medium effort (§29) — 3–5 days each
-
-| Item | What it does | Depends on |
-|---|---|---|
-| **29.1** Per-user Ollama model | User preference stored in DB; fast vs quality model per user | — |
-| **29.2** RAG in voice pipeline | After STT: semantic search → inject into voice LLM system prompt | 28.1 |
-| **29.3** Skill result rendering | `_ask_openclaw()` JSON → formatted Telegram card | — |
-| **29.4** EspoCRM two-way sync | Taris ↔ N8N ↔ EspoCRM bidirectional contact sync | 28.3, 28.4 |
-
-### Architecture flexibility (§30) — incremental / background
-
-| Item | What it does | Risk |
-|---|---|---|
-| **30.1** LLM provider plugins | `core/llm_providers/*.py` — each provider a module with Protocol | Low |
-| **30.2** STT provider protocol | `core/stt_providers/*.py` — `VoskSTT` / `FasterWhisperSTT` swappable | Low |
-| **30.3** `VariantConfig` dataclass | Replace `if DEVICE_VARIANT==` checks with typed config object | Low |
-| Screen DSL `visible_variants` | 🔲 Planned | §21.6 in TODO.md |
+| Item | Description |
+|---|---|
+| **29.4 EspoCRM two-way sync** | ⏳ OPEN: Taris ↔ N8N ↔ EspoCRM bidirectional contact sync → See [TODO.md §29.4](../TODO.md) |
+| **30.1 LLM provider plugins** | ⏳ OPEN: Extract `core/llm_providers/*.py` with `LLMProvider` Protocol → See [TODO.md §30.1](../TODO.md) |
+| **30.2 STT provider protocol** | ⏳ OPEN: Extract `core/stt_providers/*.py` with swappable `VoskSTT`/`FasterWhisperSTT` → See [TODO.md §30.2](../TODO.md) |
+| **30.3 `VariantConfig` dataclass** | ⏳ OPEN: Replace `if DEVICE_VARIANT==` checks with typed config object → See [TODO.md §30.3](../TODO.md) |
 
 ---
 

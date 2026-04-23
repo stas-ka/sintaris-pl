@@ -26,14 +26,13 @@
 ✅ Implemented (v2026.4.50) — allowlists, `_classify_cmd_class()`, configurable extra blocklist, admin Security Policy UI, T122 regression test.
 → [Full spec](doc/archive/todo/1.1-rbac.md) · [Developer menu spec](doc/archive/todo/1.3-developer-role.md)
 
-### 1.2 Guest Users 🔲 Planned
-Limited access for new / unverified users: rate-limited chat with shared-docs RAG, meeting request (calendar booking), no personal data features. "Full User" renamed to **"User"** throughout.  
-Registration modes: `pending` (default) · `AUTO_GUEST_ENABLED=1` · `AUTO_USER_ENABLED=1`.  
+### 1.2 Guest Users ✅ Implemented (v2026.4.73)
+Auto-guest/user registration (`AUTO_GUEST_ENABLED`, `AUTO_USER_ENABLED`), rate limiting (`GUEST_MSG_DAILY_LIMIT`, `GUEST_MSG_HOURLY_LIMIT`), guest menu keyboard, `_is_guest_real_impl()`, `_check_guest_rate_limit()`, meeting request flow (`_start_guest_meeting`, free slot picker), admin Promote-to-User button with handler, shared-docs RAG constant (`SHARED_DOCS_OWNER`). Tests T140–T149.  
 → [Full spec](doc/todo/1.2-guest-users.md) · [Roles overview](doc/users/roles-overview.md)
 
-### 1.5 Prompt Templates per Role 🔲 Planned
-Role-based system prompt templates (`src/prompts/{role}_system.txt`), variable substitution (`{calendar_summary}`, `{rag_context}`, etc.), separate conversation style guides per role. Admin-configurable.  
-→ [Full spec](doc/todo/1.5-prompt-templates.md) · [conversation.md](doc/architecture/conversation.md)
+### 1.5 Prompt Templates per Role ✅ Implemented (v2026.4.73)
+Role-based system prompt templates in `src/prompts.json` (`role_system_prompts` + `role_capabilities` keys), `{style_guide}` + `{bot_capabilities}` variable injection, voice-mode template key, `_build_system_message(chat_id, text, voice_mode=False)`. Tests T168–T172.  
+→ [conversation.md](doc/architecture/conversation.md) · [prompts.json](src/prompts.json)
 
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 → [Full spec](doc/archive/todo/4.0-contact-book.md) · [Developer role spec](doc/archive/todo/1.3-developer-role.md)
@@ -401,7 +400,7 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ## 28. OpenClaw Quick Wins ✅ Implemented (v2026.4.68)
 
-> → Full spec: [doc/todo/28-openclaw-extensions.md](doc/todo/28-openclaw-extensions.md)
+> → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)
 
 ### 28.1 RAG Document Embedding ✅ Implemented (v2026.4.68)
 ### 28.2 Ollama Model List UI ✅ Implemented (v2026.4.68)
@@ -414,15 +413,13 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ## 29. OpenClaw Medium Effort (partial) ✅ v2026.4.68
 
-> → Full spec: [doc/todo/28-openclaw-extensions.md §29](doc/todo/28-openclaw-extensions.md)
+> → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)
 
 ### 29.1 Per-User Ollama Model Preference ✅ Implemented (v2026.4.68)
 `_resolve_ollama_model(chat_id)` + `ROLE_DEFAULT_OLLAMA_MODEL` in `bot_config.py`. Stored in `user_prefs` table key `ollama_model`.
 
-### 29.2 RAG in Voice Pipeline 🔲
-**Depends on:** §28.1 (pgvector population wiring)  
-**Files:** `features/bot_voice.py`, `core/bot_llm.py`, `core/bot_config.py`  
-**Tests:** T211
+### 29.2 RAG in Voice Pipeline ✅ Implemented (v2026.4.68)
+`VOICE_RAG_ENABLED`, `VOICE_RAG_TOP_K` in `bot_config.py`; integrated in `features/bot_voice.py`. Tests: T211.
 
 ### 29.3 OpenClaw Gateway Skill Result Rendering ✅ Implemented (v2026.4.68)
 `render_skill_result(skill_result)` in `ui/render_telegram.py:293`. Called after skill execution to format structured JSON → Telegram markdown.
@@ -442,8 +439,7 @@ Full bidirectional sync: Taris contact changes → N8N → EspoCRM; EspoCRM chan
 
 ## 30. OpenClaw Architecture Flexibility 🔲 Planned (background / incremental)
 
-> Refactoring work — no behavior change. Incremental, low-risk, can run in parallel with other features.  
-> → Full spec with code examples: [doc/todo/28-openclaw-extensions.md §30](doc/todo/28-openclaw-extensions.md)
+> Refactoring work — no behavior change. Incremental, low-risk, can run in parallel with other features.
 
 ### 30.1 LLM Provider Plugin Extraction 🔲
 
