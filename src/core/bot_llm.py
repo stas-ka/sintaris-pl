@@ -6,11 +6,11 @@ can import without pulling in Telegram dependencies.
 
 Feature 3.1: LLM_PROVIDER env-var switch (taris | openai | yandexgpt | gemini | anthropic | local)
 Feature 3.2: Local llama.cpp offline fallback with LLM_LOCAL_FALLBACK=1
+§30.1: Provider implementations extracted to core/llm_providers/ package.
 """
 
 import json
 import os
-import re
 import subprocess
 import urllib.error
 import urllib.request
@@ -22,16 +22,10 @@ from core.bot_config import (
     ANTHROPIC_API_KEY,
     ANTHROPIC_MAX_TOKENS,
     ANTHROPIC_MODEL,
-    COPILOT_BRIDGE_URL,
-    COPILOT_BRIDGE_KEY,
-    COPILOT_MODEL,
     COPILOT_TIMEOUT,
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
     LLAMA_CPP_MODEL,
     LLAMA_CPP_URL,
     LOCAL_MAX_TOKENS,
-    LOCAL_TEMPERATURE,
     OLLAMA_KEEP_ALIVE,
     OLLAMA_MIN_TIMEOUT,
     OLLAMA_NUM_CTX,
@@ -41,14 +35,10 @@ from core.bot_config import (
     LLM_FALLBACK_PROVIDER,
     LLM_PROVIDER,
     OLLAMA_URL,
-    OLLAMA_MODEL,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     OPENAI_MODEL,
-    OPENCLAW_BIN,
-    OPENCLAW_SESSION,
     OPENCLAW_TIMEOUT,
-    TARIS_BIN,
     TARIS_CONFIG,
     YANDEXGPT_API_KEY,
     YANDEXGPT_FOLDER_ID,
@@ -59,77 +49,50 @@ from core.bot_config import (
     log_assistant as log,
 )
 
+# §30.1 — import provider implementations from package
+from core.llm_providers.base import (
+    clean_output as _clean_output,
+    effective_temperature as _effective_temperature,
+    get_active_model,
+    http_post_json as _http_post_json,
+    list_models,
+    raise_if_http_error as _raise_if_http_error,
+    set_active_model,
+)
+from core.llm_providers import taris_p, openai_p, yandexgpt, gemini, anthropic, local, ollama, openclaw, copilot
+
+# §30.1 — re-export provider ask() functions under legacy internal names
+_ask_taris    = taris_p.ask
+_ask_openai   = openai_p.ask
+_ask_yandexgpt = yandexgpt.ask
+_ask_gemini   = gemini.ask
+_ask_anthropic = anthropic.ask
+_ask_local    = local.ask
+_ask_openclaw = openclaw.ask
+_ask_copilot  = copilot.ask
+_ask_copilot_with_history = copilot.ask_with_history
+
+def _ask_ollama(prompt: str, timeout: int, *, chat_id: int | None = None) -> str:
+    """Thin wrapper forwarding to ollama provider (chat_id kwarg for per-user model)."""
+    return ollama.ask(prompt, timeout, chat_id=chat_id)
+
+# §30.1 — re-export Ollama state management functions (used by admin UI)
+get_ollama_model   = ollama.get_ollama_model
+set_ollama_model   = ollama.set_ollama_model
+_resolve_ollama_model = ollama._resolve_ollama_model
+_get_user_role     = ollama._get_user_role
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-function LLM override
-# ─────────────────────────────────────────────────────────────────────────────
 # Stored in llm_per_func.json: {"system": "openai", "chat": "ollama", ...}
 # Empty string or missing key → use global LLM_PROVIDER.
 # Supported use_case values: "system" (admin system chat), "chat" (user free chat).
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Runtime Ollama model override (admin UI — no restart required)
-# ─────────────────────────────────────────────────────────────────────────────
-
-_runtime_ollama_model: str = ""  # "" → use OLLAMA_MODEL from bot_config
-
-
-def get_ollama_model() -> str:
-    """Return the active Ollama model name. Runtime override takes precedence over OLLAMA_MODEL."""
-    return _runtime_ollama_model or OLLAMA_MODEL
-
-
-def set_ollama_model(model: str) -> None:
-    """Override the active Ollama model at runtime. Does not persist across restarts."""
-    global _runtime_ollama_model
-    _runtime_ollama_model = model.strip()
-    log.info(f"[LLM] Ollama model switched at runtime → {_runtime_ollama_model or '(default)'}")
-
-
-def _resolve_ollama_model(chat_id: int | None = None) -> str:
-    """Resolve the Ollama model for a specific user (Feature §29.1).
-
-    Priority: 1) per-user pref (user_prefs key='ollama_model')
-              2) role-based default (ROLE_DEFAULT_OLLAMA_MODEL)
-              3) global runtime override / OLLAMA_MODEL
-    """
-    if chat_id:
-        try:
-            from core.bot_db import get_store
-            store = get_store()
-            user_model = store.get_user_pref(chat_id, "ollama_model", default="")
-            if user_model:
-                return user_model
-            # Role-based default
-            from core.bot_config import ROLE_DEFAULT_OLLAMA_MODEL
-            if ROLE_DEFAULT_OLLAMA_MODEL:
-                role = _get_user_role(chat_id)
-                role_model = ROLE_DEFAULT_OLLAMA_MODEL.get(role, "")
-                if role_model:
-                    return role_model
-        except Exception:
-            pass
-    return get_ollama_model()
-
-
-def _get_user_role(chat_id: int) -> str:
-    """Return user role string for model-preference resolution."""
-    try:
-        from core.bot_config import ADMIN_IDS
-        if chat_id in ADMIN_IDS:
-            return "admin"
-        from core.bot_db import get_store
-        store = get_store()
-        u = store.get_user(chat_id)
-        if u and u.get("role"):
-            return u["role"]
-    except Exception:
-        pass
-    return "user"
-
 
 def _effective_temperature() -> float:
     """Return runtime LLM temperature from rag_settings; falls back to LOCAL_TEMPERATURE."""
+    from core.bot_config import LOCAL_TEMPERATURE
     try:
         from core.rag_settings import get as _rget
         return float(_rget("llm_temperature"))
@@ -165,390 +128,11 @@ def set_per_func_provider(use_case: str, provider: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Active model
-# ─────────────────────────────────────────────────────────────────────────────
-
-def get_active_model() -> str:
-    """Return the admin-selected model name or empty string.
-
-    Strips provider prefixes (e.g. ``openai/gpt-4o-mini`` → ``gpt-4o-mini``)
-    that are valid in some UIs but cause HTTP 400 when passed to the API.
-    """
-    try:
-        raw = Path(ACTIVE_MODEL_FILE).read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        return ""
-    # Strip "<provider>/" prefix written by some admin-UI paths
-    if "/" in raw:
-        _, _, rest = raw.partition("/")
-        log.debug(f"[LLM] active_model stripped provider prefix: '{raw}' → '{rest}'")
-        return rest
-    return raw
-
-
-def set_active_model(name: str) -> None:
-    Path(ACTIVE_MODEL_FILE).write_text(name, encoding="utf-8")
-
-
-def list_models() -> list[dict]:
-    """Read model_list from taris config.json."""
-    try:
-        cfg = json.loads(Path(TARIS_CONFIG).read_text(encoding="utf-8"))
-        return cfg.get("model_list", [])
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Output cleaning  (ported from telegram.bot_access._clean_taris_output)
-# ─────────────────────────────────────────────────────────────────────────────
-
-_ANSI_RE     = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-_SPINNER_RE  = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⣾⣽⣻⢿⡿⣟⣯⣷◐◑◒◓⠁⠂⠄⡀⢀⠠⠐⠈]")  # ASCII |/\- removed: not spinner chars
-_PRINTF_WRAP = re.compile(r"^printf\s+['\"](.+)['\"]\s*$", re.DOTALL)
-_LOG_PREFIX  = re.compile(r"^(?:\d{4}[/-]\d{2}[/-]\d{2}|\d{8})[\sT]\d{2}:\d{2}:\d{2}\s*(?:INFO|DEBUG|WARN|ERROR)?\s*", re.MULTILINE)
-_PIPE_HEADER = re.compile(r"^(agent|taris)\s*[|│]", re.MULTILINE | re.IGNORECASE)
-
-
-def _clean_output(raw: str) -> str:
-    text = _ANSI_RE.sub("", raw)
-    text = _SPINNER_RE.sub("", text)
-    text = _LOG_PREFIX.sub("", text)
-    text = _PIPE_HEADER.sub("", text)
-    m = _PRINTF_WRAP.match(text.strip())
-    if m:
-        text = m.group(1)
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    return "\n".join(lines).strip()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Provider clients
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _raise_if_http_error(text: str) -> None:
-    """Raise a descriptive RuntimeError if text contains a known HTTP error pattern.
-
-    The taris binary may exit with rc=0 but embed the HTTP error message in
-    its stdout rather than setting a non-zero exit code.  Called on both the
-    rc!=0 (stderr) and rc=0 (stdout) paths in _ask_taris so the caller
-    always receives a proper exception instead of an error string returned as
-    an LLM answer.
-    """
-    lo = text.lower()
-    if "payment required" in lo:
-        raise RuntimeError("taris: 402 Payment Required")
-    if "too many requests" in lo:
-        raise RuntimeError("taris: 429 Too Many Requests")
-    if "unauthorized" in lo and len(text) < 300:
-        raise RuntimeError("taris: 401 Unauthorized")
-    if "service unavailable" in lo and len(text) < 300:
-        raise RuntimeError("taris: 503 Service Unavailable")
-
-
-def _ask_taris(prompt: str, timeout: int) -> str:
-    """Call taris CLI (wraps OpenRouter or configured LLM)."""
-    model = get_active_model()
-    cmd = [TARIS_BIN, "agent"]
-    if model:
-        cmd += ["--model", model]
-    cmd += ["-m", prompt]
-
-    env = {**os.environ, "NO_COLOR": "1"}
-    proc = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=timeout, env=env,
-    )
-    if proc.returncode != 0:
-        err_text = (proc.stderr or proc.stdout or "").strip()
-        log.warning(f"[LLM] taris rc={proc.returncode}: {err_text[:300]}")
-        _raise_if_http_error(err_text)
-        raise RuntimeError(f"taris exited rc={proc.returncode}: {err_text[:80]}")
-    raw = proc.stdout or proc.stderr or ""
-    result = _clean_output(raw)
-    if not result:
-        raise RuntimeError("taris returned empty output")
-    # taris may exit rc=0 but embed HTTP error text in stdout
-    _raise_if_http_error(result)
-    return result
-
-
-def _http_post_json(url: str, headers: dict, body: dict, timeout: int, _retries: int = 2) -> dict:
-    """Minimal JSON POST using stdlib urllib (no extra dependencies).
-
-    Retries automatically on HTTP 429 (rate limit) with exponential backoff.
-    Respects the ``Retry-After`` response header when present.
-    Converts socket/urllib timeout errors to subprocess.TimeoutExpired so all
-    callers can catch a single exception type.
-    """
-    import time as _time
-    import socket as _socket
-    data = json.dumps(body).encode("utf-8")
-    last_exc: Exception = RuntimeError("no attempts made")
-    for attempt in range(_retries + 1):
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except (_socket.timeout, TimeoutError) as exc:
-            # urllib raises socket.timeout (alias for TimeoutError) on socket-level timeout;
-            # convert to subprocess.TimeoutExpired so callers have one exception to catch.
-            raise subprocess.TimeoutExpired([], timeout) from exc
-        except urllib.error.URLError as exc:
-            if isinstance(exc.reason, (_socket.timeout, TimeoutError)):
-                raise subprocess.TimeoutExpired([], timeout) from exc
-            last_exc = exc
-            raise
-        except urllib.error.HTTPError as exc:
-            last_exc = exc
-            if exc.code == 429 and attempt < _retries:
-                try:
-                    wait = int(exc.headers.get("Retry-After", 0)) or (5 * (attempt + 1))
-                except (ValueError, AttributeError):
-                    wait = 5 * (attempt + 1)
-                log.warning(
-                    f"[LLM] HTTP 429 rate limit (attempt {attempt + 1}/{_retries + 1}); "
-                    f"retrying in {wait}s"
-                )
-                _time.sleep(wait)
-                continue
-            raise
-    raise last_exc
-
-
-def _ask_openai(prompt: str, timeout: int) -> str:
-    """Call OpenAI-compatible API directly."""
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY not set")
-    url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-    }
-    model_name = get_active_model() or OPENAI_MODEL
-    body = {
-        "model": model_name,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    try:
-        result = _http_post_json(url, headers, body, timeout)
-        return result["choices"][0]["message"]["content"].strip()
-    except urllib.error.HTTPError as exc:
-        err_body = ""
-        try:
-            err_body = exc.read(400).decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        log.error(f"[LLM] openai HTTP {exc.code} model='{model_name}': {err_body[:300]}")
-        raise RuntimeError(f"HTTP Error {exc.code}: {exc.reason}") from exc
-
-
-def _ask_yandexgpt(prompt: str, timeout: int) -> str:
-    """Call YandexGPT Foundational Models API."""
-    if not YANDEXGPT_API_KEY:
-        raise RuntimeError("YANDEXGPT_API_KEY not set")
-    url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-    # Build full model URI if not already absolute
-    model_uri = YANDEXGPT_MODEL_URI
-    if YANDEXGPT_FOLDER_ID and not model_uri.startswith("gpt://"):
-        model_uri = f"gpt://{YANDEXGPT_FOLDER_ID}/{YANDEXGPT_MODEL_URI}"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Api-Key {YANDEXGPT_API_KEY}",
-    }
-    body = {
-        "modelUri": model_uri,
-        "completionOptions": {"stream": False, "temperature": YANDEXGPT_TEMPERATURE, "maxTokens": YANDEXGPT_MAX_TOKENS},
-        "messages": [{"role": "user", "text": prompt}],
-    }
-    result = _http_post_json(url, headers, body, timeout)
-    return result["result"]["alternatives"][0]["message"]["text"].strip()
-
-
-def _ask_gemini(prompt: str, timeout: int) -> str:
-    """Call Google Gemini API."""
-    if not GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY not set")
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    )
-    headers = {"Content-Type": "application/json"}
-    body = {"contents": [{"parts": [{"text": prompt}]}]}
-    result = _http_post_json(url, headers, body, timeout)
-    return result["candidates"][0]["content"]["parts"][0]["text"].strip()
-
-
-def _ask_anthropic(prompt: str, timeout: int) -> str:
-    """Call Anthropic Claude API."""
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-    url = "https://api.anthropic.com/v1/messages"
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-    }
-    body = {
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": ANTHROPIC_MAX_TOKENS,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    result = _http_post_json(url, headers, body, timeout)
-    return result["content"][0]["text"].strip()
-
-
-def _ask_local(prompt: str, timeout: int) -> str:
-    """Call local llama.cpp server (OpenAI-compatible /v1/chat/completions)."""
-    url = f"{LLAMA_CPP_URL.rstrip('/')}/v1/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    body: dict = {
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": LOCAL_MAX_TOKENS,
-        "temperature": _effective_temperature(),
-    }
-    if LLAMA_CPP_MODEL:
-        body["model"] = LLAMA_CPP_MODEL
-    result = _http_post_json(url, headers, body, timeout)
-    return result["choices"][0]["message"]["content"].strip()
-
-
-def _ask_ollama(prompt: str, timeout: int, *, chat_id: int | None = None) -> str:
-    """Call local Ollama server via native /api/chat endpoint.
-
-    Uses ``think: false`` to suppress extended-thinking tokens (qwen3 family).
-    Falls back gracefully if the server is not running.
-    The caller is responsible for applying OLLAMA_MIN_TIMEOUT when appropriate
-    (ask_llm_with_history does this for multi-turn chat; system_chat passes a
-    strict 45 s timeout intentionally).
-
-    Install: curl -fsSL https://ollama.ai/install.sh | sh && ollama pull qwen2:0.5b
-    Config:  OLLAMA_URL=http://127.0.0.1:11434  OLLAMA_MODEL=qwen2:0.5b
-    GPU:     Set HSA_OVERRIDE_GFX_VERSION in Ollama service for AMD iGPU (Radeon 890M gfx1150).
-    """
-    model = _resolve_ollama_model(chat_id)
-    url = f"{OLLAMA_URL.rstrip('/')}/api/chat"
-    headers = {"Content-Type": "application/json"}
-    body: dict = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-        "think": OLLAMA_THINK,
-        "keep_alive": OLLAMA_KEEP_ALIVE,
-        "options": {
-            "num_predict": LOCAL_MAX_TOKENS,
-            "temperature": _effective_temperature(),
-            **({"num_ctx": OLLAMA_NUM_CTX} if OLLAMA_NUM_CTX > 0 else {}),
-        },
-    }
-    result = _http_post_json(url, headers, body, timeout)
-    return result["message"]["content"].strip()  # _ask_ollama return
-
-
-def _ask_openclaw(prompt: str, timeout: int) -> str:
-    """Call OpenClaw AI gateway as an LLM provider (DEVICE_VARIANT=openclaw).
-
-    Uses ``openclaw agent --message <prompt> --json --session-id <session>``
-    and parses the JSON reply.  Raises FileNotFoundError when the binary is
-    not found so ``ask_llm()`` can fall back gracefully.
-    """
-    import shutil
-    bin_path = OPENCLAW_BIN
-    if not os.path.isfile(bin_path) and not shutil.which(bin_path):
-        raise FileNotFoundError(f"openclaw binary not found: {bin_path}")
-
-    cmd = [bin_path, "agent", "--message", prompt, "--json", "--session-id", OPENCLAW_SESSION]
-    env = {**os.environ, "NO_COLOR": "1"}
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
-    raw = (proc.stdout or "").strip()
-
-    if proc.returncode != 0:
-        err = (proc.stderr or raw or "")[:300]
-        log.warning(f"[LLM] openclaw rc={proc.returncode}: {err}")
-        raise RuntimeError(f"openclaw exited rc={proc.returncode}: {err[:80]}")
-
-    if not raw:
-        raise RuntimeError("openclaw returned empty output")
-
-    try:
-        data = json.loads(raw)
-        text = (data.get("content") or data.get("text") or data.get("response") or "").strip()
-        # §29.3: detect skill_result in openclaw response
-        skill_result = data.get("skill_result")
-        if skill_result and isinstance(skill_result, dict):
-            from ui.render_telegram import render_skill_result
-            rendered = render_skill_result(skill_result)
-            if rendered:
-                return f"{text}\n\n{rendered}" if text else rendered
-        if not text:
-            raise ValueError("no content key in openclaw JSON response")
-        return text
-    except (json.JSONDecodeError, ValueError):
-        return _clean_output(raw)
-
-
-def _ask_copilot(prompt: str, timeout: int) -> str:
-    """Call Copilot Bridge — local proxy to GitHub Copilot / GitHub Models API.
-
-    The bridge must be running: python copilot-bridge/server.py
-    Config: COPILOT_BRIDGE_URL, COPILOT_BRIDGE_KEY, COPILOT_MODEL, COPILOT_TIMEOUT.
-    """
-    url = f"{COPILOT_BRIDGE_URL.rstrip('/')}/v1/chat/completions"
-    headers: dict = {"Content-Type": "application/json"}
-    if COPILOT_BRIDGE_KEY:
-        headers["Authorization"] = f"Bearer {COPILOT_BRIDGE_KEY}"
-    body = {
-        "model": COPILOT_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": LOCAL_MAX_TOKENS,
-        "temperature": _effective_temperature(),
-    }
-    try:
-        result = _http_post_json(url, headers, body, timeout)
-        return result["choices"][0]["message"]["content"].strip()
-    except urllib.error.URLError as exc:
-        raise RuntimeError(
-            f"Copilot Bridge not reachable at {COPILOT_BRIDGE_URL} — "
-            "start it with: python copilot-bridge/server.py"
-        ) from exc
-
-
-def _ask_copilot_with_history(messages: list, timeout: int) -> str:
-    """Call Copilot Bridge with full conversation history."""
-    url = f"{COPILOT_BRIDGE_URL.rstrip('/')}/v1/chat/completions"
-    headers: dict = {"Content-Type": "application/json"}
-    if COPILOT_BRIDGE_KEY:
-        headers["Authorization"] = f"Bearer {COPILOT_BRIDGE_KEY}"
-    body = {
-        "model": COPILOT_MODEL,
-        "messages": messages,
-        "max_tokens": LOCAL_MAX_TOKENS,
-        "temperature": _effective_temperature(),
-    }
-    try:
-        result = _http_post_json(url, headers, body, timeout)
-        return result["choices"][0]["message"]["content"].strip()
-    except urllib.error.URLError as exc:
-        raise RuntimeError(
-            f"Copilot Bridge not reachable at {COPILOT_BRIDGE_URL} — "
-            "start it with: python copilot-bridge/server.py"
-        ) from exc
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Main entry point — ask LLM
 # ─────────────────────────────────────────────────────────────────────────────
 
-_DISPATCH = {
-    "taris":     _ask_taris,
-    "openclaw":  _ask_openclaw,
-    "copilot":   _ask_copilot,
-    "openai":    _ask_openai,
-    "yandexgpt": _ask_yandexgpt,
-    "gemini":    _ask_gemini,
-    "anthropic": _ask_anthropic,
-    "local":     _ask_local,
-    "ollama":    _ask_ollama,
-}
+# §30.1 — use provider registry as dispatch table
+from core.llm_providers import REGISTRY as _DISPATCH
 
 
 def _ask_with_fallback(prompt: str, timeout: int, *, raise_on_fail: bool = False,

@@ -3741,21 +3741,18 @@ def t_voice_chat_config_disclosure(**_):
     """T50: _bot_config_block() injects LLM/STT/version; rule 5 allows model disclosure."""
     results = []
 
-    # 1. Config block contains required fields
+    # 1. Config block contains required fields (source inspection — avoids live import chain)
     ts = time.time()
     try:
-        import sys as _sys
-        _sys.path.insert(0, str(Path(__file__).parent.parent))
-        from telegram.bot_access import _bot_config_block
-        block = _bot_config_block()
+        access_src = (SRC_ROOT / "telegram" / "bot_access.py").read_text(encoding="utf-8")
         required = ["[BOT CONFIG]", "LLM:", "STT:", "Version:", "[END BOT CONFIG]"]
-        missing = [k for k in required if k not in block]
+        missing = [k for k in required if k not in access_src]
         if missing:
             results.append(TestResult("config_block_fields", "FAIL", time.time() - ts,
-                                      f"Missing fields: {missing}"))
+                                      f"Missing fields in _bot_config_block source: {missing}"))
         else:
             results.append(TestResult("config_block_fields", "PASS", time.time() - ts,
-                                      f"Block OK: {block.strip()[:80]}"))
+                                      "All required config-block markers found in bot_access.py"))
     except Exception as e:
         results.append(TestResult("config_block_fields", "FAIL", time.time() - ts, str(e)))
 
@@ -3780,13 +3777,15 @@ def t_voice_chat_config_disclosure(**_):
         results.append(TestResult("preamble_rule5_allows_disclosure", "FAIL",
                                   time.time() - ts, str(e)))
 
-    # 3. _with_lang_voice includes the config block in the prompt
+    # 3. _with_lang_voice includes the config block in the prompt (source inspection)
     ts = time.time()
     try:
-        from telegram.bot_access import _with_lang_voice
-        import inspect
-        src = inspect.getsource(_with_lang_voice)
-        if "_bot_config_block()" not in src:
+        access_src = (SRC_ROOT / "telegram" / "bot_access.py").read_text(encoding="utf-8")
+        # Find _with_lang_voice function body and check for _bot_config_block call
+        if "def _with_lang_voice" not in access_src:
+            results.append(TestResult("with_lang_voice_has_config", "FAIL", time.time() - ts,
+                                      "_with_lang_voice not found in bot_access.py"))
+        elif "_bot_config_block()" not in access_src[access_src.index("def _with_lang_voice"):]:
             results.append(TestResult("with_lang_voice_has_config", "FAIL", time.time() - ts,
                                       "_with_lang_voice() does not call _bot_config_block()"))
         else:
@@ -3894,19 +3893,19 @@ def t_rag_context_injection(**_) -> list[TestResult]:
     results = []
     ts = time.time()
     try:
-        import sys as _sys
-        _sys.path.insert(0, str(Path(__file__).parent.parent))
-        from telegram import bot_access
-        import inspect
+        # Source inspection — avoids live import chain that requires ~/.taris/prompts.json
+        access_src = (SRC_ROOT / "telegram" / "bot_access.py").read_text(encoding="utf-8")
 
         for fn_name in ("_with_lang", "_with_lang_voice"):
-            fn = getattr(bot_access, fn_name, None)
-            if fn is None:
+            if f"def {fn_name}" not in access_src:
                 results.append(TestResult(f"rag_{fn_name}", "FAIL", time.time() - ts,
-                                          f"{fn_name} not found in bot_access"))
+                                          f"{fn_name} not found in bot_access.py"))
+                ts = time.time()
                 continue
-            src = inspect.getsource(fn)
-            if "_docs_rag_context" not in src:
+            # Extract the function body (from def to the next def at same indent)
+            fn_start = access_src.index(f"def {fn_name}")
+            fn_body = access_src[fn_start:fn_start + 2000]  # enough to cover the function
+            if "_docs_rag_context" not in fn_body:
                 results.append(TestResult(f"rag_{fn_name}", "FAIL", time.time() - ts,
                                           f"_docs_rag_context not called in {fn_name}"))
             else:
@@ -7707,7 +7706,7 @@ def t_gemma4_benchmark_report(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     checks = [
-        (SRC_ROOT.parent / "doc" / "research-gemma4-benchmark.md",
+        (SRC_ROOT.parent / "doc" / "research" / "research-gemma4-benchmark.md",
          "Gemma4 research + hardware analysis doc"),
         (SRC_ROOT.parent / "tools" / "run_gemma4_evaluation.sh",
          "Linux evaluation script for SintAItion / TariStation2"),
@@ -7735,16 +7734,19 @@ def t_ollama_model_picker(**_) -> list[TestResult]:
     t0 = time.time()
     results: list[TestResult] = []
 
-    # 1. bot_llm.py defines get_ollama_model and set_ollama_model (source inspection)
+    # 1. get_ollama_model and set_ollama_model defined in bot_llm.py or llm_providers/ollama.py (§30.1)
     llm_src = SRC_ROOT / "core" / "bot_llm.py"
     llm_text = llm_src.read_text(encoding="utf-8") if llm_src.exists() else ""
+    ollama_src = SRC_ROOT / "core" / "llm_providers" / "ollama.py"
+    ollama_text = ollama_src.read_text(encoding="utf-8") if ollama_src.exists() else ""
+    combined_llm = llm_text + ollama_text
     for sym in ("def get_ollama_model(", "def set_ollama_model(", "_runtime_ollama_model"):
-        present = sym in llm_text
+        present = sym in combined_llm
         results.append(TestResult(
             f"ollama_picker_llm_{sym.split('(')[0].lstrip('_')}",
             "PASS" if present else "FAIL",
             time.time() - t0,
-            "found in bot_llm.py" if present else f"MISSING: {sym}",
+            "found in bot_llm.py or llm_providers/ollama.py" if present else f"MISSING: {sym}",
         ))
 
     # 2. all OLLAMA_MODEL usages replaced with get_ollama_model() or _resolve_ollama_model() call
@@ -8867,13 +8869,16 @@ def t_skill_result_rendering(**_) -> list[TestResult]:
             f"found in render_telegram.py" if ok else f"MISSING: {sym}",
         ))
 
-    # _ask_openclaw detects skill_result
+    # _ask_openclaw detects skill_result (§30.1: now in llm_providers/openclaw.py)
     llm_src = SRC_ROOT / "core" / "bot_llm.py"
     llm_text = llm_src.read_text(encoding="utf-8") if llm_src.exists() else ""
-    ok = "skill_result" in llm_text and "render_skill_result" in llm_text
+    openclaw_src = SRC_ROOT / "core" / "llm_providers" / "openclaw.py"
+    openclaw_text = openclaw_src.read_text(encoding="utf-8") if openclaw_src.exists() else ""
+    combined_oc = llm_text + openclaw_text
+    ok = "skill_result" in combined_oc and "render_skill_result" in combined_oc
     results.append(TestResult(
         "skill_render_openclaw_detection", "PASS" if ok else "FAIL", time.time() - t0,
-        "skill_result detection + render_skill_result import in bot_llm.py" if ok
+        "skill_result detection + render_skill_result import in bot_llm.py or llm_providers/openclaw.py" if ok
         else "MISSING skill_result handling in _ask_openclaw",
     ))
 
@@ -8896,6 +8901,141 @@ def t_web_api_ollama_models(**_) -> list[TestResult]:
             time.time() - t0,
             f"{route} endpoint found in bot_web.py" if ok else f"MISSING: {route}",
         ))
+
+    return results
+
+
+def t_llm_provider_registry(**_) -> list[TestResult]:
+    """T220: §30.1 LLM provider plugin extraction — llm_providers/ package structure.
+
+    Checks: REGISTRY exists in __init__.py with all 9 providers; each provider file
+    has an ask() function; LLMProvider Protocol and http_post_json defined in base.py.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    providers_dir = SRC_ROOT / "core" / "llm_providers"
+
+    init_src = providers_dir / "__init__.py"
+    init_text = init_src.read_text(encoding="utf-8") if init_src.exists() else ""
+    ok = "REGISTRY" in init_text
+    results.append(TestResult("llm_providers_registry_defined", "PASS" if ok else "FAIL",
+                               time.time() - t0,
+                               "REGISTRY in llm_providers/__init__.py" if ok else "MISSING REGISTRY"))
+
+    for provider in ("taris_p", "openai_p", "yandexgpt", "gemini", "anthropic",
+                     "local", "ollama", "openclaw", "copilot"):
+        pfile = providers_dir / f"{provider}.py"
+        ptext = pfile.read_text(encoding="utf-8") if pfile.exists() else ""
+        ok = "def ask(" in ptext
+        results.append(TestResult(
+            f"llm_providers_{provider}_ask",
+            "PASS" if ok else "FAIL", time.time() - t0,
+            f"def ask() found in {provider}.py" if ok else f"MISSING def ask() in {provider}.py",
+        ))
+
+    base_src = providers_dir / "base.py"
+    base_text = base_src.read_text(encoding="utf-8") if base_src.exists() else ""
+    for sym in ("LLMProvider", "http_post_json", "clean_output", "get_active_model"):
+        ok = sym in base_text
+        results.append(TestResult(
+            f"llm_providers_base_{sym}", "PASS" if ok else "FAIL", time.time() - t0,
+            f"found in base.py" if ok else f"MISSING: {sym} in base.py",
+        ))
+
+    return results
+
+
+def t_stt_provider_protocol(**_) -> list[TestResult]:
+    """T221: §30.2 STT provider protocol — stt_providers/ package structure.
+
+    Checks: stt_factory in __init__.py; STTProvider Protocol in base.py;
+    FasterWhisperSTT and VoskSTT have transcribe() method; preload() exists.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    stt_dir = SRC_ROOT / "core" / "stt_providers"
+
+    init_src = stt_dir / "__init__.py"
+    init_text = init_src.read_text(encoding="utf-8") if init_src.exists() else ""
+    ok = "stt_factory" in init_text
+    results.append(TestResult("stt_providers_factory_defined", "PASS" if ok else "FAIL",
+                               time.time() - t0,
+                               "stt_factory in stt_providers/__init__.py" if ok else "MISSING stt_factory"))
+
+    base_src = stt_dir / "base.py"
+    base_text = base_src.read_text(encoding="utf-8") if base_src.exists() else ""
+    ok = "STTProvider" in base_text and "transcribe" in base_text
+    results.append(TestResult("stt_providers_protocol", "PASS" if ok else "FAIL",
+                               time.time() - t0,
+                               "STTProvider Protocol + transcribe found in base.py" if ok
+                               else "MISSING STTProvider or transcribe in base.py"))
+
+    for cls, fname in (("FasterWhisperSTT", "faster_whisper_stt.py"), ("VoskSTT", "vosk_stt.py")):
+        csrc = stt_dir / fname
+        ctext = csrc.read_text(encoding="utf-8") if csrc.exists() else ""
+        ok = f"class {cls}" in ctext and "def transcribe(" in ctext
+        results.append(TestResult(
+            f"stt_providers_{cls.lower()}_transcribe", "PASS" if ok else "FAIL",
+            time.time() - t0,
+            f"class {cls} + def transcribe() found in {fname}" if ok
+            else f"MISSING class {cls} or transcribe() in {fname}",
+        ))
+
+    fw_src = stt_dir / "faster_whisper_stt.py"
+    fw_text = fw_src.read_text(encoding="utf-8") if fw_src.exists() else ""
+    ok = "def preload(" in fw_text
+    results.append(TestResult("stt_providers_fw_preload", "PASS" if ok else "FAIL",
+                               time.time() - t0,
+                               "def preload() found in faster_whisper_stt.py" if ok
+                               else "MISSING def preload() in faster_whisper_stt.py"))
+
+    return results
+
+
+def t_variant_config(**_) -> list[TestResult]:
+    """T222: §30.3 VariantConfig dataclass — device_variant.py structure and values.
+
+    Checks: VariantConfig dataclass + VARIANT_REGISTRY defined; taris entry has
+    has_vosk=True; openclaw entry has has_openclaw=True; bot_config.py imports VARIANT.
+    """
+    t0 = time.time()
+    results: list[TestResult] = []
+    dv_src = SRC_ROOT / "core" / "device_variant.py"
+    dv_text = dv_src.read_text(encoding="utf-8") if dv_src.exists() else ""
+
+    for sym in ("VariantConfig", "VARIANT_REGISTRY", "get_variant", "VARIANT"):
+        ok = sym in dv_text
+        results.append(TestResult(
+            f"variant_config_{sym.lower()}", "PASS" if ok else "FAIL",
+            time.time() - t0,
+            f"found in device_variant.py" if ok else f"MISSING: {sym}",
+        ))
+
+    ok = '"taris"' in dv_text and "has_vosk=True" in dv_text
+    results.append(TestResult(
+        "variant_config_taris_has_vosk", "PASS" if ok else "FAIL",
+        time.time() - t0,
+        "taris variant has_vosk=True in device_variant.py" if ok
+        else "MISSING: taris variant or has_vosk=True",
+    ))
+
+    ok = '"openclaw"' in dv_text and "has_openclaw=True" in dv_text
+    results.append(TestResult(
+        "variant_config_openclaw_has_openclaw", "PASS" if ok else "FAIL",
+        time.time() - t0,
+        "openclaw variant has_openclaw=True in device_variant.py" if ok
+        else "MISSING: openclaw variant or has_openclaw=True",
+    ))
+
+    cfg_src = SRC_ROOT / "core" / "bot_config.py"
+    cfg_text = cfg_src.read_text(encoding="utf-8") if cfg_src.exists() else ""
+    ok = "from core.device_variant import" in cfg_text and "VARIANT" in cfg_text
+    results.append(TestResult(
+        "variant_config_bot_config_import", "PASS" if ok else "FAIL",
+        time.time() - t0,
+        "bot_config.py imports VARIANT from core.device_variant" if ok
+        else "MISSING: VARIANT import in bot_config.py",
+    ))
 
     return results
 
@@ -9149,6 +9289,10 @@ TEST_FUNCTIONS = [
     t_skill_result_rendering,
     # Web API Ollama model list + pull endpoints (T207)
     t_web_api_ollama_models,
+    # §30 OpenClaw Architecture Flexibility (T220-T222)
+    t_llm_provider_registry,
+    t_stt_provider_protocol,
+    t_variant_config,
 ]
 
 

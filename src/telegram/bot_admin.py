@@ -29,7 +29,7 @@ from core.bot_config import (
     ANTHROPIC_API_KEY, ANTHROPIC_MODEL,
     STT_PROVIDER, STT_FALLBACK_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
     PIPER_BIN, PIPER_MODEL, STT_LANG,
-    _VOICE_OPTS_DEFAULTS, DEVICE_VARIANT,
+    _VOICE_OPTS_DEFAULTS, DEVICE_VARIANT, VARIANT,
     _LOG_FILE, _ASSISTANT_LOG_FILE, _SECURITY_LOG_FILE, _VOICE_LOG_FILE, _DATASTORE_LOG_FILE,
     CONVERSATION_HISTORY_MAX, CONV_SUMMARY_THRESHOLD, CONV_MID_MAX,
     N8N_URL, N8N_API_KEY, CRM_ENABLED,
@@ -558,7 +558,7 @@ def _notify_admins_new_registration(chat_id: int, username: str, name: str,
 def _handle_voice_opts_menu(chat_id: int) -> None:
     """Show voice optimization toggle panel for admins."""
     opts = _voice_opts()
-    is_openclaw = DEVICE_VARIANT == "openclaw"
+    is_openclaw = VARIANT.has_openclaw
 
     def _flag(key: str) -> str:
         return "✅" if opts.get(key) else "◻️"
@@ -704,7 +704,7 @@ def _handle_admin_voice_config(chat_id: int) -> None:
         f"{'✅' if vosk_active else '◻️'} Vosk (default, offline)",
         callback_data="admin_stt_set:vosk",
     ))
-    if DEVICE_VARIANT == "openclaw":
+    if VARIANT.has_openclaw:
         kb.add(InlineKeyboardButton(
             f"{'✅' if fw_active else '◻️'} Faster-Whisper",
             callback_data="admin_stt_set:faster_whisper",
@@ -959,10 +959,10 @@ def _handle_admin_llm_menu(chat_id: int) -> None:
         "gemini":    bool(GEMINI_API_KEY),
         "anthropic": bool(ANTHROPIC_API_KEY),
         "taris":     True,
-        "openclaw":  DEVICE_VARIANT == "openclaw",
+        "openclaw":  VARIANT.has_openclaw,
     }
     _PROVIDER_NAMES = ["openai", "ollama", "gemini", "anthropic"]
-    if DEVICE_VARIANT != "openclaw":
+    if not VARIANT.has_openclaw:
         _PROVIDER_NAMES.append("taris")
 
     kb = InlineKeyboardMarkup(row_width=2)
@@ -1005,7 +1005,7 @@ def _handle_admin_llm_per_func(chat_id: int, use_case: str) -> None:
         "gemini":    bool(GEMINI_API_KEY),
         "anthropic": bool(ANTHROPIC_API_KEY),
         "taris":     True,
-        "openclaw":  DEVICE_VARIANT == "openclaw",
+        "openclaw":  VARIANT.has_openclaw,
     }
     labels = {"system": "System Chat", "chat": "User Chat"}
     title = labels.get(use_case, use_case)
@@ -1017,7 +1017,7 @@ def _handle_admin_llm_per_func(chat_id: int, use_case: str) -> None:
     )
     kb = InlineKeyboardMarkup(row_width=1)
     providers = ["openai", "ollama", "gemini", "anthropic"]
-    if DEVICE_VARIANT != "openclaw":
+    if not VARIANT.has_openclaw:
         providers.append("taris")
     for p in providers:
         icon = "✅" if p == current_p else "◻️"

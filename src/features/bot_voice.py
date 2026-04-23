@@ -31,7 +31,7 @@ from core.bot_config import (
     STT_PROVIDER, FASTER_WHISPER_MODEL, FASTER_WHISPER_DEVICE, FASTER_WHISPER_COMPUTE,
     FASTER_WHISPER_THREADS, FASTER_WHISPER_SPEECH_PAD_MS, STT_LANG, DEVICE_VARIANT,
     LLM_PROVIDER, OLLAMA_MODEL, OPENAI_MODEL,
-    TARIS_DIR, _PENDING_TTS_FILE, log_voice as log,
+    TARIS_DIR, _PENDING_TTS_FILE, log_voice as log, VARIANT,
 )
 from core.bot_instance import bot
 from telegram.bot_access import (
@@ -964,7 +964,7 @@ def _handle_voice_message(chat_id: int, voice_obj) -> None:
 
         # Vosk fallback — skip when primary STT succeeded, vosk_fallback=False, or on OpenClaw
         primary_stt_used = fw_used or whisper_used
-        vosk_fallback_enabled = not primary_stt_used or opts.get("vosk_fallback", DEVICE_VARIANT != "openclaw")
+        vosk_fallback_enabled = not primary_stt_used or opts.get("vosk_fallback", VARIANT.vosk_fallback_default)
         if not text and vosk_fallback_enabled:
             STT_CONF_THRESHOLD = 0.65
             try:

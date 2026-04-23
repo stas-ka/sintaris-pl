@@ -49,9 +49,9 @@ import vosk
 # STT provider — set via STT_PROVIDER env var
 # vosk          → Vosk offline (default for Pi/taris)
 # faster_whisper → faster-whisper CTranslate2 (default for openclaw/laptop)
-STT_PROVIDER = os.getenv("STT_PROVIDER",
-    "faster_whisper" if os.getenv("DEVICE_VARIANT", "taris").lower() == "openclaw" else "vosk"
-).lower()
+# §30.3: Use VARIANT.default_stt instead of raw DEVICE_VARIANT check
+from core.device_variant import VARIANT as _VARIANT
+STT_PROVIDER = os.getenv("STT_PROVIDER", _VARIANT.default_stt).lower()
 FASTER_WHISPER_MODEL   = os.getenv("FASTER_WHISPER_MODEL",   "base")
 FASTER_WHISPER_DEVICE  = os.getenv("FASTER_WHISPER_DEVICE",  "cpu")
 FASTER_WHISPER_COMPUTE = os.getenv("FASTER_WHISPER_COMPUTE", "int8")

@@ -103,6 +103,11 @@ _dv_raw = os.environ.get("DEVICE_VARIANT", "taris").lower()
 # Accept legacy "picoclaw" value from existing Pi bot.env files as alias for "taris"
 DEVICE_VARIANT = "taris" if _dv_raw == "picoclaw" else _dv_raw
 
+# §30.3: VariantConfig — single object encoding all variant-specific capabilities.
+# Import after DEVICE_VARIANT is resolved so get_variant() sees the correct value.
+from core.device_variant import get_variant, VariantConfig, VARIANT_REGISTRY  # noqa: E402
+VARIANT: VariantConfig = get_variant(DEVICE_VARIANT)
+
 # OpenClaw AI gateway — optional provider (Feature §4.2 remote integration)
 # Only active when DEVICE_VARIANT=openclaw or OPENCLAW_BIN is explicitly set.
 # Falls back to taris binary automatically when the binary is not found.
@@ -347,7 +352,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.73"
+BOT_VERSION        = "2026.4.74"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Guest / auto-registration
@@ -414,7 +419,7 @@ VOICE_BACKEND      = os.environ.get("VOICE_BACKEND", "cpu").lower()
 # openai_whisper — OpenAI Whisper API (best accuracy for ru/en/de/sl, requires OPENAI_API_KEY)
 # whisper_cpp   — whisper.cpp binary (hardware-accelerated, VOICE_BACKEND=cuda)
 # Auto-default: faster_whisper for openclaw, vosk for taris (Pi)
-_DEFAULT_STT = "faster_whisper" if os.environ.get("DEVICE_VARIANT", "taris").lower() == "openclaw" else "vosk"
+_DEFAULT_STT = VARIANT.default_stt  # resolved via §30.3 VariantConfig
 STT_PROVIDER            = os.environ.get("STT_PROVIDER", _DEFAULT_STT).lower()
 
 # STT fallback — analogous to LLM_LOCAL_FALLBACK.
@@ -488,7 +493,7 @@ _VOICE_OPTS_DEFAULTS: dict = {
     "vad_prefilter":      False,   # §5.3: webrtcvad noise gate before STT
     "faster_whisper_stt": STT_PROVIDER == "faster_whisper",  # faster-whisper (Python, CTranslate2) — OpenClaw default
     "whisper_stt":        False,   # §5.3: use whisper.cpp binary instead of Vosk (Pi/whisper-cpp)
-    "vosk_fallback":      DEVICE_VARIANT != "openclaw",  # §5.3: fall back to Vosk when primary STT returns nothing (disabled on OpenClaw — Vosk not installed)
+    "vosk_fallback":      VARIANT.vosk_fallback_default,  # §5.3: fall back to Vosk when primary STT returns nothing (disabled on OpenClaw — Vosk not installed)
     "piper_low_model":    False,   # §5.3: use ru_RU-irina-low.onnx (faster TTS)
     "persistent_piper":   False,   # §5.3: keep warm Piper process alive (ONNX hot)
     "voice_timing_debug": False,   # show per-stage ⏱ timings in voice replies
