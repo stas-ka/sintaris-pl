@@ -364,19 +364,6 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ---
 
-## 28. OpenClaw Quick Wins ✅ Implemented (v2026.4.68)
-
-> → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)
-
-### 28.1 RAG Document Embedding ✅ Implemented (v2026.4.68)
-### 28.2 Ollama Model List UI ✅ Implemented (v2026.4.68)
-### 28.3 N8N → Taris Inbound Event Router ✅ Implemented (v2026.4.68)
-`dispatch_inbound_event(payload)` in `features/bot_n8n.py:370`. Auth via Bearer token.
-### 28.4 Contact → N8N Sync Button ✅ Implemented (v2026.4.68)
-`_handle_contact_sync_crm()` in `features/bot_contacts.py:365`. REST: `POST /api/contacts/{cid}/sync`.
-
----
-
 ## 29. OpenClaw Medium Effort (partial) ✅ v2026.4.68
 
 > → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)

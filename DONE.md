@@ -437,3 +437,14 @@ Per-user sliding window history stored in SQLite `chat_history` table; injected 
 - [x] **Phase D — Remote RAG + MCP:** `/mcp/search` endpoint + `bot_mcp_client.py` circuit breaker + RRF merge (v2026.4.1)
 
 ---
+
+## 28. OpenClaw Quick Wins ✅ Implemented (v2026.4.68)
+
+> → Architecture: [doc/architecture/openclaw-integration.md §Extension Features](doc/architecture/openclaw-integration.md)
+
+- [x] **28.1 RAG Document Embedding** — pgvector embeddings created on document upload; injected into LLM prompt via `_docs_rag_context()`
+- [x] **28.2 Ollama Model List UI** — Admin → LLM Settings → 🦙 Ollama model picker; lists installed models from `/api/tags`; stores in `user_prefs`
+- [x] **28.3 N8N → Taris Inbound Event Router** — `dispatch_inbound_event(payload)` in `features/bot_n8n.py:370`; auth via Bearer token
+- [x] **28.4 Contact → N8N Sync Button** — `_handle_contact_sync_crm()` in `features/bot_contacts.py:365`; REST: `POST /api/contacts/{cid}/sync`
+
+---
