@@ -121,7 +121,7 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 - ❌ Firewall changes (`ufw`, `iptables`) without confirmation
 - ❌ Restart taris services without confirmation (brief downtime visible publicly)
 
-`BOT_VERSION = "2026.3.48"` — deployed 2026-03-31
+`BOT_VERSION = "2026.4.73"` — deployed 2026-04-23
 
 ## Current LLM Config
 

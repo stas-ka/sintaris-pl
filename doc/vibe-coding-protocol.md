@@ -40,6 +40,14 @@ Use this to analyse cost (time, requests) per feature over time.
 | 07:53 | Add drawio to git; create roles-overview.md (full feature matrix per role); create doc/todo/1.2-guest-users.md (guest user concept + impl plan P1–P6, T140–T144); update TODO.md §1.2, security.md, copilot-instructions | 2 | 2 | claude-sonnet-4.6 | doc/users/roles-overview.md (new), doc/todo/1.2-guest-users.md (new), doc/users/*.drawio, TODO.md, security.md, copilot-instructions.md | done |
 | 06:20 | Implement SSH-over-443 on VPS via nginx stream: install libnginx-mod-stream, add stream block to nginx.conf, route port 443 (no-TLS→sshd:22, TLS→nginx:8443); nginx -t OK; reload; SSH via port 443 verified from Windows | 3 | 5 | claude-sonnet-4.6 | deploy/nginx-stream-setup.sh, deploy/ssh-tunnel.conf, .env.example, .env | done |
 
+### Session — 2026-04-23 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 01:00 UTC | Doc cleanup: integrate §28-29 OpenClaw extensions into openclaw-integration.md; integrate §1.5 prompt templates into conversation.md; delete spec files; §1.2 guest users: verify implementation (T140-T149 23/23 PASS), fix missing admin_promote_user callback handler, mark §1.2 ✅ in TODO.md; BOT_VERSION → 2026.4.73; commit + push | 3 | 12 | claude-sonnet-4.6 | doc/architecture/openclaw-integration.md, doc/architecture/conversation.md, TODO.md, doc/todo/1.2-guest-users.md, src/telegram_menu_bot.py, src/core/bot_config.py, src/release_notes.json, AGENTS.md, + deleted doc/todo/1.5-prompt-templates.md + doc/todo/28-openclaw-extensions.md | done |
+
+---
+
 ### Session — 2026-04-21 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
