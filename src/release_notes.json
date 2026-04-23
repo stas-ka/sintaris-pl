@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.75",
+    "date": "2026-04-23",
+    "title": "§4.3 Remote KB MCP: Phase 3–6 — Telegram agent, Google N8N workflow, benchmark harness, AutoResearch eval",
+    "notes": "Phase 3: bot_remote_kb.py (search/upload/list/clear-memory), agents menu button, doc handler, /api/remote-kb/search Web UI route, strings ru/en/de. Phase 4: KB - MCP Server Google.json (kb_search_web via Google CSE + kb_search_local). Phase 5: bench_remote_kb.py (Recall@k, MRR@10, p50/p95 latency). Phase 6: autoresearch_kb/ (qa_pairs.json 20 QA ru/en/de, prepare.py, evaluate.py, program.md with rag_score formula). REMOTE_KB_ENABLED added to bot_config.py."
+  },
+  {
     "version": "2026.4.74",
     "date": "2026-04-23",
     "title": "§30 OpenClaw Architecture Flexibility: LLM/STT provider plugins + VariantConfig",

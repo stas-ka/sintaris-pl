@@ -114,6 +114,9 @@ import features.bot_content as _content
 # ─── Notify Agent ────────────────────────────────────────────────────────────
 import features.bot_notify as _notify
 
+# ─── Remote Knowledge Base Agent ─────────────────────────────────────────────
+import features.bot_remote_kb as _remote_kb
+
 # ─── User handlers ────────────────────────────────────────────────────────────
 from telegram.bot_handlers import (
     _handle_digest, _refresh_digest,
@@ -1161,6 +1164,52 @@ def callback_handler(call):
         _notify.cancel(cid)
         bot.send_message(cid, _t(cid, "notify_cancelled"))
 
+    # ── Remote KB Agent ────────────────────────────────────────────────────
+    elif data == "remote_kb_menu":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _remote_kb.is_configured():
+                bot.send_message(cid, _t(cid, "remote_kb_not_configured"))
+            else:
+                _remote_kb.show_menu(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "remote_kb_search":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _remote_kb.is_configured():
+                bot.send_message(cid, _t(cid, "remote_kb_not_configured"))
+            else:
+                _remote_kb.start_search(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "remote_kb_upload":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _remote_kb.is_configured():
+                bot.send_message(cid, _t(cid, "remote_kb_not_configured"))
+            else:
+                _remote_kb.start_upload(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "remote_kb_list_docs":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _remote_kb.is_configured():
+                bot.send_message(cid, _t(cid, "remote_kb_not_configured"))
+            else:
+                _remote_kb.list_docs(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
+    elif data == "remote_kb_clear_mem":
+        if _is_admin(cid) or _is_advanced(cid):
+            if not _remote_kb.is_configured():
+                bot.send_message(cid, _t(cid, "remote_kb_not_configured"))
+            else:
+                _remote_kb.clear_memory(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     # ── Voice opts ─────────────────────────────────────────────────────────
     elif data == "voice_opts_menu":
         if _is_admin(cid):
@@ -1560,6 +1609,14 @@ def _handle_agents_menu(chat_id: int) -> None:
         InlineKeyboardButton(
             _t(chat_id, "agents_btn_notify"), callback_data="notify_menu"
         ),
+    )
+    if _remote_kb.is_configured():
+        kb.add(
+            InlineKeyboardButton(
+                _t(chat_id, "agents_btn_remote_kb"), callback_data="remote_kb_menu"
+            ),
+        )
+    kb.add(
         InlineKeyboardButton(
             _t(chat_id, "agents_btn_back"), callback_data="menu"
         ),
@@ -1651,6 +1708,15 @@ def text_handler(message):
                 return
         else:
             _notify.cancel(cid)
+
+    # ── Remote KB agent text input ─────────────────────────────────────────────
+    if _remote_kb.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            consumed = _remote_kb.handle_message(cid, message.text, bot, _t)
+            if consumed:
+                return
+        else:
+            _remote_kb.cancel(cid)
 
     if mode is None:
         # Default to chat mode — don't force menu on every unrouted text
@@ -2000,6 +2066,13 @@ def document_handler(message):
         _deny(cid)
         return
     _set_lang(cid, message.from_user)
+    # ── Remote KB upload flow ─────────────────────────────────────────────────
+    if _remote_kb.is_active(cid):
+        if _is_admin(cid) or _is_advanced(cid):
+            if _remote_kb.handle_document(cid, message.document, bot, _t):
+                return
+        else:
+            _remote_kb.cancel(cid)
     _handle_doc_upload(message)
 
 

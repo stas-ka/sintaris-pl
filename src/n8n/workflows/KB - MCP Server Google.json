@@ -1,0 +1,174 @@
+{
+  "name": "KB - MCP Server Google",
+  "nodes": [
+    {
+      "id": "kg-001",
+      "name": "MCP Server Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "webhookId": "kb-google-server-wh",
+      "parameters": {
+        "path": "kb-google",
+        "tools": {
+          "values": [
+            {
+              "name": "kb_search_web",
+              "description": "Search the web via Google Custom Search Engine and return grounded results with snippets and source URLs. Use when the user needs up-to-date information not present in the local knowledge base.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Search query in any language\"},\"top_k\":{\"type\":\"integer\",\"description\":\"Max results to return (1–10, default 5)\"},\"lang\":{\"type\":\"string\",\"description\":\"Language hint for results, e.g. lang_ru, lang_en, lang_de\"}},\"required\":[\"query\"]}"
+            },
+            {
+              "name": "kb_search_local",
+              "description": "Search the local PostgreSQL knowledge base using hybrid vector+BM25 retrieval. Use when the user needs information from uploaded documents or past conversations.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Search query in any language\"},\"top_k\":{\"type\":\"integer\",\"description\":\"Max chunks to return (default 5)\"},\"chat_id\":{\"type\":\"integer\",\"description\":\"User chat ID to scope results\"}},\"required\":[\"query\"]}"
+            }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "kg-002",
+      "name": "Route by Tool",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.name }}",
+        "rules": {
+          "rules": [
+            { "value2": "kb_search_web",   "outputKey": "0" },
+            { "value2": "kb_search_local", "outputKey": "1" }
+          ]
+        },
+        "fallbackOutput": "none"
+      }
+    },
+
+    {
+      "id": "kg-010",
+      "name": "Google CSE Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 180],
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "key", "value": "={{ $vars.GOOGLE_CSE_KEY }}" },
+            { "name": "cx",  "value": "={{ $vars.GOOGLE_CSE_CX }}" },
+            { "name": "q",   "value": "={{ $('Route by Tool').item.json.input.query }}" },
+            { "name": "num", "value": "={{ Math.min($('Route by Tool').item.json.input.top_k || 5, 10) }}" },
+            { "name": "lr",  "value": "={{ $('Route by Tool').item.json.input.lang || '' }}" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+
+    {
+      "id": "kg-011",
+      "name": "Format Web Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 180],
+      "parameters": {
+        "jsCode": "const items = $input.first().json.items || [];\nconst results = items.map(item => ({\n  title:   item.title || '',\n  snippet: item.snippet || '',\n  url:     item.link || '',\n  source:  item.displayLink || '',\n}));\nreturn [{ json: {\n  results,\n  count: results.length,\n  tool: 'kb_search_web',\n  query: $('Route by Tool').first().json.input.query,\n}}];"
+      }
+    },
+
+    {
+      "id": "kg-020",
+      "name": "Embed Local Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 420],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.OLLAMA_URL }}/api/embeddings",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model":  "={{ $vars.EMBED_MODEL }}",
+          "prompt": "={{ $('Route by Tool').item.json.input.query }}"
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+
+    {
+      "id": "kg-021",
+      "name": "Hybrid Local Search",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [720, 420],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n  vec AS (\n    SELECT chunk_id, doc_id, section, chunk_text,\n           (embedding <=> $1::vector) AS vec_dist\n    FROM taris_kb.kb_chunks\n    WHERE chat_id = $2\n    ORDER BY embedding <=> $1::vector\n    LIMIT 20\n  ),\n  bm25 AS (\n    SELECT chunk_id, ts_rank(tsv, plainto_tsquery('simple', $3)) AS rank_bm25\n    FROM taris_kb.kb_chunks\n    WHERE chat_id = $2\n      AND tsv @@ plainto_tsquery('simple', $3)\n    LIMIT 20\n  ),\n  rrf AS (\n    SELECT v.chunk_id, v.doc_id, v.section, v.chunk_text,\n           (1.0 / (60 + ROW_NUMBER() OVER (ORDER BY v.vec_dist)))\n         + COALESCE(1.0 / (60 + ROW_NUMBER() OVER (ORDER BY b.rank_bm25 DESC)), 0) AS rrf_score\n    FROM vec v\n    LEFT JOIN bm25 b ON b.chunk_id = v.chunk_id\n  )\nSELECT chunk_id, doc_id, section, chunk_text, rrf_score AS score\nFROM rrf\nORDER BY rrf_score DESC\nLIMIT $4",
+        "additionalFields": {},
+        "options": {
+          "queryParams": "=[\"[\" + $('Embed Local Query').item.json.embedding.join(\",\") + \"]\", {{ $('Route by Tool').item.json.input.chat_id || 0 }}, \"{{ $('Route by Tool').item.json.input.query }}\", {{ Math.min($('Route by Tool').item.json.input.top_k || 5, 10) }}]"
+        },
+        "credentials": {
+          "postgres": {
+            "id": "REPLACE_WITH_CREDENTIAL_ID",
+            "name": "KB Postgres"
+          }
+        }
+      }
+    },
+
+    {
+      "id": "kg-022",
+      "name": "Format Local Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 420],
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst chunks = rows.map(r => ({\n  doc_id:   r.doc_id,\n  section:  r.section || '',\n  text:     r.chunk_text || '',\n  score:    parseFloat(r.score) || 0,\n  source_uri: '',\n}));\nreturn [{ json: {\n  chunks,\n  count: chunks.length,\n  tool: 'kb_search_local',\n  query: $('Route by Tool').first().json.input.query,\n}}];"
+      }
+    }
+  ],
+
+  "connections": {
+    "MCP Server Trigger": {
+      "main": [[{ "node": "Route by Tool", "type": "main", "index": 0 }]]
+    },
+    "Route by Tool": {
+      "main": [
+        [{ "node": "Google CSE Search",  "type": "main", "index": 0 }],
+        [{ "node": "Embed Local Query",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Google CSE Search":  { "main": [[{ "node": "Format Web Results",   "type": "main", "index": 0 }]] },
+    "Embed Local Query":  { "main": [[{ "node": "Hybrid Local Search",  "type": "main", "index": 0 }]] },
+    "Hybrid Local Search":{ "main": [[{ "node": "Format Local Results", "type": "main", "index": 0 }]] }
+  },
+
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "taris-kb-google"
+  },
+
+  "_readme": {
+    "description": "KB - MCP Server Google: exposes two MCP tools over SSE transport at /n8n/mcp/kb-google/sse",
+    "tools": ["kb_search_web (Google CSE)", "kb_search_local (pgvector+BM25)"],
+    "n8n_variables_required": ["GOOGLE_CSE_KEY", "GOOGLE_CSE_CX", "OLLAMA_URL", "EMBED_MODEL"],
+    "credential_required": "KB Postgres (PostgreSQL connection to taris_kb DB)",
+    "sse_url": "https://agents.sintaris.net/n8n/mcp/kb-google/sse",
+    "setup": "1. Set N8N variables GOOGLE_CSE_KEY + GOOGLE_CSE_CX. 2. Replace REPLACE_WITH_CREDENTIAL_ID with KB Postgres credential ID. 3. Import + activate workflow. 4. Add MCP_REMOTE_URL_GOOGLE to bot.env (optional, if using Google variant)."
+  }
+}

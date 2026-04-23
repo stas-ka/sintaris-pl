@@ -17,6 +17,14 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-23 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| 14:00 UTC | §4.3 Remote KB MCP Phases 3–6: bot_remote_kb.py agent (search/upload/list/clear-mem), agents menu button + callbacks + doc handler in telegram_menu_bot.py, /api/remote-kb/search Web UI route, 19 i18n strings ru/en/de, KB - MCP Server Google.json workflow (CSE+local hybrid), bench_remote_kb.py (Recall@k/MRR/p50/p95), autoresearch_kb/ (qa_pairs.json 20 QA, prepare.py, evaluate.py, program.md), REMOTE_KB_ENABLED config, v2026.4.75 | 4 | 3 | claude-sonnet-4.6 | src/features/bot_remote_kb.py, src/telegram_menu_bot.py, src/bot_web.py, src/core/bot_config.py, src/strings.json, src/release_notes.json, src/n8n/workflows/KB - MCP Server Google.json, src/tests/bench_remote_kb.py, src/tests/autoresearch_kb/qa_pairs.json, src/tests/autoresearch_kb/prepare.py, src/tests/autoresearch_kb/evaluate.py, src/tests/autoresearch_kb/program.md, TODO.md | done |
+
+---
+
 ### Session — 2026-04-19 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
@@ -1611,3 +1619,4 @@ Every ~3 months, measure baseline health:
 | 20:33 UTC | | 20:32 UTC | | 20:33 UTC | 1 | Commit and push marketing article research document | 1 | 1 turn | gpt-5-codex | doc/marketing/article_topics_ru_research.md, doc/vibe-coding-protocol.md | done |
 | 02:58 UTC | | 02:56 UTC | | 02:58 UTC | 2 | Push current branch to git; remote already up to date, then log protocol row | 1 | 1 turn | gpt-5-codex | doc/vibe-coding-protocol.md | done |
 | 15:59 UTC | Notes fully stored in Postgres DB (not .md files); backfilled 14/17 notes from .md files; Docker deploy + git push | 4 | 12 | claude-sonnet-4-6 | store_postgres.py, store_sqlite.py, bot_users.py, bot_web.py, migrate_to_db.py, T102 test, data-layer.md, SKILL.md, copilot-instructions.md | done |
+| 05:41 UTC | §30.1-30.3 LLM/STT provider plugins + VariantConfig; fix 8 test failures; T220-T222; deploy to VPS-Supertaris v2026.4.73→74 | 4 | ~20 | claude-sonnet-4.6 | src/core/device_variant.py (new), src/core/llm_providers/ (11 files new), src/core/stt_providers/ (4 files new), src/core/bot_config.py, src/core/bot_llm.py, src/features/bot_voice.py, src/telegram/bot_admin.py, src/voice_assistant.py, src/tests/test_voice_regression.py, src/tests/test_data_consistency.py (new), src/release_notes.json | done |

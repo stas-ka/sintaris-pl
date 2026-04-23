@@ -5,7 +5,6 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=stas
 WorkingDirectory=/home/stas/.taris
 ExecStart=/usr/bin/python3 /home/stas/.taris/bot_web.py
 Restart=on-failure

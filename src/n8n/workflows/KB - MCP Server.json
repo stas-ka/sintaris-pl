@@ -1,0 +1,314 @@
+{
+  "name": "KB - MCP Server",
+  "nodes": [
+    {
+      "id": "kb-mcp-001",
+      "name": "MCP Server Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "webhookId": "kb-mcp-server-wh",
+      "parameters": {
+        "path": "kb-server",
+        "tools": {
+          "values": [
+            {
+              "name": "kb_search",
+              "description": "Search the remote knowledge base using hybrid vector+BM25 retrieval. Returns ranked chunks with source info.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Search query in any language\"},\"top_k\":{\"type\":\"integer\",\"description\":\"Max chunks to return (default 5)\"},\"chat_id\":{\"type\":\"integer\",\"description\":\"User chat ID to scope results\"}},\"required\":[\"query\"]}"
+            },
+            {
+              "name": "kb_memory_get",
+              "description": "Read stored memory for a user from a specific tier (short/middle/long).",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"chat_id\":{\"type\":\"integer\"},\"tier\":{\"type\":\"string\",\"enum\":[\"short\",\"middle\",\"long\"]}},\"required\":[\"chat_id\",\"tier\"]}"
+            },
+            {
+              "name": "kb_memory_append",
+              "description": "Append a message to the user's short-term memory.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"chat_id\":{\"type\":\"integer\"},\"role\":{\"type\":\"string\",\"enum\":[\"user\",\"assistant\",\"system\"]},\"content\":{\"type\":\"string\"}},\"required\":[\"chat_id\",\"role\",\"content\"]}"
+            },
+            {
+              "name": "kb_memory_clear",
+              "description": "Clear memory for a user, optionally filtered by tier.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"chat_id\":{\"type\":\"integer\"},\"tier\":{\"type\":\"string\",\"enum\":[\"short\",\"middle\",\"long\"]}},\"required\":[\"chat_id\"]}"
+            },
+            {
+              "name": "kb_list_documents",
+              "description": "List all documents uploaded by a user.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"chat_id\":{\"type\":\"integer\"}},\"required\":[\"chat_id\"]}"
+            },
+            {
+              "name": "kb_delete_document",
+              "description": "Delete a document and all its chunks from the knowledge base.",
+              "inputSchema": "{\"type\":\"object\",\"properties\":{\"doc_id\":{\"type\":\"string\",\"description\":\"UUID of the document\"}},\"required\":[\"doc_id\"]}"
+            }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "kb-mcp-002",
+      "name": "Route by Tool",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.name }}",
+        "rules": {
+          "rules": [
+            { "value2": "kb_search" },
+            { "value2": "kb_memory_get" },
+            { "value2": "kb_memory_append" },
+            { "value2": "kb_memory_clear" },
+            { "value2": "kb_list_documents" },
+            { "value2": "kb_delete_document" }
+          ]
+        },
+        "fallbackOutput": "none"
+      }
+    },
+
+    {
+      "id": "kb-mcp-003",
+      "name": "Embed Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.OLLAMA_URL || 'http://localhost:11434' }}/api/embeddings",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "={{ $vars.EMBED_MODEL || 'multilingual-e5-small' }}",
+          "prompt": "={{ $json.input.query }}"
+        },
+        "options": { "timeout": 30000 }
+      }
+    },
+
+    {
+      "id": "kb-mcp-004",
+      "name": "Format Search Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0],
+      "parameters": {
+        "jsCode": "const emb = items[0].json.embedding;\nif (!emb || !Array.isArray(emb)) throw new Error('Ollama embedding missing — check OLLAMA_URL and model name');\nconst vecStr = '[' + emb.join(',') + ']';\nconst triggerInput = $('MCP Server Trigger').first().json.input;\nreturn [{ json: {\n  vec: vecStr,\n  chat_id: triggerInput.chat_id || 0,\n  query: triggerInput.query,\n  top_k: triggerInput.top_k || 5\n}}];"
+      }
+    },
+
+    {
+      "id": "kb-mcp-005",
+      "name": "PG Hybrid Search",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 0],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH vec_results AS ( SELECT c.chunk_id, c.doc_id, c.section, c.text, d.title AS source_uri, ROW_NUMBER() OVER (ORDER BY c.embedding <=> $1::vector) AS vec_rank FROM kb_chunks c JOIN kb_documents d ON d.doc_id = c.doc_id WHERE d.owner_chat_id = $2 ORDER BY c.embedding <=> $1::vector LIMIT 20 ), bm25_results AS ( SELECT c.chunk_id, ROW_NUMBER() OVER (ORDER BY ts_rank(c.fts, plainto_tsquery('simple', $3)) DESC) AS bm25_rank FROM kb_chunks c JOIN kb_documents d ON d.doc_id = c.doc_id WHERE c.fts @@ plainto_tsquery('simple', $3) AND d.owner_chat_id = $2 LIMIT 20 ), rrf AS ( SELECT COALESCE(v.chunk_id, b.chunk_id) AS chunk_id, (COALESCE(1.0/(60.0 + v.vec_rank), 0) + COALESCE(1.0/(60.0 + b.bm25_rank), 0)) AS rrf_score FROM vec_results v FULL OUTER JOIN bm25_results b ON v.chunk_id = b.chunk_id ) SELECT v.chunk_id::text AS chunk_id, v.doc_id::text AS doc_id, v.section, v.text, v.source_uri, r.rrf_score AS score FROM rrf r JOIN vec_results v ON v.chunk_id = r.chunk_id ORDER BY r.rrf_score DESC LIMIT $4",
+        "options": {
+          "queryParams": "={{ JSON.stringify([$json.vec, $json.chat_id, $json.query, $json.top_k]) }}"
+        }
+      },
+      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+    },
+
+    {
+      "id": "kb-mcp-006",
+      "name": "Format Search Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 0],
+      "parameters": {
+        "jsCode": "const chunks = items.map(it => ({\n  doc_id: it.json.doc_id || it.json.chunk_id,\n  section: it.json.section || '',\n  text: it.json.text,\n  score: parseFloat(it.json.score) || 0,\n  source_uri: it.json.source_uri || ''\n}));\nreturn [{ json: { chunks, latency_ms: 0, mode: 'n8n' } }];"
+      }
+    },
+
+    {
+      "id": "kb-mcp-007",
+      "name": "PG Memory Get",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [480, 200],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT role, content, created_at::text FROM kb_memory WHERE chat_id = $1 AND tier = $2 ORDER BY seq ASC LIMIT 50",
+        "options": {
+          "queryParams": "={{ JSON.stringify([$json.input.chat_id, $json.input.tier || 'short']) }}"
+        }
+      },
+      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+    },
+
+    {
+      "id": "kb-mcp-008",
+      "name": "Format Memory Get",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 200],
+      "parameters": {
+        "jsCode": "const rows = items.map(it => ({ role: it.json.role, content: it.json.content, created_at: it.json.created_at }));\nreturn [{ json: { rows } }];"
+      }
+    },
+
+    {
+      "id": "kb-mcp-009",
+      "name": "PG Memory Append",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [480, 400],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO kb_memory (chat_id, tier, role, content, tokens) VALUES ($1, 'short', $2, $3, length($3)/4) RETURNING seq",
+        "options": {
+          "queryParams": "={{ JSON.stringify([$json.input.chat_id, $json.input.role, $json.input.content]) }}"
+        }
+      },
+      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+    },
+
+    {
+      "id": "kb-mcp-010",
+      "name": "Format Memory Append",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 400],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, compacted: false, seq: items[0]?.json?.seq ?? null } }];"
+      }
+    },
+
+    {
+      "id": "kb-mcp-011",
+      "name": "PG Memory Clear",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [480, 600],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH deleted AS (DELETE FROM kb_memory WHERE chat_id = $1 AND ($2::text IS NULL OR tier = $2) RETURNING seq) SELECT count(*)::int AS deleted FROM deleted",
+        "options": {
+          "queryParams": "={{ JSON.stringify([$json.input.chat_id, $json.input.tier || null]) }}"
+        }
+      },
+      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+    },
+
+    {
+      "id": "kb-mcp-012",
+      "name": "Format Memory Clear",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 600],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, deleted: items[0]?.json?.deleted || 0 } }];"
+      }
+    },
+
+    {
+      "id": "kb-mcp-013",
+      "name": "PG List Docs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [480, 800],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT d.doc_id::text, d.title, d.mime, d.source, d.created_at::text, (SELECT count(*)::int FROM kb_chunks WHERE doc_id = d.doc_id) AS n_chunks FROM kb_documents d WHERE d.owner_chat_id = $1 ORDER BY d.created_at DESC LIMIT 50",
+        "options": {
+          "queryParams": "={{ JSON.stringify([$json.input.chat_id]) }}"
+        }
+      },
+      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+    },
+
+    {
+      "id": "kb-mcp-014",
+      "name": "Format List Docs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 800],
+      "parameters": {
+        "jsCode": "const docs = items.map(it => ({\n  doc_id: it.json.doc_id,\n  title: it.json.title,\n  mime: it.json.mime,\n  source: it.json.source,\n  n_chunks: it.json.n_chunks,\n  created_at: it.json.created_at\n}));\nreturn [{ json: { docs } }];"
+      }
+    },
+
+    {
+      "id": "kb-mcp-015",
+      "name": "PG Delete Doc",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [480, 1000],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM kb_documents WHERE doc_id = $1::uuid RETURNING doc_id::text",
+        "options": {
+          "queryParams": "={{ JSON.stringify([$json.input.doc_id]) }}"
+        }
+      },
+      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+    },
+
+    {
+      "id": "kb-mcp-016",
+      "name": "Format Delete Doc",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 1000],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: items.length > 0 } }];"
+      }
+    }
+  ],
+
+  "connections": {
+    "MCP Server Trigger": {
+      "main": [
+        [{ "node": "Route by Tool", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route by Tool": {
+      "main": [
+        [{ "node": "Embed Query",    "type": "main", "index": 0 }],
+        [{ "node": "PG Memory Get",  "type": "main", "index": 0 }],
+        [{ "node": "PG Memory Append","type": "main","index": 0 }],
+        [{ "node": "PG Memory Clear","type": "main", "index": 0 }],
+        [{ "node": "PG List Docs",   "type": "main", "index": 0 }],
+        [{ "node": "PG Delete Doc",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Embed Query": {
+      "main": [[{ "node": "Format Search Params", "type": "main", "index": 0 }]]
+    },
+    "Format Search Params": {
+      "main": [[{ "node": "PG Hybrid Search", "type": "main", "index": 0 }]]
+    },
+    "PG Hybrid Search": {
+      "main": [[{ "node": "Format Search Response", "type": "main", "index": 0 }]]
+    },
+    "PG Memory Get": {
+      "main": [[{ "node": "Format Memory Get", "type": "main", "index": 0 }]]
+    },
+    "PG Memory Append": {
+      "main": [[{ "node": "Format Memory Append", "type": "main", "index": 0 }]]
+    },
+    "PG Memory Clear": {
+      "main": [[{ "node": "Format Memory Clear", "type": "main", "index": 0 }]]
+    },
+    "PG List Docs": {
+      "main": [[{ "node": "Format List Docs", "type": "main", "index": 0 }]]
+    },
+    "PG Delete Doc": {
+      "main": [[{ "node": "Format Delete Doc", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "templateId": "taris-kb-mcp-server",
+    "instanceId": "taris"
+  }
+}

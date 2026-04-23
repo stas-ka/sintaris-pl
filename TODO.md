@@ -87,6 +87,16 @@ Auto-guest/user registration (`AUTO_GUEST_ENABLED`, `AUTO_USER_ENABLED`), rate l
 ### 4.2 Remote RAG Service (MCP) ✅ All done → See DONE.md (v2026.4.1 / v2026.4.38)
 → Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
 
+### 4.3 Remote KB via N8N MCP Server ✅ Implemented (v2026.4.75) — Phases 1–6 done
+→ Spec: [doc/todo/4.3-remote-mcp-rag.md](doc/todo/4.3-remote-mcp-rag.md)
+→ Phase 1: `core/bot_mcp_client.py` (MCP SSE client, circuit breaker), `bot_config.py` MCP block
+→ Phase 2: `n8n/workflows/KB - MCP Server.json` + `KB - Ingest.json`, `parse_doc.py`, `n8n-setup.md`
+→ Phase 3: `features/bot_remote_kb.py` (search/upload/list/clear), Telegram agent menu, `/api/remote-kb/search`
+→ Phase 4: `n8n/workflows/KB - MCP Server Google.json` (Google CSE + local hybrid tools)
+→ Phase 5: `tests/bench_remote_kb.py` (Recall@k, MRR@10, p50/p95 latency)
+→ Phase 6: `tests/autoresearch_kb/` (qa\_pairs.json, prepare.py, evaluate.py, program.md)
+→ **VPS deployment**: awaiting explicit per-step confirmation from user (see `n8n-setup.md`)
+
 ---
 
 

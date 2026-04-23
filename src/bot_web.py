@@ -66,6 +66,7 @@ from core.bot_config import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, ADMIN_EMAIL,
     PIPER_BIN, PIPER_MODEL,
     MCP_SERVER_ENABLED, MCP_REMOTE_URL, MCP_TIMEOUT,
+    REMOTE_KB_ENABLED,
     N8N_URL, N8N_API_KEY, N8N_WEBHOOK_SECRET, CRM_ENABLED,
 )
 from core.pipeline_logger import PipelineLog, read_pipeline_logs, get_pipeline_stats
@@ -3375,6 +3376,38 @@ async def mcp_search(request: Request):
     except Exception as exc:
         log.error("[MCP-server] /mcp/search error: %s", exc)
         raise HTTPException(500, detail="RAG search failed")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Remote KB search API — wraps N8N MCP Server via bot_mcp_client
+# POST /api/remote-kb/search
+#   Body:     {"query": "...", "chat_id": <int>, "top_k": 3}
+#   Response: {"chunks": [{"doc_id": ..., "section": ..., "text": ..., "score": ...}], "count": <int>}
+#   Auth:     Authorization: Bearer <TARIS_API_TOKEN>
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/remote-kb/search")
+async def api_remote_kb_search(request: Request):
+    """Search the remote N8N Knowledge Base via MCP."""
+    if not REMOTE_KB_ENABLED:
+        raise HTTPException(503, detail="Remote KB is disabled")
+    _verify_api_token(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(400, detail="'query' field is required")
+    chat_id = int(body.get("chat_id", 0))
+    top_k   = min(int(body.get("top_k", 3)), 10)
+    try:
+        import core.bot_mcp_client as _mcp
+        chunks = _mcp.query_remote(query, chat_id=chat_id, top_k=top_k)
+        return JSONResponse({"chunks": chunks, "count": len(chunks)})
+    except Exception as exc:
+        log.error("[remote-kb] /api/remote-kb/search error: %s", exc)
+        raise HTTPException(500, detail="Remote KB search failed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "q001",
+    "question": "What are the main symptoms of burnout at work?",
+    "answer": "Main burnout symptoms include chronic exhaustion, detachment or cynicism toward one's job, reduced professional efficacy, difficulty concentrating, and physical complaints such as headaches or sleep disturbances.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "health"
+  },
+  {
+    "id": "q002",
+    "question": "Wie kann man Stress am Arbeitsplatz reduzieren?",
+    "answer": "Stressreduktion am Arbeitsplatz umfasst regelmäßige Pausen, klare Aufgabenpriorisierung, Grenzen setzen, Sport und Entspannungstechniken wie Meditation sowie offene Kommunikation mit Vorgesetzten.",
+    "relevant_doc_ids": [],
+    "language": "de",
+    "category": "health"
+  },
+  {
+    "id": "q003",
+    "question": "Какие методы тайм-менеджмента наиболее эффективны?",
+    "answer": "Наиболее эффективные методы: техника Pomodoro (25/5 минут), метод GTD (Getting Things Done), матрица Эйзенхауэра для расстановки приоритетов, блокировка времени в календаре и принцип «сначала — главное».",
+    "relevant_doc_ids": [],
+    "language": "ru",
+    "category": "productivity"
+  },
+  {
+    "id": "q004",
+    "question": "What is the difference between supervised and unsupervised machine learning?",
+    "answer": "Supervised learning trains a model on labeled data (input-output pairs) to predict outputs for new inputs. Unsupervised learning finds hidden patterns or structure in unlabeled data, such as clustering or dimensionality reduction.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "ai"
+  },
+  {
+    "id": "q005",
+    "question": "Explain transformer architecture in simple terms.",
+    "answer": "A transformer processes sequences by computing attention weights that capture relationships between all positions simultaneously. It uses self-attention layers stacked with feed-forward networks, enabling parallel training and better long-range dependency modeling than recurrent networks.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "ai"
+  },
+  {
+    "id": "q006",
+    "question": "Что такое вектор внедрений (embedding) в NLP?",
+    "answer": "Вектор внедрений — это числовое представление слова, предложения или документа в многомерном пространстве. Близкие по смыслу тексты имеют близкие векторы. Используется для семантического поиска, классификации и RAG-систем.",
+    "relevant_doc_ids": [],
+    "language": "ru",
+    "category": "ai"
+  },
+  {
+    "id": "q007",
+    "question": "How does RAG (Retrieval-Augmented Generation) work?",
+    "answer": "RAG retrieves relevant documents from a knowledge base using semantic search (embedding similarity), then injects the retrieved text into the LLM prompt as context. This grounds the model's response in factual, up-to-date information without fine-tuning.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "ai"
+  },
+  {
+    "id": "q008",
+    "question": "Was sind die Vorteile von PostgreSQL gegenüber MySQL?",
+    "answer": "PostgreSQL bietet erweiterte SQL-Konformität, bessere Unterstützung für komplexe Abfragen, JSON/JSONB-Typen, vollständige ACID-Transaktionen, erweiterbare Typen und Indizes (z.B. pgvector) sowie aktive Open-Source-Entwicklung.",
+    "relevant_doc_ids": [],
+    "language": "de",
+    "category": "databases"
+  },
+  {
+    "id": "q009",
+    "question": "Как работает индекс HNSW для векторного поиска?",
+    "answer": "HNSW (Hierarchical Navigable Small World) строит многоуровневый граф связей между векторами. При поиске алгоритм начинает с верхнего уровня (меньше узлов, дальние связи) и постепенно спускается к нижнему (плотная связность), находя ближайших соседей за O(log n).",
+    "relevant_doc_ids": [],
+    "language": "ru",
+    "category": "databases"
+  },
+  {
+    "id": "q010",
+    "question": "What is the CAP theorem in distributed systems?",
+    "answer": "CAP theorem states that a distributed system can guarantee at most two of three properties: Consistency (all nodes see the same data), Availability (every request gets a response), and Partition tolerance (the system continues despite network partitions). In practice, partition tolerance is required, so the choice is between consistency and availability.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "distributed_systems"
+  },
+  {
+    "id": "q011",
+    "question": "Erkläre das Konzept der Microservices-Architektur.",
+    "answer": "Microservices teilen eine Anwendung in kleine, unabhängig deploybare Dienste auf, die über APIs kommunizieren. Vorteile: unabhängige Skalierung, Technologiefreiheit pro Dienst, isolierte Fehler. Nachteile: erhöhte Netzwerkkomplexität, verteilte Transaktionen, Orchestrierungsaufwand.",
+    "relevant_doc_ids": [],
+    "language": "de",
+    "category": "architecture"
+  },
+  {
+    "id": "q012",
+    "question": "What are the OWASP Top 10 security risks?",
+    "answer": "The OWASP Top 10 (2021) includes: Broken Access Control, Cryptographic Failures, Injection, Insecure Design, Security Misconfiguration, Vulnerable and Outdated Components, Identification and Authentication Failures, Software and Data Integrity Failures, Security Logging Failures, and Server-Side Request Forgery (SSRF).",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "security"
+  },
+  {
+    "id": "q013",
+    "question": "Что такое JWT и как он работает?",
+    "answer": "JWT (JSON Web Token) — компактный токен аутентификации, состоящий из трёх частей: header (алгоритм), payload (данные пользователя, срок действия), signature (HMAC или RSA подпись). Сервер проверяет подпись без обращения к БД, что делает JWT статeless.",
+    "relevant_doc_ids": [],
+    "language": "ru",
+    "category": "security"
+  },
+  {
+    "id": "q014",
+    "question": "How does async/await work in Python?",
+    "answer": "Python's async/await uses coroutines scheduled by an event loop (asyncio). `async def` defines a coroutine; `await` suspends it and yields control to the event loop until the awaited coroutine or future completes. This enables concurrent I/O-bound tasks without threads.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "programming"
+  },
+  {
+    "id": "q015",
+    "question": "Was ist der Unterschied zwischen Docker und einer virtuellen Maschine?",
+    "answer": "Docker-Container teilen den Host-Kernel und isolieren Prozesse per Namespaces/Cgroups — leichtgewichtig, schnell startend. VMs emulieren vollständige Hardware mit eigenem OS-Kernel — stärkere Isolation, aber mehr Ressourcenverbrauch und langsamerer Start.",
+    "relevant_doc_ids": [],
+    "language": "de",
+    "category": "devops"
+  },
+  {
+    "id": "q016",
+    "question": "Как настроить Nginx как обратный прокси?",
+    "answer": "В конфигурации Nginx добавьте блок `location / { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }`. Для WebSocket добавьте `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection \"upgrade\";`.",
+    "relevant_doc_ids": [],
+    "language": "ru",
+    "category": "devops"
+  },
+  {
+    "id": "q017",
+    "question": "What is the difference between BM25 and vector similarity search?",
+    "answer": "BM25 is a lexical ranking function based on term frequency and inverse document frequency — fast and interpretable but misses semantic synonyms. Vector search (cosine/dot-product similarity on embeddings) captures semantic meaning and works across languages but can miss exact keyword matches. Hybrid search (RRF fusion) combines both.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "search"
+  },
+  {
+    "id": "q018",
+    "question": "Erkläre den Unterschied zwischen SQL und NoSQL-Datenbanken.",
+    "answer": "SQL-Datenbanken speichern Daten in strukturierten Tabellen mit festem Schema und ACID-Garantien. NoSQL-Datenbanken (Dokument, Key-Value, Graph, Spalten) bieten flexibles Schema, horizontale Skalierung und eventuell Konsistenz. Wahl hängt von Anforderungen an Konsistenz, Schema-Flexibilität und Skalierung ab.",
+    "relevant_doc_ids": [],
+    "language": "de",
+    "category": "databases"
+  },
+  {
+    "id": "q019",
+    "question": "Что такое SSE (Server-Sent Events) и чем отличается от WebSocket?",
+    "answer": "SSE — однонаправленный канал от сервера к клиенту по HTTP, клиент не может отправлять данные после открытия. WebSocket — двунаправленный протокол (full-duplex). SSE проще (встроенный браузерный API EventSource), автопереподключение, работает через HTTP/2. WebSocket нужен для двунаправленного реального времени.",
+    "relevant_doc_ids": [],
+    "language": "ru",
+    "category": "protocols"
+  },
+  {
+    "id": "q020",
+    "question": "How do you prevent SQL injection in Python?",
+    "answer": "Always use parameterized queries (prepared statements) — e.g., `cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))` — never string concatenation. Use ORMs like SQLAlchemy that parameterize automatically. Validate and sanitize inputs at system boundaries.",
+    "relevant_doc_ids": [],
+    "language": "en",
+    "category": "security"
+  }
+]
