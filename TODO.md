@@ -311,36 +311,6 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ---
 
-## 25. Deployment Plan: OpenClaw (TariStation2 + SintAItion) ✅ Implemented (v2026.4.50)
-
-> **Deployed targets:** TariStation2 (IniCoS-1, i7-2640M, 7.6 GB, CPU-only) + SintAItion (AMD Radeon 890M GPU, 48 GB RAM).
-> **Backend:** `STORE_BACKEND=postgres` + pgvector HNSW. **LLM:** Ollama (gemma4:e4b on SintAItion / qwen3.5:0.8b on TariStation2) + OpenAI fallback.
-> → Deployment scripts: `deploy/system-configs/taristation2/` + `deploy/system-configs/sintaition/`
-> → Completed items → See DONE.md §25
-
-### 25.1 Base System ✅ Done
-- [x] Ubuntu 24.04 LTS; `ffmpeg`, `git`, Python 3.12 installed on both targets
-- [x] Source deployed to `~/.taris/`; `pip install -r requirements.txt` (see install scripts)
-
-### 25.2–25.5 Base, PostgreSQL, Ollama, Embedding, Voice ✅ All done → See DONE.md
-
-### 25.6 RAG — Hybrid Tiered RAG ✅ Done (Phases A–D)
-- [ ] `doc_sharing` permission table — fine-grained per-user ACL (Phase C open item) → tracked in **§27.4**
-
-### 25.7 Migration from PicoClaw ✅ Done → See DONE.md (v2026.4.31)
-
-### 25.8 Services & Tests ✅ Done
-- [ ] AutoResearch eval (§23.3+): `pip install ragas deepeval` — future/research only (§23)
-
-### 25.9 Hardware Notes
-- **SintAItion** — AMD Radeon 890M GPU (16 GB shared VRAM), 48 GB RAM, 915 GB NVMe. Full stack primary target.
-- **TariStation2 (IniCoS-1)** — i7-2640M CPU-only, 7.6 GB RAM. Engineering/dev target. Small Ollama models only.
-- **Pi 5 8 GB** — minimum for full stack. NVMe HAT strongly recommended. Use Ollama with small models.
-- **RK3588 (Orange Pi 5 / Rock 5B)** — good Pi-class option: 6 TOPS NPU + PCIe 3.0 + up to 16 GB.
-- **Pi 4 B 4 GB** — not recommended for OpenClaw tier; stick to §24 patterns with cloud LLM.
-
----
-
 ## 26. Deployment Plan: VPS (Cloud) ✅ Implemented (v2026.4.50)
 
 > **Deployed:** Docker on `dev2null.de` VPS (Ubuntu, aarch64, 6 vCPU, 7.7 GB RAM).
