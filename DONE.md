@@ -61,6 +61,10 @@
 
 ## 1. Open Issues &amp; Roadmap
 
+### 1.5 Prompt Templates per Role ✅ Implemented (v2026.4.73)
+Role-based system prompt templates in `src/prompts.json` (`role_system_prompts` + `role_capabilities` keys), `{style_guide}` + `{bot_capabilities}` variable injection, voice-mode template key, `_build_system_message(chat_id, text, voice_mode=False)`. Tests T168–T172.  
+→ [conversation.md](doc/architecture/conversation.md) · [prompts.json](src/prompts.json)
+
 ### 1.0 Profile Redesign ✅ Implemented (v2026.3.31)
 Profile self-service hub — edit name, change password, open mailbox — in both Telegram and Web UI.
 

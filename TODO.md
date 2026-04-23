@@ -30,10 +30,6 @@
 Auto-guest/user registration (`AUTO_GUEST_ENABLED`, `AUTO_USER_ENABLED`), rate limiting (`GUEST_MSG_DAILY_LIMIT`, `GUEST_MSG_HOURLY_LIMIT`), guest menu keyboard, `_is_guest_real_impl()`, `_check_guest_rate_limit()`, meeting request flow (`_start_guest_meeting`, free slot picker), admin Promote-to-User button with handler, shared-docs RAG constant (`SHARED_DOCS_OWNER`). Tests T140–T149.  
 → [Full spec](doc/todo/1.2-guest-users.md) · [Roles overview](doc/users/roles-overview.md)
 
-### 1.5 Prompt Templates per Role ✅ Implemented (v2026.4.73)
-Role-based system prompt templates in `src/prompts.json` (`role_system_prompts` + `role_capabilities` keys), `{style_guide}` + `{bot_capabilities}` variable injection, voice-mode template key, `_build_system_message(chat_id, text, voice_mode=False)`. Tests T168–T172.  
-→ [conversation.md](doc/architecture/conversation.md) · [prompts.json](src/prompts.json)
-
 ### 1.3 Contact Book ✅ Implemented (v2026.3.30)
 → [Full spec](doc/archive/todo/4.0-contact-book.md) · [Developer role spec](doc/archive/todo/1.3-developer-role.md)
 - [ ] Add additional fields for contact (planned, not yet implemented)
