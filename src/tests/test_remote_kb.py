@@ -22,6 +22,9 @@ T62  circuit-breaker skips MCP calls when open; clears on success
 T63  session cancel: is_active() clears after cancel()
 T64  Web UI route /api/kb present in bot_web.py (source)
 T65  handle_message returns False when no active session (no state pollution)
+T225 _extract_to_text converts RTF bytes → text/plain (requires striprtf)
+T226 _extract_to_text converts PDF bytes → text/plain (requires pdfminer.six)
+T227 ingest_file returns {"error": msg} when extraction raises ValueError
 
 Usage (offline — no bot.env needed):
     python3 src/tests/test_remote_kb.py
@@ -833,6 +836,95 @@ def test_clear_memory_error_uses_op_fail_string():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T225  _extract_to_text: RTF → text/plain
+# ─────────────────────────────────────────────────────────────────────────────
+def test_extract_rtf_to_text():
+    """T225: _extract_to_text converts RTF bytes to text/plain via striprtf.
+
+    Root-cause regression: RTF files sent as binary to N8N produced 0 chunks
+    because striprtf was not installed in the Docker container. After installing
+    striprtf, the extraction must succeed and return text/plain.
+    """
+    try:
+        import striprtf  # noqa: F401
+    except ImportError:
+        raise AssertionError("SKIP: striprtf not installed — install with: pip install striprtf")
+    import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
+    from core.bot_mcp_client import _extract_to_text
+
+    # Minimal valid RTF with content
+    rtf_bytes = (
+        b"{\\rtf1\\ansi\\ansicpg1251{\\fonttbl{\\f0 Arial;}}"
+        b"\\f0 Safety guidelines for work at height }"
+    )
+    result_bytes, result_name, result_mime = _extract_to_text(rtf_bytes, "safety.rtf", "text/rtf")
+
+    assert result_mime == "text/plain", f"Expected text/plain, got {result_mime}"
+    assert result_name.endswith(".txt"), f"Expected .txt extension, got {result_name}"
+    text = result_bytes.decode("utf-8")
+    assert len(text) > 5, f"Expected extracted text, got: {text!r}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T226  _extract_to_text: PDF → text/plain
+# ─────────────────────────────────────────────────────────────────────────────
+def test_extract_pdf_to_text():
+    """T226: _extract_to_text converts PDF bytes to text/plain via pdfminer.six.
+
+    Regression: PDF files were not handled before this fix. pdfminer.six was
+    installed but _extract_to_text only handled RTF and .doc.
+    """
+    try:
+        import pdfminer  # noqa: F401
+    except ImportError:
+        raise AssertionError("SKIP: pdfminer.six not installed — install with: pip install pdfminer.six")
+
+    import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
+
+    # Minimal valid PDF (text in content stream)
+    pdf_bytes = (
+        b"%PDF-1.4\n"
+        b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]"
+        b"/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+        b"4 0 obj<</Length 48>>stream\nBT /F1 12 Tf 100 700 Td (Safety rules) Tj ET\nendstream\nendobj\n"
+        b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+        b"xref\n0 6\n0000000000 65535 f \n"
+        b"trailer<</Size 6/Root 1 0 R>>\nstartxref\n9\n%%EOF"
+    )
+
+    from core.bot_mcp_client import _extract_to_text
+    result_bytes, result_name, result_mime = _extract_to_text(pdf_bytes, "manual.pdf", "application/pdf")
+
+    assert result_mime == "text/plain", f"Expected text/plain, got {result_mime}"
+    assert result_name.endswith(".txt"), f"Expected .txt extension, got {result_name}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T227  ingest_file returns {"error": ...} when extraction fails (no crash)
+# ─────────────────────────────────────────────────────────────────────────────
+def test_ingest_extraction_error_returned():
+    """T227: ingest_file returns {"error": msg} (not {}) when _extract_to_text raises ValueError.
+
+    Regression: before fix, failed extraction caused silent {} return (no error feedback).
+    After fix, the error message is returned and shown to the user.
+    """
+    import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
+    from unittest.mock import patch, MagicMock
+    import core.bot_mcp_client as mcp_mod
+
+    # Patch _extract_to_text to raise ValueError (e.g., empty RTF)
+    with patch.object(mcp_mod, "_extract_to_text", side_effect=ValueError("RTF extraction produced empty text")):
+        with patch.object(mcp_mod, "_load_config", return_value=("http://fake", "key", "tok", 5, 3)):
+            with patch("core.bot_config.N8N_KB_WEBHOOK_INGEST", "http://fake-webhook"):
+                result = mcp_mod.ingest_file(12345, "empty.rtf", b"{\\rtf1}", "text/rtf")
+
+    assert "error" in result, f"Expected 'error' key in result, got: {result}"
+    assert "RTF extraction" in result["error"], f"Expected extraction error msg, got: {result['error']}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Deployed integration tests (T220–T224)
 # Require KB_PG_DSN env var pointing to a live taris_kb PostgreSQL DB.
 # Insert real test data, call bot_remote_kb public API with mocked bot and _t,
@@ -1107,6 +1199,9 @@ if __name__ == "__main__":
         ("T217 search_error_uses_op_fail",         test_search_error_uses_op_fail_string),
         ("T218 list_docs_error_uses_op_fail",      test_list_docs_error_uses_op_fail_string),
         ("T219 clear_memory_error_uses_op_fail",   test_clear_memory_error_uses_op_fail_string),
+        ("T225 extract_rtf_to_text",               test_extract_rtf_to_text),
+        ("T226 extract_pdf_to_text",               test_extract_pdf_to_text),
+        ("T227 ingest_extraction_error_returned",  test_ingest_extraction_error_returned),
     ]
 
     passed = failed = skipped = 0

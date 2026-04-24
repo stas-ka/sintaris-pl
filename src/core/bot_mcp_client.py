@@ -346,37 +346,79 @@ def call_tool(tool: str, args: dict) -> dict[str, Any]:
 def _extract_to_text(
     file_bytes: bytes, filename: str, mime: str
 ) -> tuple[bytes, str, str]:
-    """Pre-process RTF and legacy DOC files to plain text before sending to N8N.
+    """Pre-process binary documents to plain text before sending to N8N.
 
+    Supported formats: RTF, PDF, .doc, .docx.
     Returns (file_bytes, filename, mime) — converted to text/plain when possible.
     Other formats are passed through unchanged.
+    Raises ValueError if extraction produces empty text (caller should abort ingest).
     """
     fname_lower = filename.lower()
+    base = filename.rsplit('.', 1)[0]
 
     # RTF → plain text via striprtf
     if fname_lower.endswith('.rtf') or 'rtf' in mime.lower():
         try:
             from striprtf.striprtf import rtf_to_text
-            text = rtf_to_text(file_bytes.decode('utf-8', errors='replace'))
-            base = filename.rsplit('.', 1)[0]
-            log.debug("[MCP-client] RTF extracted: %d chars", len(text))
+            text = rtf_to_text(file_bytes.decode('utf-8', errors='replace')).strip()
+            if not text:
+                raise ValueError("RTF extraction produced empty text")
+            log.info("[MCP-client] RTF extracted: %d chars from %s", len(text), filename)
             return text.encode('utf-8'), base + '.txt', 'text/plain'
         except ImportError:
-            log.warning("[MCP-client] striprtf not installed — RTF upload may fail")
+            raise ValueError("striprtf not installed — cannot extract RTF. Run: pip install striprtf")
+        except ValueError:
+            raise
         except Exception as exc:
-            log.warning("[MCP-client] RTF extraction failed (%s)", exc)
+            raise ValueError(f"RTF extraction failed: {exc}") from exc
 
-    # .doc (old binary Word) → try python-docx (handles OOXML-based .doc files)
-    if fname_lower.endswith('.doc') and not fname_lower.endswith('.docx'):
+    # PDF → plain text via pdfminer.six
+    if fname_lower.endswith('.pdf') or 'pdf' in mime.lower():
+        try:
+            import io as _io
+            from pdfminer.high_level import extract_text as _pdf_extract
+            text = _pdf_extract(_io.BytesIO(file_bytes)).strip()
+            if not text:
+                raise ValueError("PDF extraction produced empty text (scanned image PDF?)")
+            log.info("[MCP-client] PDF extracted: %d chars from %s", len(text), filename)
+            return text.encode('utf-8'), base + '.txt', 'text/plain'
+        except ImportError:
+            raise ValueError("pdfminer.six not installed — cannot extract PDF. Run: pip install pdfminer.six")
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(f"PDF extraction failed: {exc}") from exc
+
+    # .docx → plain text via python-docx
+    if fname_lower.endswith('.docx') or 'officedocument.wordprocessingml' in mime.lower():
         try:
             import io as _io
             from docx import Document as _Doc
             doc = _Doc(_io.BytesIO(file_bytes))
-            text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+            text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip()).strip()
+            if not text:
+                raise ValueError(".docx extraction produced empty text")
+            log.info("[MCP-client] DOCX extracted: %d paragraphs from %s", len(doc.paragraphs), filename)
+            return text.encode('utf-8'), base + '.txt', 'text/plain'
+        except ImportError:
+            raise ValueError("python-docx not installed — cannot extract .docx. Run: pip install python-docx")
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(f"DOCX extraction failed: {exc}") from exc
+
+    # .doc (old binary Word) → try python-docx (handles OOXML-based .doc files)
+    if fname_lower.endswith('.doc'):
+        try:
+            import io as _io
+            from docx import Document as _Doc
+            doc = _Doc(_io.BytesIO(file_bytes))
+            text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip()).strip()
             if text:
-                base = filename.rsplit('.', 1)[0]
-                log.debug("[MCP-client] .doc extracted: %d paragraphs", len(doc.paragraphs))
+                log.info("[MCP-client] DOC extracted: %d paragraphs from %s", len(doc.paragraphs), filename)
                 return text.encode('utf-8'), base + '.txt', 'text/plain'
+            # Old binary .doc — can't extract, pass through and let N8N try
+            log.warning("[MCP-client] .doc extraction yielded no text — sending as-is")
         except Exception as exc:
             log.warning("[MCP-client] .doc extraction failed (%s) — sending as-is", exc)
 
@@ -406,8 +448,12 @@ def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
         log.warning("[MCP-client] N8N_KB_WEBHOOK_INGEST not configured — ingest skipped")
         return {}
 
-    # Pre-process RTF and legacy .doc files to plain text
-    file_bytes, filename, mime = _extract_to_text(file_bytes, filename, mime)
+    # Pre-process binary documents (RTF, PDF, DOCX) to plain text
+    try:
+        file_bytes, filename, mime = _extract_to_text(file_bytes, filename, mime)
+    except ValueError as exc:
+        log.error("[MCP-client] Cannot ingest %s: %s", filename, exc)
+        return {"error": str(exc)}
 
     # Build multipart/form-data manually (no external lib required)
     boundary = b"----TarisMCPBoundary"

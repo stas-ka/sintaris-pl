@@ -203,6 +203,13 @@ def _do_ingest(chat_id: int, doc, bot, _t) -> None:
                 reply_markup=_done_markup(chat_id, _t),
             )
             return
+        if result.get("error"):
+            bot.edit_message_text(
+                _t(chat_id, "remote_kb_upload_fail").format(error=result["error"][:200]),
+                chat_id, status.message_id, parse_mode="Markdown",
+                reply_markup=_done_markup(chat_id, _t),
+            )
+            return
         n_chunks = result.get("n_chunks", "?")
         bot.edit_message_text(
             _t(chat_id, "remote_kb_upload_ok").format(filename=fname, n_chunks=n_chunks),
