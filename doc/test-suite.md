@@ -27,9 +27,10 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | `src/tests/screen_loader/` | Screen DSL loader regression (Category G — all 64 tests) | Local machine |
 | `src/tests/llm/` | LLM provider tests (Category H — all 18 tests) | Local machine |
 | **Before backup or after data migration** | Data consistency check (Category J) | Any target |
-| `src/features/bot_remote_kb.py` / `src/core/bot_mcp_client.py` | Remote KB agent tests T200–T219 | Local machine |
+| `src/features/bot_remote_kb.py` / `src/core/bot_mcp_client.py` | Remote KB agent tests T200–T224 | Local machine (T200–T219); VPS with KB_PG_DSN (T220–T224) |
 | `src/strings.json` remote_kb_* keys | Remote KB agent T203, T209, T216 | Local machine |
 | `src/bot_web.py` `/api/remote-kb/` routes | Remote KB agent T214 | Local machine |
+| `src/core/bot_mcp_client.py` KB direct DB functions | Integration T220–T224 | VPS-Supertaris with `KB_PG_DSN` set |
 
 ---
 
@@ -254,7 +255,13 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 
 ### 2.5f Remote KB Agent Tests — `src/tests/test_remote_kb.py`
 
-Run with: `python src/tests/test_remote_kb.py` (offline, source-inspection + mock E2E). All T200-T215 tests run without network access.
+Run with: `python src/tests/test_remote_kb.py` (offline, source-inspection + mock E2E). All T200–T219 tests run without network access.  
+Integration tests T220–T224 require `KB_PG_DSN` to be set and run against a live PostgreSQL `taris_kb` database:
+```
+KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb python3 src/tests/test_remote_kb.py
+# On VPS inside Docker:
+docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb taris-vps-telegram python3 /app/tests/test_remote_kb.py
+```
 
 | ID | Test | What it checks | When to run |
 |---|---|---|---|
@@ -278,6 +285,11 @@ Run with: `python src/tests/test_remote_kb.py` (offline, source-inspection + moc
 | T217 | `search_error_uses_op_fail` | Search failure uses `remote_kb_op_fail` string (`❌ Error: ...`) not `remote_kb_upload_fail` (`❌ Upload failed: ...`). Regression guard — wrong string caused confusing "Upload failed" message on search errors. | After editing `_do_search()` exception handler |
 | T218 | `list_docs_error_uses_op_fail` | `list_docs()` failure uses `remote_kb_op_fail` not `remote_kb_upload_fail`. | After editing `list_docs()` exception handler |
 | T219 | `clear_memory_error_uses_op_fail` | `clear_memory()` failure uses `remote_kb_op_fail` not `remote_kb_upload_fail`. | After editing `clear_memory()` exception handler |
+| T220 | `deployed_list_docs` | *(integration)* Inserts test doc via psycopg, calls `list_docs()` with mock bot, asserts title + chunk count appear in reply. | After editing `list_docs()` or `_kb_list_documents_direct()` |
+| T221 | `deployed_list_docs_empty` | *(integration)* No docs for test chat_id → `list_docs()` sends `remote_kb_docs_empty` key. | After editing `list_docs()` empty-result path |
+| T222 | `deployed_delete_document` | *(integration)* Inserts doc, calls `call_tool('kb_delete_document')`, verifies doc removed from DB. | After editing `_kb_delete_document_direct()` |
+| T223 | `deployed_search` | *(integration)* Inserts doc with embedding, calls `query_remote("quick brown fox")`, asserts text in results. | After editing `_kb_search_direct()` or Ollama embedding path |
+| T224 | `deployed_full_cycle` | *(integration)* Full end-to-end: insert → list (non-empty) → search (results) → delete → list (empty). | After any change touching KB list/search/delete pipeline |
 
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 

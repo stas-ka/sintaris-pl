@@ -265,7 +265,9 @@ def test_is_configured_false_when_env_empty():
         "N8N_KB_API_KEY":    "",
     }):
         import importlib
+        import core.bot_config as cfg
         import features.bot_remote_kb as mod
+        importlib.reload(cfg)   # re-read module-level constants from patched env
         importlib.reload(mod)
         assert mod.is_configured() is False, "is_configured() must be False when disabled"
 
@@ -815,6 +817,229 @@ def test_clear_memory_error_uses_op_fail_string():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Deployed integration tests (T220–T224)
+# Require KB_PG_DSN env var pointing to a live taris_kb PostgreSQL DB.
+# Insert real test data, call bot_remote_kb public API with mocked bot and _t,
+# verify replies contain expected content, then clean up.
+# Run these inside the Docker container or with direct PG access:
+#   docker exec taris-vps-telegram python3 /app/tests/test_remote_kb.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+import os as _os
+_HAS_KB_PG = bool(_os.environ.get("KB_PG_DSN"))
+
+_KB_PG_DSN    = _os.environ.get("KB_PG_DSN", "")
+_KB_TEST_CHAT = 7777777          # dedicated test chat_id, never a real user
+_KB_TEST_TITLE = "taris_integration_test.txt"
+_KB_TEST_TEXT  = "Taris integration test: the quick brown fox jumps over the lazy dog."
+_KB_EMB_DIM    = 384
+
+
+def _kb_get_embedding(text: str) -> list:
+    """Return embedding from Ollama all-minilm, or unit vector as fallback."""
+    import urllib.request, json as _j
+    ollama_url = _os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+    try:
+        payload = _j.dumps({"model": "all-minilm", "prompt": text}).encode()
+        req = urllib.request.Request(
+            ollama_url.rstrip("/") + "/api/embeddings", data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            emb = _j.loads(resp.read()).get("embedding", [])
+        if len(emb) == _KB_EMB_DIM:
+            return emb
+    except Exception:
+        pass
+    v = [0.0] * _KB_EMB_DIM
+    v[0] = 1.0
+    return v
+
+
+def _kb_insert_test_doc() -> str:
+    """Insert one test document + one chunk into taris_kb; return doc_id."""
+    import psycopg
+    vec_str = "[" + ",".join(f"{x:.6f}" for x in _kb_get_embedding(_KB_TEST_TEXT)) + "]"
+    with psycopg.connect(_KB_PG_DSN) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO kb_documents
+                       (doc_id, owner_chat_id, title, mime, sha256, source)
+                   VALUES (gen_random_uuid(), %s, %s, 'text/plain',
+                           md5(%s::text || %s::text), 'integration_test')
+                   ON CONFLICT (sha256) DO UPDATE SET title = EXCLUDED.title
+                   RETURNING doc_id::text""",
+                (_KB_TEST_CHAT, _KB_TEST_TITLE, _KB_TEST_TITLE, str(_KB_TEST_CHAT)),
+            )
+            doc_id = cur.fetchone()[0]
+            cur.execute(
+                """INSERT INTO kb_chunks
+                       (doc_id, chunk_idx, section, text, tokens, embedding, metadata)
+                   VALUES (%s::uuid, 0, '', %s, %s, %s::vector, '{}'::jsonb)
+                   ON CONFLICT DO NOTHING""",
+                (doc_id, _KB_TEST_TEXT, len(_KB_TEST_TEXT) // 4, vec_str),
+            )
+        conn.commit()
+    return doc_id
+
+
+def _kb_cleanup() -> None:
+    """Remove all test docs and chunks for _KB_TEST_CHAT from taris_kb."""
+    import psycopg
+    with psycopg.connect(_KB_PG_DSN) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM kb_documents WHERE owner_chat_id = %s", (_KB_TEST_CHAT,)
+            )
+        conn.commit()
+
+
+def _make_bot_mock():
+    bot = MagicMock()
+    bot.send_message.return_value = SimpleNamespace(message_id=42)
+    return bot
+
+
+def _t_passthrough(chat_id, key, **kw):
+    return key.format(**kw) if kw else key
+
+
+def test_deployed_list_docs():
+    """T220 list_docs() returns real document title from deployed KB via direct psycopg."""
+    if not _HAS_KB_PG:
+        raise unittest.SkipTest("KB_PG_DSN not set")
+    _kb_cleanup()
+    _kb_insert_test_doc()
+    try:
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+
+        bot = _make_bot_mock()
+        mod.list_docs(_KB_TEST_CHAT, bot, _t_passthrough)
+
+        assert bot.edit_message_text.called, "edit_message_text not called"
+        edit_text = bot.edit_message_text.call_args_list[-1][0][0]
+        assert _KB_TEST_TITLE in edit_text, \
+            f"Expected doc title '{_KB_TEST_TITLE}' in reply, got: {edit_text!r}"
+        assert "chunks" in edit_text, \
+            f"Expected 'chunks' count in reply, got: {edit_text!r}"
+    finally:
+        _kb_cleanup()
+
+
+def test_deployed_list_docs_empty():
+    """T221 list_docs() sends 'empty' key when no documents exist for this chat."""
+    if not _HAS_KB_PG:
+        raise unittest.SkipTest("KB_PG_DSN not set")
+    _kb_cleanup()
+    try:
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+
+        bot = _make_bot_mock()
+        mod.list_docs(_KB_TEST_CHAT, bot, _t_passthrough)
+
+        assert bot.edit_message_text.called, "edit_message_text not called"
+        edit_text = bot.edit_message_text.call_args_list[-1][0][0]
+        assert "remote_kb_docs_empty" in edit_text, \
+            f"Expected empty-KB key in reply, got: {edit_text!r}"
+    finally:
+        _kb_cleanup()
+
+
+def test_deployed_delete_document():
+    """T222 call_tool(kb_delete_document) removes doc; subsequent list shows it gone."""
+    if not _HAS_KB_PG:
+        raise unittest.SkipTest("KB_PG_DSN not set")
+    _kb_cleanup()
+    doc_id = _kb_insert_test_doc()
+    try:
+        import importlib
+        from core import bot_mcp_client as mcp_mod
+        importlib.reload(mcp_mod)
+
+        result = mcp_mod.call_tool("kb_delete_document", {
+            "doc_id": doc_id, "chat_id": _KB_TEST_CHAT,
+        })
+        assert result.get("deleted") is True, \
+            f"Expected deleted=True, got: {result}"
+
+        list_result = mcp_mod.call_tool("kb_list_documents", {"chat_id": _KB_TEST_CHAT})
+        titles = [d.get("title") for d in list_result.get("documents", [])]
+        assert _KB_TEST_TITLE not in titles, \
+            f"Doc still in list after delete: {titles}"
+    finally:
+        _kb_cleanup()
+
+
+def test_deployed_search():
+    """T223 query_remote() finds test chunk via real pgvector cosine search."""
+    if not _HAS_KB_PG:
+        raise unittest.SkipTest("KB_PG_DSN not set")
+    _kb_cleanup()
+    _kb_insert_test_doc()
+    try:
+        import importlib
+        from core import bot_mcp_client as mcp_mod
+        importlib.reload(mcp_mod)
+
+        chunks = mcp_mod.query_remote("quick brown fox lazy dog", _KB_TEST_CHAT, top_k=5)
+        assert chunks, "Expected at least one chunk from pgvector search"
+        texts = [c.get("text", "") for c in chunks]
+        assert any(_KB_TEST_TEXT in t for t in texts), \
+            f"Test chunk text not found in results: {texts}"
+    finally:
+        _kb_cleanup()
+
+
+def test_deployed_full_cycle():
+    """T224 Full UI cycle via bot_remote_kb API: insert → list → search → delete → empty."""
+    if not _HAS_KB_PG:
+        raise unittest.SkipTest("KB_PG_DSN not set")
+    _kb_cleanup()
+    try:
+        import importlib
+        import features.bot_remote_kb as mod
+        from core import bot_mcp_client as mcp_mod
+        importlib.reload(mcp_mod)
+        importlib.reload(mod)
+
+        # Step 1: insert test data
+        doc_id = _kb_insert_test_doc()
+
+        # Step 2: list_docs shows the title
+        bot1 = _make_bot_mock()
+        mod.list_docs(_KB_TEST_CHAT, bot1, _t_passthrough)
+        edit1 = bot1.edit_message_text.call_args_list[-1][0][0]
+        assert _KB_TEST_TITLE in edit1, \
+            f"Step 2 (list): expected title in reply, got: {edit1!r}"
+
+        # Step 3: search returns the chunk
+        chunks = mcp_mod.query_remote("quick brown fox", _KB_TEST_CHAT, top_k=3)
+        assert chunks, "Step 3 (search): no chunks returned"
+        assert any(_KB_TEST_TEXT in c.get("text", "") for c in chunks), \
+            f"Step 3 (search): test text not in results: {[c.get('text') for c in chunks]}"
+
+        # Step 4: delete the document
+        del_result = mcp_mod.call_tool("kb_delete_document", {
+            "doc_id": doc_id, "chat_id": _KB_TEST_CHAT,
+        })
+        assert del_result.get("deleted") is True, \
+            f"Step 4 (delete): expected deleted=True, got: {del_result}"
+
+        # Step 5: list_docs now shows empty
+        bot2 = _make_bot_mock()
+        mod.list_docs(_KB_TEST_CHAT, bot2, _t_passthrough)
+        edit2 = bot2.edit_message_text.call_args_list[-1][0][0]
+        assert "remote_kb_docs_empty" in edit2, \
+            f"Step 5 (empty list): expected empty key, got: {edit2!r}"
+    finally:
+        _kb_cleanup()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Runtime tests (only when bot.env is loadable)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -895,6 +1120,28 @@ if __name__ == "__main__":
                 failed += 1
     else:
         print("INFO  runtime tests skipped (no bot.env / BOT_TOKEN)")
+
+    if _HAS_KB_PG:
+        print("\n--- Deployed integration tests (KB_PG_DSN set) ---")
+        for name, fn in [
+            ("T220 deployed_list_docs",            test_deployed_list_docs),
+            ("T221 deployed_list_docs_empty",       test_deployed_list_docs_empty),
+            ("T222 deployed_delete_document",       test_deployed_delete_document),
+            ("T223 deployed_search",                test_deployed_search),
+            ("T224 deployed_full_cycle",            test_deployed_full_cycle),
+        ]:
+            try:
+                fn()
+                print(f"PASS  {name}")
+                passed += 1
+            except AssertionError as e:
+                print(f"FAIL  {name}: {e}")
+                failed += 1
+            except Exception as e:
+                print(f"SKIP  {name}: {type(e).__name__}: {e}")
+                skipped += 1
+    else:
+        print("INFO  integration tests skipped (KB_PG_DSN not set)")
 
     print(f"\n{'='*50}")
     print(f"Results: {passed} passed, {failed} failed, {skipped} skipped")

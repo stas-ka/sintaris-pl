@@ -115,7 +115,7 @@ def list_docs(chat_id: int, bot, _t) -> None:
         lines = [_t(chat_id, "remote_kb_docs_header")]
         for d in docs[:20]:
             title = d.get("title") or d.get("filename") or "—"
-            n = d.get("chunk_count", "?")
+            n = d.get("n_chunks") or d.get("chunk_count", "?")
             lines.append(f"• *{title}* ({n} chunks)")
         bot.edit_message_text(
             "\n".join(lines), chat_id, msg.message_id, parse_mode="Markdown",
