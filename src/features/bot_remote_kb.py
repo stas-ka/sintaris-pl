@@ -121,9 +121,20 @@ def list_docs(chat_id: int, bot, _t) -> None:
             return
         lines = [_t(chat_id, "remote_kb_docs_header")]
         for d in docs[:20]:
-            title = d.get("title") or d.get("filename") or "—"
-            n = d.get("n_chunks") or d.get("chunk_count", "?")
-            lines.append(f"• *{title}* ({n} chunks)")
+            title    = d.get("title") or d.get("filename") or "—"
+            n        = d.get("n_chunks") or d.get("chunk_count", "?")
+            tokens   = d.get("total_tokens", 0)
+            created  = d.get("created_at", "—")
+            sha      = d.get("sha256", "")
+            sha_disp = sha[:12] + "…" if len(sha) > 12 else sha or "—"
+            mime     = d.get("mime", "")
+            lines.append(
+                f"\n📄 *{title}*\n"
+                f"  • {_t(chat_id, 'remote_kb_doc_mime')}: `{mime}`\n"
+                f"  • {_t(chat_id, 'remote_kb_doc_chunks')}: {n} | {_t(chat_id, 'remote_kb_doc_tokens')}: {tokens}\n"
+                f"  • {_t(chat_id, 'remote_kb_doc_date')}: {created}\n"
+                f"  • SHA256: `{sha_disp}`"
+            )
         bot.edit_message_text(
             "\n".join(lines), chat_id, msg.message_id, parse_mode="Markdown",
         )

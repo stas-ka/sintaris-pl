@@ -208,22 +208,26 @@ def _kb_list_documents_direct(chat_id: int) -> dict[str, Any]:
                 cur.execute(
                     """SELECT d.doc_id::text, d.title, d.mime,
                               to_char(d.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
-                              COUNT(c.chunk_id) AS n_chunks
+                              COUNT(c.chunk_id)        AS n_chunks,
+                              COALESCE(SUM(c.tokens), 0) AS total_tokens,
+                              d.sha256
                          FROM kb_documents d
                          LEFT JOIN kb_chunks c ON c.doc_id = d.doc_id
                         WHERE d.owner_chat_id = %s
-                        GROUP BY d.doc_id, d.title, d.mime, d.created_at
+                        GROUP BY d.doc_id, d.title, d.mime, d.created_at, d.sha256
                         ORDER BY d.created_at DESC""",
                     (chat_id,),
                 )
                 rows = cur.fetchall()
         docs = [
             {
-                "doc_id":     r[0],
-                "title":      r[1],
-                "mime":       r[2],
-                "created_at": r[3],
-                "n_chunks":   r[4],
+                "doc_id":       r[0],
+                "title":        r[1],
+                "mime":         r[2],
+                "created_at":   r[3],
+                "n_chunks":     r[4],
+                "total_tokens": r[5],
+                "sha256":       r[6] or "",
             }
             for r in rows
         ]
