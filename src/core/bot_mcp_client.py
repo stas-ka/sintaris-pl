@@ -266,26 +266,24 @@ def _kb_delete_document_direct(doc_id: str, chat_id: int) -> dict[str, Any]:
 
 
 def _kb_search_direct(query: str, chat_id: int, top_k: int) -> list[dict]:
-    """Search KB via direct Ollama embedding + pgvector query (bypasses MCP SSE)."""
-    from core.bot_config import KB_PG_DSN, OLLAMA_URL
+    """Search KB via fastembed embedding + pgvector query (bypasses MCP SSE)."""
+    from core.bot_config import KB_PG_DSN
     if not KB_PG_DSN:
         return []
-    # 1. Get embedding from Ollama
+
+    # 1. Embed the query using the same model as ingest (fastembed all-MiniLM-L6-v2, 384-dim)
     try:
-        embed_url = OLLAMA_URL.rstrip('/').replace('/v1', '') + "/api/embeddings"
-        payload = _json.dumps({"model": "all-minilm", "prompt": query}).encode()
-        req = urllib.request.Request(
-            embed_url, data=payload,
-            headers={"Content-Type": "application/json"}, method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            emb_data = _json.loads(resp.read())
-        embedding = emb_data.get("embedding", [])
+        from core.bot_embeddings import EmbeddingService
+        svc = EmbeddingService.get()
+        if svc is None:
+            log.warning("[MCP-client] kb_search_direct: EmbeddingService unavailable")
+            return []
+        embedding = svc.embed(query)   # returns list[float] | None
         if not embedding:
-            log.warning("[MCP-client] kb_search_direct: empty embedding from Ollama")
+            log.warning("[MCP-client] kb_search_direct: empty embedding result")
             return []
     except Exception as exc:
-        log.warning("[MCP-client] kb_search_direct: Ollama embedding failed (%s)", exc)
+        log.warning("[MCP-client] kb_search_direct: embedding failed (%s)", exc)
         return []
 
     # 2. pgvector cosine similarity search
