@@ -146,7 +146,7 @@
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ doc_id: $('Split Chunks').first().json.doc_id, n_chunks: $('Split Chunks').first().json.totalChunks, n_embedded: $('Split Chunks').first().json.totalChunks, parse_time_ms: Date.now() - $('Split Chunks').first().json.startMs, filename: $('Split Chunks').first().json.filename }) }}",
+        "responseBody": "={{ JSON.stringify({ doc_id: $input.first().json.doc_id, n_chunks: $input.first().json.totalChunks, n_embedded: $input.first().json.totalChunks, parse_time_ms: Date.now() - $input.first().json.startMs, filename: $input.first().json.filename }) }}",
         "options": {
           "responseCode": 200
         }
