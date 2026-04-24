@@ -62,7 +62,8 @@ openai                 # required for LLM_PROVIDER=openai (gpt-4o-mini etc.)
 # ── Documents / RAG ──────────────────────────────────────────────────────────
 sentence-transformers  # all-MiniLM-L6-v2 embeddings (~90 MB)
 pdfminer.six           # PDF text extraction
-python-docx            # .docx text extraction
+python-docx            # .docx and .doc text extraction
+striprtf               # .rtf text extraction (pure Python)
 sqlite-vec             # SQLite vector search extension (RAG / KNN embeddings)
 
 # ── Remote KB — MCP client (N8N MCP Server Trigger, Phase 3+) ────────────────

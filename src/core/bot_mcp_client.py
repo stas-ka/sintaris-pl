@@ -198,6 +198,46 @@ def call_tool(tool: str, args: dict) -> dict[str, Any]:
         return {}
 
 
+def _extract_to_text(
+    file_bytes: bytes, filename: str, mime: str
+) -> tuple[bytes, str, str]:
+    """Pre-process RTF and legacy DOC files to plain text before sending to N8N.
+
+    Returns (file_bytes, filename, mime) — converted to text/plain when possible.
+    Other formats are passed through unchanged.
+    """
+    fname_lower = filename.lower()
+
+    # RTF → plain text via striprtf
+    if fname_lower.endswith('.rtf') or 'rtf' in mime.lower():
+        try:
+            from striprtf.striprtf import rtf_to_text
+            text = rtf_to_text(file_bytes.decode('utf-8', errors='replace'))
+            base = filename.rsplit('.', 1)[0]
+            log.debug("[MCP-client] RTF extracted: %d chars", len(text))
+            return text.encode('utf-8'), base + '.txt', 'text/plain'
+        except ImportError:
+            log.warning("[MCP-client] striprtf not installed — RTF upload may fail")
+        except Exception as exc:
+            log.warning("[MCP-client] RTF extraction failed (%s)", exc)
+
+    # .doc (old binary Word) → try python-docx (handles OOXML-based .doc files)
+    if fname_lower.endswith('.doc') and not fname_lower.endswith('.docx'):
+        try:
+            import io as _io
+            from docx import Document as _Doc
+            doc = _Doc(_io.BytesIO(file_bytes))
+            text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+            if text:
+                base = filename.rsplit('.', 1)[0]
+                log.debug("[MCP-client] .doc extracted: %d paragraphs", len(doc.paragraphs))
+                return text.encode('utf-8'), base + '.txt', 'text/plain'
+        except Exception as exc:
+            log.warning("[MCP-client] .doc extraction failed (%s) — sending as-is", exc)
+
+    return file_bytes, filename, mime
+
+
 def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
                 mime: str = "application/octet-stream") -> dict[str, Any]:
     """Upload a file to the N8N ingest webhook (plain HTTP POST multipart).
@@ -220,6 +260,9 @@ def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
     if not webhook_url:
         log.warning("[MCP-client] N8N_KB_WEBHOOK_INGEST not configured — ingest skipped")
         return {}
+
+    # Pre-process RTF and legacy .doc files to plain text
+    file_bytes, filename, mime = _extract_to_text(file_bytes, filename, mime)
 
     # Build multipart/form-data manually (no external lib required)
     boundary = b"----TarisMCPBoundary"
@@ -246,10 +289,17 @@ def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
     try:
         req = urllib.request.Request(webhook_url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            result = _json.loads(resp.read())
+            raw = resp.read()
+        if not raw.strip():
+            log.warning("[MCP-client] ingest webhook returned empty body (N8N workflow error?)")
+            return {}
+        result = _json.loads(raw)
         log.info("[MCP-client] ingest ok: doc_id=%s n_chunks=%s",
                  result.get("doc_id"), result.get("n_chunks"))
         return result
+    except _json.JSONDecodeError as exc:
+        log.warning("[MCP-client] ingest: N8N returned non-JSON response (%s)", exc)
+        return {}
     except Exception as exc:
         log.warning("[MCP-client] ingest failed (%s)", exc)
         return {}
