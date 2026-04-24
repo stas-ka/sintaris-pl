@@ -128,8 +128,10 @@ def list_docs(chat_id: int, bot, _t) -> None:
             sha      = d.get("sha256", "")
             sha_disp = sha[:12] + "…" if len(sha) > 12 else sha or "—"
             mime     = d.get("mime", "")
+            preview  = d.get("preview", "")
+            preview_line = f"\n  _{preview[:200]}_" if preview else ""
             lines.append(
-                f"\n📄 *{title}*\n"
+                f"\n📄 *{title}*{preview_line}\n"
                 f"  • {_t(chat_id, 'remote_kb_doc_mime')}: `{mime}`\n"
                 f"  • {_t(chat_id, 'remote_kb_doc_chunks')}: {n} | {_t(chat_id, 'remote_kb_doc_tokens')}: {tokens}\n"
                 f"  • {_t(chat_id, 'remote_kb_doc_date')}: {created}\n"

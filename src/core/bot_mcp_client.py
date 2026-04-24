@@ -210,11 +210,12 @@ def _kb_list_documents_direct(chat_id: int) -> dict[str, Any]:
                               to_char(d.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                               COUNT(c.chunk_id)        AS n_chunks,
                               COALESCE(SUM(c.tokens), 0) AS total_tokens,
-                              d.sha256
+                              d.sha256,
+                              d.structure
                          FROM kb_documents d
                          LEFT JOIN kb_chunks c ON c.doc_id = d.doc_id
                         WHERE d.owner_chat_id = %s
-                        GROUP BY d.doc_id, d.title, d.mime, d.created_at, d.sha256
+                        GROUP BY d.doc_id, d.title, d.mime, d.created_at, d.sha256, d.structure
                         ORDER BY d.created_at DESC""",
                     (chat_id,),
                 )
@@ -228,6 +229,8 @@ def _kb_list_documents_direct(chat_id: int) -> dict[str, Any]:
                 "n_chunks":     r[4],
                 "total_tokens": r[5],
                 "sha256":       r[6] or "",
+                "preview":      (r[7] or {}).get("preview", "") if isinstance(r[7], dict)
+                                else (_json.loads(r[7]).get("preview", "") if r[7] else ""),
             }
             for r in rows
         ]
@@ -429,6 +432,31 @@ def _extract_to_text(
     return file_bytes, filename, mime
 
 
+def _fix_doc_meta(doc_id: str, title: str, preview: str) -> None:
+    """Overwrite kb_documents.title and .structure after N8N ingest.
+
+    N8N sanitizes non-ASCII filenames (e.g. Cyrillic → underscores).
+    This corrects the title to the original Unicode filename and stores
+    a short text preview in the structure JSONB field.
+    """
+    from core.bot_config import KB_PG_DSN
+    if not KB_PG_DSN:
+        return
+    try:
+        import psycopg
+        structure = _json.dumps({"preview": preview}, ensure_ascii=False) if preview else None
+        with psycopg.connect(KB_PG_DSN) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE kb_documents SET title=%s, structure=%s WHERE doc_id=%s::uuid",
+                    (title, structure, doc_id),
+                )
+            conn.commit()
+        log.debug("[MCP-client] doc meta fixed: doc_id=%s title=%r", doc_id, title)
+    except Exception as exc:
+        log.warning("[MCP-client] _fix_doc_meta failed (%s)", exc)
+
+
 def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
                 mime: str = "application/octet-stream") -> dict[str, Any]:
     """Upload a file to the N8N ingest webhook (plain HTTP POST multipart).
@@ -452,12 +480,31 @@ def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
         log.warning("[MCP-client] N8N_KB_WEBHOOK_INGEST not configured — ingest skipped")
         return {}
 
+    # Keep original filename (with Unicode) before extraction changes the extension.
+    # N8N sanitizes filenames to ASCII — we overwrite title in DB after ingest.
+    original_filename = filename
+
     # Pre-process binary documents (RTF, PDF, DOCX) to plain text
     try:
         file_bytes, filename, mime = _extract_to_text(file_bytes, filename, mime)
     except ValueError as exc:
         log.error("[MCP-client] Cannot ingest %s: %s", filename, exc)
         return {"error": str(exc)}
+
+    # Preserve original title (Unicode), applying the new extension from extraction
+    if filename != original_filename:
+        ext = filename.rsplit('.', 1)[-1] if '.' in filename else 'txt'
+        base = original_filename.rsplit('.', 1)[0]
+        original_title = base + '.' + ext
+    else:
+        original_title = original_filename
+
+    # Build a short text preview for display in the document list
+    try:
+        preview_text = file_bytes[:500].decode('utf-8', errors='replace').strip()
+        preview = ' '.join(preview_text.split())[:250]
+    except Exception:
+        preview = ""
 
     # Build multipart/form-data manually (no external lib required)
     boundary = b"----TarisMCPBoundary"
@@ -491,12 +538,20 @@ def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
                 # N8N workflow ran but Respond node expression failed — data was stored.
                 # Treat as success with unknown chunk count.
                 log.warning("[MCP-client] ingest webhook HTTP 200 with empty body — assuming stored ok")
-                return {"n_chunks": "?"}
-            log.warning("[MCP-client] ingest webhook returned empty body (HTTP %s)", status)
-            return {}
-        result = _json.loads(raw)
+                result = {"n_chunks": "?"}
+            else:
+                log.warning("[MCP-client] ingest webhook returned empty body (HTTP %s)", status)
+                return {}
+        else:
+            result = _json.loads(raw)
         log.info("[MCP-client] ingest ok: doc_id=%s n_chunks=%s",
                  result.get("doc_id"), result.get("n_chunks"))
+
+        # Fix title and add preview in DB — N8N sanitizes Unicode filenames to ASCII underscores.
+        doc_id = result.get("doc_id")
+        if doc_id:
+            _fix_doc_meta(doc_id, original_title, preview)
+
         return result
     except _json.JSONDecodeError as exc:
         log.warning("[MCP-client] ingest: N8N returned non-JSON response (%s)", exc)
