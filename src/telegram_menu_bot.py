@@ -2073,8 +2073,17 @@ def document_handler(message):
         if _is_admin(cid) or _is_advanced(cid):
             if _remote_kb.handle_document(cid, message.document, bot, _t):
                 return
+            # active KB session but wrong step — hint user
+            bot.send_message(cid, _t(cid, "remote_kb_no_session"), parse_mode="Markdown")
+            return
         else:
             _remote_kb.cancel(cid)
+    elif _is_admin(cid) or _is_advanced(cid):
+        # file sent outside KB session — hint user to use KB Upload flow
+        fname = getattr(message.document, "file_name", "") or ""
+        if fname.lower().endswith((".pdf", ".docx", ".doc", ".rtf", ".txt", ".md", ".csv")):
+            bot.send_message(cid, _t(cid, "remote_kb_no_session"), parse_mode="Markdown")
+            return
     _handle_doc_upload(message)
 
 
