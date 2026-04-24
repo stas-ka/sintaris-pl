@@ -25,6 +25,8 @@ from core.bot_config import (
     MCP_REMOTE_URL,
     N8N_KB_API_KEY,
 )
+from core.bot_llm import ask_llm_with_history
+from telegram.bot_access import _lang
 import core.bot_mcp_client as _mcp
 
 log = logging.getLogger("taris.remote_kb")
@@ -160,6 +162,13 @@ def clear_memory(chat_id: int, bot, _t) -> None:
 
 # ─── Internal helpers ──────────────────────────────────────────────────────────
 
+_LANG_PROMPT = {
+    "ru": "Отвечай строго на русском языке.",
+    "de": "Antworte ausschließlich auf Deutsch.",
+    "en": "Answer in English.",
+}
+
+
 def _do_search(chat_id: int, query: str, bot, _t) -> None:
     cancel(chat_id)
     status = bot.send_message(chat_id, _t(chat_id, "remote_kb_searching"), parse_mode="Markdown")
@@ -171,16 +180,49 @@ def _do_search(chat_id: int, query: str, bot, _t) -> None:
                 chat_id, status.message_id, parse_mode="Markdown",
             )
             return
-        lines = [_t(chat_id, "remote_kb_result_header").format(count=len(chunks))]
-        for i, chunk in enumerate(chunks, 1):
-            section = chunk.get("section") or chunk.get("doc_id") or "—"
-            text    = (chunk.get("text") or chunk.get("chunk_text") or "")[:400]
-            score   = chunk.get("score", 0.0)
-            lines.append(f"\n*{i}. {section}* _(score: {score:.2f})_\n{text}")
-        bot.edit_message_text(
-            "\n".join(lines), chat_id, status.message_id,
-            parse_mode="Markdown",
+
+        # Build context string from retrieved chunks
+        context_parts = []
+        for i, chunk in enumerate(chunks[:5], 1):
+            section = chunk.get("section") or ""
+            text    = (chunk.get("text") or chunk.get("chunk_text") or "").strip()
+            if text:
+                prefix = f"[{i}] {section}\n" if section else f"[{i}] "
+                context_parts.append(prefix + text)
+        context = "\n\n".join(context_parts)
+
+        lang = _lang(chat_id)
+        lang_instr = _LANG_PROMPT.get(lang, _LANG_PROMPT["en"])
+        system_msg = (
+            "You are a helpful assistant. Answer the user's question using ONLY "
+            "the context excerpts below. If the answer is not in the context, "
+            f"say so clearly. {lang_instr}\n\nContext:\n{context}"
         )
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user",   "content": query},
+        ]
+        answer = ask_llm_with_history(messages, timeout=90, use_case="chat", chat_id=chat_id)
+
+        if not answer:
+            bot.edit_message_text(
+                _t(chat_id, "remote_kb_no_results"),
+                chat_id, status.message_id, parse_mode="Markdown",
+            )
+            return
+
+        # Append deduplicated source references
+        seen: set[str] = set()
+        sources: list[str] = []
+        for chunk in chunks[:5]:
+            src = chunk.get("section") or chunk.get("doc_id") or ""
+            if src and src not in seen:
+                seen.add(src)
+                sources.append(src)
+        if sources:
+            answer += f"\n\n_{_t(chat_id, 'remote_kb_sources')}: {', '.join(sources)}_"
+
+        bot.edit_message_text(answer, chat_id, status.message_id, parse_mode="Markdown")
     except Exception as exc:
         log.error("[remote_kb] search error: %s", exc)
         bot.edit_message_text(
