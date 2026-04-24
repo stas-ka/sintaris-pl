@@ -158,6 +158,48 @@ taris/
 - **TariStation1 (SintAItion) is a shared production VPS** — hosts PostgreSQL, N8N, Nginx, and other bots/services. ALL operations on TariStation1 (code deploy, service restarts, service file changes, package installs, database migrations, system config changes) require **explicit confirmation from the user before execution**. Present the VPS pre-checklist (see SKILL.md) before any TS1 action. Never bundle multiple TS1 operation types into a single confirmation — ask separately for each.
 - **VPS-Supertaris (`agents.sintaris.net`) is a shared public internet VPS** — 🔴 HIGHEST RISK. Hosts N8N, PostgreSQL (shared DB), Nginx (reverse proxy for all bots/apps), and other services. taris runs there **in Docker** (`taris-vps-telegram`/`taris-vps-web` containers, compose project `/opt/taris-docker/`, source at `/opt/taris-docker/app/src`, config at `/opt/taris-docker/bot.env`, sub-path `/supertaris-vps/`). **NOT systemctl --user.** Deploy = copy files to `/opt/taris-docker/app/src/`, then `docker compose restart`. ALL operations require **separate explicit confirmation from the user** with the mandatory pre-VPS checklist before execution. Forbidden without confirmation: `apt upgrade/install`, Nginx config changes, PostgreSQL DDL, shared service restarts, firewall changes.
 - **Continuous test improvement:** Every bug fix MUST add a regression test that would have caught the bug. Every new feature MUST add tests covering the happy path and the main failure modes. Tests live in `src/tests/test_voice_regression.py` (T-numbered) for voice/config/LLM; add new test IDs sequentially. Update `doc/test-suite.md` with the new test IDs in the same commit. No exceptions.
+- **Lessons learned after every bug fix — MANDATORY:** After fixing any bug (especially one found in production), perform a lessons-learned review and add concrete prevention rules. See **§ Lessons Learned Protocol** below.
+
+## Lessons Learned Protocol — MANDATORY after every bug fix
+
+> **After every bug that was found in production or reported by the user, you MUST perform a short lessons-learned review before closing the task. The goal is process improvement, not blame.**
+
+### When to trigger
+
+- Any bug reported by user on a deployed target (production or engineering)
+- Any regression introduced by a recent change
+- Any "it worked in tests but failed in production" scenario
+- Any silent failure (no error raised, no log entry, wrong result silently returned)
+
+### Required steps
+
+1. **Root cause in one sentence** — what was the actual technical cause?
+2. **Why tests didn't catch it** — which test was missing or incomplete?
+3. **Add a regression test** — write a test that would have caught this bug. Add it to the relevant test file with a T-number. Run it.
+4. **Process improvement** — answer each of these for the specific bug:
+   - Was a dependency assumed to be installed but not verified? → Add a dependency check test or verify step.
+   - Was code deployed but process not restarted? → Add a restart+verify step to the relevant deploy skill.
+   - Was a new format/type added in code but not in the format allowlist? → Update the allowlist and add a test.
+   - Was a silent failure (empty result, no error) returned instead of a clear error? → Add error surfacing.
+   - Was the fix verified only via `docker exec` (fresh subprocess) but not the live running process? → Restart the service and re-verify.
+5. **Update instructions/skills** — if the lesson reveals a gap in a skill or instruction file, fix it in the same commit.
+6. **Record the lesson** — add one line to `doc/lessons-learned.md` (create if absent):
+
+```
+| YYYY-MM-DD | <bug summary> | <root cause> | <prevention added> |
+```
+
+### Example lessons from recent bugs (2026-04)
+
+| Date | Bug | Root cause | Prevention added |
+|---|---|---|---|
+| 2026-04-24 | KB search returned nothing for uploaded RTF | `striprtf` listed in requirements but not installed in Docker image | T225: test RTF extraction; deploy skill: verify `pip show striprtf` after install |
+| 2026-04-24 | "format not supported" after fix deployed | Files deployed AFTER last container restart → old code still in memory | Deploy skills updated: always restart AFTER copying files, never before |
+| 2026-04-24 | `_extract_to_text` silently passed binary RTF to N8N on ImportError | `except ImportError: log.warning` swallowed error with no user feedback | Changed to `raise ValueError` so caller shows error to user |
+
+### Doc target
+
+`doc/lessons-learned.md` — one row per bug, append only, newest first.
 
 ## Secrets & Configuration Security — MANDATORY
 
