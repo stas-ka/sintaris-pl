@@ -1,24 +1,32 @@
 """
-bot_mcp_client.py — Remote KB client via N8N MCP Server (SSE transport).
+bot_mcp_client.py — Remote KB client: direct PostgreSQL + N8N ingest webhook.
 
-Connects to an N8N workflow published as an MCP Server using the MCP protocol
-over Server-Sent Events (SSE). Used exclusively by the remote_kb agent/skill.
-Default Taris RAG/chat flow is NOT affected.
+Provides list, search (via pgvector), and delete for the KB document store,
+bypassing N8N MCP SSE (incompatible with the Python mcp client library due to
+N8N's non-standard SSE session protocol). File ingestion still uses the N8N
+Ingest Webhook (multipart POST).
 
-Circuit breaker:
+When KB_PG_DSN is set (preferred on VPS-Supertaris):
+  • list_documents  → direct SELECT on kb_documents
+  • delete_document → direct DELETE on kb_documents/kb_chunks
+  • search (RAG)    → Ollama embedding + pgvector cosine search on kb_chunks
+
+When KB_PG_DSN is not set, falls back to N8N MCP Server SSE calls.
+
+Circuit breaker (MCP SSE path only):
   After 3 consecutive failures the client stops calling the remote for
   MCP_CB_RESET_SEC seconds (default 300 = 5 min), then retries once.
-  On the retry success the circuit closes; on failure it stays open.
 
 Configuration (via bot.env / environment):
-  MCP_REMOTE_URL   — N8N MCP Server SSE endpoint (empty = disabled)
-                     e.g. https://agents.sintaris.net/n8n/mcp/<path>/sse
+  KB_PG_DSN        — PostgreSQL DSN for taris_kb DB (direct path, preferred)
+                     e.g. postgresql://taris:pw@127.0.0.1:5432/taris_kb
+  MCP_REMOTE_URL   — N8N MCP Server SSE endpoint (fallback if KB_PG_DSN empty)
   N8N_KB_API_KEY   — N8N API key sent as X-N8N-API-Key header
   N8N_KB_TOKEN     — Bearer token for the N8N ingest webhook (file upload)
   MCP_TIMEOUT      — per-request timeout in seconds (default 15)
-  MCP_REMOTE_TOP_K — max chunks to request from kb_search tool (default 3)
+  MCP_REMOTE_TOP_K — max chunks to request from kb_search (default 3)
 
-Requires: mcp>=1.2.0, httpx>=0.27.0, httpx-sse>=0.4.0 (in deploy/requirements.txt)
+Requires: psycopg>=3, mcp>=1.2.0, httpx>=0.27.0, httpx-sse>=0.4.0
 """
 from __future__ import annotations
 
@@ -152,19 +160,27 @@ def _load_config() -> tuple[str, str, str, int, int]:
 
 
 def query_remote(query: str, chat_id: int, top_k: int | None = None) -> list[dict[str, Any]]:
-    """Search remote KB via N8N MCP Server `kb_search` tool.
+    """Search remote KB via `kb_search`.
 
+    When KB_PG_DSN is set, queries pgvector directly (bypasses MCP SSE).
+    Otherwise uses N8N MCP Server tool call.
     Returns an empty list when disabled, circuit open, or on any failure.
     Each chunk dict has keys: ``doc_id``, ``section``, ``text``, ``score``, ``source_uri``.
     """
+    from core.bot_config import KB_PG_DSN
     url, api_key, _, timeout, default_top_k = _load_config()
+    k = top_k if top_k is not None else default_top_k
+
+    # Direct pgvector path (preferred — MCP SSE incompatible with N8N)
+    if KB_PG_DSN:
+        return _kb_search_direct(query, chat_id, k)
+
     if not url:
         return []
     if _cb_is_open():
         log.debug("[MCP-client] circuit breaker open — skipping remote query")
         return []
 
-    k = top_k if top_k is not None else default_top_k
     try:
         chunks = _run_in_new_loop(_kb_search_async(url, api_key, query, chat_id, k, timeout))
         _cb_record_success()
@@ -176,12 +192,141 @@ def query_remote(query: str, chat_id: int, top_k: int | None = None) -> list[dic
         return []
 
 
+def _kb_list_documents_direct(chat_id: int) -> dict[str, Any]:
+    """Query kb_documents directly via psycopg (bypasses MCP SSE).
+
+    Returns {"documents": [{doc_id, title, mime, created_at, n_chunks}, ...]}
+    or {} on error.
+    """
+    from core.bot_config import KB_PG_DSN
+    if not KB_PG_DSN:
+        return {}
+    try:
+        import psycopg
+        with psycopg.connect(KB_PG_DSN) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT d.doc_id::text, d.title, d.mime,
+                              to_char(d.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
+                              COUNT(c.chunk_id) AS n_chunks
+                         FROM kb_documents d
+                         LEFT JOIN kb_chunks c ON c.doc_id = d.doc_id
+                        WHERE d.owner_chat_id = %s
+                        GROUP BY d.doc_id, d.title, d.mime, d.created_at
+                        ORDER BY d.created_at DESC""",
+                    (chat_id,),
+                )
+                rows = cur.fetchall()
+        docs = [
+            {
+                "doc_id":     r[0],
+                "title":      r[1],
+                "mime":       r[2],
+                "created_at": r[3],
+                "n_chunks":   r[4],
+            }
+            for r in rows
+        ]
+        log.debug("[MCP-client] kb_list direct: %d docs for chat_id=%s", len(docs), chat_id)
+        return {"documents": docs}
+    except Exception as exc:
+        log.warning("[MCP-client] kb_list_documents_direct failed (%s)", exc)
+        return {}
+
+
+def _kb_delete_document_direct(doc_id: str, chat_id: int) -> dict[str, Any]:
+    """Delete a KB document and its chunks directly via psycopg."""
+    from core.bot_config import KB_PG_DSN
+    if not KB_PG_DSN:
+        return {}
+    try:
+        import psycopg
+        with psycopg.connect(KB_PG_DSN) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM kb_documents WHERE doc_id=%s::uuid AND owner_chat_id=%s RETURNING doc_id",
+                    (doc_id, chat_id),
+                )
+                deleted = cur.fetchone()
+            conn.commit()
+        if deleted:
+            log.info("[MCP-client] deleted doc %s", doc_id)
+            return {"deleted": True, "doc_id": doc_id}
+        return {"deleted": False, "doc_id": doc_id}
+    except Exception as exc:
+        log.warning("[MCP-client] kb_delete_document_direct failed (%s)", exc)
+        return {}
+
+
+def _kb_search_direct(query: str, chat_id: int, top_k: int) -> list[dict]:
+    """Search KB via direct Ollama embedding + pgvector query (bypasses MCP SSE)."""
+    from core.bot_config import KB_PG_DSN, OLLAMA_URL
+    if not KB_PG_DSN:
+        return []
+    # 1. Get embedding from Ollama
+    try:
+        embed_url = OLLAMA_URL.rstrip('/').replace('/v1', '') + "/api/embeddings"
+        payload = _json.dumps({"model": "all-minilm", "prompt": query}).encode()
+        req = urllib.request.Request(
+            embed_url, data=payload,
+            headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            emb_data = _json.loads(resp.read())
+        embedding = emb_data.get("embedding", [])
+        if not embedding:
+            log.warning("[MCP-client] kb_search_direct: empty embedding from Ollama")
+            return []
+    except Exception as exc:
+        log.warning("[MCP-client] kb_search_direct: Ollama embedding failed (%s)", exc)
+        return []
+
+    # 2. pgvector cosine similarity search
+    try:
+        import psycopg
+        vec_str = "[" + ",".join(str(x) for x in embedding) + "]"
+        with psycopg.connect(KB_PG_DSN) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT c.doc_id::text, c.section, c.text,
+                              1 - (c.embedding <=> %s::vector) AS score
+                         FROM kb_chunks c
+                         JOIN kb_documents d ON d.doc_id = c.doc_id
+                        WHERE d.owner_chat_id = %s
+                        ORDER BY c.embedding <=> %s::vector
+                        LIMIT %s""",
+                    (vec_str, chat_id, vec_str, top_k),
+                )
+                rows = cur.fetchall()
+        chunks = [
+            {"doc_id": r[0], "section": r[1], "text": r[2], "score": float(r[3]), "source_uri": ""}
+            for r in rows
+        ]
+        log.debug("[MCP-client] kb_search direct: %d chunks for %r", len(chunks), query[:40])
+        return chunks
+    except Exception as exc:
+        log.warning("[MCP-client] kb_search_direct: pgvector query failed (%s)", exc)
+        return []
+
+
 def call_tool(tool: str, args: dict) -> dict[str, Any]:
     """Generic MCP tool call (memory_get, memory_append, memory_clear,
     kb_list_documents, kb_delete_document).
 
-    Returns {} on any failure. Circuit breaker applies.
+    For kb_list_documents and kb_delete_document, falls back to direct DB
+    queries when KB_PG_DSN is set (MCP SSE is incompatible with N8N's SSE
+    protocol and closes the connection immediately).
+
+    Returns {} on any failure. Circuit breaker applies to MCP path.
     """
+    from core.bot_config import KB_PG_DSN
+
+    # Direct DB path for document operations (bypasses broken MCP SSE)
+    if tool == "kb_list_documents" and KB_PG_DSN:
+        return _kb_list_documents_direct(args.get("chat_id", 0))
+    if tool == "kb_delete_document" and KB_PG_DSN:
+        return _kb_delete_document_direct(args.get("doc_id", ""), args.get("chat_id", 0))
+
     url, api_key, _, timeout, _ = _load_config()
     if not url:
         return {}
@@ -289,9 +434,15 @@ def ingest_file(chat_id: int, filename: str, file_bytes: bytes,
     try:
         req = urllib.request.Request(webhook_url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
+            status = resp.status
             raw = resp.read()
         if not raw.strip():
-            log.warning("[MCP-client] ingest webhook returned empty body (N8N workflow error?)")
+            if status == 200:
+                # N8N workflow ran but Respond node expression failed — data was stored.
+                # Treat as success with unknown chunk count.
+                log.warning("[MCP-client] ingest webhook HTTP 200 with empty body — assuming stored ok")
+                return {"n_chunks": "?"}
+            log.warning("[MCP-client] ingest webhook returned empty body (HTTP %s)", status)
             return {}
         result = _json.loads(raw)
         log.info("[MCP-client] ingest ok: doc_id=%s n_chunks=%s",

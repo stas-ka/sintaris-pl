@@ -128,6 +128,8 @@ TARIS_API_TOKEN  = os.environ.get("TARIS_API_TOKEN", "")
 # N8N_KB_WEBHOOK_INGEST: N8N webhook URL for file upload (binary, separate from MCP)
 # MCP_TIMEOUT:          per-request timeout in seconds
 # MCP_REMOTE_TOP_K:     max chunks returned by kb_search tool
+# KB_PG_DSN:            PostgreSQL DSN for taris_kb DB (used for list/search
+#                       when N8N MCP SSE is unavailable, e.g. VPS Docker)
 # ─────────────────────────────────────────────────────────────────────────────
 MCP_SERVER_ENABLED    = os.environ.get("MCP_SERVER_ENABLED", "1") == "1"
 MCP_REMOTE_URL        = os.environ.get("MCP_REMOTE_URL", "")
@@ -136,6 +138,7 @@ MCP_REMOTE_TOP_K      = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
 N8N_KB_API_KEY        = os.environ.get("N8N_KB_API_KEY", "")
 N8N_KB_TOKEN          = os.environ.get("N8N_KB_TOKEN", "")
 N8N_KB_WEBHOOK_INGEST = os.environ.get("N8N_KB_WEBHOOK_INGEST", "")
+KB_PG_DSN             = os.environ.get("KB_PG_DSN", "")
 REMOTE_KB_ENABLED     = os.environ.get("REMOTE_KB_ENABLED", "0") == "1"
 
 # ─────────────────────────────────────────────────────────────────────────────
