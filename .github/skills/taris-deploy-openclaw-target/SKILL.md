@@ -905,6 +905,58 @@ Expected: `Taris - Campaign Select ✅` and `Taris - Campaign Send ✅`
 
 ---
 
+## Step 4b — E2E Tests on Deployed Target *(mandatory after every deploy)*
+
+> **After restarting services and confirming the version line, you MUST run E2E tests on the target before proceeding. A successful restart is NOT sufficient — run tests to confirm the feature works end-to-end.**
+
+### TariStation2 (local)
+
+```bash
+# Full offline regression (always)
+cd /home/stas/projects/sintaris/sintaris-pl
+DEVICE_VARIANT=openclaw PYTHONPATH=src python3 -m pytest \
+  src/tests/telegram/ src/tests/screen_loader/ src/tests/llm/ \
+  -q --tb=short
+
+# Source-inspection voice tests (always)
+DEVICE_VARIANT=openclaw PYTHONPATH=src \
+  python3 src/tests/test_voice_regression.py
+
+# KB integration tests (if KB-related files changed)
+DEVICE_VARIANT=openclaw PYTHONPATH=src \
+  python3 src/tests/test_remote_kb.py
+```
+
+All tests must pass before deploying to TariStation1.
+
+### TariStation1 (SintAItion) — run after deploy, with explicit confirmation
+
+```bash
+source /home/stas/projects/sintaris/sintaris-pl/.env
+# Voice regression on target
+sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@$OPENCLAW1_HOST \
+  "PYTHONPATH=~/.taris python3 ~/.taris/tests/test_voice_regression.py"
+```
+
+### VPS-Supertaris (Docker) — run after deploy, with explicit confirmation
+
+```bash
+source /home/stas/projects/sintaris/sintaris-pl/.env
+# Voice regression inside container
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "docker exec taris-vps-telegram python3 /app/tests/test_voice_regression.py"
+
+# KB integration tests (if KB-related files changed)
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb \
+   taris-vps-telegram python3 /app/tests/test_remote_kb.py"
+```
+
+**Pass criteria:** All tests show `PASS`. Report to user: `"E2E on <target>: N/N pass ✅"`.  
+**If any test fails:** stop, diagnose, fix, redeploy, re-run. Do not proceed to next target.
+
+---
+
 ## Step 5 — Post-Deploy Prompt *(always ask the user)*
 
 After every successful TariStation2 deployment, ask:

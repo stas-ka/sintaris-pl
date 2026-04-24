@@ -175,3 +175,29 @@ Then add to the `TEST_FUNCTIONS` list and document in `doc/test-suite.md`.
 6. Include in same commit as the fix
 
 > **No fix without a test. No feature without a test. Tests are permanent documentation of intended behaviour.**
+
+## Mandatory E2E Testing on Deployed Targets
+
+> **After every code change that is deployed to any target, you MUST run the E2E test suite on that target before the task is considered complete. Local tests passing is NOT sufficient.**
+
+### E2E test commands per target
+
+| Target | E2E test command |
+|---|---|
+| **TariStation2** (local OpenClaw) | `PYTHONPATH=~/.taris python3 ~/.taris/tests/test_voice_regression.py` |
+| **TariStation1** (SintAItion) | `sshpass -p "$OPENCLAW1PWD" ssh stas@$OPENCLAW1_HOST "PYTHONPATH=~/.taris python3 ~/.taris/tests/test_voice_regression.py"` |
+| **VPS-Supertaris** (Docker) | `sshpass -p "$VPS_PWD" ssh $VPS_USER@$VPS_HOST "docker exec taris-vps-telegram python3 /app/tests/test_voice_regression.py"` |
+| **VPS-Supertaris KB** (Docker) | `sshpass -p "$VPS_PWD" ssh $VPS_USER@$VPS_HOST "docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb taris-vps-telegram python3 /app/tests/test_remote_kb.py"` |
+| **PI2** (Raspberry Pi engineering) | `plink -pw "$TARGET2PWD" -batch stas@OpenClawPI2 "python3 /home/stas/.taris/tests/test_voice_regression.py"` |
+| **PI1** (Raspberry Pi production) | `plink -pw "$HOSTPWD" -batch stas@OpenClawPI "python3 /home/stas/.taris/tests/test_voice_regression.py"` |
+
+### Rules
+
+1. **Run the relevant E2E test on the target AFTER every deploy** — before closing the task or asking for confirmation.
+2. **If tests fail on the target** — stop, diagnose, fix, redeploy, and re-run tests. Do not mark the task done.
+3. **Module-specific tests**: if you changed a specific feature (KB, calendar, voice, CRM), run the targeted test file on the target:
+   - KB: `test_remote_kb.py` (with `KB_PG_DSN`)
+   - Voice regression: `test_voice_regression.py`
+   - Web UI: `test_ui.py` (Playwright, requires local browser)
+4. **Report E2E results** to the user: "E2E on \<target\>: N/N pass ✅" or list failures.
+5. **Never skip E2E testing** with the argument that "it only affects tests" or "it's a minor change".

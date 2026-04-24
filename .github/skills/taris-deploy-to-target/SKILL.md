@@ -318,21 +318,44 @@ plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "journalctl -u taris-telegram -
 
 ---
 
-## Step 3 — Run Post-Deploy Tests
+## Step 3 — Run Post-Deploy E2E Tests *(mandatory after every deploy)*
 
-### Voice regression tests (mandatory if voice files changed)
+> **Run tests on the TARGET after every deploy. A successful restart is NOT sufficient — tests must pass on the deployed target before the task is complete.**
 
-```bat
-plink -pw "%TARGET2PWD%" -batch stas@OpenClawPI2 "python3 /home/stas/.taris/tests/test_voice_regression.py"
+### Offline regression tests (always — run locally first)
+
+```bash
+cd /home/stas/projects/sintaris/sintaris-pl
+DEVICE_VARIANT=picoclaw PYTHONPATH=src python3 -m pytest \
+  src/tests/telegram/ src/tests/screen_loader/ src/tests/llm/ \
+  -q --tb=short
 ```
 
-Tests T01–T21 cover: model files, STT/TTS pipelines, i18n coverage, bot name injection, calendar/note callbacks.
+### Voice regression on PI2 (mandatory if voice/config files changed)
+
+```bash
+plink -pw "$TARGET2PWD" -batch stas@OpenClawPI2 \
+  "python3 /home/stas/.taris/tests/test_voice_regression.py"
+```
+
+Tests T01–T41 cover: model files, STT/TTS pipelines, i18n coverage, bot name injection, calendar/note callbacks.
+
+### Voice regression on PI1 (after PI1 deploy — same command)
+
+```bash
+plink -pw "$HOSTPWD" -batch stas@OpenClawPI \
+  "python3 /home/stas/.taris/tests/test_voice_regression.py"
+```
 
 ### Web UI tests (mandatory if web files changed)
 
-```bat
-py -m pytest src/tests/ui/test_ui.py -v --base-url https://openclawpi2:8080 --browser chromium
+```bash
+python3 -m pytest src/tests/ui/test_ui.py -v \
+  --base-url https://openclawpi2:8080 --browser chromium
 ```
+
+**Pass criteria:** All tests `PASS`. Report: `"E2E on PI2: N/N pass ✅"`.  
+**If any test fails:** stop, diagnose, fix, redeploy, re-run. Do not promote to PI1.
 
 ---
 

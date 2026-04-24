@@ -95,9 +95,54 @@ python3 -m pytest src/tests/ui/test_ui.py -v \
 
 | Result | Action |
 |---|---|
-| All `PASS` | ✅ Done — commit or deploy as needed |
+| All `PASS` | ✅ Proceed to Step 5 — E2E on deployed target |
 | Any `FAIL` | Fix before committing. Do NOT skip. |
 | `WARN` | Performance regression. Investigate or update baseline. |
+
+---
+
+## Step 5 — E2E Tests on Deployed Target *(mandatory)*
+
+> **Local tests passing is NOT sufficient. After any deploy, run the E2E test suite on the target itself. The task is not complete until deployed-target tests pass.**
+
+If the change has already been deployed to a target, run the appropriate E2E tests:
+
+### OpenClaw targets
+
+```bash
+source /home/stas/projects/sintaris/sintaris-pl/.env
+
+# TariStation2 (local — after local deploy)
+DEVICE_VARIANT=openclaw PYTHONPATH=~/.taris python3 ~/.taris/tests/test_voice_regression.py
+
+# TariStation1 / SintAItion (after TS1 deploy)
+sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no ${OPENCLAW1_USER:-stas}@$OPENCLAW1_HOST \
+  "PYTHONPATH=~/.taris python3 ~/.taris/tests/test_voice_regression.py"
+
+# VPS-Supertaris (Docker — after VPS deploy)
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "docker exec taris-vps-telegram python3 /app/tests/test_voice_regression.py"
+
+# VPS-Supertaris KB tests (if KB / bot_remote_kb.py changed)
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb \
+   taris-vps-telegram python3 /app/tests/test_remote_kb.py"
+```
+
+### Raspberry Pi targets
+
+```bash
+# PI2 (engineering — after PI2 deploy)
+plink -pw "$TARGET2PWD" -batch stas@OpenClawPI2 \
+  "python3 /home/stas/.taris/tests/test_voice_regression.py"
+
+# PI1 (production — after PI1 deploy)
+plink -pw "$HOSTPWD" -batch stas@OpenClawPI \
+  "python3 /home/stas/.taris/tests/test_voice_regression.py"
+```
+
+**Report to user:** `"E2E on <target>: N/N pass ✅"` or list failures.  
+**If tests fail on target:** stop, diagnose, fix, redeploy, re-run before marking task done.
 | `SKIP` | OK for optional components (Whisper, VAD, German models). |
 
 ---
