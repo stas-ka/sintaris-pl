@@ -99,6 +99,7 @@ def test_remote_kb_module_public_api_source():
         "def show_menu",
         "def start_search",
         "def start_upload",
+        "def finish_upload",
         "def handle_message",
         "def handle_document",
         "def list_docs",
@@ -154,6 +155,7 @@ def test_remote_kb_i18n_keys():
         "remote_kb_no_results",
         "remote_kb_result_header",
         "remote_kb_upload_prompt",
+        "remote_kb_upload_done_btn",
         "remote_kb_uploading",
         "remote_kb_upload_ok",
         "remote_kb_upload_fail",
@@ -181,6 +183,7 @@ def test_remote_kb_callback_routing_source():
         '"remote_kb_menu"',
         '"remote_kb_search"',
         '"remote_kb_upload"',
+        '"remote_kb_upload_done"',
         '"remote_kb_list_docs"',
         '"remote_kb_clear_mem"',
     ):
@@ -404,7 +407,9 @@ def test_search_flow_no_results():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_upload_flow_success():
-    """T209: start_upload → handle_document → MCP ingest_file called → success reply."""
+    """T209: start_upload → handle_document → MCP ingest_file called → success reply with Done button.
+    Session remains active after upload (multi-file: user can send more files).
+    """
     CHAT_ID = 44
 
     fake_doc = SimpleNamespace(
@@ -460,8 +465,19 @@ def test_upload_flow_success():
             assert "worksafety.pdf" in all_reply_text or "47" in all_reply_text, \
                 "Success reply must contain filename or chunk count (regression: n_chunks format bug)"
 
-        # Session must be cleared after upload
-        assert not mod.is_active(CHAT_ID), "Session must be cleared after upload"
+            # Done button must be present in the edit_message_text call's reply_markup
+            last_edit_kwargs = edit_calls[-1][1] if edit_calls else {}
+            markup = last_edit_kwargs.get("reply_markup")
+            assert markup is not None, "Done button markup must be included in upload result"
+
+        # Session stays alive after upload — user can send another file
+        assert mod.is_active(CHAT_ID), \
+            "Session must stay active after upload so user can send more files"
+
+        # Calling finish_upload ends the session
+        bot2 = _make_bot()
+        mod.finish_upload(CHAT_ID, bot2, _t)
+        assert not mod.is_active(CHAT_ID), "finish_upload must clear the session"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

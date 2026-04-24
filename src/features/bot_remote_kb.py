@@ -9,6 +9,7 @@ Public API (called from telegram_menu_bot.py):
     show_menu(cid, bot, _t)
     start_search(cid, bot, _t)
     start_upload(cid, bot, _t)
+    finish_upload(cid, bot, _t)           ← called by remote_kb_upload_done callback
     handle_message(cid, text, bot, _t)    → bool (True = consumed)
     handle_document(cid, doc, bot, _t)
     list_docs(cid, bot, _t)
@@ -46,6 +47,12 @@ def is_active(chat_id: int) -> bool:
 
 def cancel(chat_id: int) -> None:
     _sessions.pop(chat_id, None)
+
+
+def finish_upload(chat_id: int, bot, _t) -> None:
+    """End a multi-file upload session and return to the KB menu."""
+    cancel(chat_id)
+    show_menu(chat_id, bot, _t)
 
 
 def show_menu(chat_id: int, bot, _t) -> None:
@@ -169,8 +176,18 @@ def _do_search(chat_id: int, query: str, bot, _t) -> None:
         )
 
 
+def _done_markup(chat_id: int, _t) -> InlineKeyboardMarkup:
+    """Inline keyboard with a single 'Done uploading' button."""
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(
+        _t(chat_id, "remote_kb_upload_done_btn"),
+        callback_data="remote_kb_upload_done",
+    ))
+    return kb
+
+
 def _do_ingest(chat_id: int, doc, bot, _t) -> None:
-    cancel(chat_id)
+    # Keep session alive so the user can send more files.
     from core.bot_instance import bot as _bot
     status = bot.send_message(chat_id, _t(chat_id, "remote_kb_uploading"), parse_mode="Markdown")
     try:
@@ -183,16 +200,19 @@ def _do_ingest(chat_id: int, doc, bot, _t) -> None:
             bot.edit_message_text(
                 _t(chat_id, "remote_kb_upload_empty"),
                 chat_id, status.message_id, parse_mode="Markdown",
+                reply_markup=_done_markup(chat_id, _t),
             )
             return
         n_chunks = result.get("n_chunks", "?")
         bot.edit_message_text(
             _t(chat_id, "remote_kb_upload_ok").format(filename=fname, n_chunks=n_chunks),
             chat_id, status.message_id, parse_mode="Markdown",
+            reply_markup=_done_markup(chat_id, _t),
         )
     except Exception as exc:
         log.error("[remote_kb] ingest error: %s", exc)
         bot.edit_message_text(
             _t(chat_id, "remote_kb_upload_fail").format(error=str(exc)[:120]),
             chat_id, status.message_id, parse_mode="Markdown",
+            reply_markup=_done_markup(chat_id, _t),
         )

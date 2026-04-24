@@ -1189,6 +1189,12 @@ def callback_handler(call):
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
+    elif data == "remote_kb_upload_done":
+        if _is_admin(cid) or _is_advanced(cid):
+            _remote_kb.finish_upload(cid, bot, _t)
+        else:
+            bot.send_message(cid, _t(cid, "admin_only"))
+
     elif data == "remote_kb_list_docs":
         if _is_admin(cid) or _is_advanced(cid):
             if not _remote_kb.is_configured():
