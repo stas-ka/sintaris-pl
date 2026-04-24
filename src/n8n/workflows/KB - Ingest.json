@@ -1,12 +1,21 @@
 {
+  "updatedAt": "2026-04-24T13:38:01.810Z",
+  "createdAt": "2026-04-24T06:52:22.509Z",
+  "id": "fRkBBp8cvGCArCk5",
   "name": "KB - Ingest",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "id": "kb-ing-001",
       "name": "Ingest Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "kb-ingest-wh",
       "parameters": {
         "httpMethod": "POST",
@@ -18,181 +27,598 @@
         }
       }
     },
-
     {
       "id": "kb-ing-002",
       "name": "Auth and Write File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "parameters": {
-        "jsCode": "// ── Authenticate ─────────────────────────────────────────────────────────\nconst headers = $('Ingest Webhook').first().json.headers || {};\nconst authHeader = headers.authorization || headers.Authorization || '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '').trim();\nconst expectedToken = $vars.KB_INGEST_TOKEN || '';\nif (expectedToken && token !== expectedToken) {\n  throw new Error('401 Unauthorized: invalid Bearer token');\n}\n\n// ── Extract form fields ───────────────────────────────────────────────────\nconst body = $('Ingest Webhook').first().json.body || $('Ingest Webhook').first().json;\nconst chatId = parseInt(body.chat_id || '0') || 0;\nconst filename = (body.filename || 'upload.bin').replace(/[^a-zA-Z0-9._-]/g, '_');\nconst mime = body.mime || 'application/octet-stream';\n\n// ── Write binary to /tmp ──────────────────────────────────────────────────\nconst fs = require('fs');\nconst crypto = require('crypto');\nconst binary = $('Ingest Webhook').first().binary?.file;\nif (!binary) throw new Error('No file received — multipart field must be named \"file\"');\nconst buf = Buffer.from(binary.data, 'base64');\nconst sha256 = crypto.createHash('sha256').update(buf).digest('hex');\nconst tmpPath = `/tmp/kb_${sha256}`;\nfs.writeFileSync(tmpPath, buf);\n\nreturn [{ json: {\n  chat_id: chatId,\n  filename,\n  mime,\n  sha256,\n  tmpPath,\n  fileSize: buf.length,\n  startMs: Date.now()\n}}];"
+        "jsCode": "function sha256hex(buf) {\n  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\n  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];\n  const rr = (v,n) => (v>>>n)|(v<<(32-n));\n  const bs = new Uint8Array(buf.buffer, buf.byteOffset, buf.length);\n  const L = bs.length, bits = L*8;\n  const pad = (L%64<56)?56-L%64:120-L%64;\n  const m = new Uint8Array(L+pad+8);\n  m.set(bs); m[L]=0x80;\n  const dv0 = new DataView(m.buffer); dv0.setUint32(m.length-4, bits, false);\n  for (let i=0; i<m.length; i+=64) {\n    const w=new Uint32Array(64), dv=new DataView(m.buffer,i,64);\n    for (let j=0;j<16;j++) w[j]=dv.getUint32(j*4);\n    for (let j=16;j<64;j++) {\n      const s0=rr(w[j-15],7)^rr(w[j-15],18)^(w[j-15]>>>3);\n      const s1=rr(w[j-2],17)^rr(w[j-2],19)^(w[j-2]>>>10);\n      w[j]=(w[j-16]+s0+w[j-7]+s1)>>>0;\n    }\n    let [a,b,c,d,e,f,g,h]=H;\n    for (let j=0;j<64;j++) {\n      const S1=rr(e,6)^rr(e,11)^rr(e,25), ch=(e&f)^(~e&g);\n      const t1=(h+S1+ch+K[j]+w[j])>>>0;\n      const S0=rr(a,2)^rr(a,13)^rr(a,22), maj=(a&b)^(a&c)^(b&c);\n      const t2=(S0+maj)>>>0;\n      [h,g,f,e,d,c,b,a]=[g,f,e,(d+t1)>>>0,c,b,a,(t1+t2)>>>0];\n    }\n    H=H.map((v,i)=>(v+[a,b,c,d,e,f,g,h][i])>>>0);\n  }\n  return H.map(v=>v.toString(16).padStart(8,'0')).join('');\n}\n\nconst headers = $('Ingest Webhook').first().json.headers || {};\nconst authHeader = headers.authorization || headers.Authorization || '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '').trim();\nconst expectedToken = 'ObruI6NrfgChsBl1HUHvZvQs8v9EiFcJ1Zsxez205_s';\nif (expectedToken && token !== expectedToken) {\n  throw new Error('401 Unauthorized: invalid Bearer token');\n}\n\nconst body = $('Ingest Webhook').first().json.body || $('Ingest Webhook').first().json;\nconst chatId = parseInt(body.chat_id || '0') || 0;\nconst filename = (body.filename || 'upload.bin').replace(/[^a-zA-Z0-9._-]/g, '_');\nconst mime = body.mime || 'application/octet-stream';\n\nconst allBinary = $('Ingest Webhook').first().binary || {};\nconst fileKey = Object.keys(allBinary)[0];\nconst binary = fileKey ? allBinary[fileKey] : null;\nif (!binary) throw new Error('No file received — send multipart/form-data with a file field');\nconst buf = Buffer.from(binary.data, 'base64');\nconst sha256 = sha256hex(buf);\n\n// Extract text here — keeps binary OUT of downstream execution context\nconst isText = mime.includes('text') || filename.endsWith('.txt') || filename.endsWith('.md');\nconst isPdf = mime.includes('pdf') || filename.toLowerCase().endsWith('.pdf');\nconst isDocx = mime.includes('docx') || mime.includes('word') || filename.toLowerCase().endsWith('.docx');\n\nlet rawText = '';\nif (isText) {\n  rawText = buf.toString('utf8').trim();\n} else if (isPdf) {\n  const pdfParse = require('pdf-parse');\n  const data = await pdfParse(buf);\n  rawText = data.text.trim();\n} else if (isDocx) {\n  const mammoth = require('mammoth');\n  const result = await mammoth.extractRawText({ buffer: buf });\n  rawText = result.value.trim();\n} else {\n  rawText = buf.toString('utf8').trim();\n}\n\nif (!rawText) throw new Error('No text extracted from document');\n\n// Output rawText in JSON — NO binary field — keeps downstream runner context small\nreturn [{ json: {\n  chat_id: chatId,\n  filename,\n  mime,\n  sha256,\n  fileSize: buf.length,\n  startMs: Date.now(),\n  rawText\n}}];"
       }
     },
-
     {
       "id": "kb-ing-003",
       "name": "Insert Document Record",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [480, 300],
+      "position": [
+        480,
+        300
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO kb_documents (doc_id, owner_chat_id, title, mime, sha256, source) VALUES (gen_random_uuid(), $1, $2, $3, $4, 'taris_upload') ON CONFLICT (sha256) DO UPDATE SET title = EXCLUDED.title RETURNING doc_id::text, (xmax = 0) AS is_new",
         "options": {
-          "queryParams": "={{ JSON.stringify([$json.chat_id, $json.filename, $json.mime, $json.sha256]) }}"
+          "queryReplacement": "={{ [$json.chat_id, $json.filename, $json.mime, $json.sha256] }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
-    },
-
-    {
-      "id": "kb-ing-004",
-      "name": "Attach Doc ID",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [720, 300],
-      "parameters": {
-        "jsCode": "const prev = $('Auth and Write File').first().json;\nconst docRow = items[0].json;\nreturn [{ json: { ...prev, doc_id: docRow.doc_id, is_new: docRow.is_new } }];"
+      "credentials": {
+        "postgres": {
+          "id": "x9VIa7p0k2YihK4J",
+          "name": "KB Postgres"
+        }
       }
     },
-
     {
       "id": "kb-ing-005",
-      "name": "Docling Parse",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [960, 300],
-      "parameters": {
-        "command": "python3 /opt/taris-mcp-kb/parse_doc.py \"{{ $json.tmpPath }}\" \"{{ $json.filename }}\" 2>&1 || echo '{\"ok\":false,\"error\":\"parse_doc.py execution failed\"}'"
-      }
-    },
-
-    {
-      "id": "kb-ing-006",
-      "name": "Chunk Text",
+      "name": "Parse and Chunk",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 300],
+      "position": [
+        960,
+        300
+      ],
       "parameters": {
-        "jsCode": "// Parse docling output\nconst rawStdout = items[0].json.stdout || items[0].json;\nlet parsed;\ntry {\n  parsed = JSON.parse(typeof rawStdout === 'string' ? rawStdout.trim() : JSON.stringify(rawStdout));\n} catch (e) {\n  throw new Error('Docling output parse failed. stdout: ' + String(rawStdout).substring(0, 400));\n}\nif (!parsed.ok) throw new Error('Docling error: ' + parsed.error);\n\nconst meta = $('Attach Doc ID').first().json;\nconst CHUNK_SIZE = parseInt($vars.KB_CHUNK_SIZE || '512');\nconst OVERLAP    = parseInt($vars.KB_CHUNK_OVERLAP || '50');\n\n// Clean up temp file\ntry { require('fs').unlinkSync(meta.tmpPath); } catch(_) {}\n\n// Build chunks\nconst chunks = [];\nfor (const page of (parsed.pages || [])) {\n  const text = (page.text || '').trim();\n  if (!text) continue;\n  let start = 0;\n  while (start < text.length) {\n    const end = Math.min(start + CHUNK_SIZE, text.length);\n    const chunkText = text.slice(start, end).trim();\n    if (chunkText.length > 20) {\n      chunks.push({\n        doc_id:     meta.doc_id,\n        chat_id:    meta.chat_id,\n        sha256:     meta.sha256,\n        filename:   meta.filename,\n        startMs:    meta.startMs,\n        section:    (page.section || '').substring(0, 200),\n        text:       chunkText,\n        chunk_idx:  chunks.length,\n        totalChunks: 0  // filled after loop\n      });\n    }\n    start = end - OVERLAP;\n    if (start >= end) break;\n  }\n}\n\n// Attach total count\nchunks.forEach(c => { c.totalChunks = chunks.length; });\n\nif (chunks.length === 0) throw new Error('No text chunks extracted from document');\n\nreturn chunks.map(c => ({ json: c }));"
+        "language": "javaScript",
+        "jsCode": "const item = items[0].json;\nconst rawText = String(item.rawText || '').trim();\nconst doc_id = item.doc_id || '';\nif (!rawText) throw new Error('No rawText in merged input');\nif (!doc_id) throw new Error('No doc_id in merged input');\n\nconst meta = { doc_id, chat_id: item.chat_id || 0, sha256: item.sha256 || '', filename: item.filename || '', startMs: item.startMs || 0 };\n\nconst CHUNK_SIZE = 512; const OVERLAP = 50;\nconst chunks = []; let start = 0;\nwhile (start < rawText.length) {\n  const end = Math.min(start + CHUNK_SIZE, rawText.length);\n  const chunkText = rawText.slice(start, end).trim();\n  if (chunkText.length > 20) {\n    chunks.push({ json: { ...meta, section: '', text: chunkText, chunk_idx: chunks.length, totalChunks: 0 } });\n  }\n  if (end >= rawText.length) break;\n  start = Math.max(end - OVERLAP, 0);\n  if (start >= end) break;\n}\nfor (const c of chunks) { c.json.totalChunks = chunks.length; }\nif (!chunks.length) throw new Error('No chunks extracted from rawText');\nreturn chunks;"
       }
     },
-
     {
       "id": "kb-ing-007",
       "name": "Split Chunks",
       "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1440, 300],
+      "typeVersion": 1,
+      "position": [
+        1440,
+        300
+      ],
       "parameters": {
         "batchSize": 1,
         "options": {}
       }
     },
-
     {
       "id": "kb-ing-008",
       "name": "Embed Chunk",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1680, 200],
+      "position": [
+        1680,
+        200
+      ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.OLLAMA_URL || 'http://localhost:11434' }}/api/embeddings",
+        "url": "http://172.17.0.1:11434/api/embeddings",
         "sendBody": true,
-        "contentType": "json",
-        "body": {
-          "model": "={{ $vars.EMBED_MODEL || 'multilingual-e5-small' }}",
-          "prompt": "={{ $json.text }}"
-        },
-        "options": { "timeout": 30000 }
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model: 'all-minilm', prompt: $json.text}) }}",
+        "options": {
+          "timeout": 30000
+        }
       }
     },
-
     {
       "id": "kb-ing-009",
       "name": "Insert Chunk",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1920, 200],
+      "position": [
+        1920,
+        200
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO kb_chunks (doc_id, chunk_idx, section, text, tokens, embedding, metadata) VALUES ($1::uuid, $2, $3, $4, length($4)/4, $5::vector, '{}'::jsonb) ON CONFLICT DO NOTHING RETURNING chunk_id",
         "options": {
-          "queryParams": "={{ JSON.stringify([$('Split Chunks').first().json.doc_id, $('Split Chunks').first().json.chunk_idx, $('Split Chunks').first().json.section, $('Split Chunks').first().json.text, '[' + $json.embedding.join(',') + ']']) }}"
+          "queryReplacement": "={{ [$('Split Chunks').first().json.doc_id, $('Split Chunks').first().json.chunk_idx, $('Split Chunks').first().json.section, $('Split Chunks').first().json.text, '[' + $json.embedding.join(',') + ']'] }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": {
+        "postgres": {
+          "id": "x9VIa7p0k2YihK4J",
+          "name": "KB Postgres"
+        }
+      }
     },
-
     {
       "id": "kb-ing-010",
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1680, 400],
+      "position": [
+        1680,
+        400
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ doc_id: $('Split Chunks').first().json.doc_id, n_chunks: $('Split Chunks').first().json.totalChunks, n_embedded: $('Split Chunks').first().json.totalChunks, parse_time_ms: Date.now() - $('Split Chunks').first().json.startMs, filename: $('Split Chunks').first().json.filename }) }}",
-        "options": { "responseCode": 200 }
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "kb-ing-006",
+      "name": "Merge Doc ID",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "mode": "mergeByIndex"
       }
     }
   ],
-
   "connections": {
     "Ingest Webhook": {
       "main": [
-        [{ "node": "Auth and Write File", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Auth and Write File",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Auth and Write File": {
       "main": [
-        [{ "node": "Insert Document Record", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Insert Document Record",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Doc ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Insert Document Record": {
       "main": [
-        [{ "node": "Attach Doc ID", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Doc ID",
+            "type": "main",
+            "index": 1
+          }
+        ]
       ]
     },
-    "Attach Doc ID": {
+    "Merge Doc ID": {
       "main": [
-        [{ "node": "Docling Parse", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Parse and Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Docling Parse": {
+    "Parse and Chunk": {
       "main": [
-        [{ "node": "Chunk Text", "type": "main", "index": 0 }]
-      ]
-    },
-    "Chunk Text": {
-      "main": [
-        [{ "node": "Split Chunks", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Split Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Split Chunks": {
       "main": [
-        [{ "node": "Embed Chunk",     "type": "main", "index": 0 }],
-        [{ "node": "Respond Success", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Embed Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Embed Chunk": {
       "main": [
-        [{ "node": "Insert Chunk", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Insert Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Insert Chunk": {
       "main": [
-        [{ "node": "Split Chunks", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Split Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
-
-  "active": false,
-  "settings": { "executionOrder": "v1" },
-  "meta": {
-    "templateId": "taris-kb-ingest",
-    "instanceId": "taris"
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "cfa251c7-8e46-4d5d-b3c9-394d6a4a6006",
+  "activeVersionId": "cfa251c7-8e46-4d5d-b3c9-394d6a4a6006",
+  "versionCounter": 133,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-04-24T06:52:22.509Z",
+      "createdAt": "2026-04-24T06:52:22.509Z",
+      "role": "workflow:owner",
+      "workflowId": "fRkBBp8cvGCArCk5",
+      "projectId": "O9XbC3IbtLXuzUQJ",
+      "project": {
+        "updatedAt": "2025-07-06T14:50:27.538Z",
+        "createdAt": "2025-07-06T14:49:22.006Z",
+        "id": "O9XbC3IbtLXuzUQJ",
+        "name": "Stanislav Ulmer <stas.ulmer@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d2b35160-20b8-4774-a219-6c677a1b292b",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-07-06T14:49:22.006Z",
+            "createdAt": "2025-07-06T14:49:22.006Z",
+            "userId": "d2b35160-20b8-4774-a219-6c677a1b292b",
+            "projectId": "O9XbC3IbtLXuzUQJ",
+            "user": {
+              "updatedAt": "2026-04-24T11:33:27.150Z",
+              "createdAt": "2025-07-06T14:49:21.240Z",
+              "id": "d2b35160-20b8-4774-a219-6c677a1b292b",
+              "email": "stas.ulmer@gmail.com",
+              "firstName": "Stanislav",
+              "lastName": "Ulmer",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-07-06T14:50:49.162Z",
+                "personalization_survey_n8n_version": "1.98.2",
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "business-owner",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "WoyBWgHRfFN3XuNj",
+                "userActivatedAt": 1752252363756,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1768324711199
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-04-23",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-04-24T13:38:01.815Z",
+    "createdAt": "2026-04-24T13:38:01.815Z",
+    "versionId": "cfa251c7-8e46-4d5d-b3c9-394d6a4a6006",
+    "workflowId": "fRkBBp8cvGCArCk5",
+    "nodes": [
+      {
+        "id": "kb-ing-001",
+        "name": "Ingest Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          300
+        ],
+        "webhookId": "kb-ingest-wh",
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "kb-ingest",
+          "responseMode": "responseNode",
+          "options": {
+            "binaryPropertyName": "file",
+            "rawBody": false
+          }
+        }
+      },
+      {
+        "id": "kb-ing-002",
+        "name": "Auth and Write File",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          300
+        ],
+        "parameters": {
+          "jsCode": "function sha256hex(buf) {\n  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\n  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];\n  const rr = (v,n) => (v>>>n)|(v<<(32-n));\n  const bs = new Uint8Array(buf.buffer, buf.byteOffset, buf.length);\n  const L = bs.length, bits = L*8;\n  const pad = (L%64<56)?56-L%64:120-L%64;\n  const m = new Uint8Array(L+pad+8);\n  m.set(bs); m[L]=0x80;\n  const dv0 = new DataView(m.buffer); dv0.setUint32(m.length-4, bits, false);\n  for (let i=0; i<m.length; i+=64) {\n    const w=new Uint32Array(64), dv=new DataView(m.buffer,i,64);\n    for (let j=0;j<16;j++) w[j]=dv.getUint32(j*4);\n    for (let j=16;j<64;j++) {\n      const s0=rr(w[j-15],7)^rr(w[j-15],18)^(w[j-15]>>>3);\n      const s1=rr(w[j-2],17)^rr(w[j-2],19)^(w[j-2]>>>10);\n      w[j]=(w[j-16]+s0+w[j-7]+s1)>>>0;\n    }\n    let [a,b,c,d,e,f,g,h]=H;\n    for (let j=0;j<64;j++) {\n      const S1=rr(e,6)^rr(e,11)^rr(e,25), ch=(e&f)^(~e&g);\n      const t1=(h+S1+ch+K[j]+w[j])>>>0;\n      const S0=rr(a,2)^rr(a,13)^rr(a,22), maj=(a&b)^(a&c)^(b&c);\n      const t2=(S0+maj)>>>0;\n      [h,g,f,e,d,c,b,a]=[g,f,e,(d+t1)>>>0,c,b,a,(t1+t2)>>>0];\n    }\n    H=H.map((v,i)=>(v+[a,b,c,d,e,f,g,h][i])>>>0);\n  }\n  return H.map(v=>v.toString(16).padStart(8,'0')).join('');\n}\n\nconst headers = $('Ingest Webhook').first().json.headers || {};\nconst authHeader = headers.authorization || headers.Authorization || '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '').trim();\nconst expectedToken = 'ObruI6NrfgChsBl1HUHvZvQs8v9EiFcJ1Zsxez205_s';\nif (expectedToken && token !== expectedToken) {\n  throw new Error('401 Unauthorized: invalid Bearer token');\n}\n\nconst body = $('Ingest Webhook').first().json.body || $('Ingest Webhook').first().json;\nconst chatId = parseInt(body.chat_id || '0') || 0;\nconst filename = (body.filename || 'upload.bin').replace(/[^a-zA-Z0-9._-]/g, '_');\nconst mime = body.mime || 'application/octet-stream';\n\nconst allBinary = $('Ingest Webhook').first().binary || {};\nconst fileKey = Object.keys(allBinary)[0];\nconst binary = fileKey ? allBinary[fileKey] : null;\nif (!binary) throw new Error('No file received — send multipart/form-data with a file field');\nconst buf = Buffer.from(binary.data, 'base64');\nconst sha256 = sha256hex(buf);\n\n// Extract text here — keeps binary OUT of downstream execution context\nconst isText = mime.includes('text') || filename.endsWith('.txt') || filename.endsWith('.md');\nconst isPdf = mime.includes('pdf') || filename.toLowerCase().endsWith('.pdf');\nconst isDocx = mime.includes('docx') || mime.includes('word') || filename.toLowerCase().endsWith('.docx');\n\nlet rawText = '';\nif (isText) {\n  rawText = buf.toString('utf8').trim();\n} else if (isPdf) {\n  const pdfParse = require('pdf-parse');\n  const data = await pdfParse(buf);\n  rawText = data.text.trim();\n} else if (isDocx) {\n  const mammoth = require('mammoth');\n  const result = await mammoth.extractRawText({ buffer: buf });\n  rawText = result.value.trim();\n} else {\n  rawText = buf.toString('utf8').trim();\n}\n\nif (!rawText) throw new Error('No text extracted from document');\n\n// Output rawText in JSON — NO binary field — keeps downstream runner context small\nreturn [{ json: {\n  chat_id: chatId,\n  filename,\n  mime,\n  sha256,\n  fileSize: buf.length,\n  startMs: Date.now(),\n  rawText\n}}];"
+        }
+      },
+      {
+        "id": "kb-ing-003",
+        "name": "Insert Document Record",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          480,
+          300
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO kb_documents (doc_id, owner_chat_id, title, mime, sha256, source) VALUES (gen_random_uuid(), $1, $2, $3, $4, 'taris_upload') ON CONFLICT (sha256) DO UPDATE SET title = EXCLUDED.title RETURNING doc_id::text, (xmax = 0) AS is_new",
+          "options": {
+            "queryReplacement": "={{ [$json.chat_id, $json.filename, $json.mime, $json.sha256] }}"
+          }
+        },
+        "credentials": {
+          "postgres": {
+            "id": "x9VIa7p0k2YihK4J",
+            "name": "KB Postgres"
+          }
+        }
+      },
+      {
+        "id": "kb-ing-005",
+        "name": "Parse and Chunk",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          960,
+          300
+        ],
+        "parameters": {
+          "language": "javaScript",
+          "jsCode": "const item = items[0].json;\nconst rawText = String(item.rawText || '').trim();\nconst doc_id = item.doc_id || '';\nif (!rawText) throw new Error('No rawText in merged input');\nif (!doc_id) throw new Error('No doc_id in merged input');\n\nconst meta = { doc_id, chat_id: item.chat_id || 0, sha256: item.sha256 || '', filename: item.filename || '', startMs: item.startMs || 0 };\n\nconst CHUNK_SIZE = 512; const OVERLAP = 50;\nconst chunks = []; let start = 0;\nwhile (start < rawText.length) {\n  const end = Math.min(start + CHUNK_SIZE, rawText.length);\n  const chunkText = rawText.slice(start, end).trim();\n  if (chunkText.length > 20) {\n    chunks.push({ json: { ...meta, section: '', text: chunkText, chunk_idx: chunks.length, totalChunks: 0 } });\n  }\n  if (end >= rawText.length) break;\n  start = Math.max(end - OVERLAP, 0);\n  if (start >= end) break;\n}\nfor (const c of chunks) { c.json.totalChunks = chunks.length; }\nif (!chunks.length) throw new Error('No chunks extracted from rawText');\nreturn chunks;"
+        }
+      },
+      {
+        "id": "kb-ing-007",
+        "name": "Split Chunks",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 1,
+        "position": [
+          1440,
+          300
+        ],
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        }
+      },
+      {
+        "id": "kb-ing-008",
+        "name": "Embed Chunk",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1680,
+          200
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "http://172.17.0.1:11434/api/embeddings",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify({model: 'all-minilm', prompt: $json.text}) }}",
+          "options": {
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "kb-ing-009",
+        "name": "Insert Chunk",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          1920,
+          200
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO kb_chunks (doc_id, chunk_idx, section, text, tokens, embedding, metadata) VALUES ($1::uuid, $2, $3, $4, length($4)/4, $5::vector, '{}'::jsonb) ON CONFLICT DO NOTHING RETURNING chunk_id",
+          "options": {
+            "queryReplacement": "={{ [$('Split Chunks').first().json.doc_id, $('Split Chunks').first().json.chunk_idx, $('Split Chunks').first().json.section, $('Split Chunks').first().json.text, '[' + $json.embedding.join(',') + ']'] }}"
+          }
+        },
+        "credentials": {
+          "postgres": {
+            "id": "x9VIa7p0k2YihK4J",
+            "name": "KB Postgres"
+          }
+        }
+      },
+      {
+        "id": "kb-ing-010",
+        "name": "Respond Success",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1680,
+          400
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ doc_id: $('Split Chunks').first().json.doc_id, n_chunks: $('Split Chunks').first().json.totalChunks, n_embedded: $('Split Chunks').first().json.totalChunks, parse_time_ms: Date.now() - $('Split Chunks').first().json.startMs, filename: $('Split Chunks').first().json.filename }) }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "kb-ing-006",
+        "name": "Merge Doc ID",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 1,
+        "position": [
+          1100,
+          300
+        ],
+        "parameters": {
+          "mode": "mergeByIndex"
+        }
+      }
+    ],
+    "connections": {
+      "Ingest Webhook": {
+        "main": [
+          [
+            {
+              "node": "Auth and Write File",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Auth and Write File": {
+        "main": [
+          [
+            {
+              "node": "Insert Document Record",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge Doc ID",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert Document Record": {
+        "main": [
+          [
+            {
+              "node": "Merge Doc ID",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Doc ID": {
+        "main": [
+          [
+            {
+              "node": "Parse and Chunk",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse and Chunk": {
+        "main": [
+          [
+            {
+              "node": "Split Chunks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Chunks": {
+        "main": [
+          [
+            {
+              "node": "Embed Chunk",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Embed Chunk": {
+        "main": [
+          [
+            {
+              "node": "Insert Chunk",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert Chunk": {
+        "main": [
+          [
+            {
+              "node": "Split Chunks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Stanislav Ulmer",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-04-24T13:38:01.984Z",
+        "id": 596,
+        "workflowId": "fRkBBp8cvGCArCk5",
+        "versionId": "cfa251c7-8e46-4d5d-b3c9-394d6a4a6006",
+        "event": "activated",
+        "userId": "d2b35160-20b8-4774-a219-6c677a1b292b"
+      }
+    ]
   }
 }

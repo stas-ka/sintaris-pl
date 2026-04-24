@@ -113,7 +113,7 @@
           "queryParams": "={{ JSON.stringify([$json.vec, $json.chat_id, $json.query, $json.top_k]) }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": { "postgres": { "id": "x9VIa7p0k2YihK4J", "name": "KB Postgres" } }
     },
 
     {
@@ -140,7 +140,7 @@
           "queryParams": "={{ JSON.stringify([$json.input.chat_id, $json.input.tier || 'short']) }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": { "postgres": { "id": "x9VIa7p0k2YihK4J", "name": "KB Postgres" } }
     },
 
     {
@@ -167,7 +167,7 @@
           "queryParams": "={{ JSON.stringify([$json.input.chat_id, $json.input.role, $json.input.content]) }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": { "postgres": { "id": "x9VIa7p0k2YihK4J", "name": "KB Postgres" } }
     },
 
     {
@@ -194,7 +194,7 @@
           "queryParams": "={{ JSON.stringify([$json.input.chat_id, $json.input.tier || null]) }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": { "postgres": { "id": "x9VIa7p0k2YihK4J", "name": "KB Postgres" } }
     },
 
     {
@@ -221,7 +221,7 @@
           "queryParams": "={{ JSON.stringify([$json.input.chat_id]) }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": { "postgres": { "id": "x9VIa7p0k2YihK4J", "name": "KB Postgres" } }
     },
 
     {
@@ -248,7 +248,7 @@
           "queryParams": "={{ JSON.stringify([$json.input.doc_id]) }}"
         }
       },
-      "credentials": { "postgres": { "id": "REPLACE_WITH_CREDENTIAL_ID", "name": "KB Postgres" } }
+      "credentials": { "postgres": { "id": "x9VIa7p0k2YihK4J", "name": "KB Postgres" } }
     },
 
     {

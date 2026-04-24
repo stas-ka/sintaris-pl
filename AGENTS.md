@@ -87,7 +87,7 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 > 🔴 **HIGHEST RISK TARGET — SHARED PUBLIC INTERNET VPS.**  
 > This VPS is **directly internet-facing** and hosts multiple critical services:  
 > PostgreSQL (shared DB), N8N (workflow engine), Nginx (reverse proxy for all bots), other bots and apps.  
-> taris runs here as `systemctl --user taris-telegram taris-web` behind the Nginx `/supertaris/` sub-path.  
+> taris runs here in **Docker** (`taris-vps-telegram`/`taris-vps-web` containers). **NOT systemctl --user.**  
 > **ALL operations require explicit confirmation from the user (stas) before execution — NO EXCEPTIONS.**  
 > **Never run `apt upgrade`, `apt install`, database DDL, or Nginx changes without explicit confirmation.**
 
@@ -99,11 +99,19 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 | `VPS_PWD` | `$VPS_PWD` (in `.env` — never commit) |
 | `VPS_HOSTKEY` | `$VPS_HOSTKEY` (in `.env` — never commit) |
 | SSH | `ssh -i ~/.ssh/vps_key $VPS_USER@$VPS_HOST "<cmd>"` or `sshpass -p "$VPS_PWD" ssh $VPS_USER@$VPS_HOST` |
-| Deploy path | `/home/$VPS_USER/.taris/` |
-| Web UI path | `https://agents.sintaris.net/supertaris/` |
-| ROOT_PATH | `/supertaris` (set in `~/.taris/bot.env`) |
+| **Docker compose** | `/opt/taris-docker/docker-compose.yml` |
+| **Source volume** | `/opt/taris-docker/app/src/` (mounted as `/app:ro` in containers) |
+| **Config (bot.env)** | `/opt/taris-docker/bot.env` |
+| **Container names** | `taris-vps-telegram`, `taris-vps-web` |
+| **Compose service names** | `taris-telegram`, `taris-web` (use in `docker compose restart`) |
+| **Deploy source** | `sudo cp $PROJECT/src/<file> /opt/taris-docker/app/src/<file>` |
+| **Restart** | `cd /opt/taris-docker && docker compose restart taris-telegram taris-web` |
+| **Verify** | `docker logs taris-vps-telegram --tail=10` |
+| Web UI port | `8090` (uvicorn direct — no prefix) |
+| Web UI path | `https://agents.sintaris.net/supertaris-vps/` (nginx proxy) |
+| ROOT_PATH | `/supertaris-vps` (in `/opt/taris-docker/bot.env`; nginx-only prefix) |
+| Direct test URL | `http://localhost:8090/login` (no prefix — uvicorn routes have no prefix) |
 | DB | PostgreSQL — shared VPS database (same server as N8N and other bots) |
-| Ollama | depends on VPS resources |
 | Nginx config | `/etc/nginx/sites-available/agents.sintaris.net` |
 | Skill | `/taris-deploy-openclaw-target` (target=`vps`) |
 
@@ -119,9 +127,54 @@ This file stores persistent state for AI coding agents. See `.github/copilot-ins
 - ❌ PostgreSQL DDL (CREATE/DROP/ALTER TABLE) without confirmation + backup
 - ❌ Restart shared services (PostgreSQL, Nginx, N8N) without confirmation
 - ❌ Firewall changes (`ufw`, `iptables`) without confirmation
-- ❌ Restart taris services without confirmation (brief downtime visible publicly)
+- ❌ `docker compose restart taris-telegram taris-web` without confirmation (brief public downtime)
+- ❌ `systemctl --user restart taris-*` — does NOT apply (VPS uses Docker, not systemd)
 
-`BOT_VERSION = "2026.4.73"` — deployed 2026-04-23
+**Deploy from VPS directly (code-server / terminal on agents.sintaris.net):**
+
+```bash
+# 1. Copy changed files to Docker volume (requires sudo for root-owned files)
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
+APP=/opt/taris-docker/app/src
+sudo cp $PROJECT/src/telegram_menu_bot.py  $APP/
+sudo cp $PROJECT/src/bot_web.py            $APP/
+sudo cp $PROJECT/src/strings.json          $APP/
+sudo cp $PROJECT/src/release_notes.json    $APP/
+sudo cp $PROJECT/src/core/*.py             $APP/core/
+sudo cp $PROJECT/src/features/*.py         $APP/features/
+sudo cp $PROJECT/src/telegram/*.py         $APP/telegram/
+sudo cp $PROJECT/src/ui/*.py               $APP/ui/
+sudo cp $PROJECT/src/security/*.py         $APP/security/
+echo "✓ files copied"
+
+# 3. Restart containers (confirm separately — brief public downtime)
+cd /opt/taris-docker && docker compose restart taris-telegram taris-web && sleep 8
+docker logs taris-vps-telegram --tail=10
+# Expected: "Version: 2026.X.Y" + "Polling Telegram…"
+```
+
+**Deploy from remote dev machine (TariStation2, home laptop) via SCP+SSH:**
+
+```bash
+source /home/stas/projects/sintaris/sintaris-pl/.env
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
+APP=/opt/taris-docker/app/src
+
+# Copy files
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/telegram_menu_bot.py $PROJECT/src/bot_web.py \
+  $PROJECT/src/strings.json $PROJECT/src/release_notes.json \
+  $VPS_USER@$VPS_HOST:$APP/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/core/*.py     $VPS_USER@$VPS_HOST:$APP/core/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/features/*.py $VPS_USER@$VPS_HOST:$APP/features/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/telegram/*.py $VPS_USER@$VPS_HOST:$APP/telegram/
+
+# Restart (confirm separately)
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST \
+  "cd /opt/taris-docker && docker compose restart taris-telegram taris-web && sleep 8 && docker logs taris-vps-telegram --tail=10"
+```
+
+`BOT_VERSION = "2026.4.75"` — deployed 2026-04-24
 
 ## Current LLM Config
 

@@ -107,6 +107,23 @@ User (Telegram)
 |---|---|---|---|---|---|
 | **TariStation2** (local, `$ENG_TARGETHOST_IP`) | Engineering workstation | `cp src/... ~/.taris/...` + `systemctl --user restart taris-web` | `http://localhost:8080/` | `https://agents.sintaris.net/supertaris2/` | `@suppenclaw_bot` |
 | **TariStation1** / SintAItion (`$OPENCLAW1_LAN_IP`) | Production workstation | `scp src/... stas@SintAItion:~/.taris/...` + SSH restart | `http://SintAItion:8080/` | `https://agents.sintaris.net/supertaris/` | `@supertaris_bot` |
+| **VPS-Supertaris** (`agents.sintaris.net`) | 🔴 Internet-facing production | **Docker** — `sudo cp src/... /opt/taris-docker/app/src/...` + `docker compose restart` | `http://localhost:8090/` (no prefix) | `https://agents.sintaris.net/supertaris-vps/` | `@supertaris_bot` |
+
+### VPS-Supertaris — Docker Deployment Details
+
+> **taris runs in Docker on VPS-Supertaris. Do NOT use `systemctl --user` or `~/.taris/` paths on this host.**
+
+| Item | Value |
+|---|---|
+| Docker compose | `/opt/taris-docker/docker-compose.yml` |
+| Source volume | `/opt/taris-docker/app/src/` (mounted as `/app:ro`) |
+| Config (bot.env) | `/opt/taris-docker/bot.env` |
+| Compose service names | `taris-telegram`, `taris-web` |
+| Container names | `taris-vps-telegram`, `taris-vps-web` |
+| Web UI | port `8090`, direct: `http://localhost:8090/login` (no prefix) |
+| ROOT_PATH | `/supertaris-vps` (nginx-only prefix, not in uvicorn routes) |
+| Restart command | `cd /opt/taris-docker && docker compose restart taris-telegram taris-web` |
+| Verify | `docker logs taris-vps-telegram --tail=10` |
 
 **Remote access (SintAItion):**
 

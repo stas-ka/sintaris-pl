@@ -4,8 +4,11 @@ conftest.py — Playwright fixtures for Taris Bot Web UI tests.
 Usage:
     pytest src/tests/ui/ --base-url https://openclawpi2:8080
 
+    # VPS-Supertaris (Docker, agents.sintaris.net):
+    PICO_BASE_URL=http://localhost:8090 pytest src/tests/ui/
+
 Environment vars (override defaults):
-    PICO_BASE_URL   — default https://openclawpi2:8080
+    PICO_BASE_URL   — default https://openclawpi2:8080  (VPS: http://localhost:8090)
     PICO_ADMIN_USER — default admin
     PICO_ADMIN_PASS — default admin
     PICO_USER       — default testuser  (non-admin, auto-created if absent)

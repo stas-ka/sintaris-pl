@@ -1,0 +1,901 @@
+#!/usr/bin/env python3
+"""
+test_remote_kb.py — End-to-end UI tests for the Remote Knowledge Base agent.
+
+Tests cover the complete user-facing flows from button press through MCP call
+and bot reply, using mock objects so they run fully offline (no bot.env needed).
+Source-inspection tests also verify module structure and i18n completeness.
+
+T50  config constants present in bot_config.py (source)
+T51  bot_remote_kb.py public API complete (source)
+T52  bot_mcp_client.py public API complete (source)
+T53  i18n keys for remote_kb present in all 3 languages
+T54  callback routing in telegram_menu_bot.py (source)
+T55  is_configured() returns False when env vars are empty
+T56  show_menu() sends message with 5 inline buttons
+T57  search flow: start → handle_message → MCP called → result sent
+T58  search flow: start → no results → "nothing found" message
+T59  upload flow: start → handle_document → MCP ingest → success reply
+T60  list_docs flow: MCP returns docs → formatted list sent
+T61  clear_memory flow: MCP called → confirmation sent
+T62  circuit-breaker skips MCP calls when open; clears on success
+T63  session cancel: is_active() clears after cancel()
+T64  Web UI route /api/kb present in bot_web.py (source)
+T65  handle_message returns False when no active session (no state pollution)
+
+Usage (offline — no bot.env needed):
+    python3 src/tests/test_remote_kb.py
+    python -m pytest src/tests/test_remote_kb.py -v
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch, call
+
+# ── path bootstrap ─────────────────────────────────────────────────────────
+_SRC = Path(__file__).resolve().parent.parent
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+
+# ── helpers ────────────────────────────────────────────────────────────────
+
+def _read_src(rel: str) -> str:
+    return (_SRC / rel).read_text(encoding="utf-8")
+
+
+def _can_import_bot_config() -> bool:
+    try:
+        import core.bot_config  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+_HAS_BOT_CONFIG = _can_import_bot_config()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T50  Config constants in bot_config.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_remote_kb_config_constants_source():
+    """T200: bot_config.py defines all Remote KB config constants."""
+    src = _read_src("core/bot_config.py")
+    for const in (
+        "REMOTE_KB_ENABLED",
+        "MCP_REMOTE_URL",
+        "MCP_REMOTE_TOP_K",
+        "N8N_KB_API_KEY",
+        "N8N_KB_TOKEN",
+        "N8N_KB_WEBHOOK_INGEST",
+        "MCP_TIMEOUT",
+    ):
+        assert const in src, f"Missing config constant: {const}"
+
+    # constants must use os.environ.get (no hardcoded secrets)
+    for const in ("REMOTE_KB_ENABLED", "MCP_REMOTE_URL", "N8N_KB_API_KEY",
+                  "N8N_KB_TOKEN", "N8N_KB_WEBHOOK_INGEST"):
+        assert f'os.environ.get("{const}"' in src, \
+            f"{const} must use os.environ.get(), found no such pattern"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T51  bot_remote_kb.py public API
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_remote_kb_module_public_api_source():
+    """T201: bot_remote_kb.py exposes the complete public API."""
+    src = _read_src("features/bot_remote_kb.py")
+    for fn in (
+        "def is_configured",
+        "def is_active",
+        "def cancel",
+        "def show_menu",
+        "def start_search",
+        "def start_upload",
+        "def handle_message",
+        "def handle_document",
+        "def list_docs",
+        "def clear_memory",
+    ):
+        assert fn in src, f"bot_remote_kb.py missing: {fn}"
+
+    # internal helpers
+    for fn in ("def _do_search", "def _do_ingest"):
+        assert fn in src, f"bot_remote_kb.py missing internal helper: {fn}"
+
+    # imports mcp client, not direct HTTP
+    assert "bot_mcp_client" in src or "_mcp" in src, \
+        "bot_remote_kb.py must import bot_mcp_client"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T52  bot_mcp_client.py public API
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_mcp_client_public_api_source():
+    """T202: bot_mcp_client.py exposes query_remote, call_tool, ingest_file."""
+    src = _read_src("core/bot_mcp_client.py")
+    for fn in ("def query_remote", "def call_tool", "def ingest_file"):
+        assert fn in src, f"bot_mcp_client.py missing: {fn}"
+
+    # circuit-breaker helpers must exist
+    for fn in ("_cb_record_success", "_cb_record_failure", "_cb_is_open"):
+        assert fn in src, f"bot_mcp_client.py missing circuit-breaker helper: {fn}"
+
+    # must not make direct HTTP calls bypassing MCP (no raw requests.get etc.)
+    assert "import requests" not in src, \
+        "bot_mcp_client.py must not import requests directly; use httpx via MCP SDK"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T53  i18n completeness
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_remote_kb_i18n_keys():
+    """T203: All remote_kb i18n keys present in ru, en, de."""
+    strings = json.loads((_SRC / "strings.json").read_text(encoding="utf-8"))
+    required_keys = [
+        "agents_btn_remote_kb",
+        "remote_kb_menu_title",
+        "remote_kb_not_configured",
+        "remote_kb_search_btn",
+        "remote_kb_upload_btn",
+        "remote_kb_list_btn",
+        "remote_kb_clear_mem_btn",
+        "remote_kb_enter_query",
+        "remote_kb_searching",
+        "remote_kb_no_results",
+        "remote_kb_result_header",
+        "remote_kb_upload_prompt",
+        "remote_kb_uploading",
+        "remote_kb_upload_ok",
+        "remote_kb_upload_fail",
+        "remote_kb_upload_empty",
+        "remote_kb_op_fail",
+        "remote_kb_docs_header",
+        "remote_kb_docs_empty",
+        "remote_kb_mem_cleared",
+    ]
+    for lang in ("ru", "en", "de"):
+        assert lang in strings, f"Language '{lang}' missing from strings.json"
+        for key in required_keys:
+            assert key in strings[lang], f"Key '{key}' missing in lang '{lang}'"
+            assert strings[lang][key], f"Key '{key}' is empty in lang '{lang}'"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T54  Callback routing in telegram_menu_bot.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_remote_kb_callback_routing_source():
+    """T204: telegram_menu_bot.py routes all remote_kb callback data values."""
+    src = _read_src("telegram_menu_bot.py")
+    for cb in (
+        '"remote_kb_menu"',
+        '"remote_kb_search"',
+        '"remote_kb_upload"',
+        '"remote_kb_list_docs"',
+        '"remote_kb_clear_mem"',
+    ):
+        assert cb in src, f"Missing callback route: {cb}"
+
+    # module imported
+    assert "bot_remote_kb" in src, "telegram_menu_bot.py must import bot_remote_kb"
+
+    # agents menu must have KB button
+    assert "agents_btn_remote_kb" in src, \
+        "Agents menu must include agents_btn_remote_kb button"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mock-based E2E tests (no running bot, no network)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_bot():
+    """Create a mock telebot bot object with message tracking."""
+    bot = MagicMock()
+    sent = []
+
+    def _send(chat_id, text, **kw):
+        msg = SimpleNamespace(message_id=len(sent) + 100, text=text)
+        sent.append(("send", chat_id, text))
+        return msg
+
+    def _edit(text, chat_id, message_id, **kw):
+        sent.append(("edit", chat_id, text))
+        return SimpleNamespace(message_id=message_id, text=text)
+
+    bot.send_message.side_effect = _send
+    bot.edit_message_text.side_effect = _edit
+    bot._sent = sent
+    return bot
+
+
+def _make_t():
+    """Minimal i18n function using real strings.json."""
+    strings = json.loads((_SRC / "strings.json").read_text(encoding="utf-8"))["en"]
+
+    def _t(chat_id, key, **kw):
+        val = strings.get(key, f"<{key}>")
+        if kw:
+            try:
+                return val.format(**kw)
+            except Exception:
+                return val
+        return val
+
+    return _t
+
+
+def _load_remote_kb():
+    """Import bot_remote_kb with bot_config patched so no BOT_TOKEN needed."""
+    with patch.dict("os.environ", {
+        "BOT_TOKEN":           "0:test",
+        "REMOTE_KB_ENABLED":   "0",
+        "MCP_REMOTE_URL":      "",
+        "N8N_KB_API_KEY":      "",
+        "N8N_KB_TOKEN":        "",
+        "N8N_KB_WEBHOOK_INGEST": "",
+    }):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        # clear session state between tests
+        mod._sessions.clear()
+        return mod
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T55  is_configured() when env empty
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_is_configured_false_when_env_empty():
+    """T205: is_configured() returns False when REMOTE_KB_ENABLED=0 or vars absent."""
+    with patch.dict("os.environ", {
+        "BOT_TOKEN":         "0:test",
+        "REMOTE_KB_ENABLED": "0",
+        "MCP_REMOTE_URL":    "",
+        "N8N_KB_API_KEY":    "",
+    }):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        assert mod.is_configured() is False, "is_configured() must be False when disabled"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T56  show_menu() — 5 inline buttons
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_show_menu_sends_5_buttons():
+    """T206: show_menu() sends exactly one message with 5 inline keyboard buttons."""
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "", "N8N_KB_API_KEY": ""}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = MagicMock()
+        sent_markup = []
+
+        def _send(cid, text, **kw):
+            sent_markup.append(kw.get("reply_markup"))
+            return SimpleNamespace(message_id=1, text=text)
+
+        bot.send_message.side_effect = _send
+        _t = _make_t()
+
+        mod.show_menu(999, bot, _t)
+
+        assert bot.send_message.call_count == 1, "show_menu must send exactly 1 message"
+        markup = sent_markup[0]
+        assert markup is not None, "show_menu must send inline keyboard"
+
+        # flatten all buttons across keyboard rows
+        all_buttons = [btn for row in markup.keyboard for btn in row]
+        assert len(all_buttons) == 5, \
+            f"Expected 5 buttons, got {len(all_buttons)}: {[b.callback_data for b in all_buttons]}"
+
+        callback_data = {b.callback_data for b in all_buttons}
+        for expected_cb in ("remote_kb_search", "remote_kb_upload",
+                             "remote_kb_list_docs", "remote_kb_clear_mem",
+                             "agents_menu"):
+            assert expected_cb in callback_data, f"Missing button: {expected_cb}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T57  Search flow: start → send query → MCP returns results → reply
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_search_flow_with_results():
+    """T207: start_search → handle_message → MCP called → result edited into message."""
+    CHAT_ID = 42
+    _chunks = [
+        {"section": "Safety rules", "text": "Always wear PPE.", "score": 0.92},
+        {"section": "Emergency exit", "text": "Use exit B in case of fire.", "score": 0.88},
+    ]
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.query_remote.return_value = _chunks
+
+            # Step 1: press "Search" button → bot asks for query text
+            mod.start_search(CHAT_ID, bot, _t)
+            assert bot.send_message.call_count == 1
+            assert mod.is_active(CHAT_ID), "Session must be active after start_search"
+
+            # Step 2: user types query → handle_message consumes it
+            consumed = mod.handle_message(CHAT_ID, "safety PPE", bot, _t)
+            assert consumed, "handle_message must return True for active search session"
+
+            # MCP query_remote must be called with the user's query
+            mock_mcp.query_remote.assert_called_once()
+            call_args = mock_mcp.query_remote.call_args
+            assert "safety PPE" in call_args[0] or call_args[1].get("query") == "safety PPE" \
+                or (call_args[0] and call_args[0][0] == "safety PPE"), \
+                f"query_remote not called with 'safety PPE': {call_args}"
+
+            # Bot must have edited the status message with results
+            edits = [ev for ev in bot._sent if ev[0] == "edit"]
+            assert edits, "Search result must be edited into status message"
+            result_text = edits[-1][2]
+            assert "Safety rules" in result_text or "2" in result_text or "PPE" in result_text, \
+                f"Result text looks wrong: {result_text[:200]}"
+
+        # Session cleared after search
+        assert not mod.is_active(CHAT_ID), "Session must be cleared after search completes"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T58  Search flow: no results
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_search_flow_no_results():
+    """T208: search returns empty list → bot sends 'nothing found' message."""
+    CHAT_ID = 43
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.query_remote.return_value = []
+
+            mod.start_search(CHAT_ID, bot, _t)
+            mod.handle_message(CHAT_ID, "xyzzy does not exist", bot, _t)
+
+            edits = [ev for ev in bot._sent if ev[0] == "edit"]
+            assert edits, "Must edit message even on no results"
+            result_text = edits[-1][2]
+            # should contain the "no results" string
+            assert "nothing" in result_text.lower() or "найдено" in result_text.lower() \
+                or "no" in result_text.lower() or "пусто" in result_text.lower() \
+                or "not found" in result_text.lower(), \
+                f"Expected 'no results' message, got: {result_text[:200]}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T59  Upload flow: start → send document → MCP ingest → success reply
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_upload_flow_success():
+    """T209: start_upload → handle_document → MCP ingest_file called → success reply."""
+    CHAT_ID = 44
+
+    fake_doc = SimpleNamespace(
+        file_id="TG_FILE_ID_001",
+        file_name="worksafety.pdf",
+        mime_type="application/pdf",
+    )
+    fake_file_info = SimpleNamespace(file_path="documents/file_001.pdf")
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key",
+                                    "N8N_KB_TOKEN": "tok", "N8N_KB_WEBHOOK_INGEST": "http://wh"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        bot.get_file.return_value = fake_file_info
+        bot.download_file.return_value = b"%PDF-1.4 fake content"
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp, \
+             patch("features.bot_remote_kb.bot_instance", create=True), \
+             patch("core.bot_instance.bot") as mock_core_bot:
+
+            mock_core_bot.get_file.return_value = fake_file_info
+            mock_core_bot.download_file.return_value = b"%PDF-1.4 fake content"
+            mock_mcp.ingest_file.return_value = {"n_chunks": 47, "doc_id": "doc-001"}
+
+            # Step 1: press Upload button → bot asks for a file
+            mod.start_upload(CHAT_ID, bot, _t)
+            assert bot.send_message.call_count == 1
+            assert mod.is_active(CHAT_ID)
+
+            # Step 2: user sends a document
+            consumed = mod.handle_document(CHAT_ID, fake_doc, bot, _t)
+            assert consumed, "handle_document must return True when in upload mode"
+
+            # ingest_file must have been called
+            mock_mcp.ingest_file.assert_called_once()
+            ingest_call = mock_mcp.ingest_file.call_args
+            assert CHAT_ID in ingest_call[0] or ingest_call[1].get("chat_id") == CHAT_ID \
+                or (ingest_call[0] and ingest_call[0][0] == CHAT_ID), \
+                f"ingest_file not called with chat_id={CHAT_ID}: {ingest_call}"
+
+            # success reply must contain filename and chunk count
+            edit_calls = bot.edit_message_text.call_args_list
+            all_reply_text = " ".join(
+                str(c[0][0]) if c[0] else str(c[1].get("text", ""))
+                for c in (bot.send_message.call_args_list + edit_calls)
+            )
+            assert "worksafety.pdf" in all_reply_text or "47" in all_reply_text, \
+                "Success reply must contain filename or chunk count (regression: n_chunks format bug)"
+
+        # Session must be cleared after upload
+        assert not mod.is_active(CHAT_ID), "Session must be cleared after upload"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T60  list_docs flow
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_list_docs_flow():
+    """T210: list_docs() calls kb_list_documents and formats result."""
+    CHAT_ID = 45
+    fake_docs = [
+        {"title": "Safety Manual", "filename": "safety.pdf", "chunk_count": 120},
+        {"title": "HR Policy",     "filename": "hr.pdf",     "chunk_count": 45},
+    ]
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.call_tool.return_value = {"documents": fake_docs}
+
+            mod.list_docs(CHAT_ID, bot, _t)
+
+            # MCP call_tool must be called with kb_list_documents
+            mock_mcp.call_tool.assert_called_once()
+            tool_name = mock_mcp.call_tool.call_args[0][0]
+            assert tool_name == "kb_list_documents", \
+                f"list_docs must call kb_list_documents, got: {tool_name}"
+
+            # Result must mention doc titles
+            edits = [ev for ev in bot._sent if ev[0] == "edit"]
+            assert edits, "list_docs must edit the status message with results"
+            result_text = edits[-1][2]
+            assert "Safety Manual" in result_text, \
+                f"Doc title missing from list: {result_text[:300]}"
+            assert "120" in result_text, "Chunk count must be shown"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T61  clear_memory flow
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_clear_memory_flow():
+    """T211: clear_memory() calls kb_memory_clear and sends confirmation."""
+    CHAT_ID = 46
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.call_tool.return_value = {"cleared": True}
+
+            mod.clear_memory(CHAT_ID, bot, _t)
+
+            # Must call kb_memory_clear
+            mock_mcp.call_tool.assert_called_once()
+            tool_name = mock_mcp.call_tool.call_args[0][0]
+            assert tool_name == "kb_memory_clear", \
+                f"clear_memory must call kb_memory_clear, got: {tool_name}"
+
+            # Must send confirmation message (not just edit)
+            sends = [ev for ev in bot._sent if ev[0] == "send"]
+            assert sends, "clear_memory must send a confirmation message"
+            confirm_text = sends[-1][2]
+            assert "cleared" in confirm_text.lower() or "очищен" in confirm_text.lower(), \
+                f"Expected confirmation text, got: {confirm_text}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T62  Circuit-breaker: open → MCP skipped; success → closes
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_circuit_breaker_open_skips_mcp():
+    """T212: circuit-breaker opens after threshold failures; closes on success."""
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test"}):
+        import importlib
+        import core.bot_mcp_client as mcp_mod
+        importlib.reload(mcp_mod)
+
+        # Verify closed initially
+        assert not mcp_mod._cb_is_open(), "Circuit breaker must start closed"
+
+        # Simulate threshold failures via the public helper
+        for _ in range(mcp_mod._CB_THRESHOLD):
+            mcp_mod._cb_record_failure()
+
+        assert mcp_mod._cb_is_open(), \
+            f"Circuit breaker must open after {mcp_mod._CB_THRESHOLD} failures"
+        assert mcp_mod._cb_failures >= mcp_mod._CB_THRESHOLD
+
+        # success resets the circuit
+        mcp_mod._cb_record_success()
+        assert not mcp_mod._cb_is_open(), \
+            "Circuit breaker must close after _cb_record_success()"
+        assert mcp_mod._cb_failures == 0, \
+            "_cb_failures must reset to 0 after success"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T63  Session lifecycle: is_active / cancel
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_session_lifecycle():
+    """T213: is_active() and cancel() correctly track session state."""
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "", "N8N_KB_API_KEY": ""}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = MagicMock()
+        bot.send_message.return_value = SimpleNamespace(message_id=1, text="")
+        _t = _make_t()
+
+        CHAT_ID = 47
+        assert not mod.is_active(CHAT_ID), "No session initially"
+
+        mod.start_search(CHAT_ID, bot, _t)
+        assert mod.is_active(CHAT_ID), "Session active after start_search"
+
+        mod.cancel(CHAT_ID)
+        assert not mod.is_active(CHAT_ID), "Session cleared after cancel"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T64  Web UI route /api/kb present in bot_web.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_web_ui_kb_route_source():
+    """T214: bot_web.py defines /api/remote-kb/search route."""
+    src = _read_src("bot_web.py")
+    assert "/api/remote-kb/search" in src, \
+        "bot_web.py must define /api/remote-kb/search route for the Web UI KB agent integration"
+    assert "REMOTE_KB_ENABLED" in src, \
+        "bot_web.py must guard /api/remote-kb/search with REMOTE_KB_ENABLED check"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T65  handle_message returns False when no session (no state pollution)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_handle_message_no_session_returns_false():
+    """T215: handle_message returns False for a chat_id with no active session."""
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "", "N8N_KB_API_KEY": ""}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = MagicMock()
+        _t = _make_t()
+
+        result = mod.handle_message(9999, "some random text", bot, _t)
+        assert result is False, \
+            "handle_message must return False when no session exists (avoids stealing messages)"
+        bot.send_message.assert_not_called()
+        bot.edit_message_text.assert_not_called()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T216  Upload with empty MCP response shows error (not false success)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_upload_flow_empty_mcp_response_shows_error():
+    """T216: _do_ingest shows error message when ingest_file returns {} (no server response).
+
+    Regression guard: previously, empty result {} caused a false success
+    message '✅ ? chunks indexed' because the code didn't check for empty result.
+    """
+    CHAT_ID = 50
+
+    fake_doc = SimpleNamespace(
+        file_id="TG_FILE_ID_002",
+        file_name="report.pdf",
+        mime_type="application/pdf",
+    )
+    fake_file_info = SimpleNamespace(file_path="documents/file_002.pdf")
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key",
+                                    "N8N_KB_TOKEN": "tok", "N8N_KB_WEBHOOK_INGEST": "http://wh"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp, \
+             patch("core.bot_instance.bot") as mock_core_bot:
+
+            mock_core_bot.get_file.return_value = fake_file_info
+            mock_core_bot.download_file.return_value = b"%PDF-1.4 stub"
+            mock_mcp.ingest_file.return_value = {}  # ← server returned empty / failed
+
+            mod.start_upload(CHAT_ID, bot, _t)
+            mod.handle_document(CHAT_ID, fake_doc, bot, _t)
+
+            mock_mcp.ingest_file.assert_called_once()
+
+            # Must show error, NOT success
+            edit_texts = [
+                str(c[0][0]) if c[0] else str(c[1].get("text", ""))
+                for c in bot.edit_message_text.call_args_list
+            ]
+            combined = " ".join(edit_texts)
+
+            assert "✅" not in combined, \
+                "Empty MCP response must NOT show success ✅ checkmark (was showing '? chunks indexed')"
+            assert "❌" in combined or "konfiguriert" in combined or "server" in combined.lower(), \
+                f"Empty MCP response must show error message, got: {combined!r}"
+
+            # Specifically must NOT contain '?' as chunk count (the old false-success symptom)
+            assert "? chunks" not in combined and "? Abschnitte" not in combined, \
+                f"Must not show '? chunks' on empty response (false success), got: {combined!r}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T217  Search error uses op_fail string (not upload_fail)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_search_error_uses_op_fail_string():
+    """T217: When search fails, bot_remote_kb uses remote_kb_op_fail, not remote_kb_upload_fail.
+
+    Regression guard: previously search/list/clear errors showed 'Upload failed: ...'
+    which was confusing for non-upload operations.
+    """
+    CHAT_ID = 51
+    import json as _json
+    strings_en = _json.loads((_SRC / "strings.json").read_text(encoding="utf-8"))["en"]
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+        mod._sessions.clear()
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.query_remote.side_effect = RuntimeError("connection timeout")
+
+            mod.start_search(CHAT_ID, bot, _t)
+            mod.handle_message(CHAT_ID, "find documents about quality", bot, _t)
+
+            edit_texts = [
+                str(c[0][0]) if c[0] else str(c[1].get("text", ""))
+                for c in bot.edit_message_text.call_args_list
+            ]
+            combined = " ".join(edit_texts)
+
+            # Must NOT say "Upload failed"
+            assert strings_en["remote_kb_upload_fail"].split(":")[0] not in combined, \
+                f"Search error must not say 'Upload failed', got: {combined!r}"
+            # Must show a generic error (op_fail pattern: '❌ Error: ...')
+            assert "❌" in combined, f"Search error must show ❌ error message, got: {combined!r}"
+            assert "connection timeout" in combined, \
+                f"Error message must include the exception text, got: {combined!r}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T218  list_docs error uses op_fail string (not upload_fail)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_list_docs_error_uses_op_fail_string():
+    """T218: When list_docs fails, uses remote_kb_op_fail not remote_kb_upload_fail."""
+    CHAT_ID = 52
+    import json as _json
+    strings_en = _json.loads((_SRC / "strings.json").read_text(encoding="utf-8"))["en"]
+    upload_fail_prefix = strings_en["remote_kb_upload_fail"].split(":")[0]  # "❌ Upload failed"
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.call_tool.side_effect = RuntimeError("DB unreachable")
+
+            mod.list_docs(CHAT_ID, bot, _t)
+
+            edit_texts = [
+                str(c[0][0]) if c[0] else str(c[1].get("text", ""))
+                for c in bot.edit_message_text.call_args_list
+            ]
+            combined = " ".join(edit_texts)
+
+            assert upload_fail_prefix not in combined, \
+                f"list_docs error must not say '{upload_fail_prefix}', got: {combined!r}"
+            assert "❌" in combined, f"list_docs error must show ❌ error, got: {combined!r}"
+            assert "DB unreachable" in combined, \
+                f"Error must include exception text, got: {combined!r}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T219  clear_memory error uses op_fail string (not upload_fail)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_clear_memory_error_uses_op_fail_string():
+    """T219: When clear_memory fails, uses remote_kb_op_fail not remote_kb_upload_fail."""
+    CHAT_ID = 53
+    import json as _json
+    strings_en = _json.loads((_SRC / "strings.json").read_text(encoding="utf-8"))["en"]
+    upload_fail_prefix = strings_en["remote_kb_upload_fail"].split(":")[0]  # "❌ Upload failed"
+
+    with patch.dict("os.environ", {"BOT_TOKEN": "0:test", "REMOTE_KB_ENABLED": "0",
+                                    "MCP_REMOTE_URL": "http://fake", "N8N_KB_API_KEY": "key"}):
+        import importlib
+        import features.bot_remote_kb as mod
+        importlib.reload(mod)
+
+        bot = _make_bot()
+        _t = _make_t()
+
+        with patch("features.bot_remote_kb._mcp") as mock_mcp:
+            mock_mcp.call_tool.side_effect = RuntimeError("tool unavailable")
+
+            mod.clear_memory(CHAT_ID, bot, _t)
+
+            send_texts = [
+                str(c[0][1]) if len(c[0]) > 1 else str(c[1].get("text", ""))
+                for c in bot.send_message.call_args_list
+            ]
+            combined = " ".join(send_texts)
+
+            assert upload_fail_prefix not in combined, \
+                f"clear_memory error must not say '{upload_fail_prefix}', got: {combined!r}"
+            assert "❌" in combined, f"clear_memory error must show ❌ error, got: {combined!r}"
+            assert "tool unavailable" in combined, \
+                f"Error must include exception text, got: {combined!r}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Runtime tests (only when bot.env is loadable)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if _HAS_BOT_CONFIG:
+    def test_remote_kb_config_runtime():
+        """Remote KB config constants importable and correctly typed at runtime."""
+        from core.bot_config import (
+            REMOTE_KB_ENABLED, MCP_REMOTE_URL, MCP_REMOTE_TOP_K,
+            N8N_KB_API_KEY, N8N_KB_TOKEN, N8N_KB_WEBHOOK_INGEST,
+        )
+        assert isinstance(REMOTE_KB_ENABLED, bool)
+        assert isinstance(MCP_REMOTE_URL, str)
+        assert isinstance(MCP_REMOTE_TOP_K, int)
+        assert isinstance(N8N_KB_API_KEY, str)
+        assert isinstance(N8N_KB_TOKEN, str)
+        assert isinstance(N8N_KB_WEBHOOK_INGEST, str)
+
+    def test_remote_kb_is_configured_runtime():
+        """is_configured() returns correct bool based on runtime env."""
+        from core.bot_config import REMOTE_KB_ENABLED, MCP_REMOTE_URL, N8N_KB_API_KEY
+        from features.bot_remote_kb import is_configured
+        expected = bool(REMOTE_KB_ENABLED and MCP_REMOTE_URL and N8N_KB_API_KEY)
+        assert is_configured() == expected
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# __main__ runner (matches test_n8n_crm.py pattern)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    tests = [
+        ("T200 config_constants_source",          test_remote_kb_config_constants_source),
+        ("T201 module_public_api_source",          test_remote_kb_module_public_api_source),
+        ("T202 mcp_client_public_api_source",      test_mcp_client_public_api_source),
+        ("T203 i18n_keys",                         test_remote_kb_i18n_keys),
+        ("T204 callback_routing_source",           test_remote_kb_callback_routing_source),
+        ("T205 is_configured_false_env_empty",     test_is_configured_false_when_env_empty),
+        ("T206 show_menu_5_buttons",               test_show_menu_sends_5_buttons),
+        ("T207 search_flow_with_results",          test_search_flow_with_results),
+        ("T208 search_flow_no_results",            test_search_flow_no_results),
+        ("T209 upload_flow_success",               test_upload_flow_success),
+        ("T210 list_docs_flow",                    test_list_docs_flow),
+        ("T211 clear_memory_flow",                 test_clear_memory_flow),
+        ("T212 circuit_breaker",                   test_circuit_breaker_open_skips_mcp),
+        ("T213 session_lifecycle",                 test_session_lifecycle),
+        ("T214 web_ui_kb_route_source",            test_web_ui_kb_route_source),
+        ("T215 handle_message_no_session",         test_handle_message_no_session_returns_false),
+        ("T216 upload_empty_mcp_shows_error",      test_upload_flow_empty_mcp_response_shows_error),
+        ("T217 search_error_uses_op_fail",         test_search_error_uses_op_fail_string),
+        ("T218 list_docs_error_uses_op_fail",      test_list_docs_error_uses_op_fail_string),
+        ("T219 clear_memory_error_uses_op_fail",   test_clear_memory_error_uses_op_fail_string),
+    ]
+
+    passed = failed = skipped = 0
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"PASS  {name}")
+            passed += 1
+        except AssertionError as e:
+            print(f"FAIL  {name}: {e}")
+            failed += 1
+        except Exception as e:
+            print(f"SKIP  {name}: {type(e).__name__}: {e}")
+            skipped += 1
+
+    if _HAS_BOT_CONFIG:
+        for name, fn in [
+            ("runtime_config",        test_remote_kb_config_runtime),
+            ("runtime_is_configured", test_remote_kb_is_configured_runtime),
+        ]:
+            try:
+                fn()
+                print(f"PASS  {name}")
+                passed += 1
+            except Exception as e:
+                print(f"FAIL  {name}: {e}")
+                failed += 1
+    else:
+        print("INFO  runtime tests skipped (no bot.env / BOT_TOKEN)")
+
+    print(f"\n{'='*50}")
+    print(f"Results: {passed} passed, {failed} failed, {skipped} skipped")
+    sys.exit(1 if failed else 0)

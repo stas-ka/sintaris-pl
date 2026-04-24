@@ -58,9 +58,10 @@ def show_menu(chat_id: int, bot, _t) -> None:
         InlineKeyboardButton(_t(chat_id, "remote_kb_clear_mem_btn"), callback_data="remote_kb_clear_mem"),
         InlineKeyboardButton(_t(chat_id, "agents_btn_back"),      callback_data="agents_menu"),
     )
+    title = _t(chat_id, "remote_kb_menu_title")
     bot.send_message(
         chat_id,
-        _t(chat_id, "remote_kb_menu_title"),
+        title,
         reply_markup=kb,
         parse_mode="Markdown",
     )
@@ -122,7 +123,7 @@ def list_docs(chat_id: int, bot, _t) -> None:
     except Exception as exc:
         log.error("[remote_kb] list_docs error: %s", exc)
         bot.edit_message_text(
-            _t(chat_id, "remote_kb_upload_fail").format(error=str(exc)[:120]),
+            _t(chat_id, "remote_kb_op_fail").format(error=str(exc)[:120]),
             chat_id, msg.message_id, parse_mode="Markdown",
         )
 
@@ -134,7 +135,7 @@ def clear_memory(chat_id: int, bot, _t) -> None:
         bot.send_message(chat_id, _t(chat_id, "remote_kb_mem_cleared"), parse_mode="Markdown")
     except Exception as exc:
         log.error("[remote_kb] clear_memory error: %s", exc)
-        bot.send_message(chat_id, _t(chat_id, "remote_kb_upload_fail").format(error=str(exc)[:120]))
+        bot.send_message(chat_id, _t(chat_id, "remote_kb_op_fail").format(error=str(exc)[:120]))
 
 
 # ─── Internal helpers ──────────────────────────────────────────────────────────
@@ -163,7 +164,7 @@ def _do_search(chat_id: int, query: str, bot, _t) -> None:
     except Exception as exc:
         log.error("[remote_kb] search error: %s", exc)
         bot.edit_message_text(
-            _t(chat_id, "remote_kb_upload_fail").format(error=str(exc)[:120]),
+            _t(chat_id, "remote_kb_op_fail").format(error=str(exc)[:120]),
             chat_id, status.message_id, parse_mode="Markdown",
         )
 
@@ -178,6 +179,12 @@ def _do_ingest(chat_id: int, doc, bot, _t) -> None:
         fname = doc.file_name or "document"
         mime  = doc.mime_type or "application/octet-stream"
         result = _mcp.ingest_file(chat_id, fname, file_bytes, mime)
+        if not result:
+            bot.edit_message_text(
+                _t(chat_id, "remote_kb_upload_empty"),
+                chat_id, status.message_id, parse_mode="Markdown",
+            )
+            return
         n_chunks = result.get("n_chunks", "?")
         bot.edit_message_text(
             _t(chat_id, "remote_kb_upload_ok").format(filename=fname, n_chunks=n_chunks),

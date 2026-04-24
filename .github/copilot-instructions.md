@@ -72,6 +72,7 @@ Taris runs on **two hardware variants** selected by `DEVICE_VARIANT` in `~/.tari
 |---|---|---|
 | `DEVICE_VARIANT` | `picoclaw` | `openclaw` |
 | **Hosts** | OpenClawPI2 (dev) · OpenClawPI (prod) | TariStation2 · TariStation1 · VPS-Supertaris |
+| **VPS-Supertaris deploy** | — | **Docker** at `/opt/taris-docker/` — NOT `~/.taris/` — see Mandatory Rules |
 | **STT commands** | `vosk` (Vosk small-ru) | `faster_whisper` (CTranslate2, base/small int8) |
 | **TTS** | Piper ONNX `irina-medium` | Piper ONNX `irina-medium` |
 | **LLM default** | `taris` CLI → OpenRouter | `ollama` → Qwen3 local (:11434) |

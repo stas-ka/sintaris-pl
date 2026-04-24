@@ -736,6 +736,12 @@ def detect_rag_capability() -> RAGCapability:
 
 ## 7. Implementation Plan
 
+> **Status update — 2026-04-23** (verified against current `src/`):
+> - **Phase A (Memory):** ❌ not started. `bot_memory.py`, `memory_summaries`, `memory_long` do not exist.
+> - **Phase B (Enhanced RAG):** 🟡 partial. ✅ `EmbeddingService` (`bot_embeddings.py`), `rag_log` table (SQLite + Postgres), `vec_embeddings` (sqlite-vec / pgvector HNSW), document upload uses embeddings when available. ❌ `bot_retrieval.py` (RRF + adaptive router + context assembler) still missing — embeddings are generated but not fused into retrieval.
+> - **Phase C (Document Management):** ❌ `doc_sharing` table missing; duplicate-detection by SHA-256 present in `bot_documents.py`; download + share UI not built.
+> - **Phase D (Remote RAG & MCP):** 🟡 partial. ✅ `bot_mcp_client.py` exists (HTTP + circuit breaker) but **not wired into any handler**. ❌ `bot_mcp_server.py` missing. Detailed re-scope in [doc/todo/4.3-remote-mcp-rag.md](../../todo/4.3-remote-mcp-rag.md) — moves Phase D to a VPS/N8N service with a dedicated Skill+Agent on OpenClaw and a separate Postgres DB. That concept is **pending user review** before implementation starts.
+
 ### Phase A: Memory System (3-5 days)
 
 **Goal:** 3-tier memory compaction (short → middle → long) with user controls.

@@ -27,6 +27,9 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | `src/tests/screen_loader/` | Screen DSL loader regression (Category G — all 64 tests) | Local machine |
 | `src/tests/llm/` | LLM provider tests (Category H — all 18 tests) | Local machine |
 | **Before backup or after data migration** | Data consistency check (Category J) | Any target |
+| `src/features/bot_remote_kb.py` / `src/core/bot_mcp_client.py` | Remote KB agent tests T200–T219 | Local machine |
+| `src/strings.json` remote_kb_* keys | Remote KB agent T203, T209, T216 | Local machine |
+| `src/bot_web.py` `/api/remote-kb/` routes | Remote KB agent T214 | Local machine |
 
 ---
 
@@ -248,6 +251,33 @@ pscp -pw "%HOSTPWD%" src\tests\voice\*.ogg              stas@OpenClawPI:/home/st
 | T156d | `guest_role_detection` | `_get_user_role()` checks `_dynamic_guests` and returns `"guest"`. | After editing `_get_user_role()` |
 | T156e | `guest_role_set` | `_handle_admin_user_set_role()` handles `role == "guest"` case. | After editing `_handle_admin_user_set_role()` |
 | T156f | `guest_approval_dispatch` | `telegram_menu_bot.py` imports `_do_approve_as_guest` and dispatches `reg_guest:` callback. | After editing callback routing |
+
+### 2.5f Remote KB Agent Tests — `src/tests/test_remote_kb.py`
+
+Run with: `python src/tests/test_remote_kb.py` (offline, source-inspection + mock E2E). All T200-T215 tests run without network access.
+
+| ID | Test | What it checks | When to run |
+|---|---|---|---|
+| T200 | `config_constants_source` | `bot_config.py` has all 6 Remote KB constants: `MCP_REMOTE_URL`, `MCP_REMOTE_TOP_K`, `N8N_KB_API_KEY`, `N8N_KB_TOKEN`, `N8N_KB_WEBHOOK_INGEST`, `REMOTE_KB_ENABLED`. | After editing `bot_config.py` or adding Remote KB env vars |
+| T201 | `module_public_api_source` | `bot_remote_kb.py` exports all 10 public functions: `is_configured`, `is_active`, `cancel`, `show_menu`, `start_search`, `start_upload`, `handle_message`, `handle_document`, `list_docs`, `clear_memory`. | After editing `bot_remote_kb.py` public API |
+| T202 | `mcp_client_public_api_source` | `bot_mcp_client.py` exports `query_remote`, `call_tool`, `ingest_file`, `_cb_record_success`, `_cb_record_failure`, `_cb_is_open`. | After editing `bot_mcp_client.py` |
+| T203 | `i18n_keys` | All `remote_kb_*` strings present and non-empty in ru/en/de. Catches missing translations. | After editing `strings.json` remote KB keys |
+| T204 | `callback_routing_source` | `telegram_menu_bot.py` routes all 5 KB callbacks: `remote_kb_search`, `remote_kb_upload`, `remote_kb_list_docs`, `remote_kb_clear_mem`, `agents_menu`. | After editing callback routing |
+| T205 | `is_configured_false_env_empty` | `is_configured()` returns `False` when `MCP_REMOTE_URL` and `N8N_KB_WEBHOOK_INGEST` are empty. | After editing `is_configured()` logic |
+| T206 | `show_menu_5_buttons` | `show_menu()` sends exactly 5 inline keyboard buttons. | After editing `show_menu()` or adding/removing KB menu buttons |
+| T207 | `search_flow_with_results` | Full search flow: `start_search()` → `handle_message()` → `_mcp.query_remote()` called → result edited into message. | After editing `start_search()` or `handle_message()` |
+| T208 | `search_flow_no_results` | `query_remote()` returns empty list → "nothing found" key sent. | After editing empty-result handling in `handle_message()` |
+| T209 | `upload_flow_success` | `start_upload()` → `handle_document()` → `_mcp.ingest_file()` called → success reply contains filename and chunk count. Regression guard for `n_chunks` format-string bug (`{n\_chunks}` in strings.json broke `.format(n_chunks=...)`). | After editing `_do_ingest()`, `handle_document()`, or `remote_kb_upload_ok` string |
+| T210 | `list_docs_flow` | `list_docs()` calls `kb_list_documents` MCP tool and formats result with doc IDs. | After editing `list_docs()` or `kb_list_documents` tool call |
+| T211 | `clear_memory_flow` | `clear_memory()` calls `kb_memory_clear` MCP tool and sends confirmation. | After editing `clear_memory()` or `kb_memory_clear` tool call |
+| T212 | `circuit_breaker` | `_cb_is_open()` starts closed; opens after `_CB_THRESHOLD` failures via `_cb_record_failure()`; closes to zero after `_cb_record_success()`. Root cause: `_cb_is_open()` was missing `global _cb_open_until` → `UnboundLocalError`. | After editing circuit-breaker logic in `bot_mcp_client.py` |
+| T213 | `session_lifecycle` | `is_active()` returns True after `start_search()`; `cancel()` clears session; `is_active()` returns False. | After editing `_sessions` state dict management |
+| T214 | `web_ui_kb_route_source` | `bot_web.py` defines `/api/remote-kb/search` route guarded by `REMOTE_KB_ENABLED`. | After editing `bot_web.py` KB API route |
+| T215 | `handle_message_no_session` | `handle_message()` returns `False` when no session is active for chat_id. | After editing `handle_message()` early-return guard |
+| T216 | `upload_empty_mcp_shows_error` | `_do_ingest()` shows `❌` error (not `✅ ? chunks indexed`) when `ingest_file()` returns `{}` (empty/failed response from N8N). Regression guard for silent false-success bug. | After editing `_do_ingest()`, `ingest_file()`, or any upload result handling |
+| T217 | `search_error_uses_op_fail` | Search failure uses `remote_kb_op_fail` string (`❌ Error: ...`) not `remote_kb_upload_fail` (`❌ Upload failed: ...`). Regression guard — wrong string caused confusing "Upload failed" message on search errors. | After editing `_do_search()` exception handler |
+| T218 | `list_docs_error_uses_op_fail` | `list_docs()` failure uses `remote_kb_op_fail` not `remote_kb_upload_fail`. | After editing `list_docs()` exception handler |
+| T219 | `clear_memory_error_uses_op_fail` | `clear_memory()` failure uses `remote_kb_op_fail` not `remote_kb_upload_fail`. | After editing `clear_memory()` exception handler |
 
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 

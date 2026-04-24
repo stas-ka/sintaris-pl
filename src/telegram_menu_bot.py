@@ -1167,10 +1167,7 @@ def callback_handler(call):
     # ── Remote KB Agent ────────────────────────────────────────────────────
     elif data == "remote_kb_menu":
         if _is_admin(cid) or _is_advanced(cid):
-            if not _remote_kb.is_configured():
-                bot.send_message(cid, _t(cid, "remote_kb_not_configured"))
-            else:
-                _remote_kb.show_menu(cid, bot, _t)
+            _remote_kb.show_menu(cid, bot, _t)
         else:
             bot.send_message(cid, _t(cid, "admin_only"))
 
@@ -1610,12 +1607,11 @@ def _handle_agents_menu(chat_id: int) -> None:
             _t(chat_id, "agents_btn_notify"), callback_data="notify_menu"
         ),
     )
-    if _remote_kb.is_configured():
-        kb.add(
-            InlineKeyboardButton(
-                _t(chat_id, "agents_btn_remote_kb"), callback_data="remote_kb_menu"
-            ),
-        )
+    kb.add(
+        InlineKeyboardButton(
+            _t(chat_id, "agents_btn_remote_kb"), callback_data="remote_kb_menu"
+        ),
+    )
     kb.add(
         InlineKeyboardButton(
             _t(chat_id, "agents_btn_back"), callback_data="menu"

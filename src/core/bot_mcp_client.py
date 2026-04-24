@@ -60,6 +60,7 @@ def _cb_record_failure() -> None:
 
 
 def _cb_is_open() -> bool:
+    global _cb_open_until
     with _cb_lock:
         if _cb_open_until == 0.0:
             return False

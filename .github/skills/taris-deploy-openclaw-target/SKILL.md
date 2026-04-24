@@ -126,14 +126,29 @@ Shall I proceed? (yes/no)
 
 ### VPS SSH/SCP commands
 
+> ⚠️ **VPS-Supertaris uses Docker, NOT `~/.taris/` or `systemctl --user`.**  
+> Source volume: `/opt/taris-docker/app/src/` · Config: `/opt/taris-docker/bot.env`  
+> When working **from the VPS itself** (code-server on agents.sintaris.net), deploy directly with `sudo cp`. No SSH/SCP needed.
+
 ```bash
 source /home/stas/projects/sintaris/sintaris-pl/.env
 
-# SSH
+# SSH (from remote dev machine)
 sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no -o "FingerprintHash=sha256" $VPS_USER@$VPS_HOST "<cmd>"
 
-# SCP
-sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/core/*.py $VPS_USER@$VPS_HOST:/home/$VPS_USER/.taris/core/
+# Copy source files to Docker volume (from remote dev machine)
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no $PROJECT/src/core/*.py \
+  $VPS_USER@$VPS_HOST:/opt/taris-docker/app/src/core/
+
+# Copy on VPS directly (when working from VPS / code-server)
+sudo cp /home/stas/projects/sintaris/sintaris-pl/src/features/bot_remote_kb.py \
+  /opt/taris-docker/app/src/features/bot_remote_kb.py
+
+# Restart containers (compose service names: taris-telegram, taris-web)
+cd /opt/taris-docker && docker compose restart taris-telegram taris-web
+
+# Verify
+docker logs taris-vps-telegram --tail=10
 ```
 
 ---
@@ -562,47 +577,51 @@ sshpass -p "$OPENCLAW1PWD" ssh -o StrictHostKeyChecking=no $U@$H \
 > 🔴 **Present the mandatory pre-VPS checklist above and wait for "yes" before any command.**  
 > 🔴 **Ask for separate confirmation for code deploy, service restart — never bundle.**
 
-> **VPS-Supertaris uses Docker**, NOT systemctl. Project path: `/home/stas/projects/sintaris/sintaris-pl`  
+> **VPS-Supertaris uses Docker**, NOT systemctl or `~/.taris/`.  
 > Docker compose project: `/opt/taris-docker/`  
-> Source volume: `/opt/taris-docker/app/src` → mounted as `/app:ro` inside containers  
+> Source volume: `/opt/taris-docker/app/src/` → mounted as `/app:ro` inside containers  
 > Config: `/opt/taris-docker/bot.env` (env_file for both containers)  
-> Containers: `taris-vps-telegram`, `taris-vps-web` (image: `taris-vps:latest`)  
-> Web UI: port 8090, ROOT_PATH=/supertaris-vps  
+> Compose service names: `taris-telegram`, `taris-web`  
+> Container names: `taris-vps-telegram`, `taris-vps-web`  
+> Web UI: port `8090`, ROOT_PATH=`/supertaris-vps` (nginx-only — uvicorn routes have no prefix)  
+> Direct web test: `curl http://localhost:8090/login` (NOT `/supertaris-vps/login`)
 
-**[SEPARATE CONFIRMATION REQUIRED]** Copy source files to Docker volume (no restart needed yet):
+---
+
+### 🖥️ Scenario A — Deploying FROM the VPS itself (e.g. code-server on agents.sintaris.net)
+
+This is the normal case when editing via VS Code/code-server on the VPS directly.  
+**No SSH or SCP needed** — project is already at `/home/stas/projects/sintaris/sintaris-pl`.
+
+**[SEPARATE CONFIRMATION REQUIRED]** Copy source files to Docker volume:
 
 ```bash
-source /home/stas/projects/sintaris/sintaris-pl/.env
-U=$VPS_USER; H=$VPS_HOST; PROJECT=/home/stas/projects/sintaris/sintaris-pl
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
 APP=/opt/taris-docker/app/src
 
-# SSH into VPS and copy files directly (VPS is local — we are ON the VPS)
-# Run the following commands on the VPS:
-cd $PROJECT
+# Core + telegram + features + entry points
+sudo cp $PROJECT/src/core/*.py          $APP/core/
+sudo cp $PROJECT/src/telegram/*.py      $APP/telegram/
+sudo cp $PROJECT/src/features/*.py      $APP/features/
+sudo cp $PROJECT/src/ui/*.py            $APP/ui/
+sudo cp $PROJECT/src/security/*.py      $APP/security/
+sudo cp $PROJECT/src/telegram_menu_bot.py $APP/
+sudo cp $PROJECT/src/bot_web.py         $APP/
+sudo cp $PROJECT/src/strings.json       $APP/
+sudo cp $PROJECT/src/release_notes.json $APP/
 
-# Copy all packages (on VPS, $PROJECT is already there)
-cp $PROJECT/src/core/*.py $APP/core/
-cp $PROJECT/src/telegram/*.py $APP/telegram/
-cp $PROJECT/src/telegram_menu_bot.py $APP/
-cp $PROJECT/src/release_notes.json $APP/
-cp $PROJECT/src/strings.json $APP/
+# Web assets (if templates/static changed)
+sudo cp -r $PROJECT/src/web/templates/. $APP/web/templates/
+sudo cp -r $PROJECT/src/web/static/.    $APP/web/static/
 
-# Features — some files may be root-owned, use sudo for those
-for f in $PROJECT/src/features/*.py; do
-  fname=$(basename $f)
-  cp "$f" "$APP/features/$fname" 2>/dev/null || sudo cp "$f" "$APP/features/$fname"
-done && echo "features OK"
+# N8N workflows (if changed)
+sudo mkdir -p $APP/n8n/workflows
+sudo cp $PROJECT/src/n8n/workflows/*.json $APP/n8n/workflows/ 2>/dev/null || true
 
-# Web assets
-cp $PROJECT/src/bot_web.py $APP/
-cp -r $PROJECT/src/web/templates/. $APP/web/templates/ 2>/dev/null || true
-cp -r $PROJECT/src/web/static/. $APP/web/static/ 2>/dev/null || true
+echo "✓ files copied to Docker volume"
 ```
 
-> **Note:** If working from a remote dev machine, use `scp` to copy files to `$VPS_USER@$VPS_HOST:/opt/taris-docker/app/src/` instead.  
-> If any file is root-owned (`ls -la` shows `root root`), run: `sudo chown -R stas:stas /opt/taris-docker/app/src/`
-
-**Verify files match before restarting:**
+**Verify sync before restarting:**
 
 ```bash
 PROJECT=/home/stas/projects/sintaris/sintaris-pl
@@ -612,15 +631,74 @@ for f in telegram_menu_bot.py core/bot_config.py features/bot_contacts.py telegr
 done
 ```
 
-**[SEPARATE CONFIRMATION REQUIRED]** Restart Docker containers on VPS (brief public downtime):
+All lines must show `OK`. Fix any `DIFF` lines before restarting.
+
+**[SEPARATE CONFIRMATION REQUIRED]** Restart Docker containers (brief public downtime):
 
 ```bash
-# Ask user for separate "yes" before running this
 cd /opt/taris-docker && docker compose restart taris-telegram taris-web && sleep 8
 docker logs taris-vps-telegram --tail=20
 ```
 
-**Pass criteria:** `Version: 2026.X.Y`, `DB init OK`, `Polling Telegram…`
+**Pass criteria:** `Version: 2026.X.Y`, `Polling Telegram…`
+
+---
+
+### 💻 Scenario B — Deploying FROM a remote dev machine (e.g. TariStation2, home laptop)
+
+Use this when you are NOT on the VPS — copy files via SCP, then SSH to restart.
+
+**[SEPARATE CONFIRMATION REQUIRED]** Copy source files to Docker volume on VPS:
+
+```bash
+source /home/stas/projects/sintaris/sintaris-pl/.env
+U=$VPS_USER; H=$VPS_HOST
+PROJECT=/home/stas/projects/sintaris/sintaris-pl
+APP=/opt/taris-docker/app/src
+
+# Core + telegram + features + entry points
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/core/*.py     $U@$H:$APP/core/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/telegram/*.py $U@$H:$APP/telegram/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/features/*.py $U@$H:$APP/features/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/ui/*.py       $U@$H:$APP/ui/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/security/*.py $U@$H:$APP/security/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no \
+  $PROJECT/src/telegram_menu_bot.py \
+  $PROJECT/src/bot_web.py \
+  $PROJECT/src/strings.json \
+  $PROJECT/src/release_notes.json \
+  $U@$H:$APP/
+
+# Web assets (if templates/static changed)
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no -r \
+  $PROJECT/src/web/templates/ $U@$H:$APP/web/
+sshpass -p "$VPS_PWD" scp -o StrictHostKeyChecking=no -r \
+  $PROJECT/src/web/static/ $U@$H:$APP/web/
+
+echo "✓ files uploaded to VPS Docker volume"
+```
+
+**Verify + restart via SSH:**
+
+```bash
+source /home/stas/projects/sintaris/sintaris-pl/.env
+U=$VPS_USER; H=$VPS_HOST
+
+# Verify key files are in sync
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $U@$H \
+  "grep BOT_VERSION /opt/taris-docker/app/src/core/bot_config.py"
+
+# [SEPARATE CONFIRMATION REQUIRED] Restart containers
+sshpass -p "$VPS_PWD" ssh -o StrictHostKeyChecking=no $U@$H \
+  "cd /opt/taris-docker && docker compose restart taris-telegram taris-web && sleep 8 && docker logs taris-vps-telegram --tail=20"
+```
+
+**Pass criteria:** `Version: 2026.X.Y`, `Polling Telegram…`
 
 ---
 
