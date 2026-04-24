@@ -173,19 +173,54 @@ Strategy string extended with `+mcp` when remote chunks merged (e.g. `"hybrid+mc
 
 ---
 
-## core/bot_mcp_client.py — Remote MCP RAG Client *(v2026.4.1)*
+## core/bot_mcp_client.py — Remote MCP RAG Client + Remote KB *(v2026.4.75)*
 
-Imports: `bot_config`, stdlib `urllib.request`, `json`.
+Imports: `bot_config`, `bot_embeddings.EmbeddingService`, `psycopg2`, `striprtf`, `pdfminer.six`, `python-docx`, stdlib `urllib.request`, `json`.
 
 | Function | Returns | Purpose |
 |---|---|---|
-| `query_remote(query, chat_id, top_k)` | `list[dict]` | POST to `MCP_REMOTE_URL/search`; returns chunk dicts `{text, score, source}`; skips if CB open |
+| `query_remote(query, chat_id, top_k)` | `list[dict]` | pgvector cosine search via `_kb_search_direct()`; skips if CB open |
+| `call_tool(tool, args)` | `dict` | Dispatches `kb_list_documents`, `kb_delete_document` to direct PG functions |
+| `ingest_file(chat_id, filename, file_bytes, mime_type)` | `dict` | Extract text → POST to N8N ingest webhook → `_fix_doc_meta()` |
+| `_fix_doc_meta(doc_id, title, preview)` | — | UPDATE `kb_documents.title` + `structure` JSONB after N8N ASCII-sanitizes the filename |
+| `_extract_to_text(filename, file_bytes, mime_type)` | `(text, mime)` | RTF→striprtf, PDF→pdfminer.six, DOCX→python-docx, plain text passthrough |
+| `_kb_search_direct(query, chat_id, top_k)` | `list[dict]` | `EmbeddingService.embed(query)` → pgvector `<=>` cosine → top-K chunks |
+| `_kb_list_documents_direct(chat_id)` | `dict` | SELECT docs + chunk counts + `structure->>'preview'` from `taris_kb` |
+| `_kb_delete_document_direct(doc_id, chat_id)` | `dict` | DELETE doc + chunks from `taris_kb` |
 | `circuit_status()` | `dict` | Returns CB health: `{state, failures, last_failure, reset_at}` |
-| `_cb_is_open()` | `bool` | True = circuit open (fail fast, skip remote); checks `_CB_RESET_SEC=300` cooldown |
+| `_cb_is_open()` | `bool` | True = circuit open (fail fast); checks `_CB_RESET_SEC=300` cooldown |
 | `_cb_record_failure()` | — | Increments `_cb_failures`; opens CB after `_CB_THRESHOLD=3` |
 | `_cb_record_success()` | — | Resets `_cb_failures` to 0, closes CB |
 
-Auth: `TARIS_API_TOKEN` as `Bearer` header. No external SDK required (stdlib only).
+**Embedding rule**: always `EmbeddingService.embed(query: str)` — single string arg. Ollama NOT used for search (not available on VPS Docker). fastembed 384-dim.  
+Auth: `TARIS_API_TOKEN` as `Bearer` header. No external SDK required (stdlib + psycopg2).
+
+---
+
+## features/bot_remote_kb.py — Remote Knowledge Base Agent *(v2026.4.75)*
+
+Imports: `bot_config`, `core.bot_mcp_client`, `core.bot_llm.ask_llm_with_history`, `telegram.bot_access._lang`.
+
+| Function | Signature | Purpose |
+|---|---|---|
+| `is_configured()` | `→ bool` | `REMOTE_KB_ENABLED` and `KB_PG_DSN` both set |
+| `is_active(chat_id)` | `→ bool` | Active upload or search session exists for `chat_id` |
+| `cancel(chat_id)` | `→ None` | Clears `_sessions[chat_id]` |
+| `show_menu(chat_id, bot, _t)` | `→ None` | 4-button KB menu: Search / Upload / List docs / Clear memory |
+| `start_search(chat_id, bot, _t)` | `→ None` | Sets session mode=search; next text → `_do_search()` |
+| `start_upload(chat_id, bot, _t)` | `→ None` | Sets session mode=upload; next document → `handle_document()` |
+| `finish_upload(chat_id, bot, _t)` | `→ None` | Triggered by `remote_kb_upload_done` callback; shows menu |
+| `handle_message(chat_id, text, bot, _t)` | `→ bool` | Consumes text when search session active |
+| `handle_document(chat_id, doc, bot, _t)` | `→ bool` | Downloads document → calls `_do_ingest()` |
+| `list_docs(chat_id, bot, _t)` | `→ None` | Shows all docs: title, mime, chunks, tokens, date, preview |
+| `clear_memory(chat_id, bot, _t)` | `→ None` | Deletes all user docs via `call_tool('kb_delete_document')` |
+| `_do_search(chat_id, query, bot, _t)` | `→ None` | `query_remote()` → RAG context → `ask_llm_with_history()` → send answer + sources |
+| `_do_ingest(chat_id, doc, bot, _t)` | `→ None` | `ingest_file()` → success/error message with chunk count |
+| `_done_markup(chat_id, _t)` | `→ InlineKeyboardMarkup` | "Done" button for post-upload |
+
+**`_do_search()` behavior** (v2026.4.75): retrieves top-5 chunks via pgvector, builds context string `[i] section\ntext`, sends to LLM with language-aware system prompt, appends `_Sources: §1, §2_` footer. LLM uses `ask_llm_with_history(messages, timeout=90)` — NOT raw chunk display.
+
+Callback keys: `remote_kb_search`, `remote_kb_upload`, `remote_kb_list_docs`, `remote_kb_clear_mem`, `remote_kb_upload_done`.
 
 ---
 

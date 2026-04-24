@@ -1,6 +1,6 @@
 # Taris — Knowledge Base Architecture
 
-**Version:** `2026.4.9`  
+**Version:** `2026.4.75`  
 → Architecture index: [architecture.md](../architecture.md)
 
 ## When to read this file
@@ -211,21 +211,68 @@ When `MCP_REMOTE_URL` is set and circuit breaker is closed, strategy string is e
 
 ---
 
-## MCP Client (`core/bot_mcp_client.py`) *(v2026.4.1)*
+## MCP Client (`core/bot_mcp_client.py`) *(v2026.4.75)*
 
-Phase D — Remote RAG integration. Queries an external MCP-compatible RAG server and merges results into the local RRF pipeline.
+Phase D — Remote RAG integration. Queries an external MCP-compatible RAG server and merges results into the local RRF pipeline. Also handles direct PostgreSQL access for the Remote KB feature.
 
 | Function | Returns | Description |
 |---|---|---|
-| `query_remote(query, chat_id, top_k)` | `list[dict]` | POST to `MCP_REMOTE_URL/search`; returns chunk dicts `{text, score, source}` |
+| `query_remote(query, chat_id, top_k)` | `list[dict]` | pgvector cosine search via `_kb_search_direct()`. Chunk dicts: `{text, score, section, chunk_id}` |
+| `call_tool(tool, args)` | `dict` | Dispatches `kb_list_documents`, `kb_delete_document` to direct PG implementations |
+| `ingest_file(chat_id, filename, file_bytes, mime_type)` | `dict` | Extracts text → POST to N8N KB ingest webhook → calls `_fix_doc_meta()` to restore Unicode title + preview |
+| `_fix_doc_meta(doc_id, title, preview)` | — | UPDATE `kb_documents` after N8N ingest: restores original Unicode filename, stores text preview in `structure` JSONB |
+| `_extract_to_text(filename, file_bytes, mime_type)` | `(text, mime)` | Extracts plain text from RTF (striprtf), PDF (pdfminer.six), DOCX (python-docx), or plain text |
+| `_kb_search_direct(query, chat_id, top_k)` | `list[dict]` | pgvector cosine search: `EmbeddingService.embed(query)` → `<=>` operator → returns top-K chunks |
+| `_kb_list_documents_direct(chat_id)` | `dict` | SELECT from `kb_documents` + `kb_chunks`; includes `structure->>'preview'` |
+| `_kb_delete_document_direct(doc_id, chat_id)` | `dict` | DELETE from `kb_documents` + `kb_chunks` for given `doc_id` |
 | `circuit_status()` | `dict` | Returns CB state: `{state, failures, last_failure, reset_at}` |
 | `_cb_is_open()` | `bool` | True = circuit open (failing fast); False = allow requests |
 | `_cb_record_failure()` | — | Increments failure counter; opens CB after `_CB_THRESHOLD=3` |
 | `_cb_record_success()` | — | Resets failure counter; closes CB |
 
+**Embedding**: `_kb_search_direct()` uses `EmbeddingService.embed(query: str)` (single string → `list[float]`) from `core/bot_embeddings.py`. fastembed model `sentence-transformers/all-MiniLM-L6-v2` (384-dim). **Do NOT use Ollama for embeddings** — Ollama is not available in VPS Docker.  
+**Important**: `EmbeddingService.embed()` takes a **single string**, not a list. Use `embed_batch()` for batch processing.  
 Circuit breaker: 3 consecutive failures → open for `_CB_RESET_SEC=300 s` → half-open probe → close on success.  
 Auth: `TARIS_API_TOKEN` sent as `Bearer` token in `Authorization` header.  
 Transport: stdlib `urllib.request` (no SDK dependency).
+
+---
+
+## Remote KB Agent (`features/bot_remote_kb.py`) *(v2026.4.75)*
+
+Telegram UI for the Remote Knowledge Base — user-uploaded documents stored in PostgreSQL (`taris_kb` DB on VPS) with pgvector 384-dim embeddings. **OpenClaw/VPS only.**
+
+| Function | Signature | Description |
+|---|---|---|
+| `is_configured()` | `→ bool` | Returns `True` if `REMOTE_KB_ENABLED` and `KB_PG_DSN` set |
+| `is_active(chat_id)` | `→ bool` | True if user has an active upload/search session |
+| `cancel(chat_id)` | `→ None` | Clears session state |
+| `show_menu(chat_id, bot, _t)` | `→ None` | Sends KB menu with 4 buttons: Search / Upload / List / Clear |
+| `start_search(chat_id, bot, _t)` | `→ None` | Opens search session; next text message triggers `_do_search()` |
+| `start_upload(chat_id, bot, _t)` | `→ None` | Opens upload session; next document triggers `handle_document()` |
+| `handle_message(chat_id, text, bot, _t)` | `→ bool` | Routes text to `_do_search()` when search session active |
+| `handle_document(chat_id, doc, bot, _t)` | `→ bool` | Downloads Telegram document → calls `ingest_file()` |
+| `finish_upload(chat_id, bot, _t)` | `→ None` | Called on `remote_kb_upload_done` callback; shows KB menu |
+| `list_docs(chat_id, bot, _t)` | `→ None` | Lists all user docs with title, chunks, tokens, date, preview |
+| `clear_memory(chat_id, bot, _t)` | `→ None` | Deletes all user docs via `call_tool('kb_delete_document')` |
+| `_do_search(chat_id, query, bot, _t)` | `→ None` | Retrieves top-5 chunks → builds RAG context → calls `ask_llm_with_history()` → sends LLM answer + sources footer |
+
+**`_do_search()` RAG flow** (v2026.4.75):
+1. `mcp.query_remote(query, chat_id, top_k=5)` → list of chunk dicts
+2. Build `context` string: `[i] section\ntext` for each chunk
+3. System prompt: answer from context only, language auto-detected via `_lang(chat_id)`
+4. `ask_llm_with_history(messages, timeout=90, use_case="chat")` → answer string
+5. Append `_Sources: section1, section2_` footer (i18n key: `remote_kb_sources`)
+6. `bot.send_message(chat_id, answer)`
+
+**Remote KB PostgreSQL schema** (`taris_kb` database):
+
+| Table | Key columns | Purpose |
+|---|---|---|
+| `kb_documents` | `doc_id uuid, owner_chat_id bigint, title text, mime text, sha256 text, source text, structure jsonb, created_at` | Document registry |
+| `kb_chunks` | `chunk_id bigint, doc_id uuid, chunk_idx, section, text, tokens, embedding vector(384), fts tsvector, metadata jsonb` | Chunk storage with pgvector + FTS |
+
+`structure` JSONB stores: `{preview: "first 300 chars of text"}` — written by `_fix_doc_meta()` after N8N ingest.
 
 ---
 
