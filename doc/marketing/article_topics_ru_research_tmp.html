@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>article_topics_ru_research.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="sintaris-контент-стратегия-для-привлечения-российских-клиентов-через-экспертные-статьи">Sintaris: контент-стратегия для привлечения российских клиентов через экспертные статьи</h1>
+<p>Дата исследования: 2026-04-19</p>
+<p>Цель: подготовить 10 тем для экспертных публикаций, которые привлекают российских заказчиков на <code>sintaris.net</code>, показывают опыт в Hybrid RAG, n8n, распределенных AI-системах, Taris, безопасной работе с данными и инженерном процессе AI-разработки.</p>
+<h2 id="короткий-вывод">Короткий вывод</h2>
+<p>Основной вектор: не &quot;продажа AI&quot;, а спокойное объяснение того, как внедрять AI в реальные бизнес-процессы без хаоса, утечек, vendor lock-in и неконтролируемых ответов модели.</p>
+<p>Для российских клиентов сейчас наиболее сильные триггеры:</p>
+<table>
+<thead>
+<tr>
+<th>Триггер</th>
+<th>Почему это работает</th>
+<th>Как раскрывать в статьях</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Безопасность данных и 152-ФЗ</td>
+<td>Российские заказчики боятся передавать клиентские данные в внешние LLM и SaaS</td>
+<td>Показывать схемы: локальное хранение, разделение данных, роли, аудит, маскирование, локальные модели, RAG без передачи лишнего</td>
+</tr>
+<tr>
+<td>Практический ROI</td>
+<td>Бизнес устал от AI-демо без эффекта</td>
+<td>Считать процессы: скорость ответа, снижение ручной нагрузки, повторные продажи, follow-up, стоимость ошибки</td>
+</tr>
+<tr>
+<td>Сложные документы и знания</td>
+<td>У многих компаний есть инструкции, регламенты, PDF, базы знаний, но поиск работает плохо</td>
+<td>Писать про RAG как инженерную систему: chunking, metadata, hybrid search, citations, тесты качества</td>
+</tr>
+<tr>
+<td>Интеграции вместо &quot;еще одного бота&quot;</td>
+<td>CRM, Telegram, почта, Google Sheets, сайт, N8N живут отдельно</td>
+<td>Показывать AI-контур: webhook, очередь, n8n, API, human-in-the-loop, мониторинг</td>
+</tr>
+<tr>
+<td>Недоверие к AI-разработке</td>
+<td>Vibe coding ассоциируется с быстрым, но рискованным кодом</td>
+<td>Позиционировать Sintaris как команду с процессом: docs, skills, tests, review, deploy discipline</td>
+</tr>
+<tr>
+<td>Ненавязчивый стиль</td>
+<td>Агрессивный маркетинг плохо работает на Habr и у экспертной аудитории</td>
+<td>Формат &quot;разбор практической проблемы&quot;, &quot;что сломалось&quot;, &quot;как мы решили&quot;, &quot;чеклист&quot;</td>
+</tr>
+</tbody>
+</table>
+<h2 id="локальная-экспертиза-которую-нужно-вынести-в-публикации">Локальная экспертиза, которую нужно вынести в публикации</h2>
+<p>Из материалов <code>doc/marketing</code>, архитектуры Taris и Worksafety-superassistant:</p>
+<table>
+<thead>
+<tr>
+<th>Актив</th>
+<th>Что доказывает</th>
+<th>Как использовать в статьях</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Taris</td>
+<td>Реальный AI-ассистент с Telegram, Web UI, голосом, календарем, заметками, почтой, RAG, RBAC, JWT, локальными LLM, PostgreSQL/SQLite</td>
+<td>Пример &quot;не чатбота&quot;, а операционной системы вокруг пользователя и бизнес-процессов</td>
+</tr>
+<tr>
+<td>OpenClaw/PicoClaw архитектура</td>
+<td>Умение адаптировать AI под железо: Raspberry Pi, laptop/PC, VPS, локальные LLM, STT/TTS</td>
+<td>Писать про offline/local-first AI, стоимость инфраструктуры, приватность</td>
+</tr>
+<tr>
+<td>Taris RAG</td>
+<td>FTS5, pgvector/sqlite-vec, RRF, adaptive retrieval, shared docs, per-user settings, RAG monitoring</td>
+<td>Технические статьи про зрелый RAG и диагностику качества</td>
+</tr>
+<tr>
+<td>Worksafety-superassistant</td>
+<td>Production RAG для охраны труда: около 200 документов, около 100K chunks, PostgreSQL 15 + pgvector, OpenAI embeddings, GPT-4o-mini, 11 n8n workflows, Telegram, activation-code auth, LDA topics, metadata filtering</td>
+<td>Сильный кейс для статьи о слабостях классического RAG и преимуществах structure-aware hybrid RAG</td>
+</tr>
+<tr>
+<td>N8N workflows</td>
+<td>Campaign Select/Send, CRM sync, inbound callbacks, webhook-first integration</td>
+<td>Показать, что Sintaris связывает AI с реальными бизнес-системами</td>
+</tr>
+<tr>
+<td>Маркетинговые продукты Sintaris</td>
+<td>AI Front Desk, AI Content Engine, AI Reactivation, AI Knowledge Assistant, AI-ассистенты по диагностике, консалтинг и пилоты</td>
+<td>Разложить по сериям: знания, коммуникации, маркетинг, автоматизация, разработка</td>
+</tr>
+</tbody>
+</table>
+<p>Важное ограничение: при публикации Worksafety как публичного кейса нужно заранее санитизировать любые production endpoints, credentials, внутренние hostname, реальные клиентские документы и фрагменты дампов. В статьях можно показывать архитектурные паттерны, формулы ранжирования, тестовый набор запросов и обезличенные метрики.</p>
+<h2 id="площадки-публикации">Площадки публикации</h2>
+<p>Основная публикация должна выходить на <code>sintaris.net</code>. Внешние площадки лучше использовать как каналы дистрибуции, обсуждения и доверия, а не как единственное место хранения статей.</p>
+<table>
+<thead>
+<tr>
+<th>Площадка</th>
+<th>Роль</th>
+<th>Что публиковать</th>
+<th>Ограничения и стиль</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sintaris.net/ru/blog/</code></td>
+<td>Главный источник, который должны находить Google, Yandex и AI-поиск</td>
+<td>Полные версии статей, схемы, FAQ, кейсы, ссылки на услуги</td>
+<td>Нужны Article schema, автор, дата, internal links, sitemap, canonical, русская версия</td>
+</tr>
+<tr>
+<td>Habr</td>
+<td>Доверие у IT-аудитории и технических руководителей</td>
+<td>Глубокие технические разборы: Hybrid RAG, pgvector, n8n, локальные LLM, AI coding process</td>
+<td>Не рекламировать услуги напрямую. На Habr правила ограничивают коммерческие упоминания вне корпоративных блогов. Нужен формат &quot;инженерный опыт&quot;</td>
+</tr>
+<tr>
+<td>vc.ru</td>
+<td>Бизнес, IT, маркетинг, AI, предприниматели</td>
+<td>Кейсы автоматизации, ROI, AI Front Desk, контент-фабрика, безопасный пилот</td>
+<td>Можно быть ближе к бизнесу, но лучше сохранять доказательность и цифры</td>
+</tr>
+<tr>
+<td>Дзен</td>
+<td>Широкая российская аудитория, предприниматели, эксперты вне IT</td>
+<td>Упрощенные версии: &quot;как понять, нужен ли вам AI-ассистент&quot;, &quot;как не утечь данными в AI&quot;</td>
+<td>Меньше кода, больше примеров и чеклистов</td>
+</tr>
+<tr>
+<td>TenChat</td>
+<td>B2B networking, владельцы, директора, консультанты</td>
+<td>Короткие экспертные посты и выжимки из статей</td>
+<td>Работает как прогрев и личный бренд, а не как основная база знаний</td>
+</tr>
+<tr>
+<td>Telegram канал/личный канал</td>
+<td>Удержание аудитории и диалог</td>
+<td>Анонсы статей, схемы, короткие заметки, ответы на комментарии</td>
+<td>Не заменяет SEO-страницы, но помогает распространению</td>
+</tr>
+<tr>
+<td>GitHub README/case pages</td>
+<td>Доказательство технической экспертизы</td>
+<td>Санитизированные архитектурные описания Worksafety/Taris, диаграммы, changelog</td>
+<td>Не публиковать operational secrets и production URLs</td>
+</tr>
+</tbody>
+</table>
+<p>Рекомендуемая модель: сначала полная статья на <code>sintaris.net</code>, через 5-10 дней адаптация под Habr/vc.ru/Дзен, в конце каждой внешней публикации - нейтральная ссылка на полный разбор или related case на сайте. Для Habr лучше не ставить прямой CTA на продажу, а ссылаться на технический материал или GitHub/case page.</p>
+<h2 id="техническая-подготовка-сайта-под-поиск-и-ai-индексацию">Техническая подготовка сайта под поиск и AI-индексацию</h2>
+<p>Минимальный набор для <code>sintaris.net</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Элемент</th>
+<th>Что сделать</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Раздел блога</td>
+<td><code>/ru/blog/</code> плюс отдельные стабильные URL, например <code>/ru/blog/hybrid-rag-real-documents/</code></td>
+</tr>
+<tr>
+<td>Структура страницы</td>
+<td>H1, короткое резюме, дата обновления, автор, оглавление, схемы, FAQ, блок &quot;для кого&quot;</td>
+</tr>
+<tr>
+<td>Schema.org</td>
+<td><code>Article</code> или <code>BlogPosting</code>, <code>Organization</code>, <code>Person</code>, <code>BreadcrumbList</code>, <code>FAQPage</code> там, где есть FAQ</td>
+</tr>
+<tr>
+<td>Internal links</td>
+<td>Из каждой статьи вести на услуги: RAG, AI automation, n8n, Taris, консультация, кейсы</td>
+</tr>
+<tr>
+<td>Sources</td>
+<td>Указывать источники и дату проверки для юридических/технических утверждений</td>
+</tr>
+<tr>
+<td>Диаграммы</td>
+<td>Mermaid/SVG/PNG со схемами: RAG pipeline, data flow, n8n integration, Taris architecture</td>
+</tr>
+<tr>
+<td>Не дублировать полностью</td>
+<td>На внешних площадках публиковать адаптацию, а не 1:1 копию. Основной текст должен жить на сайте</td>
+</tr>
+<tr>
+<td>Robots/sitemap</td>
+<td>Проверить <code>robots.txt</code>, <code>sitemap.xml</code>, индексацию в Google Search Console и Яндекс Вебмастер</td>
+</tr>
+<tr>
+<td>Авторство</td>
+<td>Страница автора: опыт, GitHub, проекты, направления экспертизы</td>
+</tr>
+<tr>
+<td>&quot;How we built it&quot;</td>
+<td>Для AI-поиска полезны конкретные технические детали: <code>pgvector</code>, <code>BM25</code>, <code>FTS5</code>, <code>RRF</code>, <code>n8n</code>, <code>PostgreSQL</code>, <code>Telegram Bot API</code>, <code>152-ФЗ</code>, <code>local LLM</code></td>
+</tr>
+</tbody>
+</table>
+<p>Google в официальной документации по AI features рекомендует не отдельную &quot;магическую оптимизацию под AI&quot;, а те же основы: полезный, надежный, people-first контент, техническая доступность страницы и соблюдение Search policies. Поэтому сильнее всего будут работать оригинальные разборы с вашим опытом, схемами и конкретикой.</p>
+<h2 id="10-тем-статей">10 тем статей</h2>
+<h3 id="1-ai-с-персональными-данными-как-внедрять-llm-и-не-превращать-бизнес-в-источник-утечек">1. AI с персональными данными: как внедрять LLM и не превращать бизнес в источник утечек</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Владельцы бизнеса, руководители сервисных компаний, юристы, IT-директора, эксперты с клиентскими базами</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Можно ли использовать AI, если в процессах есть ФИО, телефоны, почта, история клиентов, медицинские/финансовые/кадровые данные?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>AI-внедрение начинается не с выбора модели, а с карты данных: что хранится, где хранится, кто имеет доступ, что можно отправлять во внешний LLM, что должно оставаться локально</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Разбор типов данных: публичные, внутренние, персональные, чувствительные. Как строить data boundary. Когда использовать local LLM/Ollama, когда облако допустимо. Как RAG меняет риски: документы не &quot;обучают модель&quot;, но попадают в контекст запроса. Как нужны роли, аудит, TTL, маскирование, согласия, backup, delete policy</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Схема &quot;Cloud LLM vs Local LLM vs Hybrid RAG&quot;: где данные хранятся, где обрабатываются, что логируется</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Taris: per-user storage, RBAC/JWT, локальные LLM на OpenClaw, Telegram/Web UI, document RAG, mail creds with consent gate</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td><code>sintaris.net</code>, vc.ru, Дзен, TenChat</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Если вы хотите понять, какие данные можно безопасно включить в AI-процесс, начните с data/process audit&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2-почему-классический-rag-ломается-на-реальных-документах">2. Почему классический RAG ломается на реальных документах</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>IT-руководители, разработчики, владельцы компаний с регламентами, инструкциями, юридическими и отраслевыми документами</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Почему &quot;загрузили PDF в векторную базу&quot; часто дает уверенные, но неполные или неправильные ответы?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>Классический vector-only RAG теряет структуру документа, порядок глав, точные номера разделов, терминологию и границы контекста</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Разбор проблем: fixed-size chunking, lost-in-the-middle, одинаковые embeddings для разных юридических формулировок, отсутствие metadata filters, плохой порядок chunks, отсутствие тестов качества. Показать, почему BM25/FTS, metadata и structure-aware retrieval нужны вместе</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>До/после: vector top-k vs hybrid retrieval. Пример запроса &quot;требования из приказа 883Н, раздел IV&quot;</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Worksafety-superassistant: около 100K chunks, PostgreSQL/pgvector, structure-aware chunking, chapter regex, LDA topic signal, context assembly by chapter order</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td>Habr, <code>sintaris.net</code>, vc.ru</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Перед внедрением RAG стоит провести retrieval audit на 20-50 типовых вопросах&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-hybrid-rag-на-практике-bm25-векторы-структура-документа-и-rrf-вместо-одной-магической-базы">3. Hybrid RAG на практике: BM25, векторы, структура документа и RRF вместо одной магической базы</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Разработчики, CTO, data engineers, интеграторы AI</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Как проектировать RAG, если нужны точные ответы по документам, а не просто &quot;похожий текст&quot;?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>Production RAG - это композиция сигналов: keyword search, semantic search, metadata, section match, recency, ownership, reranking, traces</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Объяснить BM25/FTS5, pgvector/cosine, Reciprocal Rank Fusion, metadata filtering, chunk quality, shared vs personal docs, query classification, RAG tracing. Отдельно показать, когда достаточно FTS5, когда нужен hybrid, когда нужен server-grade pipeline</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Формула scoring из Worksafety и адаптация Taris: FTS5 + vector + section + recency + owner priority</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Taris RAG: adaptive strategy <code>fts5</code>, <code>hybrid</code>, <code>hybrid+mcp</code>, RRF, RAG monitoring dashboard, per-user settings</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td>Habr, <code>sintaris.net</code></td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Мы можем помочь спроектировать RAG не как демо, а как измеряемый retrieval pipeline&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="4-ai-справочник-по-документам-как-превратить-pdf-docx-rtf-и-регламенты-в-ассистента-которому-можно-доверять">4. AI-справочник по документам: как превратить PDF, DOCX, RTF и регламенты в ассистента, которому можно доверять</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Эксперты, консультанты, образовательные проекты, охрана труда, медицина, юристы, HR, производственные компании</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Как сделать ассистента, который отвечает по вашим материалам, а не фантазирует?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>Нужно проектировать полный lifecycle документа: ingestion, parse, chunk, metadata, embeddings, tests, update, citations, feedback</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Pipeline: загрузка документов, извлечение текста, сохранение структуры, дедупликация, embedding coverage, контроль качества chunks, тестовые вопросы, цитирование источников, обновление документов. Показать &quot;что делать с таблицами, сканами, длинными главами, версиями документов&quot;</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Checklist: 12 проверок перед запуском AI-справочника</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Worksafety-superassistant как AI-ассистент по охране труда. Taris как универсальный RAG для документов пользователя</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td><code>sintaris.net</code>, vc.ru, Дзен, Habr в более технической версии</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Начните с пилота на одном наборе документов и 30 контрольных вопросах&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="5-n8n-как-интеграционный-слой-для-ai-где-no-code-помогает-а-где-нужен-инженерный-контроль">5. N8N как интеграционный слой для AI: где no-code помогает, а где нужен инженерный контроль</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Владельцы бизнеса, операционные директора, интеграторы, разработчики, маркетологи-автоматизаторы</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Можно ли связать сайт, Telegram, CRM, почту, Google Sheets и AI без большого enterprise-проекта?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>n8n хорош как слой orchestration, но production-автоматизация требует версионирования, логирования, схем данных, error handling и security boundaries</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Когда использовать n8n: webhooks, CRM sync, уведомления, рассылки, human approval. Когда не надо: сложная бизнес-логика, тяжелый RAG, критичные транзакции без тестов. Как разделять workflow и code. Как документировать workflows и не превращать JSON в &quot;невидимый код&quot;</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Архитектура webhook-first: Taris -&gt; n8n -&gt; CRM/Gmail/Sheets -&gt; callback в Taris</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Taris Campaign Select/Send, CRM sync, inbound event router. Worksafety: 11 n8n workflows для RAG и Telegram</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td>Habr, vc.ru, <code>sintaris.net</code>, TenChat</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Если у вас уже есть n8n, полезно провести workflow audit: где есть риски, где можно быстро добавить ценность&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="6-taris-как-пример-персонального-и-бизнес-ai-ассистента-голос-telegram-web-ui-rag-и-автоматизация-в-одном-контуре">6. Taris как пример персонального и бизнес AI-ассистента: голос, Telegram, Web UI, RAG и автоматизация в одном контуре</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Владельцы малого бизнеса, эксперты, технические руководители, потенциальные партнеры</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Чем AI-ассистент отличается от обычного чатбота?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>Полезный ассистент - это не один prompt, а система каналов, памяти, документов, календаря, почты, ролей, интеграций и локального/облачного LLM dispatch</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Компоненты Taris: Telegram + Web UI, voice STT -&gt; LLM -&gt; TTS, smart calendar, notes, mail digest, contacts, RAG, admin panel, local Ollama/OpenAI fallback, PostgreSQL/SQLite variants, REST API, skills/MCP, n8n integration</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Diagram: three channels -&gt; shared LLM backend -&gt; storage/RAG -&gt; workflow integrations</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Сам Taris как живой внутренний продукт и showcase архитектуры Sintaris</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td><code>sintaris.net</code>, vc.ru, Habr</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Такая архитектура может стать основой для персонального ассистента, AI Front Desk или внутреннего knowledge assistant&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="7-ai-front-desk-247-как-автоматизировать-ответы-запись-и-follow-up-без-потери-человеческого-качества">7. AI Front Desk 24/7: как автоматизировать ответы, запись и follow-up без потери человеческого качества</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Сервисный бизнес, клиники, образовательные проекты, консультанты, HoReCa, студии, частные эксперты</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Как не терять клиентов из-за медленных ответов и нерегулярных касаний?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>AI Front Desk должен не &quot;заменять администратора&quot;, а стандартизировать первичный контакт, квалификацию, запись, напоминания и передачу человеку</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Карта клиентского пути: входящий вопрос, классификация, ответ по базе знаний, сбор контактов, запись, reminder, follow-up, escalation. Риски: неверный ответ, обещания от имени бизнеса, персональные данные. Метрики: response time, missed leads, conversion to consultation, repeat touches</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Схема &quot;AI + rules + human approval&quot;: где модель свободна, где работает только шаблон, где нужна подтвержденная запись</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Taris calendar, notification templates, contacts, mail, n8n campaign workflow, AI Knowledge Assistant</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td>vc.ru, Дзен, TenChat, <code>sintaris.net</code></td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Первый пилот лучше строить на одном канале и одном сценарии, например FAQ + запись + reminder&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="8-контент-фабрика-без-ai-мусора-как-делать-статьи-посты-и-рассылки-из-реальной-экспертизы">8. Контент-фабрика без AI-мусора: как делать статьи, посты и рассылки из реальной экспертизы</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Эксперты, консультанты, B2B-компании, владельцы услуг, маркетологи</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Почему AI-контент часто выглядит одинаково и не приводит клиентов?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>AI должен помогать упаковывать опыт, а не заменять опыт. Хороший контент строится из кейсов, архитектурных решений, ошибок, цифр, чеклистов и ответов на реальные возражения клиентов</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Процесс: интервью с экспертом, сбор артефактов, тезисы, research, outline, draft, technical review, legal/security review, публикация, crossposting, analytics. Как не писать агрессивно. Как использовать RAG по собственным материалам для сохранения стиля</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>&quot;Content RAG&quot;: база презентаций, кейсов, FAQ, звонков и заметок, из которой AI собирает черновики в вашем стиле</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Текущая задача: из презентаций Sintaris, Taris и Worksafety сформировать серию материалов без потери технической глубины</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td><code>sintaris.net</code>, vc.ru, Дзен, TenChat</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Если у вас есть экспертиза, но нет регулярного контента, можно начать с 10-статейной карты и контент-пайплайна&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="9-vibe-coding-по-взрослому-почему-ai-разработка-требует-процесса-skills-agents-тестов-и-документации">9. Vibe coding по-взрослому: почему AI-разработка требует процесса, skills, agents, тестов и документации</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Заказчики разработки, CTO, product owners, разработчики, технические предприниматели</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Можно ли быстро разрабатывать с AI и при этом не получить неуправляемый код?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>Vibe coding без процесса создает технический долг. AI-разработка становится надежной только при наличии контекста, ограничений, skills, agents, тестов, review, deploy rules и документации</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Разобрать риски: hallucinated APIs, unsafe refactors, секреты, отсутствие тестов, нарушение архитектуры. Показать рабочий framework: <code>AGENTS.md</code>, quick-ref, skills, narrow tasks, file ownership, regression tests, code review, deployment checklist, protected production targets</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>&quot;AI coding pipeline&quot;: problem -&gt; context pack -&gt; plan -&gt; implementation -&gt; tests -&gt; review -&gt; changelog -&gt; deploy -&gt; postmortem</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>Taris development process: quick-ref, test-suite decision table, deployment rules, vibe-coding protocol, regression IDs, production confirmation rules</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td>Habr, <code>sintaris.net</code>, vc.ru</td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Если вы внедряете AI в разработку, сначала опишите процесс и критерии качества, а не просто покупайте инструмент&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="10-как-считать-roi-ai-автоматизации-от-диагностики-процессов-до-пилота-и-масштабирования">10. Как считать ROI AI-автоматизации: от диагностики процессов до пилота и масштабирования</h3>
+<table>
+<thead>
+<tr>
+<th>Поле</th>
+<th>Содержание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Для кого</td>
+<td>Владельцы бизнеса, операционные директора, руководители продаж/маркетинга/сервиса</td>
+</tr>
+<tr>
+<td>Основной вопрос</td>
+<td>Как понять, где AI даст деньги, а где будет игрушкой?</td>
+</tr>
+<tr>
+<td>Главная мысль</td>
+<td>ROI появляется там, где есть повторяемый процесс, измеримая потеря и понятная точка внедрения</td>
+</tr>
+<tr>
+<td>Содержание</td>
+<td>Методика Sintaris: 30-60 минут диагностики, карта процессов, baseline, выбор 1-2 сценариев, пилот, KPI, масштабирование. Метрики: время ответа, количество ручных операций, стоимость lead loss, повторные касания, качество базы знаний, стоимость ошибки, нагрузка на персонал</td>
+</tr>
+<tr>
+<td>Технический крючок</td>
+<td>Таблица оценки: частота операции x время x стоимость x риск x степень автоматизируемости</td>
+</tr>
+<tr>
+<td>Пример Sintaris</td>
+<td>AI Front Desk, AI Reactivation, AI Knowledge Assistant, Taris, n8n workflows, content engine</td>
+</tr>
+<tr>
+<td>Площадки</td>
+<td>vc.ru, Дзен, TenChat, <code>sintaris.net</code></td>
+</tr>
+<tr>
+<td>Нейтральный CTA</td>
+<td>&quot;Начать можно с небольшого пилота с измеримым результатом за 2-4 недели&quot;</td>
+</tr>
+</tbody>
+</table>
+<h2 id="рекомендуемый-порядок-публикаций">Рекомендуемый порядок публикаций</h2>
+<table>
+<thead>
+<tr>
+<th>Очередь</th>
+<th>Статья</th>
+<th>Почему так</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>AI с персональными данными</td>
+<td>Высокий доверительный вход, важен для российского рынка</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Почему классический RAG ломается</td>
+<td>Сразу демонстрирует техническую глубину</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Hybrid RAG на практике</td>
+<td>Продолжает тему и дает Habr-grade технический материал</td>
+</tr>
+<tr>
+<td>4</td>
+<td>AI-справочник по документам</td>
+<td>Переводит RAG в понятный бизнес-продукт</td>
+</tr>
+<tr>
+<td>5</td>
+<td>N8N как интеграционный слой</td>
+<td>Показывает автоматизацию вокруг AI</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Taris как пример AI-ассистента</td>
+<td>Дает собственный case/showcase</td>
+</tr>
+<tr>
+<td>7</td>
+<td>AI Front Desk 24/7</td>
+<td>Ведет к понятной услуге для МСП</td>
+</tr>
+<tr>
+<td>8</td>
+<td>ROI AI-автоматизации</td>
+<td>Помогает конвертировать интерес в консультацию</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Контент-фабрика без AI-мусора</td>
+<td>Раскрывает маркетинговую услугу и стиль</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Vibe coding по-взрослому</td>
+<td>Закрывает доверие к разработке и качеству</td>
+</tr>
+</tbody>
+</table>
+<h2 id="рубрикатор-для-sintarisnet">Рубрикатор для <code>sintaris.net</code></h2>
+<table>
+<thead>
+<tr>
+<th>Рубрика</th>
+<th>Статьи</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI и данные</td>
+<td>1, 2, 3, 4</td>
+</tr>
+<tr>
+<td>AI-автоматизация бизнеса</td>
+<td>5, 7, 10</td>
+</tr>
+<tr>
+<td>Продукты и кейсы Sintaris</td>
+<td>4, 6, 7</td>
+</tr>
+<tr>
+<td>AI-маркетинг и контент</td>
+<td>8</td>
+</tr>
+<tr>
+<td>AI-разработка и engineering process</td>
+<td>9</td>
+</tr>
+</tbody>
+</table>
+<h2 id="формат-каждой-статьи">Формат каждой статьи</h2>
+<p>Использовать одинаковый, но не шаблонный каркас:</p>
+<ol>
+<li>Короткий практический конфликт: &quot;почему это стало проблемой&quot;.</li>
+<li>Для кого статья и когда она не подходит.</li>
+<li>Ошибочный простой подход.</li>
+<li>Инженерный/операционный подход.</li>
+<li>Схема или таблица.</li>
+<li>Мини-кейс Sintaris/Taris/Worksafety.</li>
+<li>Чеклист внедрения.</li>
+<li>Риски и ограничения.</li>
+<li>Нейтральный следующий шаг: аудит, пилот, технический разбор, демонстрация.</li>
+</ol>
+<h2 id="что-не-делать">Что не делать</h2>
+<table>
+<thead>
+<tr>
+<th>Не делать</th>
+<th>Почему</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Не писать &quot;мы внедрим AI за 3 дня и заменим сотрудников&quot;</td>
+<td>Снижает доверие и привлекает неподходящих клиентов</td>
+</tr>
+<tr>
+<td>Не публиковать одинаковый текст на всех площадках</td>
+<td>Риск дублей и потери ценности основного сайта</td>
+</tr>
+<tr>
+<td>Не ссылаться на закрытые/опасные operational details</td>
+<td>Риск безопасности и лишняя поверхность атаки</td>
+</tr>
+<tr>
+<td>Не обещать 100% отсутствие hallucinations</td>
+<td>RAG снижает риски, но требует тестов и ограничений</td>
+</tr>
+<tr>
+<td>Не уходить в чистый technical jargon</td>
+<td>Часть аудитории - эксперты из других областей, которым нужны бизнес-смысл и риски</td>
+</tr>
+<tr>
+<td>Не делать статьи слишком рекламными для Habr</td>
+<td>Площадка чувствительна к коммерческим упоминаниям</td>
+</tr>
+</tbody>
+</table>
+<h2 id="источники-и-ориентиры-исследования">Источники и ориентиры исследования</h2>
+<p>Площадки и аудитория:</p>
+<ul>
+<li>Habr rules: https://habr.com/docs/help/rules/</li>
+<li>Habr publications help: https://habr.com/ru/docs/help/publications/</li>
+<li>Habr partner/audience page: https://company.habr.com/ru/agency/</li>
+<li>vc.ru audience article: https://vc.ru/team/2629769-auditoriya-vc-ru-kto-chitaet-i-zachem</li>
+<li>vc.ru mediakit: https://vc.ru/team/1095451-mediakit</li>
+<li>Dzen audience summary via AdIndex: https://adindex.ru/news/media/2025/12/17/341039.phtml</li>
+<li>TenChat B2B examples and platform positioning: https://tenchat.ru/</li>
+</ul>
+<p>AI, RAG, retrieval:</p>
+<ul>
+<li>Original RAG paper, Lewis et al., 2020: https://arxiv.org/abs/2005.11401</li>
+<li>NeurIPS RAG abstract: https://proceedings.neurips.cc/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html</li>
+<li>Lost in the Middle, TACL/MIT Press: https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00638/119630/Lost-in-the-Middle-How-Language-Models-Use-Long</li>
+<li>Reciprocal Rank Fusion, SIGIR 2009 reference: https://dblp.org/rec/conf/sigir/CormackCB09</li>
+<li>Worksafety-superassistant repository: https://github.com/stas-ka/Worksafety-superassistant</li>
+</ul>
+<p>n8n and workflow automation:</p>
+<ul>
+<li>n8n Docs: https://docs.n8n.io/</li>
+<li>n8n AI workflow tutorial: https://docs.n8n.io/advanced-ai/intro-tutorial/</li>
+<li>n8n AI agents page: https://n8n.io/ai-agents/</li>
+<li>n8n self-hosting docs: https://docs.n8n.io/hosting/installation/</li>
+</ul>
+<p>AI coding and software quality:</p>
+<ul>
+<li>Stack Overflow 2025 AI survey: https://survey.stackoverflow.co/2025/ai</li>
+<li>Stack Overflow 2025 survey summary: https://stackoverflow.blog/2025/12/29/developers-remain-willing-but-reluctant-to-use-ai-the-2025-developer-survey-results-are-here/</li>
+<li>GitHub Copilot code quality study: https://github.blog/news-insights/research/does-github-copilot-improve-code-quality-heres-what-the-data-says/</li>
+<li>Kaspersky on vibe coding risks: https://www.kaspersky.com/blog/vibe-coding-2025-risks/54584/</li>
+</ul>
+<p>SEO, AI search, structured data:</p>
+<ul>
+<li>Google helpful people-first content: https://developers.google.com/search/docs/fundamentals/creating-helpful-content</li>
+<li>Google guidance on generative AI content: https://developers.google.com/search/docs/fundamentals/using-gen-ai-content</li>
+<li>Google AI features and your website: https://developers.google.com/search/docs/appearance/ai-features</li>
+<li>Google Article structured data: https://developers.google.com/search/docs/appearance/structured-data/article</li>
+<li>Google SEO starter guide: https://developers.google.com/search/docs/fundamentals/seo-starter-guide</li>
+</ul>
+<p>Персональные данные:</p>
+<ul>
+<li>152-ФЗ на сайте Кремля: https://www.kremlin.ru/acts/bank/24154/print</li>
+<li>152-ФЗ на сайте Правительства РФ: https://government.ru/docs/all/98196/</li>
+<li>152-ФЗ на сайте приемной Государственной Думы: https://priemnaya.duma.gov.ru/ru/info/inf/fz/</li>
+</ul>
+<p>Локальные материалы:</p>
+<ul>
+<li><code>doc/marketing/*.pptx</code>: презентации Sintaris, продукты, партнерство, Taris</li>
+<li><code>doc/architecture/knowledge-base.md</code>: Taris RAG architecture</li>
+<li><code>doc/architecture/conversation.md</code>: Taris LLM context, memory, RAG injection</li>
+<li><code>doc/architecture/features.md</code>: Taris mail/calendar/RAG/n8n/campaign/CRM features</li>
+<li><code>doc/research/rag-memory-extended-research.md</code>: Worksafety patterns and Taris RAG adaptation</li>
+</ul>
+
+</body>
+</html>

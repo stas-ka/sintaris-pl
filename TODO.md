@@ -17,28 +17,17 @@
 - [] PI2 has no Whisper model (`ggml-base.bin`) — PI2 offline; install on next access
 - [] Vosk WER regression on short audio (`audio_2026-03-08_08-34-23.ogg`) — WER 0.70 vs threshold 0.35; Pi-only (TariStation2 uses faster-whisper); tune model or adjust threshold when Pi is online
 
-## 0.1 Update Documentation
-✅ Implemented (v2026.4.50) — `doc/howto_admin.md`, `doc/howto_bot.md` updated; N8N/CRM/VPS variants added; RAG upload done.
-
 ## 1. Access & Security
 
-### 1.1 Role-Based Access Control (RBAC) 🔒
-✅ Implemented (v2026.4.50) — allowlists, `_classify_cmd_class()`, configurable extra blocklist, admin Security Policy UI, T122 regression test.
-→ [Full spec](doc/archive/todo/1.1-rbac.md) · [Developer menu spec](doc/archive/todo/1.3-developer-role.md)
+### 1.1 Role-Based Access Control (RBAC) ✅ Implemented (v2026.4.50) → See DONE.md
 
-### 1.2 Guest Users ✅ Implemented (v2026.4.73)
-Auto-guest/user registration (`AUTO_GUEST_ENABLED`, `AUTO_USER_ENABLED`), rate limiting (`GUEST_MSG_DAILY_LIMIT`, `GUEST_MSG_HOURLY_LIMIT`), guest menu keyboard, `_is_guest_real_impl()`, `_check_guest_rate_limit()`, meeting request flow (`_start_guest_meeting`, free slot picker), admin Promote-to-User button with handler, shared-docs RAG constant (`SHARED_DOCS_OWNER`). Tests T140–T149.  
-→ [Full spec](doc/todo/1.2-guest-users.md) · [Roles overview](doc/users/roles-overview.md)
+### 1.2 Guest Users ✅ Implemented (v2026.4.73) → See DONE.md
 
-### 1.3 Contact Book ✅ Implemented (v2026.3.30)
-→ [Full spec](doc/archive/todo/4.0-contact-book.md) · [Developer role spec](doc/archive/todo/1.3-developer-role.md)
+### 1.3 Contact Book ✅ Implemented (v2026.3.30) → See DONE.md
 - [ ] Add additional fields for contact (planned, not yet implemented)
 
 ---
-## 2. N8N Workflow — Campaign Email Broadcast ✅ Implemented (v2026.4.50)
-
-`bot_campaign.py` · Campaign Select + Send N8N workflows · Gmail integration · T50–T57 tests.
-→ [Full spec](doc/archive/todo/2-n8n-campaign-workflow.md)
+## 2. N8N Workflow — Campaign Email Broadcast ✅ Implemented (v2026.4.50) → See DONE.md
 
 ### 🔲 Planned
 - [ ] Status rows written before sending (in campaign-select response, not only in send)
@@ -46,22 +35,14 @@ Auto-guest/user registration (`AUTO_GUEST_ENABLED`, `AUTO_USER_ENABLED`), rate l
 - [ ] CRM Telegram menu (§2.x)
 - [ ] CRM Web UI (§2.x)
 
-### 2.1 Advanced User Role ✅ Implemented (v2026.4.x)
-- [x] `advanced` user role: can access Agents menu + campaign workflows
-- [x] Admin can set user role (user/advanced/admin/developer) via admin menu
+### 2.1 Advanced User Role ✅ Implemented (v2026.4.x) → See DONE.md
 - [ ] Developer role: additional runtime debug options
 
 
 
 ### 2.2 Webhook Authentication — outbound + inbound 🔲
 
-**Context:** `bot_n8n.py` uses `call_webhook()` as the primary trigger mechanism (standard HTTP POST, no SDK dependency). Basic auth schemes are implemented. This section tracks remaining auth work.
-
-#### ✅ Implemented (v2026.4.45)
-- `call_webhook(url, payload, *, auth_type, auth_token, ...)` — standard HTTP POST, no SDK coupling
-- `_build_auth_headers()` — `bearer` / `apikey` / `hmac` / `basic` / `none`
-- `verify_incoming_signature(body, header)` — HMAC-SHA256 inbound verification
-- Config constants: `WEBHOOK_AUTH_TYPE`, `WEBHOOK_AUTH_TOKEN`, `WEBHOOK_AUTH_HEADER`, `WEBHOOK_HMAC_SECRET`
+**Context:** `bot_n8n.py` uses `call_webhook()` as the primary trigger mechanism. Core auth implemented (v2026.4.45) → See DONE.md §2.2.
 
 #### 🔲 Planned — Outbound
 - [ ] **OAuth 2.0 client-credentials**: fetch token from `WEBHOOK_OAUTH_TOKEN_URL` using `WEBHOOK_OAUTH_CLIENT_ID` + `WEBHOOK_OAUTH_CLIENT_SECRET`; cache token until expiry; retry on 401
@@ -87,15 +68,7 @@ Auto-guest/user registration (`AUTO_GUEST_ENABLED`, `AUTO_USER_ENABLED`), rate l
 ### 4.2 Remote RAG Service (MCP) ✅ All done → See DONE.md (v2026.4.1 / v2026.4.38)
 → Implementation: **§25.6 Phase D** (OpenClaw) and **§26.5** (VPS)
 
-### 4.3 Remote KB via N8N MCP Server ✅ Implemented (v2026.4.75) — Phases 1–6 done
-→ Spec: [doc/todo/4.3-remote-mcp-rag.md](doc/todo/4.3-remote-mcp-rag.md)
-→ Phase 1: `core/bot_mcp_client.py` (MCP SSE client, circuit breaker), `bot_config.py` MCP block
-→ Phase 2: `n8n/workflows/KB - MCP Server.json` + `KB - Ingest.json`, `parse_doc.py`, `n8n-setup.md`
-→ Phase 3: `features/bot_remote_kb.py` (search/upload/list/clear), Telegram agent menu, `/api/remote-kb/search`
-→ Phase 4: `n8n/workflows/KB - MCP Server Google.json` (Google CSE + local hybrid tools)
-→ Phase 5: `tests/bench_remote_kb.py` (Recall@k, MRR@10, p50/p95 latency)
-→ Phase 6: `tests/autoresearch_kb/` (qa\_pairs.json, prepare.py, evaluate.py, program.md)
-→ **VPS deployment**: awaiting explicit per-step confirmation from user (see `n8n-setup.md`)
+### 4.3 Remote KB via N8N MCP Server ✅ Implemented (v2026.4.75) — Phases 1–6 done → See DONE.md
 
 ---
 
@@ -174,20 +147,7 @@ Contacts → Deals → Custom fields → White-label. Core platform C0 done (v20
 
 ---
 
-## 9. Flexible Storage Architecture ✅ Implemented (v2026.4.31)
-
-Multi-backend storage with adapter pattern. All phases complete.  
-**PicoClaw / ZeroClaw** → SQLite + `sqlite-vec` · **OpenClaw/VPS** → PostgreSQL + pgvector.  
-Config: `STORE_BACKEND=sqlite|postgres` in `bot.env`.
-
-→ [Full spec](doc/archive/todo/storage-architecture.md) · [Phase 1 spec](doc/archive/todo/9-sqlite-data-layer.md)
-
-| Phase | Status |
-|---|---|
-| Phase 1–3: Schema, adapters, migration scripts | ✅ Done |
-| Phase 4: All reads via adapter; dual-write eliminated | ✅ Done (v2026.4.31) |
-| Phase 5: PostgreSQL + pgvector adapter | ✅ Done (v2026.4.13) |
-| Phase 6: RAG + conversation memory via adapter | ✅ Done (v2026.4.13) |
+## 9. Flexible Storage Architecture ✅ Implemented (v2026.4.31) → See DONE.md
 
 - [ ] Tests T22–T26 (sqlite_schema, migration, vector_search, adapter_contract, credential_encryption)
 - [ ] Last interactions / active UI stored in DB (not yet implemented)
@@ -245,10 +205,7 @@ Taris runs as an additional deployment variant on OpenClaw (laptop / AI PC) alon
 
 ### 19.4 Pending ✅ All done → See DONE.md (v2026.3.29+10 / v2026.4.31)
 
-## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader ✅ Implemented (v2026.4.50)
-
-Screen DSL loader implemented; YAML/JSON file-based screens active on all targets.
-→ [Research report](doc/research/research-dynamic-ui-scenarios.md) · [Spec](doc/archive/todo/21-screen-dsl-loader.md)
+## 21. Dynamic UI — Enhanced Screen DSL + JSON/YAML Loader ✅ Implemented (v2026.4.50) → See DONE.md (§21.1–21.5)
 
 ### 21.6 Phase 6 — Visual Editor (OpenClaw only) 🔲
 
@@ -321,14 +278,7 @@ Screen DSL loader implemented; YAML/JSON file-based screens active on all target
 
 ---
 
-## 26. Deployment Plan: VPS (Cloud) ✅ Implemented (v2026.4.50)
-
-> **Deployed:** Docker on `dev2null.de` VPS (Ubuntu, aarch64, 6 vCPU, 7.7 GB RAM).
-> **Stack:** Docker Compose · system PostgreSQL 16 + pgvector 0.8.0 · nginx + Let's Encrypt TLS.
-> **Bot mode:** Telegram polling (webhook optional later). Web UI at `https://agents.sintaris.net/supertaris-vps/`.
-> **Deploy path:** `/opt/taris-docker/` · Config: `deploy/system-configs/vps/docker/`
-
-### 26.1–26.5 Base, PostgreSQL, TLS, Bot, RAG ✅ All done → See DONE.md
+## 26. Deployment Plan: VPS (Cloud) ✅ Implemented (v2026.4.50) → See DONE.md (§26.1–26.6)
 
 ### 26.6 Backups ⚠️ Open items
 - [ ] Install cron job on VPS: `(crontab -l; echo '0 3 * * * /opt/taris-docker/backup-taris-vps.sh >> /var/log/taris-backup.log 2>&1') | crontab -`
