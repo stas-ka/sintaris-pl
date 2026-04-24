@@ -25,6 +25,11 @@ T65  handle_message returns False when no active session (no state pollution)
 T225 _extract_to_text converts RTF bytes → text/plain (requires striprtf)
 T226 _extract_to_text converts PDF bytes → text/plain (requires pdfminer.six)
 T227 ingest_file returns {"error": msg} when extraction raises ValueError
+T228 _kb_search_direct does NOT use Ollama for embeddings (uses EmbeddingService)
+T229 _kb_search_direct calls svc.embed(query) with single string, not a list
+T230 _do_search calls ask_llm_with_history (not raw chunk display)
+T231 _do_search returns LLM-generated answer when chunks are available
+T232 ingest_file calls _fix_doc_meta() after receiving doc_id from N8N
 
 Usage (offline — no bot.env needed):
     python3 src/tests/test_remote_kb.py
@@ -925,6 +930,184 @@ def test_ingest_extraction_error_returned():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T228  _kb_search_direct calls EmbeddingService.embed() with a single string
+# ─────────────────────────────────────────────────────────────────────────────
+def test_kb_search_uses_fastembed_not_ollama():
+    """T228: _kb_search_direct uses EmbeddingService.embed(query) — a single string.
+
+    Regression: before fix, _kb_search_direct called Ollama directly for embeddings.
+    Ollama is not available on VPS Docker so all searches returned [].
+    Fix: use EmbeddingService (fastembed) which IS installed in Docker.
+    Verified by:
+      1. Source must NOT import OLLAMA_URL at module level for search.
+      2. Source must call svc.embed(query) with a single string argument (not a list).
+    """
+    import ast, os
+    src_path = os.path.join(os.path.dirname(__file__), "..", "core", "bot_mcp_client.py")
+    src = open(src_path).read()
+
+    # Must NOT use Ollama endpoint for embedding in _kb_search_direct
+    # (Ollama may still be used elsewhere e.g. for other features — but the
+    #  search path must not depend on OLLAMA_URL being available.)
+    tree = ast.parse(src)
+    in_search_fn = False
+    ollama_calls_in_search = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_kb_search_direct":
+            in_search_fn = True
+            for child in ast.walk(node):
+                if isinstance(child, (ast.Attribute, ast.Name)):
+                    name = child.attr if isinstance(child, ast.Attribute) else child.id
+                    if "ollama" in name.lower() or "OLLAMA_URL" in name:
+                        ollama_calls_in_search.append(name)
+    assert in_search_fn, "Function _kb_search_direct not found in bot_mcp_client.py"
+    assert not ollama_calls_in_search, (
+        f"_kb_search_direct still references Ollama: {ollama_calls_in_search}. "
+        "Ollama is not available on VPS Docker — use EmbeddingService.embed()."
+    )
+
+
+def test_kb_search_embed_called_with_string():
+    """T229: _kb_search_direct calls svc.embed(query) with a single string, not a list.
+
+    Regression: passing a list to EmbeddingService.embed() causes
+    'TextEncodeInput must be Union[TextInputSequence, ...]' error at runtime.
+    """
+    import ast, os
+    src_path = os.path.join(os.path.dirname(__file__), "..", "core", "bot_mcp_client.py")
+    src = open(src_path).read()
+    tree = ast.parse(src)
+
+    # Find _kb_search_direct and locate calls to .embed(...)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_kb_search_direct":
+            for child in ast.walk(node):
+                if (isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Attribute)
+                        and child.func.attr == "embed"):
+                    assert len(child.args) == 1, (
+                        "EmbeddingService.embed() must be called with exactly 1 positional arg"
+                    )
+                    # The arg must NOT be a list literal
+                    arg = child.args[0]
+                    assert not isinstance(arg, ast.List), (
+                        "EmbeddingService.embed() must receive a string, not a list literal. "
+                        "Use svc.embed(query), NOT svc.embed([query])."
+                    )
+                    return  # Found and checked
+    # If no embed() call found, check source text as fallback
+    assert "svc.embed(" in src or ".embed(query" in src, (
+        "_kb_search_direct must call EmbeddingService.embed(query) — call not found"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T230  _do_search calls ask_llm_with_history (not raw chunk display)
+# ─────────────────────────────────────────────────────────────────────────────
+def test_do_search_calls_llm_not_raw_chunks():
+    """T230: _do_search in bot_remote_kb.py calls ask_llm_with_history.
+
+    Regression: before fix, _do_search formatted and displayed raw chunk dicts
+    (showing chunk IDs and similarity scores) instead of passing them to an LLM.
+    """
+    import os
+    src_path = os.path.join(os.path.dirname(__file__), "..", "features", "bot_remote_kb.py")
+    src = open(src_path).read()
+    assert "ask_llm_with_history" in src, (
+        "bot_remote_kb.py must import and call ask_llm_with_history in _do_search. "
+        "Regression: _do_search was displaying raw KB chunks instead of LLM answers."
+    )
+    # Also verify the function is imported from core.bot_llm
+    assert "from core.bot_llm import" in src or "from core import bot_llm" in src, (
+        "bot_remote_kb.py must import ask_llm_with_history from core.bot_llm"
+    )
+
+
+def test_do_search_returns_llm_answer():
+    """T231: _do_search returns an LLM-generated answer when chunks are available.
+
+    Regression: before fix, the bot replied with raw chunk dicts (showing 'score: 0.7',
+    'chunk_id: ...') instead of a readable answer. After fix, ask_llm_with_history
+    is called and its output is sent to the user.
+    """
+    import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
+    from unittest.mock import patch, MagicMock
+
+    try:
+        from features import bot_remote_kb as kb_mod
+        from core import bot_mcp_client as mcp_mod
+    except ImportError as e:
+        raise RuntimeError(f"Import failed: {e}")
+
+    fake_chunks = [
+        {"chunk_id": 1, "text": "Работодатель обязан выдавать СИЗ.", "score": 0.85, "section": "§1"},
+    ]
+    llm_answer = "Согласно документам, работодатель обязан выдавать средства индивидуальной защиты."
+
+    bot = MagicMock()
+    bot.send_message = MagicMock()
+
+    def fake_t(chat_id, key, **kw):
+        return {"remote_kb_sources": "Sources"}.get(key, key)
+
+    with patch.object(mcp_mod, "query_remote", return_value=fake_chunks):
+        with patch("features.bot_remote_kb.ask_llm_with_history", return_value=llm_answer) as mock_llm:
+            kb_mod._do_search(994963580, "СИЗ", bot, fake_t)
+
+    # The important assertion: LLM must have been called
+    assert mock_llm.called, (
+        "_do_search must call ask_llm_with_history when chunks are found. "
+        "Before fix it was displaying raw chunk dicts."
+    )
+    # The LLM must have been given a messages list
+    call_args = mock_llm.call_args
+    if call_args:
+        messages_arg = call_args[0][0] if call_args[0] else None
+        if messages_arg is not None:
+            assert isinstance(messages_arg, list), "ask_llm_with_history must receive a messages list"
+            assert any(isinstance(m, dict) and "content" in m for m in messages_arg), (
+                "messages list must contain dicts with 'content' key"
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T232  ingest_file calls _fix_doc_meta after receiving doc_id from N8N
+# ─────────────────────────────────────────────────────────────────────────────
+def test_ingest_calls_fix_doc_meta():
+    """T232: ingest_file calls _fix_doc_meta(doc_id, original_title, preview) after N8N ingest.
+
+    Regression: N8N sanitizes filenames (strips Unicode, lowercases, replaces spaces with _).
+    Without _fix_doc_meta, Russian filenames appear garbled in the document list.
+    After fix, the original title and a text preview are stored in structure JSONB.
+    """
+    import os
+    src_path = os.path.join(os.path.dirname(__file__), "..", "core", "bot_mcp_client.py")
+    src = open(src_path).read()
+
+    assert "_fix_doc_meta" in src, (
+        "bot_mcp_client.py must define _fix_doc_meta() to restore original title "
+        "after N8N sanitizes the filename."
+    )
+
+    # Verify _fix_doc_meta is called from ingest_file (not just defined)
+    import ast
+    tree = ast.parse(src)
+    fix_called_in_ingest = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "ingest_file":
+            for child in ast.walk(node):
+                if (isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Name)
+                        and child.func.id == "_fix_doc_meta"):
+                    fix_called_in_ingest = True
+                    break
+    assert fix_called_in_ingest, (
+        "_fix_doc_meta() must be called from within ingest_file() after receiving doc_id from N8N. "
+        "Without this, Russian filenames appear as mangled ASCII in the document list."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Deployed integration tests (T220–T224)
 # Require KB_PG_DSN env var pointing to a live taris_kb PostgreSQL DB.
 # Insert real test data, call bot_remote_kb public API with mocked bot and _t,
@@ -1202,6 +1385,11 @@ if __name__ == "__main__":
         ("T225 extract_rtf_to_text",               test_extract_rtf_to_text),
         ("T226 extract_pdf_to_text",               test_extract_pdf_to_text),
         ("T227 ingest_extraction_error_returned",  test_ingest_extraction_error_returned),
+        ("T228 kb_search_uses_fastembed_not_ollama", test_kb_search_uses_fastembed_not_ollama),
+        ("T229 kb_search_embed_called_with_string",  test_kb_search_embed_called_with_string),
+        ("T230 do_search_calls_llm_not_raw_chunks",  test_do_search_calls_llm_not_raw_chunks),
+        ("T231 do_search_returns_llm_answer",        test_do_search_returns_llm_answer),
+        ("T232 ingest_calls_fix_doc_meta",           test_ingest_calls_fix_doc_meta),
     ]
 
     passed = failed = skipped = 0

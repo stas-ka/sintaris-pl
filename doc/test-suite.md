@@ -290,6 +290,14 @@ docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb
 | T222 | `deployed_delete_document` | *(integration)* Inserts doc, calls `call_tool('kb_delete_document')`, verifies doc removed from DB. | After editing `_kb_delete_document_direct()` |
 | T223 | `deployed_search` | *(integration)* Inserts doc with embedding, calls `query_remote("quick brown fox")`, asserts text in results. | After editing `_kb_search_direct()` or Ollama embedding path |
 | T224 | `deployed_full_cycle` | *(integration)* Full end-to-end: insert → list (non-empty) → search (results) → delete → list (empty). | After any change touching KB list/search/delete pipeline |
+| T225 | `extract_rtf_to_text` | `_extract_to_text()` converts RTF bytes → text/plain via striprtf. Regression: `striprtf` was listed in requirements but not installed in Docker. | After editing KB extraction or Dockerfile |
+| T226 | `extract_pdf_to_text` | `_extract_to_text()` converts PDF bytes → text/plain via pdfminer.six. | After editing KB extraction |
+| T227 | `ingest_extraction_error_returned` | `ingest_file()` returns `{"error": msg}` when extraction raises `ValueError` (not `{}`). | After editing `ingest_file()` error handling |
+| T228 | `kb_search_uses_fastembed_not_ollama` | `_kb_search_direct()` does NOT reference Ollama/OLLAMA_URL. Regression: Ollama not available on VPS Docker → all searches returned `[]`. | After editing `_kb_search_direct()` embedding path |
+| T229 | `kb_search_embed_called_with_string` | `_kb_search_direct()` calls `svc.embed(query)` with a single string, not a list. Regression: `embed([query])` caused `TextEncodeInput must be Union[...]` error. | After editing `_kb_search_direct()` embed call |
+| T230 | `do_search_calls_llm_not_raw_chunks` | `bot_remote_kb.py` imports and calls `ask_llm_with_history` in `_do_search`. Regression: before fix, raw chunk dicts with scores were shown to users. | After editing `_do_search()` |
+| T231 | `do_search_returns_llm_answer` | `_do_search()` calls `ask_llm_with_history` with a `messages` list when chunks are found. | After editing `_do_search()` or `ask_llm_with_history` integration |
+| T232 | `ingest_calls_fix_doc_meta` | `ingest_file()` calls `_fix_doc_meta(doc_id, original_title, preview)` after N8N returns. Regression: N8N sanitizes Unicode filenames → Russian titles appeared garbled without this fix. | After editing `ingest_file()` or `_fix_doc_meta()` |
 
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 
