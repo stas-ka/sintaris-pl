@@ -5,6 +5,14 @@ Use this to analyse cost (time, requests) per feature over time.
 
 ---
 
+### Session — 2026-04-25 (UTC)
+
+| Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
+|---|---|---|---|---|---|---|
+| ~12:00 UTC | Test strategy + skills restructure: audit all tests (OpenClaw + PicoClaw), create doc/test-strategy.md (29KB, 10 sections, 12 layers, research basis: RAGAS/MT-Bench/HELM/OWASP), fix taris-voicetests/SKILL.md T-range T01→T232+, expand taris-run-full-tests/SKILL.md (add CAMP/CS/CN/KB/K/L categories), expand taris-test-software/SKILL.md decision table (added 15 file→test rows), fix test_remote_kb.py stale T50–T65 docstring → T200–T232, expand doc/test-suite.md (§11–§13 new, quick-ref +9 rows, categories +6), update bot-coding.instructions.md 'Where tests live' table | 4 | ~20 | claude-sonnet-4.6 | doc/test-strategy.md, doc/test-suite.md, src/tests/test_remote_kb.py, .github/skills/taris-test-software/SKILL.md, .github/skills/taris-run-full-tests/SKILL.md, .github/skills/taris-voicetests/SKILL.md, .github/instructions/bot-coding.instructions.md | done |
+
+---
+
 ### Session — 2026-04-22 (UTC)
 
 | Time (UTC) | Request | Complexity | Requests | Model | Files changed | Status |
