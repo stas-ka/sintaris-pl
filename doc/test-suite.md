@@ -40,6 +40,7 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | `src/core/bot_security.py`, RBAC logic | Security T70–T71, T116, T140–T157 | Local machine |
 | `src/core/bot_embeddings.py`, `src/core/bot_rag.py` | Embeddings/RAG T76–T80, T200–T205 | Local machine |
 | `src/setup/migrate_*.py` | Migration T111, T113, T23 | Local machine |
+| `src/features/bot_error_observer.py`, `src/features/bot_error_protocol.py` | Error Observer T242–T245 | Local machine |
 | Performance-sensitive paths (STT, KB, LLM) | Benchmarks (Category K) | Local or target |
 
 ---
@@ -323,6 +324,19 @@ docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb
 | T239 | `do_search_system_prompt_lang_aware` | When `_lang(chat_id)='ru'`, the LLM system prompt contains Russian-language instruction ("русском"). Verifies language-aware prompt is active for Russian regulatory queries. | After editing `_do_search()` system prompt construction |
 | T240 | `deployed_worksafety_query_quality` | *(integration, benchmark)* Runs 3 standard Worksafety queries against the KB; checks ≥60% fuzzy similarity with expected regulatory text fragments. Requires `KB_PG_DSN` + `WORKSAFETY_CHAT_ID` + 883Н RTF uploaded. See `doc/kb-quality-comparison.md §7`. | After implementing KB P1 improvements; before production release |
 | T241 | `deployed_kb_user_isolation` | *(integration)* Inserts doc for chat_id=7777777, queries from chat_id=6666666 — must NOT find it. Verifies `owner_chat_id` filter in `_kb_search_direct()`. | After editing `_kb_search_direct()` or DB schema |
+
+### 2.5c Error Observer Tests — `src/tests/test_voice_regression.py` (T242–T245)
+
+Source-inspection tests for the Error Observer Agent (`src/features/bot_error_observer.py`). All run offline with no Pi/network required.
+
+Run with: `DEVICE_VARIANT=openclaw PYTHONPATH=src python3 src/tests/test_voice_regression.py --test t_error_observer`
+
+| ID | Test | What it checks | When to run |
+|---|---|---|---|
+| T242 | `error_observer_constants` | `bot_config.py` exports `GIT_ERRORS_DIR`, `ERROR_GIT_AUTO_PUSH`, `LOG_FILE` constants; `bot_error_observer.py` module imports and exposes `start_observer`, `stop_observer`, `get_buffered_error_lines`, `write_error_to_git_dir`, `make_description_md`, `update_errors_index`. | After editing `bot_error_observer.py` public API or adding/removing bot_config constants |
+| T243 | `error_capture_handler` | `ErrorCaptureHandler` captures `logging.ERROR` level records into `_error_buffer`; entry has `ts`, `msg`, `name`, `levelname` keys; `get_buffered_error_lines()` returns text with `ERROR` string. | After editing `ErrorCaptureHandler`, `_error_buffer`, or `get_buffered_error_lines()` |
+| T244 | `make_description_md` | `make_description_md(title, log_lines, user_text)` generates Markdown with title heading, `open` status, `medium` severity, a log section containing `TEST ERROR`, user text section, and a resolution checklist. | After editing `make_description_md()` output format |
+| T245 | `update_errors_index` | `update_errors_index(errors_dir)` with a temp dir creates `README.md` with header, a table, open/resolved entry counts, and an auto-generated notice. | After editing `update_errors_index()` or `errors/README.md` template |
 
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 

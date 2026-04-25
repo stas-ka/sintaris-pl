@@ -9045,6 +9045,196 @@ def t_variant_config(**_) -> list[TestResult]:
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T242–T245: Error Observer Agent tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+def t_error_observer_constants(**_):
+    """T242: bot_config exports GIT_ERRORS_DIR + ERROR_GIT_AUTO_PUSH; bot_error_observer importable."""
+    t0 = time.time()
+    results = []
+
+    try:
+        import importlib
+        os.environ.setdefault("WEB_ONLY", "1")
+        cfg = importlib.import_module("core.bot_config")
+    except Exception as e:
+        return [TestResult("T242_error_observer_constants", "SKIP",
+                           time.time() - t0, f"bot_config import failed: {e}")]
+
+    for attr, label in [
+        ("GIT_ERRORS_DIR",      "T242a_git_errors_dir_constant"),
+        ("ERROR_GIT_AUTO_PUSH", "T242b_error_git_auto_push_constant"),
+        ("LOG_FILE",            "T242c_log_file_exported"),
+    ]:
+        ok = hasattr(cfg, attr)
+        results.append(TestResult(label, "PASS" if ok else "FAIL",
+                                  time.time() - t0, f"{attr} in bot_config" if ok else f"MISSING: {attr}"))
+
+    try:
+        import importlib
+        obs = importlib.import_module("features.bot_error_observer")
+        missing = [fn for fn in ("start_observer", "stop_observer", "write_error_to_git_dir", "commit_and_push_error")
+                   if not hasattr(obs, fn)]
+        ok_obs = not missing
+        results.append(TestResult("T242d_observer_module_api", "PASS" if ok_obs else "FAIL",
+                                  time.time() - t0,
+                                  "all public API functions present" if ok_obs
+                                  else f"MISSING: {missing}"))
+    except Exception as e:
+        results.append(TestResult("T242d_observer_module_api", "FAIL", time.time() - t0,
+                                  f"bot_error_observer import failed: {e}"))
+
+    return results
+
+
+def t_error_capture_handler(**_):
+    """T243: ErrorCaptureHandler captures ERROR records into shared _error_buffer."""
+    t0 = time.time()
+    results = []
+
+    try:
+        import importlib
+        os.environ.setdefault("WEB_ONLY", "1")
+        obs = importlib.import_module("features.bot_error_observer")
+    except Exception as e:
+        return [TestResult("T243_error_capture_handler", "SKIP", time.time() - t0,
+                           f"bot_error_observer import failed: {e}")]
+
+    import logging
+    buf_before = len(obs._error_buffer)
+    handler = obs.ErrorCaptureHandler()
+    handler.setLevel(logging.WARNING)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    record = logging.LogRecord(
+        name="taris-test", level=logging.ERROR, pathname="", lineno=0,
+        msg="test error from T243", args=(), exc_info=None,
+    )
+    handler.emit(record)
+    buf_after = len(obs._error_buffer)
+
+    captured = buf_after > buf_before
+    results.append(TestResult("T243a_handler_captures_error",
+                              "PASS" if captured else "FAIL",
+                              time.time() - t0,
+                              f"buffer grew {buf_before}→{buf_after}" if captured
+                              else f"buffer unchanged at {buf_before}"))
+
+    if captured:
+        last_entry = list(obs._error_buffer)[-1]
+        ts, lvl, msg = last_entry
+        ok_lvl = lvl == "ERROR"
+        results.append(TestResult("T243b_handler_entry_structure",
+                                  "PASS" if ok_lvl else "FAIL",
+                                  time.time() - t0,
+                                  f"(ts={ts[:10]}, lvl={lvl}, msg present)" if ok_lvl
+                                  else f"unexpected level: {lvl}"))
+
+    lines = obs.get_buffered_error_lines(10)
+    ok_lines = isinstance(lines, list)
+    results.append(TestResult("T243c_get_buffered_lines_type",
+                              "PASS" if ok_lines else "FAIL",
+                              time.time() - t0,
+                              f"returns list of {len(lines)} items" if ok_lines
+                              else f"got {type(lines)}"))
+    return results
+
+
+def t_make_description_md(**_):
+    """T244: make_description_md() generates required Markdown sections."""
+    t0 = time.time()
+    results = []
+
+    try:
+        import importlib
+        os.environ.setdefault("WEB_ONLY", "1")
+        obs = importlib.import_module("features.bot_error_observer")
+    except Exception as e:
+        return [TestResult("T244_make_description_md", "SKIP", time.time() - t0,
+                           f"bot_error_observer import failed: {e}")]
+
+    manifest = {
+        "id": "20260425-112512_test_error",
+        "name": "Test error for T244",
+        "status": "open",
+        "severity": "high",
+        "reporter_type": "user",
+        "reporter_chat_id": 12345,
+        "created": "2026-04-25T11:25:12",
+        "bot_version": "2026.4.75",
+        "target": "openclaw",
+        "log_lines": ["2026-04-25 11:25:12 ERROR taris-tgbot: something failed"],
+    }
+    md = obs.make_description_md(manifest, ["User reported this issue"])
+
+    for name, ok in [
+        ("has_title",              "# " in md and "Test error for T244" in md),
+        ("has_status",             "open" in md),
+        ("has_severity",           "high" in md),
+        ("has_log_section",        "## Log Excerpt" in md),
+        ("has_log_content",        "something failed" in md),
+        ("has_user_text",          "User reported" in md),
+        ("has_resolution_checklist", "## Resolution Checklist" in md),
+    ]:
+        results.append(TestResult(f"T244_{name}", "PASS" if ok else "FAIL",
+                                  time.time() - t0,
+                                  f"present: {name}" if ok else f"MISSING: {name}"))
+    return results
+
+
+def t_update_errors_index(**_):
+    """T245: update_errors_index() writes README.md with valid table and counts."""
+    t0 = time.time()
+    results = []
+
+    try:
+        import importlib, tempfile, json as _json
+        os.environ.setdefault("WEB_ONLY", "1")
+        obs = importlib.import_module("features.bot_error_observer")
+    except Exception as e:
+        return [TestResult("T245_update_errors_index", "SKIP", time.time() - t0,
+                           f"bot_error_observer import failed: {e}")]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for i, (status, severity) in enumerate([("open", "high"), ("resolved", "low")]):
+            folder = os.path.join(tmpdir, f"20260425-{i:06d}_test_error_{i}")
+            os.makedirs(folder)
+            manifest = {
+                "id": os.path.basename(folder),
+                "name": f"Test error {i}",
+                "status": status,
+                "severity": severity,
+                "reporter_type": "user",
+                "created": "2026-04-25T11:25:12",
+                "bot_version": "2026.4.75",
+                "target": "openclaw",
+            }
+            Path(os.path.join(folder, "manifest.json")).write_text(
+                _json.dumps(manifest), encoding="utf-8")
+
+        obs.update_errors_index(tmpdir)
+        readme = os.path.join(tmpdir, "README.md")
+        ok_exists = os.path.isfile(readme)
+        results.append(TestResult("T245a_readme_created",
+                                  "PASS" if ok_exists else "FAIL",
+                                  time.time() - t0,
+                                  "README.md created" if ok_exists else "README.md not created"))
+
+        if ok_exists:
+            content = Path(readme).read_text(encoding="utf-8")
+            for name, ok in [
+                ("has_header",        "# Error Reports Index" in content),
+                ("has_table",         "| # |" in content and "| Folder |" in content),
+                ("has_open_entry",    "open" in content),
+                ("has_resolved_entry","resolved" in content),
+                ("has_auto_gen",      "Auto-generated" in content),
+            ]:
+                results.append(TestResult(f"T245b_{name}", "PASS" if ok else "FAIL",
+                                          time.time() - t0,
+                                          f"present: {name}" if ok else f"MISSING: {name}"))
+    return results
+
+
 TEST_FUNCTIONS = [
     t_piper_json_present,
     t_tmpfs_model_complete,
@@ -9298,6 +9488,11 @@ TEST_FUNCTIONS = [
     t_llm_provider_registry,
     t_stt_provider_protocol,
     t_variant_config,
+    # Error Observer Agent (T242–T245)
+    t_error_observer_constants,
+    t_error_capture_handler,
+    t_make_description_md,
+    t_update_errors_index,
 ]
 
 

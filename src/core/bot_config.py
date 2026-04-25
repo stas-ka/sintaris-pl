@@ -328,6 +328,12 @@ MAIL_CREDS_DIR      = os.environ.get("MAIL_CREDS_DIR",
                           _th("mail_creds"))
 ERROR_PROTOCOL_DIR  = os.environ.get("ERROR_PROTOCOL_DIR",
                           _th("error_protocols"))
+# Path to the git-tracked errors/ directory in the project repository.
+# When set, error reports are written here AND committed/pushed automatically.
+# Leave empty to disable git integration (errors saved to ERROR_PROTOCOL_DIR only).
+GIT_ERRORS_DIR      = os.environ.get("GIT_ERRORS_DIR", "")
+# Set to "0" to disable automatic git push after error reports are committed.
+ERROR_GIT_AUTO_PUSH = os.environ.get("ERROR_GIT_AUTO_PUSH", "1").strip() != "0"
 DOCS_DIR            = os.environ.get("DOCS_DIR",
                           _th("docs"))
 
@@ -537,6 +543,7 @@ _ASSISTANT_LOG_FILE = _th("assistant.log")
 _SECURITY_LOG_FILE  = _th("security.log")
 _VOICE_LOG_FILE     = _th("voice.log")
 _DATASTORE_LOG_FILE = _th("datastore.log")
+LOG_FILE            = _LOG_FILE   # public export for bot_error_observer
 _log_handlers: list = [logging.StreamHandler()]
 try:
     os.makedirs(os.path.dirname(_LOG_FILE), exist_ok=True)

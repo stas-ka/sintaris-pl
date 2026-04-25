@@ -21,7 +21,7 @@ from pathlib import Path
 
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from core.bot_config import ERROR_PROTOCOL_DIR, log
+from core.bot_config import ERROR_PROTOCOL_DIR, GIT_ERRORS_DIR, log
 import core.bot_state as _st
 from core.bot_instance import bot
 from telegram.bot_access import _is_admin, _t, _back_keyboard, _escape_md
@@ -226,12 +226,57 @@ def _errp_send(chat_id: int) -> None:
         parse_mode="Markdown",
     )
 
+    # Write to git-tracked errors/ dir + commit/push in background
+    if GIT_ERRORS_DIR:
+        threading.Thread(
+            target=_errp_sync_to_git,
+            args=(chat_id, state, folder_name),
+            daemon=True,
+        ).start()
+
     # Try to send email in background
     threading.Thread(
         target=_errp_send_email,
         args=(chat_id, state),
         daemon=True,
     ).start()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Git errors/ integration
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _errp_sync_to_git(chat_id: int, state: dict, folder_name: str) -> None:
+    """Background thread: write report to GIT_ERRORS_DIR and git commit/push."""
+    from features.bot_error_observer import (
+        write_error_to_git_dir,
+        commit_and_push_error,
+    )
+    path = write_error_to_git_dir(
+        folder_name=folder_name,
+        name=state["name"],
+        reporter_type="user",
+        reporter_chat_id=chat_id,
+        severity="medium",
+        user_texts=state["texts"],
+        voices=state["voices"],
+        photos=state["photos"],
+        errors_dir=GIT_ERRORS_DIR,
+    )
+    if not path:
+        return
+    ok, msg = commit_and_push_error(folder_name, GIT_ERRORS_DIR)
+    if ok and "pushed" in msg:
+        try:
+            bot.send_message(
+                chat_id,
+                _t(chat_id, "errp_git_pushed", folder=_escape_md(folder_name)),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            pass
+    elif not ok:
+        log.warning(f"[ErrP] git commit/push failed for {folder_name}: {msg}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

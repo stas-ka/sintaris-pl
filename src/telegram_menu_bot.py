@@ -177,6 +177,7 @@ from features.bot_error_protocol import (
     _errp_collect_text, _errp_collect_voice, _errp_collect_photo,
     _errp_send, _errp_cancel,
 )
+from features.bot_error_observer import start_observer as _start_error_observer
 
 # ─── Contact book ───────────────────────────────────────────────────────────
 from features.bot_contacts import (
@@ -2157,6 +2158,7 @@ def main() -> None:
     attach_alerts_to_main_log()
     _cal_reschedule_all()
     threading.Thread(target=_cal_morning_briefing_loop, daemon=True).start()
+    _start_error_observer()
 
     # ── Low-memory warning (Linux /proc/meminfo — no psutil required) ────────
     try:
