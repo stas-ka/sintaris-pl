@@ -258,10 +258,27 @@ def test_campaign_on_filters_skip_variants():
 # T133: call_webhook error handling — the actual production bug
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _reload_bot_n8n():
+    """Return the real features.bot_n8n module, bypassing test stubs.
+
+    test_content_strategy.py either:
+    (a) Replaces features.bot_n8n with a MagicMock stub in sys.modules, OR
+    (b) Monkey-patches .call_webhook on the real module if it was already loaded
+
+    Either way, force-reload guarantees fresh module bindings from disk.
+    """
+    import importlib as _il
+    sys.modules.pop("features.bot_n8n", None)
+    requests_mod = sys.modules.get("requests")
+    if requests_mod is not None and not getattr(requests_mod, "__file__", None):
+        sys.modules.pop("requests", None)
+    return _il.import_module("features.bot_n8n")
+
+
 def test_call_webhook_no_url():
     """T133a: call_webhook returns structured error when URL is empty."""
-    from features.bot_n8n import call_webhook
-    result = call_webhook("", {"test": 1})
+    n8n = _reload_bot_n8n()
+    result = n8n.call_webhook("", {"test": 1})
     assert "error" in result, "Must return error for empty URL"
     assert "not configured" in result["error"].lower() or "url" in result["error"].lower()
 
@@ -275,17 +292,15 @@ def test_call_webhook_empty_body_response():
 
     Correct behavior: call_webhook must handle non-JSON gracefully.
     """
-    from features.bot_n8n import call_webhook
-    import requests
-
+    n8n = _reload_bot_n8n()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.text = ""  # empty body — exactly what N8N returned before our workflow fix
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.side_effect = ValueError("No JSON object could be decoded")
 
-    with patch("requests.post", return_value=mock_resp):
-        result = call_webhook("https://example.com/wh", {"payload": "x"})
+    with patch("features.bot_n8n.requests.post", return_value=mock_resp):
+        result = n8n.call_webhook("https://example.com/wh", {"payload": "x"})
 
     # Must NOT raise — must return a structured dict
     assert isinstance(result, dict), "call_webhook must always return dict"
@@ -301,17 +316,16 @@ def test_call_webhook_empty_body_response():
 
 def test_call_webhook_http_error():
     """T133c: call_webhook returns {'error': ..., 'status_code': N} for HTTP errors."""
-    from features.bot_n8n import call_webhook
-
+    n8n = _reload_bot_n8n()
+    import requests as _req
     mock_resp = MagicMock()
     mock_resp.status_code = 404
-    import requests
-    mock_resp.raise_for_status.side_effect = requests.HTTPError(
+    mock_resp.raise_for_status.side_effect = _req.HTTPError(
         "404 Not Found", response=mock_resp
     )
 
-    with patch("requests.post", return_value=mock_resp):
-        result = call_webhook("https://example.com/wh", {})
+    with patch("features.bot_n8n.requests.post", return_value=mock_resp):
+        result = n8n.call_webhook("https://example.com/wh", {})
 
     assert "error" in result, "HTTP error must return error key"
     assert result.get("status_code") == 404 or "404" in str(result.get("error", ""))
@@ -319,11 +333,10 @@ def test_call_webhook_http_error():
 
 def test_call_webhook_timeout():
     """T133d: call_webhook returns {'error': 'Webhook timeout...'} on timeout."""
-    from features.bot_n8n import call_webhook
-    import requests
-
-    with patch("requests.post", side_effect=requests.Timeout()):
-        result = call_webhook("https://example.com/wh", {}, timeout=5)
+    n8n = _reload_bot_n8n()
+    import requests as _req
+    with patch("features.bot_n8n.requests.post", side_effect=_req.Timeout()):
+        result = n8n.call_webhook("https://example.com/wh", {}, timeout=5)
 
     assert "error" in result
     assert "timeout" in result["error"].lower()
@@ -333,8 +346,7 @@ def test_call_webhook_n8n_error_dict():
     """T133e: N8N workflow error response {'_error': true, 'step': X, 'detail': Y}
     is passed through so _run_selection can map it to user-friendly message.
     """
-    from features.bot_n8n import call_webhook
-
+    n8n = _reload_bot_n8n()
     n8n_error = {"_error": True, "step": "OpenAI Select", "detail": "API key invalid",
                  "error": "API key invalid"}
     mock_resp = MagicMock()
@@ -342,8 +354,8 @@ def test_call_webhook_n8n_error_dict():
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = n8n_error
 
-    with patch("requests.post", return_value=mock_resp):
-        result = call_webhook("https://example.com/wh", {})
+    with patch("features.bot_n8n.requests.post", return_value=mock_resp):
+        result = n8n.call_webhook("https://example.com/wh", {})
 
     assert result == n8n_error, "N8N error dict must be passed through unchanged"
     # Caller (_run_selection) can now check 'error' key and 'step' key
