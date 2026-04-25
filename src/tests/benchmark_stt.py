@@ -49,7 +49,7 @@ def _env(key: str, default: str) -> str:
         return val
     env_file = Path(TARIS_HOME) / "bot.env"
     if env_file.exists():
-        for line in env_file.read_text().splitlines():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line.startswith("#") or "=" not in line:
                 continue

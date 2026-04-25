@@ -199,7 +199,7 @@ def main() -> None:
         log.error("QA pairs file not found: %s", qa_path)
         sys.exit(2)
 
-    qa_pairs = json.loads(qa_path.read_text())
+    qa_pairs = json.loads(qa_path.read_text(encoding="utf-8"))
     log.info("Loaded %d QA pairs from %s", len(qa_pairs), qa_path)
 
     date_str = datetime.utcnow().strftime("%Y-%m-%d")

@@ -953,7 +953,7 @@ def test_kb_search_uses_fastembed_not_ollama():
     """
     import ast, os
     src_path = os.path.join(os.path.dirname(__file__), "..", "core", "bot_mcp_client.py")
-    src = open(src_path).read()
+    src = open(src_path, encoding="utf-8").read()
 
     # Must NOT use Ollama endpoint for embedding in _kb_search_direct
     # (Ollama may still be used elsewhere e.g. for other features — but the
@@ -984,7 +984,7 @@ def test_kb_search_embed_called_with_string():
     """
     import ast, os
     src_path = os.path.join(os.path.dirname(__file__), "..", "core", "bot_mcp_client.py")
-    src = open(src_path).read()
+    src = open(src_path, encoding="utf-8").read()
     tree = ast.parse(src)
 
     # Find _kb_search_direct and locate calls to .embed(...)
@@ -1021,7 +1021,7 @@ def test_do_search_calls_llm_not_raw_chunks():
     """
     import os
     src_path = os.path.join(os.path.dirname(__file__), "..", "features", "bot_remote_kb.py")
-    src = open(src_path).read()
+    src = open(src_path, encoding="utf-8").read()
     assert "ask_llm_with_history" in src, (
         "bot_remote_kb.py must import and call ask_llm_with_history in _do_search. "
         "Regression: _do_search was displaying raw KB chunks instead of LLM answers."
@@ -1091,7 +1091,7 @@ def test_ingest_calls_fix_doc_meta():
     """
     import os
     src_path = os.path.join(os.path.dirname(__file__), "..", "core", "bot_mcp_client.py")
-    src = open(src_path).read()
+    src = open(src_path, encoding="utf-8").read()
 
     assert "_fix_doc_meta" in src, (
         "bot_mcp_client.py must define _fix_doc_meta() to restore original title "

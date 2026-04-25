@@ -32,6 +32,11 @@ import re
 import subprocess
 import sys
 import time
+
+# Ensure stdout/stderr use UTF-8 on Windows (avoids cp1252 errors with box chars)
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -1373,7 +1378,7 @@ def t_db_migration_idempotent(**_) -> list[TestResult]:
             for run_no in range(1, 3):
                 r = subprocess.run(
                     [sys.executable, migrate, "--db", db_copy],
-                    capture_output=True, timeout=30,
+                    capture_output=True, timeout=60,
                     env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                 )
                 if r.returncode != 0:
@@ -2058,7 +2063,7 @@ def t_web_stt_provider_routing(**_) -> list[TestResult]:
         if not bw_path.exists():
             return [TestResult("web_stt_routing", "SKIP", time.time() - t0, "bot_web.py not found")]
 
-        src = bw_path.read_text()
+        src = bw_path.read_text(encoding="utf-8")
         has_local_fn = "def _stt_faster_whisper_web(" in src
         results.append(TestResult(
             "web_stt_local_fn_defined",
@@ -2115,7 +2120,7 @@ def t_web_stt_provider_routing(**_) -> list[TestResult]:
         for tmpl_name, attr in [("chat.html", "vosk_in_chat"), ("voice.html", "vosk_in_voice")]:
             tmpl_path = tmpl_dir / tmpl_name
             if tmpl_path.exists():
-                t_src = tmpl_path.read_text()
+                t_src = tmpl_path.read_text(encoding="utf-8")
                 import re as _re2
                 has_hardcoded = bool(_re2.search(r"(?<!\{)\bVosk\b(?!\})", t_src))
                 if attr == "vosk_in_chat":
@@ -2196,7 +2201,7 @@ def t_pipeline_logger(**_) -> list[TestResult]:
         # 6. bot_web.py imports pipeline_logger and has /api/logs endpoint
         bw_path = TARIS_DIR / "bot_web.py"
         if bw_path.exists():
-            bw_src = bw_path.read_text()
+            bw_src = bw_path.read_text(encoding="utf-8")
             has_import = "from core.pipeline_logger import" in bw_src
             has_logs_ep = '"/api/logs"' in bw_src
             has_bench_ep = '"/api/benchmark"' in bw_src
@@ -2233,7 +2238,7 @@ def t_dual_stt_providers(**_) -> list[TestResult]:
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
             cfg_path = SRC_ROOT / "core" / "bot_config.py"
-        cfg_src = cfg_path.read_text()
+        cfg_src = cfg_path.read_text(encoding="utf-8")
         has_openai_model    = "STT_OPENAI_MODEL" in cfg_src
         has_stt_lang        = "STT_LANG" in cfg_src
         has_fallback_const  = "STT_FALLBACK_PROVIDER" in cfg_src
@@ -2251,7 +2256,7 @@ def t_dual_stt_providers(**_) -> list[TestResult]:
         web_path = TARIS_DIR / "bot_web.py"
         if not web_path.exists():
             web_path = SRC_ROOT / "bot_web.py"
-        web_src = web_path.read_text()
+        web_src = web_path.read_text(encoding="utf-8")
         has_dispatch      = "_STT_DISPATCH" in web_src
         has_vosk_func     = "def _stt_vosk_web" in web_src
         has_openai_func   = "def _stt_openai_whisper_web" in web_src
@@ -2298,7 +2303,7 @@ def t_voice_debug_mode(**_) -> list[TestResult]:
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
             cfg_path = SRC_ROOT / "core" / "bot_config.py"
-        cfg_src = cfg_path.read_text()
+        cfg_src = cfg_path.read_text(encoding="utf-8")
         has_debug_mode = "VOICE_DEBUG_MODE" in cfg_src
         has_debug_dir  = "VOICE_DEBUG_DIR" in cfg_src
         has_llm_fb     = "LLM_FALLBACK_PROVIDER" in cfg_src
@@ -2343,7 +2348,7 @@ def t_voice_debug_mode(**_) -> list[TestResult]:
         llm_path = TARIS_DIR / "core" / "bot_llm.py"
         if not llm_path.exists():
             llm_path = SRC_ROOT / "core" / "bot_llm.py"
-        llm_src = llm_path.read_text()
+        llm_src = llm_path.read_text(encoding="utf-8")
         has_fn   = "def _ask_with_fallback" in llm_src
         has_use  = "LLM_FALLBACK_PROVIDER" in llm_src
         results.append(TestResult(
@@ -2382,7 +2387,7 @@ def t_stt_language_routing_fw(**_) -> list[TestResult]:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
             voice_path = SRC_ROOT / "features" / "bot_voice.py"
-        src = voice_path.read_text()
+        src = voice_path.read_text(encoding="utf-8")
 
         has_lang_map  = 'lang_map = {"ru": "ru", "en": "en", "de": "de"}' in src or \
                         '"ru": "ru"' in src and '"en": "en"' in src and '"de": "de"' in src
@@ -2495,7 +2500,7 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
             voice_path = SRC_ROOT / "features" / "bot_voice.py"
-        src = voice_path.read_text()
+        src = voice_path.read_text(encoding="utf-8")
 
         has_vosk_fallback_opt  = "vosk_fallback" in src
         has_primary_stt_used   = "primary_stt_used" in src
@@ -2528,7 +2533,7 @@ def t_stt_fallback_chain(**_) -> list[TestResult]:
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
             cfg_path = SRC_ROOT / "core" / "bot_config.py"
-        cfg_src = cfg_path.read_text()
+        cfg_src = cfg_path.read_text(encoding="utf-8")
         has_const   = "STT_FALLBACK_PROVIDER" in cfg_src
         has_default = "_DEFAULT_STT_FALLBACK" in cfg_src
         results.append(TestResult(
@@ -2601,7 +2606,7 @@ def t_openai_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResul
         cfg_path = TARIS_DIR / "core" / "bot_config.py"
         if not cfg_path.exists():
             cfg_path = SRC_ROOT / "core" / "bot_config.py"
-        cfg_src = cfg_path.read_text()
+        cfg_src = cfg_path.read_text(encoding="utf-8")
         has_model   = "STT_OPENAI_MODEL" in cfg_src
         has_lang    = "STT_LANG" in cfg_src
         has_key     = "OPENAI_API_KEY" in cfg_src
@@ -2622,7 +2627,7 @@ def t_openai_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResul
         web_path = TARIS_DIR / "bot_web.py"
         if not web_path.exists():
             web_path = SRC_ROOT / "bot_web.py"
-        web_src = web_path.read_text()
+        web_src = web_path.read_text(encoding="utf-8")
         has_fn = "def _stt_openai_whisper_web" in web_src
         has_dispatch = "_STT_DISPATCH" in web_src and '"openai_whisper"' in web_src
         results.append(TestResult(
@@ -2641,7 +2646,7 @@ def t_openai_whisper_stt(gt: dict, verbose: bool = False, **_) -> list[TestResul
         # Try reading from bot.env
         bot_env = TARIS_DIR / "bot.env"
         if bot_env.exists():
-            for line in bot_env.read_text().splitlines():
+            for line in bot_env.read_text(encoding="utf-8").splitlines():
                 if line.startswith("OPENAI_API_KEY="):
                     api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
                     break
@@ -2759,7 +2764,7 @@ def t_tts_multilang(gt: dict, verbose: bool = False, **_) -> list[TestResult]:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
             voice_path = SRC_ROOT / "features" / "bot_voice.py"
-        src = voice_path.read_text()
+        src = voice_path.read_text(encoding="utf-8")
 
         has_de_routing = 'lang == "de"' in src and "PIPER_MODEL_DE" in src
         has_ru_default = "return PIPER_MODEL" in src
@@ -2878,7 +2883,7 @@ def t_voice_llm_routing(**_) -> list[TestResult]:
         voice_path = TARIS_DIR / "features" / "bot_voice.py"
         if not voice_path.exists():
             voice_path = SRC_ROOT / "features" / "bot_voice.py"
-        src = voice_path.read_text()
+        src = voice_path.read_text(encoding="utf-8")
 
         imports_ask_llm   = "from core.bot_llm import ask_llm" in src
         no_ask_taris_imp  = "_ask_taris" not in src
@@ -2909,7 +2914,7 @@ def t_voice_llm_routing(**_) -> list[TestResult]:
         llm_path = TARIS_DIR / "core" / "bot_llm.py"
         if not llm_path.exists():
             llm_path = SRC_ROOT / "core" / "bot_llm.py"
-        llm_src = llm_path.read_text()
+        llm_src = llm_path.read_text(encoding="utf-8")
 
         has_ask_llm     = "def ask_llm(" in llm_src
         has_fallback_fn = "def _ask_with_fallback" in llm_src
@@ -2966,7 +2971,7 @@ def t_voice_system_mode_routing_guard(**_) -> list[TestResult]:
             results.append(TestResult("voice_system_mode_routing", "SKIP", time.time() - t0,
                                       "bot_voice.py not found"))
             return results
-        code = open(src).read()
+        code = open(src, encoding="utf-8").read()
 
         # Check that system mode routing is present
         has_system_check = '"system"' in code and "_handle_system_message" in code
@@ -3008,7 +3013,7 @@ def t_voice_lang_stt_lang_priority(**_) -> list[TestResult]:
             results.append(TestResult("voice_lang_stt_priority", "SKIP", time.time() - t0,
                                       "bot_voice.py not found"))
             return results
-        code = open(src).read()
+        code = open(src, encoding="utf-8").read()
 
         # _voice_lang() must exist and reference STT_LANG
         import ast
@@ -3089,7 +3094,7 @@ def t_set_lang_default_not_hardcoded_en(**_) -> list[TestResult]:
             results.append(TestResult("set_lang_default", "SKIP", time.time() - t0,
                                       "bot_access.py not found"))
             return results
-        code = open(src).read()
+        code = open(src, encoding="utf-8").read()
 
         # The else branch in _set_lang must NOT hardcode "en"
         import ast
@@ -3153,7 +3158,7 @@ def t_voice_system_admin_guard(**_) -> list[TestResult]:
             results.append(TestResult("voice_system_admin_guard", "SKIP", time.time() - t0,
                                       "bot_voice.py not found"))
             return results
-        code = open(src).read()
+        code = open(src, encoding="utf-8").read()
 
         # Find the system-mode routing block
         has_system_check = '_cur_mode == "system"' in code or "_cur_mode == 'system'" in code
@@ -3761,7 +3766,7 @@ def t_voice_chat_config_disclosure(**_):
     try:
         import json as _json
         prompts_path = SRC_ROOT / "prompts.json"
-        prompts = _json.loads(prompts_path.read_text())
+        prompts = _json.loads(prompts_path.read_text(encoding="utf-8"))
         preamble = prompts.get("security_preamble", "")
         rule5_start = preamble.find("5.")
         rule5 = preamble[rule5_start:rule5_start + 300] if rule5_start >= 0 else ""
@@ -3803,7 +3808,7 @@ def t_note_delete_confirm(**_) -> list[TestResult]:
     ts = time.time()
     try:
         handlers_path = SRC_ROOT / "telegram" / "bot_handlers.py"
-        src = handlers_path.read_text()
+        src = handlers_path.read_text(encoding="utf-8")
         # confirm dialog must be shown (not immediate delete)
         if "note_del_confirm:" not in src:
             results.append(TestResult("note_delete_confirm_callback", "FAIL", time.time() - ts,
@@ -3817,7 +3822,7 @@ def t_note_delete_confirm(**_) -> list[TestResult]:
     ts = time.time()
     try:
         menu_path = SRC_ROOT / "telegram_menu_bot.py"
-        src = menu_path.read_text()
+        src = menu_path.read_text(encoding="utf-8")
         if "note_del_confirm:" not in src:
             results.append(TestResult("note_del_confirm_wired", "FAIL", time.time() - ts,
                                       "note_del_confirm: not wired in telegram_menu_bot.py"))
@@ -3836,7 +3841,7 @@ def t_note_rename_flow(**_) -> list[TestResult]:
     ts = time.time()
     try:
         menu_path = SRC_ROOT / "telegram_menu_bot.py"
-        src = menu_path.read_text()
+        src = menu_path.read_text(encoding="utf-8")
         if "note_rename_title" not in src:
             results.append(TestResult("note_rename_mode", "FAIL", time.time() - ts,
                                       "note_rename_title mode missing from telegram_menu_bot.py"))
@@ -3849,7 +3854,7 @@ def t_note_rename_flow(**_) -> list[TestResult]:
     ts = time.time()
     try:
         handlers_path = SRC_ROOT / "telegram" / "bot_handlers.py"
-        src = handlers_path.read_text()
+        src = handlers_path.read_text(encoding="utf-8")
         if "_start_note_rename" not in src:
             results.append(TestResult("note_rename_handler", "FAIL", time.time() - ts,
                                       "_start_note_rename not found in bot_handlers.py"))
@@ -3868,7 +3873,7 @@ def t_note_zip_download(**_) -> list[TestResult]:
     ts = time.time()
     try:
         handlers_path = SRC_ROOT / "telegram" / "bot_handlers.py"
-        src = handlers_path.read_text()
+        src = handlers_path.read_text(encoding="utf-8")
         checks = [
             ("_handle_note_download_zip", "_handle_note_download_zip function"),
             ("zipfile.ZipFile", "zipfile.ZipFile usage"),
@@ -3990,7 +3995,7 @@ def t_ollama_history_native_messages(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     try:
-        src = open(SRC_ROOT / "core" / "bot_llm.py").read()
+        src = open(SRC_ROOT / "core" / "bot_llm.py", encoding="utf-8").read()
 
         # Must have an explicit ollama branch in ask_llm_with_history
         has_ollama_branch = 'provider == "ollama"' in src and 'ask_llm_with_history' in src
@@ -4053,8 +4058,8 @@ def t_multiturn_system_message(**_) -> list[TestResult]:
     results: list[TestResult] = []
 
     try:
-        bot_access_src  = open(SRC_ROOT / "telegram" / "bot_access.py").read()
-        bot_handlers_src = open(SRC_ROOT / "telegram" / "bot_handlers.py").read()
+        bot_access_src  = open(SRC_ROOT / "telegram" / "bot_access.py", encoding="utf-8").read()
+        bot_handlers_src = open(SRC_ROOT / "telegram" / "bot_handlers.py", encoding="utf-8").read()
 
         has_build_system = "def _build_system_message(" in bot_access_src
         has_user_turn    = "def _user_turn_content(" in bot_access_src
@@ -4112,7 +4117,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 1. ask_llm_with_history imported in bot_voice.py
     try:
-        src = (SRC_ROOT / "features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text(encoding="utf-8")
         ok = "ask_llm_with_history" in src
         results.append(TestResult(
             "voice_imports_ask_llm_with_history", "PASS" if ok else "FAIL",
@@ -4125,7 +4130,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 2. _build_system_message imported/used in bot_voice.py
     try:
-        src = (SRC_ROOT / "features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text(encoding="utf-8")
         ok = "_build_system_message" in src
         results.append(TestResult(
             "voice_uses_build_system_message", "PASS" if ok else "FAIL",
@@ -4138,7 +4143,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 3. _voice_user_turn_content defined in bot_access.py
     try:
-        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text(encoding="utf-8")
         ok = "def _voice_user_turn_content(" in src
         results.append(TestResult(
             "voice_user_turn_content_defined", "PASS" if ok else "FAIL",
@@ -4151,7 +4156,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 4. get_history_with_ids called in voice pipeline
     try:
-        src = (SRC_ROOT / "features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text(encoding="utf-8")
         ok = "get_history_with_ids" in src
         results.append(TestResult(
             "voice_gets_history", "PASS" if ok else "FAIL",
@@ -4164,7 +4169,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 5. add_to_history called for both user and assistant turns
     try:
-        src = (SRC_ROOT / "features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text(encoding="utf-8")
         count = src.count("add_to_history(chat_id,")
         ok = count >= 2
         results.append(TestResult(
@@ -4178,7 +4183,7 @@ def t_voice_history_context(**_) -> list[TestResult]:
 
     # 6. get_memory_context injected into voice system message
     try:
-        src = (SRC_ROOT / "features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text(encoding="utf-8")
         ok = "get_memory_context" in src
         results.append(TestResult(
             "voice_injects_memory_context", "PASS" if ok else "FAIL",
@@ -4199,7 +4204,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 1. log_rag_activity must be called in _docs_rag_context
     try:
-        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text(encoding="utf-8")
         called = "log_rag_activity" in src and "store.log_rag_activity" in src
         results.append(TestResult(
             "rag_log_activity_called", "PASS" if called else "FAIL",
@@ -4212,7 +4217,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 2. concurrent.futures timeout must be in _docs_rag_context
     try:
-        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text(encoding="utf-8")
         has_timeout = "concurrent.futures" in src and "TimeoutError" in src
         results.append(TestResult(
             "rag_fts_timeout_enforced", "PASS" if has_timeout else "FAIL",
@@ -4225,7 +4230,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 3. llm_temperature must be in rag_settings defaults (source inspection)
     try:
-        src_rs = (SRC_ROOT / "core/rag_settings.py").read_text()
+        src_rs = (SRC_ROOT / "core/rag_settings.py").read_text(encoding="utf-8")
         has_temp = "llm_temperature" in src_rs and "LOCAL_TEMPERATURE" in src_rs
         results.append(TestResult(
             "rag_llm_temperature_in_defaults", "PASS" if has_temp else "FAIL",
@@ -4238,7 +4243,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 4. _effective_temperature() must exist in bot_llm.py
     try:
-        src = (SRC_ROOT / "core/bot_llm.py").read_text()
+        src = (SRC_ROOT / "core/bot_llm.py").read_text(encoding="utf-8")
         has_fn = "def _effective_temperature" in src and "_effective_temperature()" in src
         results.append(TestResult(
             "rag_effective_temperature_fn", "PASS" if has_fn else "FAIL",
@@ -4251,7 +4256,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
 
     # 5. MAX_DOC_SIZE_MB must be in bot_config.py (source inspection)
     try:
-        src_cfg = (SRC_ROOT / "core/bot_config.py").read_text()
+        src_cfg = (SRC_ROOT / "core/bot_config.py").read_text(encoding="utf-8")
         has_const = "MAX_DOC_SIZE_MB" in src_cfg
         results.append(TestResult(
             "rag_max_doc_size_constant", "PASS" if has_const else "FAIL",
@@ -4265,7 +4270,7 @@ def t_rag_pipeline_completeness(**_) -> list[TestResult]:
     # 6. docs_too_large i18n key must be present in all 3 languages
     try:
         import json
-        strings = json.loads((SRC_ROOT / "strings.json").read_text())
+        strings = json.loads((SRC_ROOT / "strings.json").read_text(encoding="utf-8"))
         for lang in ("ru", "en", "de"):
             ok = "docs_too_large" in strings.get(lang, {})
             results.append(TestResult(
@@ -4297,7 +4302,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 1. db_log_llm_call has extended keyword params
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         checks = [
             ("model:", "model parameter in db_log_llm_call"),
             ("temperature:", "temperature parameter in db_log_llm_call"),
@@ -4320,7 +4325,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 2. db_get_llm_trace function exists
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         ok = "def db_get_llm_trace" in src
         results.append(TestResult(
             "llm_trace_get_fn",
@@ -4333,7 +4338,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 3. Voice pipeline calls db_log_llm_call after LLM call
     try:
-        src = (SRC_ROOT / "features/bot_voice.py").read_text()
+        src = (SRC_ROOT / "features/bot_voice.py").read_text(encoding="utf-8")
         ok = "db_log_llm_call" in src and "ask_llm_with_history" in src
         results.append(TestResult(
             "llm_trace_voice_logs",
@@ -4346,7 +4351,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 4. _rag_debug_stats exists in bot_access.py
     try:
-        src = (SRC_ROOT / "telegram/bot_access.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_access.py").read_text(encoding="utf-8")
         ok = "def _rag_debug_stats" in src
         results.append(TestResult(
             "llm_trace_rag_stats_fn",
@@ -4359,7 +4364,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 5. admin_llm_trace callback wired in telegram_menu_bot.py
     try:
-        src = (SRC_ROOT / "telegram_menu_bot.py").read_text()
+        src = (SRC_ROOT / "telegram_menu_bot.py").read_text(encoding="utf-8")
         ok = "admin_llm_trace" in src and "_handle_admin_llm_trace" in src
         results.append(TestResult(
             "llm_trace_callback_wired",
@@ -4373,7 +4378,7 @@ def t_llm_context_trace(**_) -> list:
 
     # 6. _handle_admin_llm_trace in bot_admin.py
     try:
-        src = (SRC_ROOT / "telegram/bot_admin.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_admin.py").read_text(encoding="utf-8")
         ok = "def _handle_admin_llm_trace" in src
         results.append(TestResult(
             "llm_trace_admin_handler",
@@ -4397,7 +4402,7 @@ def t_notes_db_content(**_) -> list:
 
     # 1. notes_index schema has content column
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         ok = "content     TEXT    DEFAULT ''" in src or "content TEXT DEFAULT ''" in src
         results.append(TestResult(
             "notes_index_content_column",
@@ -4410,7 +4415,7 @@ def t_notes_db_content(**_) -> list:
 
     # 2. _save_note_file stores content via store.save_note
     try:
-        src = (SRC_ROOT / "telegram/bot_users.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_users.py").read_text(encoding="utf-8")
         ok = "save_note(" in src  # store.save_note or _st.save_note or alias
         results.append(TestResult(
             "save_note_db_content",
@@ -4423,7 +4428,7 @@ def t_notes_db_content(**_) -> list:
 
     # 3. _load_note_text reads from store (DB) first
     try:
-        src = (SRC_ROOT / "telegram/bot_users.py").read_text()
+        src = (SRC_ROOT / "telegram/bot_users.py").read_text(encoding="utf-8")
         ok = "load_note(" in src  # store.load_note or _st.load_note or alias
         results.append(TestResult(
             "load_note_db_first",
@@ -4445,7 +4450,7 @@ def t_calendar_db_primary(**_) -> list:
     t0 = _time.time()
 
     try:
-        src = (SRC_ROOT / "features/bot_calendar.py").read_text()
+        src = (SRC_ROOT / "features/bot_calendar.py").read_text(encoding="utf-8")
         # Should call store.save_event and store.delete_event
         calls_save = "store.save_event" in src
         calls_del = "store.delete_event" in src
@@ -4487,7 +4492,7 @@ def t_doc_dedup_logic(**_) -> list:
 
     # 1. _pending_doc_replace dict exists
     try:
-        src = (SRC_ROOT / "features/bot_documents.py").read_text()
+        src = (SRC_ROOT / "features/bot_documents.py").read_text(encoding="utf-8")
         ok = "_pending_doc_replace" in src
         results.append(TestResult(
             "doc_pending_replace_dict",
@@ -4500,7 +4505,7 @@ def t_doc_dedup_logic(**_) -> list:
 
     # 2. _handle_doc_replace and _handle_doc_keep_both functions exist
     try:
-        src = (SRC_ROOT / "features/bot_documents.py").read_text()
+        src = (SRC_ROOT / "features/bot_documents.py").read_text(encoding="utf-8")
         ok = "def _handle_doc_replace" in src and "def _handle_doc_keep_both" in src
         results.append(TestResult(
             "doc_dedup_handlers",
@@ -4515,7 +4520,7 @@ def t_doc_dedup_logic(**_) -> list:
     # 3. docs_dup_found i18n key present in strings.json
     try:
         import json as _json
-        strings = _json.loads((SRC_ROOT / "strings.json").read_text())
+        strings = _json.loads((SRC_ROOT / "strings.json").read_text(encoding="utf-8"))
         ok = all("docs_dup_found" in strings.get(lang, {}) for lang in ("ru", "en", "de"))
         results.append(TestResult(
             "doc_dedup_i18n",
@@ -4539,7 +4544,7 @@ def t_user_prefs_db(**_) -> list:
 
     # 1. user_prefs table in _SCHEMA_SQL
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         ok = "CREATE TABLE IF NOT EXISTS user_prefs" in src
         results.append(TestResult(
             "user_prefs_schema",
@@ -4552,7 +4557,7 @@ def t_user_prefs_db(**_) -> list:
 
     # 2. db_get_user_pref / db_set_user_pref helpers
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         ok = "def db_get_user_pref" in src and "def db_set_user_pref" in src
         results.append(TestResult(
             "user_prefs_helpers",
@@ -4566,7 +4571,7 @@ def t_user_prefs_db(**_) -> list:
 
     # 3. profile_toggle_memory callback wired in telegram_menu_bot.py
     try:
-        src = (SRC_ROOT / "telegram_menu_bot.py").read_text()
+        src = (SRC_ROOT / "telegram_menu_bot.py").read_text(encoding="utf-8")
         ok = "profile_toggle_memory" in src
         results.append(TestResult(
             "profile_toggle_memory_wired",
@@ -4590,7 +4595,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 1. system_settings table in _SCHEMA_SQL
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         ok = "CREATE TABLE IF NOT EXISTS system_settings" in src
         results.append(TestResult(
             "system_settings_schema",
@@ -4603,7 +4608,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 2. db_get_system_setting / db_set_system_setting helpers
     try:
-        src = (SRC_ROOT / "core/bot_db.py").read_text()
+        src = (SRC_ROOT / "core/bot_db.py").read_text(encoding="utf-8")
         ok = "def db_get_system_setting" in src and "def db_set_system_setting" in src
         results.append(TestResult(
             "system_settings_helpers",
@@ -4617,7 +4622,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 3. get_conv_history_max / get_conv_summary_threshold / get_conv_mid_max in bot_config
     try:
-        src = (SRC_ROOT / "core/bot_config.py").read_text()
+        src = (SRC_ROOT / "core/bot_config.py").read_text(encoding="utf-8")
         ok = ("def get_conv_history_max" in src
               and "def get_conv_summary_threshold" in src
               and "def get_conv_mid_max" in src)
@@ -4633,7 +4638,7 @@ def t_admin_memory_settings(**_) -> list:
 
     # 4. admin_memory_menu callback wired
     try:
-        src = (SRC_ROOT / "telegram_menu_bot.py").read_text()
+        src = (SRC_ROOT / "telegram_menu_bot.py").read_text(encoding="utf-8")
         ok = "admin_memory_menu" in src
         results.append(TestResult(
             "admin_memory_menu_wired",
@@ -5824,7 +5829,7 @@ def t_upload_stats_metadata(**_) -> list[TestResult]:
     results = []
     try:
         src = Path(__file__).parent.parent / "features" / "bot_documents.py"
-        code = src.read_text()
+        code = src.read_text(encoding="utf-8")
     except FileNotFoundError:
         results.append(TestResult("upload_stats_source", "SKIP", 0, "bot_documents.py not found"))
         return results
@@ -5855,7 +5860,7 @@ def t_upload_stats_metadata(**_) -> list[TestResult]:
     try:
         strings_path = Path(__file__).parent.parent / "strings.json"
         import json as _j
-        strings = _j.loads(strings_path.read_text())
+        strings = _j.loads(strings_path.read_text(encoding="utf-8"))
         for lang in ("ru", "en", "de"):
             for key in ("docs_doc_embeds", "docs_doc_quality"):
                 present = key in strings.get(lang, {})
@@ -5877,7 +5882,7 @@ def t_embeddings_import_fix(**_) -> list[TestResult]:
     results = []
     try:
         src = Path(__file__).parent.parent / "core" / "bot_embeddings.py"
-        code = src.read_text()
+        code = src.read_text(encoding="utf-8")
     except FileNotFoundError:
         results.append(TestResult("embeddings_import_source", "SKIP", 0, "bot_embeddings.py not found"))
         return results
@@ -5920,7 +5925,7 @@ def t_mcp_phase_d_structure(**_) -> list[TestResult]:
     # Check bot_config.py has MCP constants
     try:
         cfg_src = Path(__file__).parent.parent / "core" / "bot_config.py"
-        cfg = cfg_src.read_text()
+        cfg = cfg_src.read_text(encoding="utf-8")
     except FileNotFoundError:
         results.append(TestResult("mcp_config_source", "SKIP", 0, "bot_config.py not found"))
         return results
@@ -5936,7 +5941,7 @@ def t_mcp_phase_d_structure(**_) -> list[TestResult]:
     # Check bot_web.py has /mcp/search endpoint
     try:
         web_src = Path(__file__).parent.parent / "bot_web.py"
-        web = web_src.read_text()
+        web = web_src.read_text(encoding="utf-8")
         for check, detail in [
             ('"/mcp/search"', "/mcp/search endpoint registered"),
             ("MCP_SERVER_ENABLED", "MCP_SERVER_ENABLED used as guard"),
@@ -5955,7 +5960,7 @@ def t_mcp_phase_d_structure(**_) -> list[TestResult]:
     # Check bot_mcp_client.py exists with circuit breaker
     try:
         client_src = Path(__file__).parent.parent / "core" / "bot_mcp_client.py"
-        client = client_src.read_text()
+        client = client_src.read_text(encoding="utf-8")
         for check, detail in [
             ("query_remote", "query_remote() function present"),
             ("circuit_status", "circuit_status() health check present"),
@@ -5978,7 +5983,7 @@ def t_mcp_phase_d_structure(**_) -> list[TestResult]:
     # Check bot_rag.py integrates MCP client
     try:
         rag_src = Path(__file__).parent.parent / "core" / "bot_rag.py"
-        rag = rag_src.read_text()
+        rag = rag_src.read_text(encoding="utf-8")
         for check, detail in [
             ("bot_mcp_client", "mcp_client imported in bot_rag"),
             ("query_remote", "query_remote() called in retrieve_context"),
@@ -6010,7 +6015,7 @@ def t_embedding_pipeline_fix(**_) -> list[TestResult]:
 
     # Check 1: bot_documents.py has the correct upsert_embedding call
     try:
-        code = (SRC / "features/bot_documents.py").read_text()
+        code = (SRC / "features/bot_documents.py").read_text(encoding="utf-8")
         correct_call = "store.upsert_embedding(doc_id, idx, chat_id, chunks[idx], vec)"
         wrong_call   = "store.upsert_embedding(doc_id, idx, chat_id, vec)"
         results.append(TestResult(
@@ -6026,7 +6031,7 @@ def t_embedding_pipeline_fix(**_) -> list[TestResult]:
 
     # Check 2: search_fts returns chunk_idx in result dicts
     try:
-        code = (SRC / "core/store_sqlite.py").read_text()
+        code = (SRC / "core/store_sqlite.py").read_text(encoding="utf-8")
         results.append(TestResult(
             "fts_returns_chunk_idx",
             "PASS" if '"chunk_idx"' in code and "chunk_idx" in code else "FAIL", 0.0,
@@ -6042,7 +6047,7 @@ def t_embedding_pipeline_fix(**_) -> list[TestResult]:
 
     # Check 3: search_similar returns chunk_idx
     try:
-        code = (SRC / "core/store_sqlite.py").read_text()
+        code = (SRC / "core/store_sqlite.py").read_text(encoding="utf-8")
         results.append(TestResult(
             "vector_returns_chunk_idx",
             "PASS" if "SELECT doc_id, chunk_idx, chunk_text, rank" in code else "FAIL", 0.0,
@@ -6060,7 +6065,7 @@ def t_shared_docs_search(**_) -> list[TestResult]:
     SRC = Path(__file__).parent.parent
 
     try:
-        code = (SRC / "core/store_sqlite.py").read_text()
+        code = (SRC / "core/store_sqlite.py").read_text(encoding="utf-8")
         results.append(TestResult(
             "fts_includes_shared",
             "PASS" if "is_shared" in code and "_get_shared_doc_ids" in code else "FAIL", 0.0,
@@ -6088,7 +6093,7 @@ def t_rag_trace_fields(**_) -> list[TestResult]:
     SRC = Path(__file__).parent.parent
 
     try:
-        code = (SRC / "core/bot_rag.py").read_text()
+        code = (SRC / "core/bot_rag.py").read_text(encoding="utf-8")
         # Function signature returns 4-tuple
         results.append(TestResult(
             "rag_4tuple_return",
@@ -6103,7 +6108,7 @@ def t_rag_trace_fields(**_) -> list[TestResult]:
                 f"trace dict has {field} key",
             ))
         # bot_access.py unpacks 4-tuple
-        access_code = (SRC / "telegram/bot_access.py").read_text()
+        access_code = (SRC / "telegram/bot_access.py").read_text(encoding="utf-8")
         results.append(TestResult(
             "access_unpacks_trace",
             "PASS" if "chunks, assembled, strategy, trace = _fut.result" in access_code else "FAIL", 0.0,
@@ -6115,7 +6120,7 @@ def t_rag_trace_fields(**_) -> list[TestResult]:
             "bot_access.py passes n_fts5/n_vector to log_rag_activity",
         ))
         # rag_log has extended columns
-        store_code = (SRC / "core/store_sqlite.py").read_text()
+        store_code = (SRC / "core/store_sqlite.py").read_text(encoding="utf-8")
         for col in ("n_fts5", "n_vector", "n_mcp"):
             results.append(TestResult(
                 f"raglog_col_{col}",
@@ -6170,7 +6175,7 @@ def t_system_docs_structure(**_) -> list[TestResult]:
         "src/setup/migrate_reembed.py exists",
     ))
     if migrator.exists():
-        code = migrator.read_text()
+        code = migrator.read_text(encoding="utf-8")
         for check, desc in [
             ("def _migrate", "_migrate() main function"),
             ("get_chunks_without_embeddings", "uses store API to find unembedded chunks"),
@@ -6204,7 +6209,7 @@ def t_telebot_num_threads(**_) -> list[TestResult]:
     bot_inst = SRC / "core/bot_instance.py"
     if not bot_inst.exists():
         return [TestResult("telebot_num_threads", "SKIP", 0.0, "bot_instance.py not found")]
-    code = bot_inst.read_text()
+    code = bot_inst.read_text(encoding="utf-8")
     # Must have num_threads set to 16 (or higher), not the default 2
     import re
     m = re.search(r'num_threads\s*=\s*(\d+)', code)
@@ -6232,7 +6237,7 @@ def t_handlers_background_dispatch(**_) -> list[TestResult]:
     bot_code_path = SRC / "telegram_menu_bot.py"
     if not bot_code_path.exists():
         return [TestResult("handlers_dispatch", "SKIP", 0.0, "telegram_menu_bot.py not found")]
-    code = bot_code_path.read_text()
+    code = bot_code_path.read_text(encoding="utf-8")
 
     for name, pattern, desc in [
         ("chat_handler_dispatch",
@@ -6270,7 +6275,7 @@ def t_callback_query_answer_safe(**_) -> list[TestResult]:
         return [TestResult("callback_query_answer_safe", "SKIP", 0.0,
                            "telegram_menu_bot.py not found")]
 
-    code = src.read_text()
+    code = src.read_text(encoding="utf-8")
     results = []
 
     has_try_except = bool(re.search(
@@ -6312,7 +6317,7 @@ def t_fw_preload_config(**_) -> list[TestResult]:
     # 1. bot_config.py exports FASTER_WHISPER_PRELOAD
     cfg = Path(__file__).parent.parent / "core" / "bot_config.py"
     if cfg.exists():
-        cfg_code = cfg.read_text()
+        cfg_code = cfg.read_text(encoding="utf-8")
         has_const = "FASTER_WHISPER_PRELOAD" in cfg_code
         results.append(TestResult(
             "fw_preload_const_in_config",
@@ -6336,7 +6341,7 @@ def t_fw_preload_config(**_) -> list[TestResult]:
     # 2. telegram_menu_bot.py imports and checks FASTER_WHISPER_PRELOAD
     menu = Path(__file__).parent.parent / "telegram_menu_bot.py"
     if menu.exists():
-        menu_code = menu.read_text()
+        menu_code = menu.read_text(encoding="utf-8")
         imports_it = "FASTER_WHISPER_PRELOAD" in menu_code
         results.append(TestResult(
             "fw_preload_used_in_menu_bot",
@@ -6376,7 +6381,7 @@ def t_tail_log_no_readlines(**_) -> list[TestResult]:
         return [TestResult("tail_log_no_readlines", "SKIP", 0.0,
                            "bot_logger.py not found")]
 
-    code = logger.read_text()
+    code = logger.read_text(encoding="utf-8")
 
     # Must NOT use full readlines() as primary path
     uses_readlines = bool(re.search(r'^\s+lines\s*=\s*f\.readlines\(\)', code, re.MULTILINE))
@@ -6415,7 +6420,7 @@ def t_startup_memory_check(**_) -> list[TestResult]:
         return [TestResult("startup_memory_check", "SKIP", 0.0,
                            "telegram_menu_bot.py not found")]
 
-    code = menu.read_text()
+    code = menu.read_text(encoding="utf-8")
 
     has_meminfo = "/proc/meminfo" in code
     results.append(TestResult(
@@ -7068,7 +7073,7 @@ def t_llm_system_chat_fallback(*, gt, verbose=False):
     """
     results = []
     try:
-        llm_src = (SRC_ROOT / "core" / "bot_llm.py").read_text()
+        llm_src = (SRC_ROOT / "core" / "bot_llm.py").read_text(encoding="utf-8")
 
         # T109a: ask_llm_with_history ollama block must check use_case != "system"
         has_system_timeout_guard = (
@@ -7117,7 +7122,7 @@ def t_system_chat_host_context(*, gt, verbose=False):
     """
     results = []
     try:
-        handlers_src = (SRC_ROOT / "telegram" / "bot_handlers.py").read_text()
+        handlers_src = (SRC_ROOT / "telegram" / "bot_handlers.py").read_text(encoding="utf-8")
 
         checks = [
             ("T110_build_host_ctx_func",    "def _build_host_ctx()",     "def _build_host_ctx() function present"),

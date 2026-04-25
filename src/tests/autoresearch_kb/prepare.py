@@ -89,7 +89,7 @@ def main() -> None:
         print(f"❌ QA file not found: {qa_path}")
         sys.exit(2)
 
-    qa_pairs = json.loads(qa_path.read_text())
+    qa_pairs = json.loads(qa_path.read_text(encoding="utf-8"))
     _stats(qa_pairs)
 
     if args.ingest:

@@ -44,7 +44,7 @@ def rag_score(recall: float, mrr: float, lat_p95_ms: float) -> float:
 
 def _run_bench(strategy: str, top_k: int) -> list[dict]:
     from bench_remote_kb import _run_remote, _run_local
-    qa_pairs = json.loads(QA_FILE.read_text())
+    qa_pairs = json.loads(QA_FILE.read_text(encoding="utf-8"))
     results = []
     if strategy in ("remote", "all"):
         results.append(_run_remote(qa_pairs, top_k))
