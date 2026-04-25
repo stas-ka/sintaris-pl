@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.76",
+    "date": "2026-04-25",
+    "title": "Error Observer Agent — live log monitoring, git error reports, Copilot triage skill",
+    "notes": "bot_error_observer.py: ErrorCaptureHandler captures ERROR-level log records to ring buffer; start_observer/stop_observer attach to taris logger; write_error_to_git_dir() saves structured Markdown report to errors/; make_description_md() formats incident with title/status/severity/log/resolution checklist; update_errors_index() rebuilds errors/README.md table. bot_error_protocol.py: git sync on error send (_errp_sync_to_git). bot_config.py: GIT_ERRORS_DIR, ERROR_GIT_AUTO_PUSH, LOG_FILE constants. strings.json: errp_git_pushed, errp_git_push_fail (ru/en/de). telegram_menu_bot.py: start_observer() at startup. errors/README.md initial index. .github/skills/taris-error-review/SKILL.md: Copilot error triage skill. Tests T242-T245 (20/20 PASS). doc/test-strategy.md: full 12-layer test strategy with RAGAS/MT-Bench/HELM/OWASP research basis. doc/kb-quality-comparison.md: Worksafety KB comparison T233-T241."
+  },
+  {
     "version": "2026.4.75",
     "date": "2026-04-23",
     "title": "§4.3 Remote KB MCP: Phase 3–6 — Telegram agent, Google N8N workflow, benchmark harness, AutoResearch eval",
