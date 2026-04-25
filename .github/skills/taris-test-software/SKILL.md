@@ -21,20 +21,33 @@ git status --short
 
 | Changed file(s) | Tests to run |
 |---|---|
-| `src/features/bot_voice.py`, `src/core/bot_config.py` | Voice regression T01–T41 |
+| `src/features/bot_voice.py`, `src/core/bot_config.py` | Voice regression T07–T41, cat F |
 | `src/telegram/bot_access.py` (`_escape_tts`) | T07, T08 |
-| `src/setup/setup_voice.sh` | T01–T09 (after reinstall) |
-| `src/strings.json` | T13 `i18n_string_coverage` + T17 `bot_name_injection` |
-| `src/telegram_menu_bot.py` (calendar section) | T20, T21 |
-| `src/telegram_menu_bot.py` (notes section) | T19 |
-| `src/telegram_menu_bot.py` (profile section) | T18 |
-| `src/telegram_menu_bot.py` (any callback) | Category F (telegram offline) |
-| `src/core/bot_llm.py` | Category H (LLM tests) |
-| `src/ui/*.py`, `src/screens/*.yaml` | Category G (screen loader) |
-| `src/bot_web.py`, `src/web/` | Category B (Web UI Playwright) |
+| `src/setup/setup_voice.sh` | T01–T09 (after reinstall on Pi) |
+| `src/strings.json` | T13 `i18n_string_coverage` — **always** |
+| `src/prompts.json` | T115 `bot_capabilities_tag_fix` |
+| `src/telegram_menu_bot.py` (calendar) | T20, T21, T158–T161, cat F |
+| `src/telegram_menu_bot.py` (notes) | T19, T51–T53, cat F |
+| `src/telegram_menu_bot.py` (profile) | T18, cat F |
+| `src/telegram_menu_bot.py` (RBAC/security) | T70, T71, T116, cat F |
+| `src/telegram_menu_bot.py` (guest/roles) | T140–T157, cat F |
+| `src/telegram_menu_bot.py` (any callback) | cat F (all telegram offline tests) |
+| `src/core/bot_llm.py` | cat H + T56–T57 + T81–T83 |
+| `src/ui/*.py`, `src/screens/*.yaml` | cat G (screen DSL loader) |
+| `src/bot_web.py`, `src/web/` | cat B (Web UI Playwright) |
 | `src/core/bot_state.py` | T25 `web_link_code` |
-| `src/core/store_sqlite.py`, `src/core/bot_db.py` | T22, T23 |
-| Any Python file | Full voice regression + Categories F, G, H as safety net |
+| `src/core/bot_db.py`, `src/core/store_sqlite.py` | T22, T23 |
+| `src/core/store_postgres.py` | T112–T113 |
+| `src/core/bot_rag.py`, `src/core/bot_embeddings.py` | T76–T80, T200–T205 |
+| `src/core/bot_security.py` | T70–T71, T116, cat F |
+| `src/core/bot_mcp_client.py` | T200–T232 (KB tests) |
+| `src/features/bot_campaign.py` | T130–T137, T_CS_01–T_CS_20 |
+| `src/features/bot_crm.py`, `src/core/store_crm.py` | T40–T49, T130–T137 |
+| `src/features/bot_remote_kb.py` | T200–T232 (`test_remote_kb.py`) |
+| `src/features/bot_content.py` | T_CS_01–T_CS_20 |
+| `src/features/bot_n8n.py` | T40–T43, T_CN_01–T_CN_12 |
+| `src/setup/migrate_*.py` | T111, T113, T23 (migration tests) |
+| Any Python file | Quick local run (cat F + G + H + source inspection) always |
 
 ---
 
@@ -60,7 +73,25 @@ DEVICE_VARIANT=openclaw PYTHONPATH=src \
   t_db_voice_opts_roundtrip t_db_migration_idempotent \
   t_web_link_code_roundtrip t_system_chat_clean_output \
   t_openclaw_stt_routing t_openclaw_ollama_provider \
-  t_voice_system_mode_routing_guard t_voice_lang_stt_lang_priority
+  t_voice_system_mode_routing_guard t_voice_lang_stt_lang_priority \
+  t_set_lang_default_not_hardcoded_en t_voice_system_admin_guard \
+  t_rbac_allowlist_enforcement t_dev_menu_rbac t_security_events_logging \
+  t_admin_only_rag_access t_migrate_postgres_structure t_contacts_store_parity \
+  t_guest_user_feature t_prompt_templates t_variant_config
+```
+
+### Campaign / CRM / Content tests (source inspection)
+
+```bash
+PYTHONPATH=src python3 -m pytest \
+  src/tests/test_campaign.py src/tests/test_content_strategy.py \
+  -q --tb=short -m "not live"
+```
+
+### Remote KB tests (source inspection / offline)
+
+```bash
+PYTHONPATH=src python3 src/tests/test_remote_kb.py --offline
 ```
 
 ### Full voice regression (requires Pi)
@@ -156,4 +187,12 @@ If all pass → ask: **"Tests passed ✅. Ready to deploy?"**
 
 ## Continuous Test Improvement
 
-Every bug fix **must** add a regression test. Every new feature **must** add tests covering the happy path and main failure modes. See `doc/test-suite.md` for test ID conventions and category table.
+Every bug fix **must** add a regression test. Every new feature **must** add tests covering the happy path and main failure modes.
+
+See [`doc/test-strategy.md`](../../../doc/test-strategy.md) for:
+- Full test layer strategy and decision matrix
+- T-number allocation registry
+- Coverage gaps and roadmap
+- Lessons-learned protocol for extending tests
+
+See [`doc/test-suite.md`](../../../doc/test-suite.md) for the complete T-number registry with run commands.

@@ -152,6 +152,14 @@ Full doc update: use `/taris-update-doc` skill.
 | LLM provider, `bot_llm.py` | `src/tests/llm/` — add pytest function |
 | Web UI route or endpoint | `src/tests/ui/` — Playwright test |
 | OpenClaw-specific (STT routing, Ollama, API) | `src/tests/test_voice_regression.py` T27+ range |
+| Campaign, CRM, content strategy | `src/tests/test_campaign.py`, `src/tests/test_content_strategy.py` |
+| Remote KB, MCP client | `src/tests/test_remote_kb.py` (T200–T232) |
+| N8N, content live integration | `src/tests/test_n8n_crm.py`, `src/tests/test_content_n8n.py` |
+| Security, RBAC, access control | T70–T71, T116, T140–T157 in `test_voice_regression.py` |
+| Performance-sensitive paths | `src/tests/benchmark_stt.py`, `src/tests/bench_remote_kb.py` |
+| Data consistency (multi-domain) | `src/tests/test_data_consistency.py` |
+
+> **Decision guide:** See [`doc/test-strategy.md §6`](../../../doc/test-strategy.md) for the full decision matrix. See [`doc/test-suite.md`](../../../doc/test-suite.md) for the complete T-number registry.
 
 ### Test ID convention (`test_voice_regression.py`)
 

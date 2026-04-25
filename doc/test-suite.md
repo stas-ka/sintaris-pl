@@ -3,6 +3,8 @@
 **Purpose:** This document is the single reference for Copilot (and human developers) on *which tests exist*, *where they live*, *what triggers them*, and *how to run them*.  
 Use it any time a user says "test the software", "run tests", or asks whether something is covered.
 
+> **See also:** [`doc/test-strategy.md`](test-strategy.md) for the full test layer strategy, decision matrix, T-number allocation, research basis, and coverage gap analysis.
+
 ---
 
 ## Quick-Reference: "I changed X — what do I run?"
@@ -31,6 +33,14 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | `src/strings.json` remote_kb_* keys | Remote KB agent T203, T209, T216 | Local machine |
 | `src/bot_web.py` `/api/remote-kb/` routes | Remote KB agent T214 | Local machine |
 | `src/core/bot_mcp_client.py` KB direct DB functions | Integration T220–T224 | VPS-Supertaris with `KB_PG_DSN` set |
+| `src/features/bot_campaign.py` | Campaign tests T130–T137 + content T_CS_01–T_CS_20 | Local machine |
+| `src/features/bot_crm.py`, `src/core/store_crm.py` | CRM/N8N tests T40–T49, T130–T137 | Local machine |
+| `src/features/bot_content.py` | Content strategy T_CS_01–T_CS_20 | Local machine |
+| `src/features/bot_n8n.py` | N8N tests T40–T43, T_CN_01–T_CN_12 | Local machine |
+| `src/core/bot_security.py`, RBAC logic | Security T70–T71, T116, T140–T157 | Local machine |
+| `src/core/bot_embeddings.py`, `src/core/bot_rag.py` | Embeddings/RAG T76–T80, T200–T205 | Local machine |
+| `src/setup/migrate_*.py` | Migration T111, T113, T23 | Local machine |
+| Performance-sensitive paths (STT, KB, LLM) | Benchmarks (Category K) | Local or target |
 
 ---
 
@@ -48,6 +58,12 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | **H — LLM provider tests** | pytest (`src/tests/llm/`) | Local machine | Yes |
 | **I — External internet UI tests** | Playwright (`test_external_ui.py`) | Any machine → internet | Yes |
 | **J — Data consistency check** | Python (`test_data_consistency.py`) | Any target (local or remote) | Yes — run before backup / after migration |
+| **CAMP — Campaign / CRM** | pytest (`test_campaign.py`, `test_n8n_crm.py`) | Local machine | Yes |
+| **CS — Content strategy** | pytest (`test_content_strategy.py`) | Local machine | Yes |
+| **CN — Content + N8N live** | pytest (`test_content_n8n.py`) | Local (requires live N8N) | Conditional |
+| **KB — Remote KB / MCP** | Python (`test_remote_kb.py`) T200–T232 | Local (T200–T219); VPS (T220–T232) | Yes |
+| **K — Performance benchmarks** | Python (`benchmark_stt.py`, `bench_remote_kb.py`, `benchmark_ollama_models.py`) | Target machine | Manual / periodic |
+| **L — Security / RBAC** | T70–T71, T116, T140–T157 in `test_voice_regression.py` | Local (source inspection) | Yes |
 
 ---
 
@@ -1014,6 +1030,14 @@ Copilot should:
 
 **Default when nothing specific changed:** run Category E smoke tests on Pi1 + Category A voice regression suite.
 
+**Extended categories** — run when the relevant module changed (see quick-reference table §1):
+- **Campaign / CRM changes** → Category CAMP: `pytest src/tests/test_campaign.py src/tests/test_n8n_crm.py`
+- **Content strategy changes** → Category CS: `pytest src/tests/test_content_strategy.py`
+- **N8N live integration** → Category CN: `pytest src/tests/test_content_n8n.py -m live` (requires N8N)
+- **Remote KB / MCP changes** → Category KB: `python3 src/tests/test_remote_kb.py` (T200–T219 offline; T220–T232 live VPS)
+- **Security / RBAC changes** → Category L: `python3 src/tests/test_voice_regression.py --test t_rbac t_security t_dev_menu`
+- **Performance regression** → Category K: `python3 src/tests/benchmark_stt.py`
+
 **Example session flow:**
 ```
 User: "test software"
@@ -1021,6 +1045,72 @@ Copilot:
   1. Check what files changed since last deploy
   2. If voice-related → deploy + run test_voice_regression.py on Pi1
   3. If UI-related → run pytest src/tests/ui/ --base-url https://openclawpi2:8080
-  4. Always finish with smoke check: journalctl -u taris-telegram -n 20
-  5. Report: "All 21 voice tests PASS, smoke OK ✅" or list failures
+  4. If campaign/CRM/KB → run Category CAMP/CS/KB as above
+  5. Always finish with smoke check: journalctl -u taris-telegram -n 20
+  6. Report: "All 21 voice tests PASS, smoke OK ✅" or list failures
 ```
+
+---
+
+## 11. Performance Benchmarks (Category K)
+
+**Files:**
+- `src/tests/benchmark_stt.py` — WER / RTF per STT model (Vosk, faster-whisper variants)
+- `src/tests/bench_remote_kb.py` — Recall@5, MRR@10 for Remote KB vector search
+- `src/tests/llm/benchmark_ollama_models.py` — Ollama model latency / quality benchmark
+
+**When to run:** After changing STT pipeline, embedding model, RAG retrieval, or Ollama model config. Not required on every commit — run periodically or when a performance regression is suspected.
+
+```bash
+# STT benchmark
+PYTHONPATH=src python3 src/tests/benchmark_stt.py
+
+# KB recall benchmark (requires KB_PG_DSN)
+KB_PG_DSN=postgresql://taris:...@localhost:5432/taris_kb \
+  PYTHONPATH=src python3 src/tests/bench_remote_kb.py
+
+# Ollama model benchmark (requires Ollama running)
+PYTHONPATH=src python3 src/tests/llm/benchmark_ollama_models.py
+```
+
+---
+
+## 12. Content Strategy Tests (Category CS / CN)
+
+**Files:**
+- `src/tests/test_content_strategy.py` — T_CS_01–T_CS_20 (offline, source inspection)
+- `src/tests/test_content_n8n.py` — T_CN_01–T_CN_12 (live N8N integration)
+
+**Run offline (no live services needed):**
+```bash
+PYTHONPATH=src python3 -m pytest src/tests/test_content_strategy.py -q --tb=short -m "not live"
+```
+
+**Run live N8N integration tests:**
+```bash
+PYTHONPATH=src python3 -m pytest src/tests/test_content_n8n.py -q --tb=short
+```
+
+**When to run:** Any change to `src/features/bot_content.py`, `src/features/bot_campaign.py`, or N8N workflow config.
+
+---
+
+## 13. Security / RBAC Tests (Category L)
+
+Source-inspection tests embedded in `test_voice_regression.py`:
+
+| T# | Function | What it checks |
+|---|---|---|
+| T70 | `t_rbac_allowlist_enforcement` | Allowlist blocks non-ALLOWED_USERS |
+| T71 | `t_dev_menu_rbac` | Dev menu hidden from non-admin |
+| T116 | `t_security_events_logging` | Security events written to security log |
+| T140 | `t_guest_user_rbac_flow` | Guest users see only guest features |
+| T141–T157 | `t_guest_*` | Full guest role lifecycle |
+
+**Run:**
+```bash
+PYTHONPATH=src python3 src/tests/test_voice_regression.py \
+  --test t_rbac_allowlist_enforcement t_dev_menu_rbac t_security_events_logging \
+  t_guest_user_rbac_flow t_admin_only_rag_access
+```
+

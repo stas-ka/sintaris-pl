@@ -1,10 +1,12 @@
 ---
 name: taris-voicetests
 description: >
-  Run the full voice regression test suite (T01–T41) on the Raspberry Pi
+  Run the full voice regression test suite (T01–T232+) on the Raspberry Pi
   or locally (source-inspection tests). Reports PASS/FAIL/WARN/SKIP per test.
+  Hardware voice tests: T01–T16 (Pi only). Source inspection: T17–T55+ (any machine).
+  OpenClaw STT/LLM tests: T27–T41. Full extended regression: T56–T232+.
 argument-hint: >
-  scope: all | source | pi1 | pi2 (default: source for local, pi2 for full)
+  scope: all | source | pi1 | pi2 | openclaw (default: source for local, pi2 for full)
   filter: test name fragment (optional, e.g. "tts" runs only TTS tests)
 ---
 
@@ -16,6 +18,17 @@ Run voice regression tests after any change to:
 - `src/telegram/bot_access.py` (`_escape_tts`)
 - `src/setup/setup_voice.sh`
 - Any bug fix in voice pipeline, TTS, STT, or language routing
+
+**Full test range is T01–T232+, organized by scope:**
+
+| Scope | T-range | Requires |
+|-------|---------|---------|
+| Hardware voice | T01–T16 | Pi (Vosk, Piper, ffmpeg, audio) |
+| Source inspection core | T17–T55 | Local only |
+| LLM/RAG/memory | T56–T116 | Local only |
+| Gemma4/Ollama picker | T117–T122 | Local only |
+| Guest/RBAC/CRM | T140–T172 | Local only |
+| Remote KB / MCP | T200–T232 | VPS Postgres (live) / local (source) |
 
 ---
 
@@ -105,7 +118,9 @@ After fixing a voice bug:
 
 ---
 
-## Test IDs — T01–T41
+## Test IDs — T01–T55+ (source-inspection range; hardware: T01–T16)
+
+> Full extended registry (T56–T232) is in [`doc/test-suite.md`](../../../doc/test-suite.md) §2–§3.
 
 | ID | Test | Pi? |
 |---|---|---|
@@ -150,6 +165,22 @@ After fixing a voice bug:
 | T39 | `voice_llm_routing` — ask_llm() used, not TARIS_BIN | Local |
 | T40 | `voice_system_mode_routing_guard` — system mode routing | Local |
 | T41 | `voice_lang_stt_lang_priority` — STT_LANG over UI lang | Local |
+| T42 | `set_lang_default_not_hardcoded_en` — no hardcoded EN default | Local |
+| T43 | `voice_system_admin_guard` — admin guard for system voice | Local |
+| T44 | `openclaw_gateway_telegram_disabled` — gateway not in Telegram | Local |
+| T45 | `taris_bin_configured` — picoclaw binary config | Local |
+| T46 | `vosk_fallback_openclaw_default` — vosk fallback off on OpenClaw | Local |
+| T47 | `faster_whisper_vad_retry` — VAD retry on empty result | Local |
+| T48 | `system_chat_admin_menu_only` — system chat behind admin menu | Local |
+| T49 | `stt_fast_speech_accuracy` — fast speech accuracy guard | Local |
+| T50 | `voice_chat_config_disclosure` — voice config not in chat | Local |
+| T51 | `note_delete_confirm` — note delete requires confirmation | Local |
+| T52 | `note_rename_flow` — rename callbacks present | Local |
+| T53 | `note_zip_download` — zip download flow | Local |
+| T54 | `rag_context_injection` — RAG context injected in prompt | Local |
+| T55 | `no_hardcoded_strings` — no hardcoded UI text | Local |
+
+> **T56–T232+** (LLM context, RAG, memory, Postgres, Gemma4, guest/RBAC, KB) — see [`doc/test-suite.md`](../../../doc/test-suite.md) for full registry.
 
 Baseline lives on Pi: `~/.taris/tests/voice/results/baseline.json`  
 Re-establish after re-image: `python3 test_voice_regression.py --set-baseline`

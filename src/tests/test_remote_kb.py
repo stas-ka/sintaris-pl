@@ -6,22 +6,31 @@ Tests cover the complete user-facing flows from button press through MCP call
 and bot reply, using mock objects so they run fully offline (no bot.env needed).
 Source-inspection tests also verify module structure and i18n completeness.
 
-T50  config constants present in bot_config.py (source)
-T51  bot_remote_kb.py public API complete (source)
-T52  bot_mcp_client.py public API complete (source)
-T53  i18n keys for remote_kb present in all 3 languages
-T54  callback routing in telegram_menu_bot.py (source)
-T55  is_configured() returns False when env vars are empty
-T56  show_menu() sends message with 5 inline buttons
-T57  search flow: start → handle_message → MCP called → result sent
-T58  search flow: start → no results → "nothing found" message
-T59  upload flow: start → handle_document → MCP ingest → success reply
-T60  list_docs flow: MCP returns docs → formatted list sent
-T61  clear_memory flow: MCP called → confirmation sent
-T62  circuit-breaker skips MCP calls when open; clears on success
-T63  session cancel: is_active() clears after cancel()
-T64  Web UI route /api/kb present in bot_web.py (source)
-T65  handle_message returns False when no active session (no state pollution)
+T200 config constants present in bot_config.py (source)
+T201 bot_remote_kb.py public API complete (source)
+T202 bot_mcp_client.py public API complete (source)
+T203 i18n keys for remote_kb present in all 3 languages
+T204 callback routing in telegram_menu_bot.py (source)
+T205 is_configured() returns False when env vars are empty
+T206 show_menu() sends message with 5 inline buttons
+T207 search flow: start → handle_message → MCP called → result sent
+T208 search flow: start → no results → "nothing found" message
+T209 upload flow: start → handle_document → MCP ingest → success reply
+T210 list_docs flow: MCP returns docs → formatted list sent
+T211 clear_memory flow: MCP called → confirmation sent
+T212 circuit-breaker skips MCP calls when open; clears on success
+T213 session cancel: is_active() clears after cancel()
+T214 Web UI route /api/remote-kb/search present in bot_web.py (source)
+T215 handle_message returns False when no active session (no state pollution)
+T216 _do_ingest shows error message when ingest_file returns {}
+T217 search failure uses remote_kb_op_fail (not remote_kb_upload_fail)
+T218 list_docs failure uses remote_kb_op_fail
+T219 clear_memory failure uses remote_kb_op_fail
+T220 list_docs() returns real document title from deployed KB (live, requires KB_PG_DSN)
+T221 list_docs() sends 'empty' key when no documents exist for this chat (live)
+T222 call_tool(kb_delete_document) removes doc (live)
+T223 query_remote() finds test chunk via real pgvector cosine search (live)
+T224 Full UI cycle: insert → list → search → delete → empty (live)
 T225 _extract_to_text converts RTF bytes → text/plain (requires striprtf)
 T226 _extract_to_text converts PDF bytes → text/plain (requires pdfminer.six)
 T227 ingest_file returns {"error": msg} when extraction raises ValueError
