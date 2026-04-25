@@ -1,5 +1,11 @@
 [
   {
+    "version": "2026.4.77",
+    "date": "2026-04-26",
+    "title": "§23.4 KB AutoResearch: Hybrid FTS+RRF retrieval, CRAG web fallback, 5-class query classifier",
+    "notes": "bot_mcp_client.py: _kb_search_direct() upgraded to hybrid pgvector+FTS+RRF fusion (ts_rank_cd, plainto_tsquery russian), _extract_doc_num() for targeted regulatory doc filter, ORDER BY (-rrf_score, chunk_idx ASC) for document-order preservation. MCP_REMOTE_TOP_K default bumped 3→8 to match Worksafety retrieval depth. core/bot_web_search.py: new CRAG web fallback module (Google CSE, SearXNG, DuckDuckGo providers, stdlib only). features/bot_remote_kb.py: _classify_query_type() 5-class heuristic classifier (regulation|procedure|definition|example|general), _QUERY_TYPE_SYSTEM dict with type-aware prompts, _do_search() now: classify→retrieve 8 chunks→web fallback if max_score<threshold→[WEB N] labeled context. bot_config.py: KB_QUERY_CLASSIFY_ENABLED, KB_WEB_SEARCH_ENABLED, KB_WEB_SEARCH_THRESHOLD, GOOGLE_CSE_ID, GOOGLE_API_KEY, SEARXNG_URL constants. Tests T246-T254 added (9 new tests). Quality improvement: matches Worksafety N8N bot retrieval depth and adds CRAG augmentation for low-confidence answers."
+  },
+  {
     "version": "2026.4.76",
     "date": "2026-04-25",
     "title": "Error Observer Agent — live log monitoring, git error reports, Copilot triage skill",

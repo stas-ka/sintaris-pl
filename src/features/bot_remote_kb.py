@@ -1,8 +1,15 @@
 """
-bot_remote_kb.py — Remote Knowledge Base agent (Phase 3).
+bot_remote_kb.py — Remote Knowledge Base agent (Phase 3 + AutoResearch §23.4).
 
 Uses N8N MCP Server Trigger as the backend (SSE transport).
 Handles: search queries, file ingest, doc listing, memory clear.
+
+AutoResearch improvements (v2026.4.77):
+  - 5-class query type classifier: regulation/procedure/definition/example/general
+  - Type-aware system prompts for better LLM framing
+  - Confidence-based web search fallback (CRAG pattern):
+    if max KB score < KB_WEB_SEARCH_THRESHOLD and KB_WEB_SEARCH_ENABLED,
+    augments context with web results from bot_web_search.search_web()
 
 Public API (called from telegram_menu_bot.py):
     is_configured()          → bool
@@ -18,12 +25,16 @@ Public API (called from telegram_menu_bot.py):
 """
 
 import logging
+import re
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.bot_config import (
     REMOTE_KB_ENABLED,
     MCP_REMOTE_URL,
     N8N_KB_API_KEY,
+    KB_WEB_SEARCH_ENABLED,
+    KB_WEB_SEARCH_THRESHOLD,
+    KB_QUERY_CLASSIFY_ENABLED,
 )
 from core.bot_llm import ask_llm_with_history
 from telegram.bot_access import _lang
@@ -168,35 +179,145 @@ _LANG_PROMPT = {
     "en": "Answer in English.",
 }
 
+# 5-class query type → specialised system prompt fragment
+_QUERY_TYPE_SYSTEM: dict[str, str] = {
+    "regulation": (
+        "You are a regulatory compliance expert. When citing requirements, "
+        "include the exact section number, document number, and verbatim wording "
+        "if available. Distinguish mandatory ('shall') from recommended ('should') "
+        "requirements."
+    ),
+    "procedure": (
+        "You are a safety procedures expert. List procedural steps clearly and "
+        "in sequential order using the exact numbering found in the source. "
+        "Do not paraphrase safety-critical instructions."
+    ),
+    "definition": (
+        "Provide a precise definition as stated in the context. "
+        "Quote the definition verbatim if it appears in the source, "
+        "then briefly explain it."
+    ),
+    "example": (
+        "Present the example exactly as described in the source text. "
+        "Preserve original numbering and formatting."
+    ),
+    "general": (
+        "You are a helpful assistant. Answer the user's question using ONLY "
+        "the context excerpts below. If the answer is not in the context, "
+        "say so clearly."
+    ),
+}
+
+# Russian / German / English keyword patterns per query type
+_QT_PATTERNS: dict[str, list[str]] = {
+    "regulation": [
+        r"(?:ГОСТ|СНиП|СП\s*\d|ПБЭЭ|НПА|ПУЭ|ФЗ|закон|указ|постановление|приказ)",
+        r"(?:норм[аы]|правил[оа]|требовани[яе]|обязателен|обязательн|должен|Norm|Vorschrift|regulation|requirement)",
+    ],
+    "procedure": [
+        r"(?:порядок|последовательност|алгоритм|шаги|инструкци[яю]|как\s+(?:выполн|провест|делать))",
+        r"(?:process|procedure|steps|how\s+to|Ablauf|Verfahren)",
+    ],
+    "definition": [
+        r"(?:что\s+такое|что\s+значит|определение|понятие|термин|значение\s+слова)",
+        r"(?:define|definition|what\s+is\s+a?\s+|was\s+(?:ist|bedeutet))",
+    ],
+    "example": [
+        r"(?:пример|образец|образ[цч]|пример документа|какой пример|покажи пример)",
+        r"(?:example|sample|Beispiel)",
+    ],
+}
+
+
+def _classify_query_type(query: str) -> str:
+    """5-class heuristic query type classifier (no LLM call, < 1 ms).
+
+    Classes: regulation | procedure | definition | example | general
+    Used to select specialised system prompts and adjust retrieval strategy.
+    """
+    q = query.lower()
+    for qtype, patterns in _QT_PATTERNS.items():
+        for pat in patterns:
+            if re.search(pat, q, re.IGNORECASE):
+                return qtype
+    return "general"
+
 
 def _do_search(chat_id: int, query: str, bot, _t) -> None:
+    """KB search with query classification, web search fallback, and source attribution.
+
+    Pipeline:
+      1. Classify query type (5-class heuristic)
+      2. Retrieve from KB (hybrid vector + FTS, top_k=MCP_REMOTE_TOP_K)
+      3. If max score < KB_WEB_SEARCH_THRESHOLD and KB_WEB_SEARCH_ENABLED:
+           augment context with web search results (CRAG pattern)
+      4. LLM synthesis with type-aware system prompt
+      5. Deduplicated source attribution footer
+    """
     cancel(chat_id)
     status = bot.send_message(chat_id, _t(chat_id, "remote_kb_searching"), parse_mode="Markdown")
     try:
+        # 1. Query classification (only when enabled)
+        qtype = "general"
+        if KB_QUERY_CLASSIFY_ENABLED:
+            qtype = _classify_query_type(query)
+            log.debug("[remote_kb] query type: %s for %r", qtype, query[:40])
+
+        # 2. KB retrieval
         chunks = _mcp.query_remote(query, chat_id=chat_id)
-        if not chunks:
+
+        # 3. Web search fallback (CRAG) when KB confidence is low
+        web_results: list[dict] = []
+        if KB_WEB_SEARCH_ENABLED and chunks:
+            max_score = max((c.get("score", 0.0) for c in chunks), default=0.0)
+            if max_score < KB_WEB_SEARCH_THRESHOLD:
+                log.info("[remote_kb] low KB confidence (%.3f < %.3f) — augmenting with web search",
+                         max_score, KB_WEB_SEARCH_THRESHOLD)
+                try:
+                    from core.bot_web_search import search_web
+                    web_results = search_web(query, num_results=5)
+                except Exception as ws_exc:
+                    log.warning("[remote_kb] web search failed: %s", ws_exc)
+
+        if not chunks and not web_results:
             bot.edit_message_text(
                 _t(chat_id, "remote_kb_no_results"),
                 chat_id, status.message_id, parse_mode="Markdown",
             )
             return
 
-        # Build context string from retrieved chunks
-        context_parts = []
-        for i, chunk in enumerate(chunks[:5], 1):
+        # 4. Build context string from KB chunks
+        context_parts: list[str] = []
+        for i, chunk in enumerate(chunks[:8], 1):
             section = chunk.get("section") or ""
             text    = (chunk.get("text") or chunk.get("chunk_text") or "").strip()
             if text:
                 prefix = f"[{i}] {section}\n" if section else f"[{i}] "
                 context_parts.append(prefix + text)
+
+        # 4b. Append web results labeled distinctly from KB sources
+        web_idx_start = len(context_parts) + 1
+        for j, wr in enumerate(web_results[:5], web_idx_start):
+            title   = wr.get("title", "")
+            snippet = wr.get("snippet", "").strip()
+            if snippet:
+                label = f"[WEB {j}] {title}\n" if title else f"[WEB {j}] "
+                context_parts.append(label + snippet)
+
         context = "\n\n".join(context_parts)
 
-        lang = _lang(chat_id)
+        lang       = _lang(chat_id)
         lang_instr = _LANG_PROMPT.get(lang, _LANG_PROMPT["en"])
+        type_instr = _QUERY_TYPE_SYSTEM.get(qtype, _QUERY_TYPE_SYSTEM["general"])
+
+        web_note = (
+            "\n\nNote: some context excerpts are from web search (marked [WEB N]). "
+            "Prefer KB sources but use web excerpts when KB lacks the information."
+            if web_results else ""
+        )
         system_msg = (
-            "You are a helpful assistant. Answer the user's question using ONLY "
-            "the context excerpts below. If the answer is not in the context, "
-            f"say so clearly. {lang_instr}\n\nContext:\n{context}"
+            f"{type_instr} {lang_instr}"
+            f"{web_note}\n\nContext:\n{context}"
         )
         messages = [
             {"role": "system", "content": system_msg},
@@ -211,14 +332,19 @@ def _do_search(chat_id: int, query: str, bot, _t) -> None:
             )
             return
 
-        # Append deduplicated source references
+        # 5. Deduplicated source references footer
         seen: set[str] = set()
         sources: list[str] = []
-        for chunk in chunks[:5]:
+        for chunk in chunks[:8]:
             src = chunk.get("section") or chunk.get("doc_id") or ""
             if src and src not in seen:
                 seen.add(src)
                 sources.append(src)
+        for wr in web_results[:5]:
+            url = wr.get("url", "")
+            if url and url not in seen:
+                seen.add(url)
+                sources.append(url)
         if sources:
             answer += f"\n\n_{_t(chat_id, 'remote_kb_sources')}: {', '.join(sources)}_"
 

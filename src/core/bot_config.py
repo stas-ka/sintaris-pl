@@ -134,12 +134,27 @@ TARIS_API_TOKEN  = os.environ.get("TARIS_API_TOKEN", "")
 MCP_SERVER_ENABLED    = os.environ.get("MCP_SERVER_ENABLED", "1") == "1"
 MCP_REMOTE_URL        = os.environ.get("MCP_REMOTE_URL", "")
 MCP_TIMEOUT           = int(os.environ.get("MCP_TIMEOUT", "15"))
-MCP_REMOTE_TOP_K      = int(os.environ.get("MCP_REMOTE_TOP_K", "3"))
+MCP_REMOTE_TOP_K      = int(os.environ.get("MCP_REMOTE_TOP_K", "8"))
 N8N_KB_API_KEY        = os.environ.get("N8N_KB_API_KEY", "")
 N8N_KB_TOKEN          = os.environ.get("N8N_KB_TOKEN", "")
 N8N_KB_WEBHOOK_INGEST = os.environ.get("N8N_KB_WEBHOOK_INGEST", "")
 KB_PG_DSN             = os.environ.get("KB_PG_DSN", "")
 REMOTE_KB_ENABLED     = os.environ.get("REMOTE_KB_ENABLED", "0") == "1"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KB AutoResearch — query classification + web search fallback (§23.4)
+# KB_QUERY_CLASSIFY_ENABLED: 5-class query classifier for adaptive retrieval
+# KB_WEB_SEARCH_ENABLED:     augment low-confidence KB answers with web search
+# KB_WEB_SEARCH_THRESHOLD:   min max-chunk-score before web search is triggered
+# GOOGLE_CSE_ID / GOOGLE_API_KEY: Google Custom Search JSON API credentials
+# SEARXNG_URL:                SearXNG self-hosted search instance URL
+# ─────────────────────────────────────────────────────────────────────────────
+KB_QUERY_CLASSIFY_ENABLED = os.environ.get("KB_QUERY_CLASSIFY_ENABLED", "1") == "1"
+KB_WEB_SEARCH_ENABLED     = os.environ.get("KB_WEB_SEARCH_ENABLED", "0") == "1"
+KB_WEB_SEARCH_THRESHOLD   = float(os.environ.get("KB_WEB_SEARCH_THRESHOLD", "0.45"))
+GOOGLE_CSE_ID             = os.environ.get("GOOGLE_CSE_ID", "")
+GOOGLE_API_KEY            = os.environ.get("GOOGLE_API_KEY", "")
+SEARXNG_URL               = os.environ.get("SEARXNG_URL", "")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # N8N Workflow Automation
@@ -369,7 +384,7 @@ LLM_TIMEOUT    = int(os.environ.get("LLM_TIMEOUT",  "60"))
 RAG_TIMEOUT    = int(os.environ.get("RAG_TIMEOUT",  "30"))
 # ─────────────────────────────────────────────────────────────────────────────
 
-BOT_VERSION        = "2026.4.76"
+BOT_VERSION        = "2026.4.77"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Guest / auto-registration

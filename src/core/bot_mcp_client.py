@@ -265,20 +265,38 @@ def _kb_delete_document_direct(doc_id: str, chat_id: int) -> dict[str, Any]:
         return {}
 
 
+def _extract_doc_num(query: str) -> str | None:
+    """Extract a regulatory document number from the query for targeted SQL filtering.
+
+    Recognises patterns: 883Н, 883H, 12.0.001 (GOST numbering).
+    Returns the matched string or None.
+    """
+    import re
+    m = re.search(r'(\d{2,4}[НHнh]|\b\d+\.\d+\.\d+)', query)
+    return m.group(1) if m else None
+
+
 def _kb_search_direct(query: str, chat_id: int, top_k: int) -> list[dict]:
-    """Search KB via fastembed embedding + pgvector query (bypasses MCP SSE)."""
+    """Hybrid KB search: pgvector cosine + PostgreSQL FTS (RRF fusion).
+
+    Improvements over v1:
+    - Hybrid retrieval: vector search + tsvector BM25, fused with RRF
+    - Regulatory doc_num filter: if query contains e.g. "883Н", restricts
+      search to documents whose metadata.doc_num matches
+    - Document-order preservation: ties in score broken by chunk_idx ASC
+    """
     from core.bot_config import KB_PG_DSN
     if not KB_PG_DSN:
         return []
 
-    # 1. Embed the query using the same model as ingest (fastembed all-MiniLM-L6-v2, 384-dim)
+    # ── 1. Embed the query (fastembed all-MiniLM-L6-v2, 384-dim) ──────────────
     try:
         from core.bot_embeddings import EmbeddingService
         svc = EmbeddingService.get()
         if svc is None:
             log.warning("[MCP-client] kb_search_direct: EmbeddingService unavailable")
             return []
-        embedding = svc.embed(query)   # returns list[float] | None
+        embedding = svc.embed(query)
         if not embedding:
             log.warning("[MCP-client] kb_search_direct: empty embedding result")
             return []
@@ -286,31 +304,96 @@ def _kb_search_direct(query: str, chat_id: int, top_k: int) -> list[dict]:
         log.warning("[MCP-client] kb_search_direct: embedding failed (%s)", exc)
         return []
 
-    # 2. pgvector cosine similarity search
+    # ── 2. Hybrid pgvector + FTS search with RRF fusion ───────────────────────
     try:
         import psycopg
-        vec_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+        vec_str  = "[" + ",".join(str(x) for x in embedding) + "]"
+        doc_num  = _extract_doc_num(query)
+        fetch    = max(top_k * 3, 20)          # over-fetch for RRF re-ranking
+        doc_filter = "AND d.metadata->>'doc_num' = %(doc_num)s" if doc_num else ""
+
         with psycopg.connect(KB_PG_DSN) as conn:
             with conn.cursor() as cur:
+                # Vector search (cosine distance, lower = better)
                 cur.execute(
-                    """SELECT c.doc_id::text, c.section, c.text,
-                              1 - (c.embedding <=> %s::vector) AS score
-                         FROM kb_chunks c
-                         JOIN kb_documents d ON d.doc_id = c.doc_id
-                        WHERE d.owner_chat_id = %s
-                        ORDER BY c.embedding <=> %s::vector
-                        LIMIT %s""",
-                    (vec_str, chat_id, vec_str, top_k),
+                    f"""SELECT c.chunk_id, c.doc_id::text, c.chunk_idx, c.section, c.text,
+                               1 - (c.embedding <=> %(vec)s::vector) AS score
+                          FROM kb_chunks c
+                          JOIN kb_documents d ON d.doc_id = c.doc_id
+                         WHERE d.owner_chat_id = %(cid)s
+                         {doc_filter}
+                         ORDER BY c.embedding <=> %(vec)s::vector
+                         LIMIT %(fetch)s""",
+                    {"vec": vec_str, "cid": chat_id, "fetch": fetch, "doc_num": doc_num},
                 )
-                rows = cur.fetchall()
-        chunks = [
-            {"doc_id": r[0], "section": r[1], "text": r[2], "score": float(r[3]), "source_uri": ""}
-            for r in rows
-        ]
-        log.debug("[MCP-client] kb_search direct: %d chunks for %r", len(chunks), query[:40])
-        return chunks
+                vec_rows = cur.fetchall()
+
+                # FTS search (Russian tsvector BM25; silently skip if unsupported)
+                fts_rows: list = []
+                try:
+                    cur.execute(
+                        f"""SELECT c.chunk_id, c.doc_id::text, c.chunk_idx, c.section, c.text,
+                                   ts_rank_cd(c.fts,
+                                       plainto_tsquery('pg_catalog.russian', %(q)s)) AS fts_score
+                              FROM kb_chunks c
+                              JOIN kb_documents d ON d.doc_id = c.doc_id
+                             WHERE d.owner_chat_id = %(cid)s
+                               AND c.fts @@ plainto_tsquery('pg_catalog.russian', %(q)s)
+                             {doc_filter}
+                             ORDER BY fts_score DESC
+                             LIMIT %(fetch)s""",
+                        {"q": query, "cid": chat_id, "fetch": fetch, "doc_num": doc_num},
+                    )
+                    fts_rows = cur.fetchall()
+                except Exception as fts_exc:
+                    log.debug("[MCP-client] FTS search skipped: %s", fts_exc)
+
+        # ── 3. Reciprocal Rank Fusion ──────────────────────────────────────────
+        rrf_k   = 60
+        merged: dict[int, dict] = {}
+
+        for rank, row in enumerate(vec_rows, 1):
+            cid_ = row[0]
+            merged[cid_] = {
+                "chunk_id":  row[0],
+                "doc_id":    row[1],
+                "chunk_idx": row[2] or 0,
+                "section":   row[3] or "",
+                "text":      row[4] or "",
+                "score":     1.0 / (rrf_k + rank),
+                "vec_score": float(row[5]),
+            }
+
+        for rank, row in enumerate(fts_rows, 1):
+            cid_ = row[0]
+            if cid_ in merged:
+                merged[cid_]["score"] += 1.0 / (rrf_k + rank)
+            else:
+                merged[cid_] = {
+                    "chunk_id":  row[0],
+                    "doc_id":    row[1],
+                    "chunk_idx": row[2] or 0,
+                    "section":   row[3] or "",
+                    "text":      row[4] or "",
+                    "score":     1.0 / (rrf_k + rank),
+                    "vec_score": 0.0,
+                }
+
+        # Sort by RRF score; ties broken by document order (chunk_idx ASC)
+        sorted_chunks = sorted(
+            merged.values(),
+            key=lambda c: (-c["score"], c["chunk_idx"]),
+        )[:top_k]
+
+        log.debug("[MCP-client] kb_search hybrid: %d chunks "
+                  "(vec=%d fts=%d doc_num=%s) for %r",
+                  len(sorted_chunks), len(vec_rows), len(fts_rows),
+                  doc_num or "—", query[:40])
+        return sorted_chunks
+
     except Exception as exc:
-        log.warning("[MCP-client] kb_search_direct: pgvector query failed (%s)", exc)
+        log.warning("[MCP-client] kb_search_direct: query failed (%s)", exc)
         return []
 
 

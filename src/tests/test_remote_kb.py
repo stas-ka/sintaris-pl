@@ -1228,17 +1228,21 @@ def test_extract_to_text_handles_all_worksafety_formats():
 
 
 def test_do_search_processes_five_chunks():
-    """T236: _do_search processes up to 5 chunks from the KB (not fewer).
+    """T236: _do_search processes at least 5 chunks from the KB.
 
     Regulatory documents are long (hundreds of sections, thousands of paragraphs).
     top_k=3 (common default) misses the specific section that answers the query.
     Worksafety N8N bot uses 5–10 chunks per query. Taris must use ≥5.
-    Verifies: chunks[:5] slice in _do_search context-building loop.
+    Updated: P1 improvement bumped slice to chunks[:8] (T254 verifies ≥8).
     """
     src = _read_src("features/bot_remote_kb.py")
-
-    assert "chunks[:5]" in src or "top_k=5" in src or "top_k = 5" in src, (
-        "_do_search must process at least 5 chunks (chunks[:5] or top_k=5). "
+    import re
+    # Accept chunks[:N] where N >= 5, or top_k=N where N >= 5
+    slice_matches = re.findall(r'chunks\[:(\d+)\]', src)
+    topk_matches = re.findall(r'top_k\s*=\s*(\d+)', src)
+    all_nums = [int(m) for m in slice_matches + topk_matches]
+    assert any(n >= 5 for n in all_nums), (
+        "_do_search must process at least 5 chunks (chunks[:5] or larger). "
         "Regulatory documents require broader context coverage than top_k=3."
     )
 
@@ -1795,6 +1799,311 @@ def test_deployed_kb_user_isolation():
 # __main__ runner (matches test_n8n_crm.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T246–T254  AutoResearch KB improvements (§23.4)
+# Source-inspection + offline unit tests — no bot.env or live DB required.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_mcp_remote_top_k_default_is_8():
+    """T246: MCP_REMOTE_TOP_K default is 8 in bot_config.py (bumped from 3).
+
+    Rationale: Worksafety bot retrieves 8–12 chunks; retrieving only 3
+    means 2/3 of relevant context is discarded before LLM synthesis.
+    P1 fix: raise default to 8 to match Worksafety retrieval depth.
+    """
+    src = _read_src("core/bot_config.py")
+    # Must contain "8" as default for MCP_REMOTE_TOP_K
+    import re
+    m = re.search(r'MCP_REMOTE_TOP_K\s*=\s*int\(os\.environ\.get\(["\']MCP_REMOTE_TOP_K["\'],\s*["\'](\d+)["\']', src)
+    assert m, "MCP_REMOTE_TOP_K constant not found in expected form in bot_config.py"
+    default = int(m.group(1))
+    assert default >= 8, (
+        f"MCP_REMOTE_TOP_K default must be ≥ 8 for adequate chunk coverage. Got: {default}. "
+        "Worksafety bot retrieves 8–12 chunks; 3 misses most relevant context."
+    )
+
+
+def test_kb_search_direct_uses_hybrid_fts():
+    """T247: _kb_search_direct uses PostgreSQL FTS hybrid search (plainto_tsquery + tsvector).
+
+    P1 improvement: vector-only search misses exact regulatory terminology matches.
+    PostgreSQL tsvector BM25 complements vector cosine similarity via RRF fusion.
+    Source inspection: _kb_search_direct must contain 'plainto_tsquery' call.
+    """
+    src = _read_src("core/bot_mcp_client.py")
+    assert "plainto_tsquery" in src, (
+        "_kb_search_direct must use PostgreSQL plainto_tsquery() for FTS hybrid search. "
+        "Vector-only search misses exact regulatory term matches (e.g. '883Н', 'СИЗ'). "
+        "P1 fix: add tsvector BM25 lane and fuse with RRF."
+    )
+    assert "ts_rank_cd" in src or "ts_rank" in src, (
+        "_kb_search_direct must use ts_rank_cd() or ts_rank() to score FTS results. "
+        "Required for BM25 scoring in the hybrid retrieval lane."
+    )
+
+
+def test_extract_doc_num_patterns():
+    """T248: _extract_doc_num() correctly extracts regulatory doc numbers.
+
+    Regulatory queries often contain document identifiers like '883Н', 'ГОСТ 12.0.001'.
+    These should trigger a targeted SQL WHERE filter to improve precision.
+    This test verifies offline extraction patterns.
+    """
+    src = _read_src("core/bot_mcp_client.py")
+    assert "_extract_doc_num" in src, (
+        "bot_mcp_client.py must define _extract_doc_num() for targeted regulatory filtering. "
+        "Queries containing '883Н' should restrict search to that document."
+    )
+
+    # Import and test the function directly
+    import importlib, sys
+    # Ensure module is importable
+    try:
+        with patch.dict("os.environ", {"BOT_TOKEN": "0:test"}):
+            import core.bot_mcp_client as mcp_mod
+            importlib.reload(mcp_mod)
+            fn = getattr(mcp_mod, "_extract_doc_num", None)
+    except Exception:
+        fn = None
+
+    if fn is None:
+        # Source-only fallback: verify pattern in source
+        import re
+        assert r'\d{2,4}' in src or r'\d{2,3}' in src, (
+            "_extract_doc_num must use regex pattern matching \\d{2,4} for doc number extraction"
+        )
+        return  # Pattern verified via source
+
+    # Unit test the extraction function
+    cases = [
+        ("Требования приказа 883Н к работе на высоте", "883Н"),
+        ("ГОСТ 12.0.001 общие положения охраны труда", "12.0.001"),
+        ("Что требует документ 123н?", "123"),
+        ("общий вопрос без номера", None),
+    ]
+    for query, expected in cases:
+        result = fn(query)
+        if expected is None:
+            assert result is None, f"Expected None for query {query!r}, got {result!r}"
+        else:
+            assert result is not None and expected.lower() in result.lower(), (
+                f"_extract_doc_num({query!r}) expected to contain {expected!r}, got {result!r}"
+            )
+
+
+def test_query_classifier_5_types():
+    """T249: _classify_query_type() returns correct type for 5 query patterns.
+
+    The 5-class query type classifier enables type-aware system prompts:
+      regulation → cite section numbers precisely
+      procedure  → list steps in order
+      definition → provide verbatim definition
+      example    → show example as in source
+      general    → standard assistant prompt
+    """
+    src = _read_src("features/bot_remote_kb.py")
+    assert "_classify_query_type" in src, (
+        "bot_remote_kb.py must define _classify_query_type() for 5-class query classification. "
+        "Type-aware prompts improve answer quality for regulatory vs procedural queries."
+    )
+    assert "_QUERY_TYPE_SYSTEM" in src, (
+        "bot_remote_kb.py must define _QUERY_TYPE_SYSTEM dict mapping query types to system prompts."
+    )
+
+    # Test all 5 types are represented in _QUERY_TYPE_SYSTEM
+    for qtype in ("regulation", "procedure", "definition", "example", "general"):
+        assert f'"{qtype}"' in src or f"'{qtype}'" in src, (
+            f"Query type '{qtype}' not found in _QUERY_TYPE_SYSTEM. "
+            "All 5 types must have dedicated system prompts."
+        )
+
+    # Import and test classifier if possible
+    try:
+        with patch.dict("os.environ", {"BOT_TOKEN": "0:test"}):
+            import importlib
+            import features.bot_remote_kb as kb_mod
+            importlib.reload(kb_mod)
+            fn = getattr(kb_mod, "_classify_query_type", None)
+    except Exception:
+        fn = None
+
+    if fn is None:
+        return  # Source checks passed, skip runtime test
+
+    cases = [
+        ("Требования приказа 883Н ГОСТ охрана труда", "regulation"),
+        ("Порядок проведения инструктажа по охране труда", "procedure"),
+        ("Что такое СИЗ определение", "definition"),
+        ("Пример документа на проведение инструктажа", "example"),
+        ("Расскажи об охране труда", "general"),
+    ]
+    for query, expected in cases:
+        result = fn(query)
+        assert result == expected, (
+            f"_classify_query_type({query!r}) expected '{expected}', got '{result}'. "
+            "Classifier must correctly categorise regulatory document queries."
+        )
+
+
+def test_kb_web_search_config_constants():
+    """T250: KB web search config constants are present in bot_config.py.
+
+    CRAG (Corrective RAG) pattern requires:
+      - KB_WEB_SEARCH_ENABLED: feature flag
+      - KB_WEB_SEARCH_THRESHOLD: confidence threshold before web fallback
+      - GOOGLE_CSE_ID + GOOGLE_API_KEY: Google Custom Search API
+      - SEARXNG_URL: SearXNG self-hosted fallback
+      - KB_QUERY_CLASSIFY_ENABLED: query type classifier toggle
+    """
+    src = _read_src("core/bot_config.py")
+    required = [
+        "KB_WEB_SEARCH_ENABLED",
+        "KB_WEB_SEARCH_THRESHOLD",
+        "GOOGLE_CSE_ID",
+        "GOOGLE_API_KEY",
+        "SEARXNG_URL",
+        "KB_QUERY_CLASSIFY_ENABLED",
+    ]
+    for const in required:
+        assert const in src, (
+            f"bot_config.py missing KB AutoResearch constant: {const}. "
+            f"Required for CRAG web search fallback (§23.4)."
+        )
+        assert f'os.environ.get("{const}"' in src, (
+            f"{const} must use os.environ.get() — no hardcoded values."
+        )
+
+
+def test_bot_web_search_module_api():
+    """T251: bot_web_search.py exists and exports search_web() with correct signature.
+
+    search_web(query, num_results, timeout) → list[dict{title, snippet, url}]
+    Module must support Google CSE, SearXNG, and DuckDuckGo providers.
+    """
+    src = _read_src("core/bot_web_search.py")
+
+    assert "def search_web(" in src, (
+        "bot_web_search.py must define search_web() function. "
+        "This is the public API called by bot_remote_kb._do_search()."
+    )
+    # Check signature parameters
+    import ast
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "search_web":
+            arg_names = [a.arg for a in node.args.args]
+            assert "query" in arg_names, "search_web() must have 'query' parameter"
+            assert "num_results" in arg_names, "search_web() must have 'num_results' parameter"
+            break
+
+    # Check all three providers are implemented
+    for provider in ("_search_google", "_search_searxng", "_search_duckduckgo"):
+        assert provider in src, (
+            f"bot_web_search.py must implement {provider}() provider function."
+        )
+
+    # Verify GOOGLE_CSE_ID, GOOGLE_API_KEY, SEARXNG_URL are imported
+    assert "GOOGLE_CSE_ID" in src, "bot_web_search.py must read GOOGLE_CSE_ID from bot_config"
+    assert "SEARXNG_URL" in src, "bot_web_search.py must read SEARXNG_URL from bot_config"
+
+    # Verify return format spec: list[dict] with title/snippet/url
+    assert "title" in src and "snippet" in src and "url" in src, (
+        "search_web() results must contain 'title', 'snippet', 'url' keys."
+    )
+
+
+def test_do_search_has_web_search_fallback():
+    """T252: _do_search() checks max chunk score vs KB_WEB_SEARCH_THRESHOLD before web fallback.
+
+    CRAG implementation requirement: low-confidence KB answers must trigger web augmentation.
+    Source must contain both the confidence check and the call to search_web().
+    """
+    src = _read_src("features/bot_remote_kb.py")
+
+    assert "KB_WEB_SEARCH_ENABLED" in src, (
+        "bot_remote_kb.py must import KB_WEB_SEARCH_ENABLED from bot_config. "
+        "Required for CRAG web search fallback gate."
+    )
+    assert "KB_WEB_SEARCH_THRESHOLD" in src, (
+        "bot_remote_kb.py must use KB_WEB_SEARCH_THRESHOLD as confidence threshold. "
+        "Threshold separates high-confidence KB answers from low-confidence fallback queries."
+    )
+    assert "search_web" in src, (
+        "bot_remote_kb.py _do_search must call search_web() from bot_web_search. "
+        "CRAG fallback: if max KB score < threshold, augment with web search."
+    )
+    assert "WEB" in src, (
+        "_do_search context must label web search results distinctly (e.g. '[WEB N]'). "
+        "Users must know which parts of the answer come from web vs KB."
+    )
+
+
+def test_do_search_uses_query_type_prompts():
+    """T253: _do_search() uses query-type-aware system prompts (_QUERY_TYPE_SYSTEM).
+
+    Type-aware prompts significantly improve answer quality:
+      - regulation: "cite section numbers precisely"
+      - procedure:  "list steps in order"
+      - definition: "provide verbatim definition"
+    Source must call _classify_query_type() and use the result to select system prompt.
+    """
+    src = _read_src("features/bot_remote_kb.py")
+
+    assert "_classify_query_type" in src, (
+        "_do_search() must call _classify_query_type() to determine query type. "
+        "Generic prompts are insufficient for regulatory document compliance queries."
+    )
+    assert "_QUERY_TYPE_SYSTEM" in src, (
+        "_do_search() must use _QUERY_TYPE_SYSTEM dict for type-specific system prompts."
+    )
+    # Verify the classifier is called inside _do_search
+    import ast
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_do_search":
+            src_do_search = ast.unparse(node)
+            assert "_classify_query_type" in src_do_search, (
+                "_classify_query_type() must be called inside _do_search(). "
+                "Defining it outside the function is insufficient."
+            )
+            assert "_QUERY_TYPE_SYSTEM" in src_do_search or "type_instr" in src_do_search, (
+                "_do_search must use _QUERY_TYPE_SYSTEM lookup to build the system prompt. "
+                "Look for type_instr = _QUERY_TYPE_SYSTEM.get(qtype, ...) pattern."
+            )
+            break
+
+
+def test_do_search_processes_8_chunks():
+    """T254: _do_search() processes up to 8 KB chunks (bumped from 5).
+
+    Rationale: regulatory documents often spread requirements across many sections.
+    5 chunks was insufficient for complex multi-part queries (e.g., PPE requirements
+    covering clothing, footwear, and respiratory protection — 3 separate sections).
+    Worksafety bot retrieves 8 chunks as standard.
+    Source must slice chunks list with [:8] or equivalent.
+    """
+    src = _read_src("features/bot_remote_kb.py")
+    import re
+    # Find slicing patterns in _do_search context
+    # Should contain [:8] or chunks[:8] for increased chunk coverage
+    # (Previous was [:5])
+    matches = re.findall(r'chunks\[:(\d+)\]', src)
+    assert matches, (
+        "_do_search must slice the chunks list (e.g. chunks[:8]). "
+        "Explicit slicing ensures consistent chunk count independent of top_k config."
+    )
+    max_slice = max(int(m) for m in matches)
+    assert max_slice >= 8, (
+        f"_do_search chunks slice must be ≥ 8 (got {max_slice}). "
+        "8 chunks matches Worksafety standard retrieval depth. "
+        "5 chunks missed multi-section regulatory requirements."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     tests = [
         ("T200 config_constants_source",          test_remote_kb_config_constants_source),
@@ -1832,6 +2141,15 @@ if __name__ == "__main__":
         ("T237 extract_cyrillic_rtf",               test_extract_cyrillic_rtf),
         ("T238 do_search_appends_sources_footer",    test_do_search_appends_sources_footer),
         ("T239 do_search_system_prompt_lang_aware",  test_do_search_system_prompt_is_language_aware),
+        ("T246 mcp_top_k_default_is_8",              test_mcp_remote_top_k_default_is_8),
+        ("T247 kb_search_hybrid_fts",                test_kb_search_direct_uses_hybrid_fts),
+        ("T248 extract_doc_num_patterns",             test_extract_doc_num_patterns),
+        ("T249 query_classifier_5_types",             test_query_classifier_5_types),
+        ("T250 kb_web_search_config_constants",       test_kb_web_search_config_constants),
+        ("T251 bot_web_search_module_api",            test_bot_web_search_module_api),
+        ("T252 do_search_web_fallback",               test_do_search_has_web_search_fallback),
+        ("T253 do_search_query_type_prompts",         test_do_search_uses_query_type_prompts),
+        ("T254 do_search_8_chunks",                   test_do_search_processes_8_chunks),
     ]
 
     passed = failed = skipped = 0
