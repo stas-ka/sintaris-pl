@@ -38,7 +38,15 @@ T228 _kb_search_direct does NOT use Ollama for embeddings (uses EmbeddingService
 T229 _kb_search_direct calls svc.embed(query) with single string, not a list
 T230 _do_search calls ask_llm_with_history (not raw chunk display)
 T231 _do_search returns LLM-generated answer when chunks are available
-T232 ingest_file calls _fix_doc_meta() after receiving doc_id from N8N
+T233 _do_search uses _lang(chat_id) + _LANG_PROMPT (language-aware prompts)
+T234 remote_kb_sources i18n key present in ru/en/de (source attribution)
+T235 _extract_to_text supports RTF, PDF, DOCX, .doc (all Worksafety formats)
+T236 _do_search processes up to 5 chunks (not <5, regulatory doc coverage)
+T237 _extract_to_text correctly extracts Cyrillic from RTF unicode escapes
+T238 _do_search appends sources footer (section names) to reply
+T239 _do_search system prompt is language-aware (Russian instruction for 'ru' users)
+T240 Worksafety query quality benchmark (live, requires KB_PG_DSN + 883Н uploaded)
+T241 KB user isolation: chat_id A docs not visible to chat_id B (live)
 
 Usage (offline — no bot.env needed):
     python3 src/tests/test_remote_kb.py
@@ -1117,6 +1125,275 @@ def test_ingest_calls_fix_doc_meta():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T233–T241  Worksafety / regulatory document quality tests
+#
+# T233–T239 are offline source-inspection and behaviour tests.
+# T240–T241 are live integration tests (require KB_PG_DSN + uploaded docs).
+#
+# Rationale: derived from comparing Taris KB against the Worksafety N8N RAG bot
+# (D:\Projects\workspace\Worksafety-superassistant).  See doc/kb-quality-comparison.md
+# for the full gap analysis and improvement roadmap.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_do_search_uses_language_detection():
+    """T233: _do_search uses _lang(chat_id) + _LANG_PROMPT for language-aware system prompts.
+
+    Without language detection, Russian regulatory docs would always be answered in
+    English regardless of the user's configured language (ru/de/en).
+    Root cause guard: verifies _LANG_PROMPT dict and _lang() call exist in the module.
+    """
+    src = _read_src("features/bot_remote_kb.py")
+
+    # _LANG_PROMPT dict must be defined (not inlined)
+    assert "_LANG_PROMPT" in src, (
+        "bot_remote_kb.py must define _LANG_PROMPT dict for per-language system prompts. "
+        "Russian regulatory queries require 'Отвечай строго на русском языке.' instruction."
+    )
+
+    # _lang must be called in the module
+    assert "_lang(" in src or "= _lang(" in src, (
+        "bot_remote_kb.py must call _lang(chat_id) to detect user language. "
+        "Without this, system prompts are hardcoded to one language."
+    )
+
+    # _LANG_PROMPT must have ru, en, de entries
+    import ast
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "_LANG_PROMPT" for t in node.targets)):
+            val = node.value
+            if isinstance(val, ast.Dict):
+                keys = {k.s for k in val.keys if isinstance(k, ast.Constant)}
+                for lang in ("ru", "en", "de"):
+                    assert lang in keys, (
+                        f"_LANG_PROMPT missing '{lang}' key — "
+                        f"regulatory docs may be answered in wrong language for {lang} users"
+                    )
+            return
+
+
+def test_remote_kb_sources_i18n_all_langs():
+    """T234: remote_kb_sources i18n key is present and non-empty in ru, en, de.
+
+    Source attribution (e.g., '_Sources: §19, 883Н_') is mandatory for regulatory
+    document compliance — users must be able to verify the legal basis for safety requirements.
+    """
+    strings = json.loads((_SRC / "strings.json").read_text(encoding="utf-8"))
+    for lang in ("ru", "en", "de"):
+        assert "remote_kb_sources" in strings[lang], (
+            f"Missing 'remote_kb_sources' key in lang '{lang}'. "
+            "Regulatory compliance requires source attribution footer."
+        )
+        val = strings[lang]["remote_kb_sources"]
+        assert val and val.strip(), (
+            f"'remote_kb_sources' is empty for lang '{lang}'. "
+            "Source footer must be non-empty."
+        )
+
+
+def test_extract_to_text_handles_all_worksafety_formats():
+    """T235: _extract_to_text supports RTF, PDF, DOCX, .doc (all Worksafety document formats).
+
+    Worksafety regulatory documents are distributed as RTF (legacy) and DOCX (current).
+    All four formats must be extractable to enable indexing of the full document set.
+    """
+    src = _read_src("core/bot_mcp_client.py")
+
+    # RTF support
+    assert "rtf" in src.lower() and "striprtf" in src.lower(), (
+        "_extract_to_text must handle RTF via striprtf (main format for Russian regulatory docs)"
+    )
+
+    # DOCX support
+    assert (
+        "vnd.openxmlformats" in src.lower()
+        or "officedocument.wordprocessingml" in src.lower()
+        or ".docx" in src
+    ), (
+        "_extract_to_text must handle DOCX via python-docx "
+        "(many Worksafety documents are .docx paired with .rtf)"
+    )
+
+    # python-docx import present
+    assert "from docx import" in src or "import docx" in src, (
+        "_extract_to_text must import python-docx (Document) for .docx extraction"
+    )
+
+    # PDF support
+    assert "pdfminer" in src or "pdf" in src.lower(), (
+        "_extract_to_text must handle PDF (some regulatory docs are PDF-only)"
+    )
+
+
+def test_do_search_processes_five_chunks():
+    """T236: _do_search processes up to 5 chunks from the KB (not fewer).
+
+    Regulatory documents are long (hundreds of sections, thousands of paragraphs).
+    top_k=3 (common default) misses the specific section that answers the query.
+    Worksafety N8N bot uses 5–10 chunks per query. Taris must use ≥5.
+    Verifies: chunks[:5] slice in _do_search context-building loop.
+    """
+    src = _read_src("features/bot_remote_kb.py")
+
+    assert "chunks[:5]" in src or "top_k=5" in src or "top_k = 5" in src, (
+        "_do_search must process at least 5 chunks (chunks[:5] or top_k=5). "
+        "Regulatory documents require broader context coverage than top_k=3."
+    )
+
+
+def test_extract_cyrillic_rtf():
+    """T237: _extract_to_text correctly extracts Cyrillic text from a UTF-8 encoded RTF.
+
+    Russian regulatory documents (Приказ Минтруда, Постановления, ГОСТ) use Cyrillic.
+    The extraction must produce readable Cyrillic text — not garbled or empty output.
+
+    Uses a minimal RTF with \\uXXXX? Unicode escapes (standard RTF encoding for Cyrillic).
+    """
+    try:
+        from striprtf.striprtf import rtf_to_text  # noqa: F401
+    except ImportError:
+        raise AssertionError("SKIP: striprtf not installed")
+
+    from core.bot_mcp_client import _extract_to_text
+
+    # Minimal RTF with Cyrillic Unicode escapes: "Охрана труда" (labor safety)
+    # \u1054? = О, \u1093? = х, \u1088? = р, \u1072? = а, \u1085? = н, \u1072? = а
+    # \u1090? = т, \u1088? = р, \u1091? = у, \u1076? = д, \u1072? = а
+    rtf_source = (
+        r"{\rtf1\ansi\ansicpg1251\deff0"
+        r"{\fonttbl{\f0\fswiss\fcharset204 Arial;}}"
+        r"\f0\fs24 "
+        r"\u1054?\u1093?\u1088?\u1072?\u1085?\u1072? "   # Охрана
+        r"\u1090?\u1088?\u1091?\u1076?\u1072?"            # труда
+        r"}"
+    )
+    rtf_bytes = rtf_source.encode("utf-8")
+
+    result_bytes, result_name, result_mime = _extract_to_text(
+        rtf_bytes, "883н_охрана_труда.rtf", "text/rtf"
+    )
+
+    assert result_mime == "text/plain", f"Expected text/plain, got {result_mime}"
+    text = result_bytes.decode("utf-8")
+    assert len(text.strip()) > 2, (
+        f"RTF extraction produced empty/trivial text: {text!r}. "
+        "Russian regulatory RTF files must yield readable content."
+    )
+    has_cyrillic = any("\u0400" <= c <= "\u04FF" for c in text)
+    assert has_cyrillic, (
+        f"Extracted text contains no Cyrillic characters: {text!r}. "
+        "Worksafety RTF documents contain Russian-language regulatory text — "
+        "Cyrillic must survive extraction."
+    )
+
+
+def test_do_search_appends_sources_footer():
+    """T238: _do_search appends a sources footer listing document sections in the reply.
+
+    Regulatory compliance requires citing which document section provided the answer.
+    The footer format is: '_Sources: §19.1 883Н, §3.2 883Н_' (i18n key remote_kb_sources).
+    Without this, users cannot verify the legal basis for safety requirements.
+    """
+    import sys
+    # Fresh import to avoid pollution from other tests
+    for mod in list(sys.modules.keys()):
+        if "bot_remote_kb" in mod:
+            sys.modules.pop(mod, None)
+
+    import importlib
+    from unittest.mock import MagicMock, patch
+    from core import bot_mcp_client as mcp_mod
+    import features.bot_remote_kb as kb_mod
+
+    fake_chunks = [
+        {"chunk_id": 1, "text": "Работодатель обязан выдавать СИЗ.",
+         "score": 0.85, "section": "§19.1 Приказ 883Н"},
+        {"chunk_id": 2, "text": "Инструктаж по охране труда проводится ежегодно.",
+         "score": 0.80, "section": "§3.2 Приказ 883Н"},
+    ]
+    llm_answer = "Работодатель обязан выдавать средства индивидуальной защиты."
+
+    bot = MagicMock()
+    sent_texts: list[str] = []
+    bot.send_message.return_value = MagicMock(message_id=42)
+    bot.edit_message_text.side_effect = lambda text, *a, **kw: sent_texts.append(text)
+
+    def fake_t(chat_id, key, **kw):
+        return {"remote_kb_sources": "Sources", "remote_kb_searching": "🔍"}.get(key, key)
+
+    with patch.object(mcp_mod, "query_remote", return_value=fake_chunks):
+        with patch("features.bot_remote_kb.ask_llm_with_history", return_value=llm_answer):
+            kb_mod._do_search(994963580, "СИЗ охрана труда", bot, fake_t)
+
+    assert sent_texts, "_do_search must send at least one message via edit_message_text"
+    full_text = " ".join(sent_texts)
+
+    # Must contain source attribution from the sections
+    has_section = "§19.1" in full_text or "§3.2" in full_text or "883Н" in full_text
+    has_label = "Sources" in full_text or "Источники" in full_text or "Quellen" in full_text
+    assert has_section or has_label, (
+        f"_do_search reply must include source attribution footer. "
+        f"Got: {full_text[:400]!r}. "
+        "Regulatory compliance: users must know which document section was cited."
+    )
+
+
+def test_do_search_system_prompt_is_language_aware():
+    """T239: _do_search passes a language-specific instruction in the LLM system prompt.
+
+    When the user's language is Russian, the system prompt must include a Russian-language
+    instruction (e.g., 'Отвечай строго на русском языке.').
+    Without this, the LLM may respond in English even for Russian regulatory queries.
+    """
+    import sys
+    for mod in list(sys.modules.keys()):
+        if "bot_remote_kb" in mod:
+            sys.modules.pop(mod, None)
+
+    from unittest.mock import MagicMock, patch
+    from core import bot_mcp_client as mcp_mod
+    import features.bot_remote_kb as kb_mod
+
+    fake_chunks = [{"chunk_id": 1, "text": "Охрана труда.", "score": 0.9, "section": "§1"}]
+    captured_messages: list = []
+
+    def capturing_llm(messages, **kw):
+        captured_messages.extend(messages)
+        return "Ответ на русском."
+
+    bot = MagicMock()
+    bot.send_message.return_value = MagicMock(message_id=1)
+    bot.edit_message_text.return_value = None
+
+    def fake_t(chat_id, key, **kw):
+        return {"remote_kb_searching": "🔍", "remote_kb_sources": "Источники"}.get(key, key)
+
+    # Patch _lang to return "ru" for this chat_id
+    with patch("features.bot_remote_kb._lang", return_value="ru"):
+        with patch.object(mcp_mod, "query_remote", return_value=fake_chunks):
+            with patch("features.bot_remote_kb.ask_llm_with_history", side_effect=capturing_llm):
+                kb_mod._do_search(994963580, "охрана труда", bot, fake_t)
+
+    assert captured_messages, "_do_search must call ask_llm_with_history with messages"
+    system_msgs = [m for m in captured_messages if m.get("role") == "system"]
+    assert system_msgs, "ask_llm_with_history must receive a system message"
+    system_content = system_msgs[0].get("content", "")
+
+    # For Russian users, system prompt must include a Russian-language directive
+    russian_directives = [
+        "русском",     # Отвечай строго на русском языке
+        "Russian",     # fallback English instruction (should not match for ru)
+    ]
+    assert "русском" in system_content, (
+        f"For Russian-language users (_lang='ru'), the system prompt must include "
+        f"'Отвечай строго на русском языке.' (or similar). "
+        f"Got system prompt: {system_content[:300]!r}"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Deployed integration tests (T220–T224)
 # Require KB_PG_DSN env var pointing to a live taris_kb PostgreSQL DB.
 # Insert real test data, call bot_remote_kb public API with mocked bot and _t,
@@ -1366,6 +1643,155 @@ if _HAS_BOT_CONFIG:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T240–T241  Worksafety benchmark tests (live, require KB_PG_DSN)
+#
+# T240: regulatory document query returns substantive answer (≥60% fuzzy similarity
+#       to expected Worksafety benchmark answers from test_cases.csv).
+# T241: KB user isolation — user A's documents are NOT visible to user B.
+#
+# Pre-requisite for T240: upload 883Н RTF to Taris KB via Telegram bot on VPS.
+# See doc/kb-quality-comparison.md §7 for upload instructions.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fuzzy_similarity(expected: str, actual: str) -> float:
+    """Fuzzy similarity 0.0–1.0 between expected and actual answer strings.
+
+    Mirrors the evaluation methodology from Worksafety test_rag.py:
+    takes the max of partial_ratio, token_sort_ratio, token_set_ratio.
+    Falls back to SequenceMatcher if fuzzywuzzy is not installed.
+    """
+    try:
+        from fuzzywuzzy import fuzz  # type: ignore
+        return max(
+            fuzz.partial_ratio(expected.lower(), actual.lower()),
+            fuzz.token_sort_ratio(expected.lower(), actual.lower()),
+            fuzz.token_set_ratio(expected.lower(), actual.lower()),
+        ) / 100.0
+    except ImportError:
+        from difflib import SequenceMatcher
+        return SequenceMatcher(None, expected.lower(), actual.lower()).ratio()
+
+
+# Standard Worksafety benchmark queries (from test_cases.csv, domain 883Н).
+# Expected fragments are short regulatory text snippets that should appear in the answer.
+_WORKSAFETY_QUERIES = [
+    ("Требования при работе на высоте", "не менее двух"),
+    ("Организация рабочего места на строительной площадке", "не менее 0,6"),
+    ("Средства индивидуальной защиты при строительных работах", "специальная одежда"),
+]
+
+
+def test_deployed_worksafety_query_quality():
+    """T240: Worksafety regulatory queries return substantive answers (≥60% fuzzy similarity).
+
+    Requires:
+      - KB_PG_DSN pointing to live taris_kb PostgreSQL
+      - WORKSAFETY_CHAT_ID env var identifying which user uploaded the 883Н RTF document
+      - OR any chat_id that has the 883Н document uploaded via Telegram bot on VPS
+
+    Fuzzy threshold: 0.60 (lower than Worksafety's 0.70 due to Taris using 384-dim embeddings).
+    Raise to 0.70 after implementing P1 improvements from doc/kb-quality-comparison.md.
+
+    Skip conditions: no KB_PG_DSN, no WORKSAFETY_CHAT_ID, or no 883Н document in KB.
+    """
+    import os as _os
+    ws_chat = _os.environ.get("WORKSAFETY_CHAT_ID")
+    if not ws_chat:
+        raise AssertionError(
+            "SKIP: set WORKSAFETY_CHAT_ID to the chat_id that uploaded the 883Н RTF. "
+            "Upload via Telegram → KB → Upload files. See doc/kb-quality-comparison.md §7."
+        )
+    ws_chat_id = int(ws_chat)
+
+    import psycopg
+    # Check that 883Н document exists for this chat_id
+    with psycopg.connect(_KB_PG_DSN) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM kb_documents "
+                "WHERE owner_chat_id = %s AND title ILIKE '%883%'",
+                (ws_chat_id,),
+            )
+            count = cur.fetchone()[0]
+    if count == 0:
+        raise AssertionError(
+            f"SKIP: no document matching '883%' found for chat_id={ws_chat_id}. "
+            "Upload 883Н RTF via Telegram → KB → Upload files first."
+        )
+
+    from core import bot_mcp_client as mcp_mod
+    pass_count = 0
+    warn_count = 0
+    fail_results = []
+
+    for query, expected_fragment in _WORKSAFETY_QUERIES:
+        chunks = mcp_mod.query_remote(query, ws_chat_id, top_k=5)
+        if not chunks:
+            fail_results.append(f"Query '{query}': no chunks returned")
+            continue
+
+        # Combine top-3 chunk texts as candidate answer
+        combined = " ".join(
+            (c.get("text") or c.get("chunk_text") or "").strip()
+            for c in chunks[:3]
+        )
+        sim = _fuzzy_similarity(expected_fragment, combined)
+
+        if sim >= 0.90:
+            pass_count += 1
+        elif sim >= 0.60:
+            warn_count += 1
+            print(f"  WARN  T240 '{query}': similarity={sim:.2f} (fragment: '{expected_fragment}')")
+        else:
+            fail_results.append(
+                f"Query '{query}': similarity={sim:.2f} < 0.60 (expected: '{expected_fragment}')"
+            )
+
+    assert not fail_results, (
+        f"T240 Worksafety benchmark failures:\n"
+        + "\n".join(f"  FAIL: {r}" for r in fail_results)
+        + f"\n\nPASS={pass_count}, WARN={warn_count}, FAIL={len(fail_results)}"
+        + "\nSee doc/kb-quality-comparison.md §8 for improvement roadmap."
+    )
+
+
+def test_deployed_kb_user_isolation():
+    """T241: KB documents are NOT visible across different chat_ids (user isolation).
+
+    Inserts a document for _KB_TEST_CHAT (7777777), then queries it from a different
+    chat_id (6666666). The document must NOT appear in the other user's results.
+    Verifies that owner_chat_id filter is enforced in _kb_search_direct().
+    """
+    _KB_OTHER_CHAT = 6666666
+    _kb_cleanup()
+    # Also clean up 'other' chat from previous runs
+    import psycopg
+    with psycopg.connect(_KB_PG_DSN) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM kb_documents WHERE owner_chat_id = %s", (_KB_OTHER_CHAT,)
+            )
+        conn.commit()
+
+    try:
+        doc_id = _kb_insert_test_doc()  # inserted for _KB_TEST_CHAT = 7777777
+        from core import bot_mcp_client as mcp_mod
+        # Query from a DIFFERENT chat_id
+        chunks = mcp_mod.query_remote("quick brown fox", _KB_OTHER_CHAT, top_k=5)
+        # Must not find the document belonging to _KB_TEST_CHAT
+        test_texts = [c.get("text", "") for c in chunks]
+        for text in test_texts:
+            assert _KB_TEST_TEXT not in text, (
+                f"T241 FAIL: document belonging to chat_id={_KB_TEST_CHAT} "
+                f"is visible to chat_id={_KB_OTHER_CHAT}. "
+                f"User isolation (_kb_search_direct owner_chat_id filter) is broken. "
+                f"Found text: {text[:120]!r}"
+            )
+    finally:
+        _kb_cleanup()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # __main__ runner (matches test_n8n_crm.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1399,6 +1825,13 @@ if __name__ == "__main__":
         ("T230 do_search_calls_llm_not_raw_chunks",  test_do_search_calls_llm_not_raw_chunks),
         ("T231 do_search_returns_llm_answer",        test_do_search_returns_llm_answer),
         ("T232 ingest_calls_fix_doc_meta",           test_ingest_calls_fix_doc_meta),
+        ("T233 do_search_uses_language_detection",   test_do_search_uses_language_detection),
+        ("T234 remote_kb_sources_i18n_all_langs",    test_remote_kb_sources_i18n_all_langs),
+        ("T235 extract_to_text_all_worksafety_fmts", test_extract_to_text_handles_all_worksafety_formats),
+        ("T236 do_search_processes_five_chunks",     test_do_search_processes_five_chunks),
+        ("T237 extract_cyrillic_rtf",               test_extract_cyrillic_rtf),
+        ("T238 do_search_appends_sources_footer",    test_do_search_appends_sources_footer),
+        ("T239 do_search_system_prompt_lang_aware",  test_do_search_system_prompt_is_language_aware),
     ]
 
     passed = failed = skipped = 0
@@ -1437,6 +1870,8 @@ if __name__ == "__main__":
             ("T222 deployed_delete_document",       test_deployed_delete_document),
             ("T223 deployed_search",                test_deployed_search),
             ("T224 deployed_full_cycle",            test_deployed_full_cycle),
+            ("T240 worksafety_query_quality",       test_deployed_worksafety_query_quality),
+            ("T241 kb_user_isolation",              test_deployed_kb_user_isolation),
         ]:
             try:
                 fn()

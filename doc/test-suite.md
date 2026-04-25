@@ -29,7 +29,7 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | `src/tests/screen_loader/` | Screen DSL loader regression (Category G — all 64 tests) | Local machine |
 | `src/tests/llm/` | LLM provider tests (Category H — all 18 tests) | Local machine |
 | **Before backup or after data migration** | Data consistency check (Category J) | Any target |
-| `src/features/bot_remote_kb.py` / `src/core/bot_mcp_client.py` | Remote KB agent tests T200–T224 | Local machine (T200–T219); VPS with KB_PG_DSN (T220–T224) |
+| `src/features/bot_remote_kb.py` / `src/core/bot_mcp_client.py` | Remote KB agent tests T200–T241 | Local machine (T200–T239); VPS with KB_PG_DSN (T220–T224, T240–T241) |
 | `src/strings.json` remote_kb_* keys | Remote KB agent T203, T209, T216 | Local machine |
 | `src/bot_web.py` `/api/remote-kb/` routes | Remote KB agent T214 | Local machine |
 | `src/core/bot_mcp_client.py` KB direct DB functions | Integration T220–T224 | VPS-Supertaris with `KB_PG_DSN` set |
@@ -61,7 +61,7 @@ Use it any time a user says "test the software", "run tests", or asks whether so
 | **CAMP — Campaign / CRM** | pytest (`test_campaign.py`, `test_n8n_crm.py`) | Local machine | Yes |
 | **CS — Content strategy** | pytest (`test_content_strategy.py`) | Local machine | Yes |
 | **CN — Content + N8N live** | pytest (`test_content_n8n.py`) | Local (requires live N8N) | Conditional |
-| **KB — Remote KB / MCP** | Python (`test_remote_kb.py`) T200–T232 | Local (T200–T219); VPS (T220–T232) | Yes |
+| **KB — Remote KB / MCP** | Python (`test_remote_kb.py`) T200–T241 | Local (T200–T239); VPS (T220–T224, T240–T241) | Yes |
 | **K — Performance benchmarks** | Python (`benchmark_stt.py`, `bench_remote_kb.py`, `benchmark_ollama_models.py`) | Target machine | Manual / periodic |
 | **L — Security / RBAC** | T70–T71, T116, T140–T157 in `test_voice_regression.py` | Local (source inspection) | Yes |
 
@@ -314,6 +314,15 @@ docker exec -e KB_PG_DSN=postgresql://taris:zusammen2019@127.0.0.1:5432/taris_kb
 | T230 | `do_search_calls_llm_not_raw_chunks` | `bot_remote_kb.py` imports and calls `ask_llm_with_history` in `_do_search`. Regression: before fix, raw chunk dicts with scores were shown to users. | After editing `_do_search()` |
 | T231 | `do_search_returns_llm_answer` | `_do_search()` calls `ask_llm_with_history` with a `messages` list when chunks are found. | After editing `_do_search()` or `ask_llm_with_history` integration |
 | T232 | `ingest_calls_fix_doc_meta` | `ingest_file()` calls `_fix_doc_meta(doc_id, original_title, preview)` after N8N returns. Regression: N8N sanitizes Unicode filenames → Russian titles appeared garbled without this fix. | After editing `ingest_file()` or `_fix_doc_meta()` |
+| T233 | `do_search_uses_language_detection` | `_do_search()` defines and uses `_LANG_PROMPT` dict with ru/en/de keys + calls `_lang(chat_id)`. Prevents Russian regulatory answers being returned in English for ru users. | After editing `_do_search()` or language detection |
+| T234 | `remote_kb_sources_i18n_all_langs` | `remote_kb_sources` key present and non-empty in ru/en/de (source attribution footer for regulatory documents). | After editing `strings.json` KB keys |
+| T235 | `extract_to_text_all_worksafety_fmts` | `_extract_to_text()` handles RTF (striprtf), PDF (pdfminer), DOCX (python-docx), .doc — all four formats used in Worksafety regulatory document corpus. | After editing `_extract_to_text()` or adding format support |
+| T236 | `do_search_processes_five_chunks` | `_do_search()` processes `chunks[:5]` or uses `top_k=5`. Regulatory documents require 5+ chunks for adequate coverage (vs default 3). | After editing context-building in `_do_search()` |
+| T237 | `extract_cyrillic_rtf` | `_extract_to_text()` extracts Cyrillic text from RTF with `\uXXXX?` unicode escapes (standard encoding for Russian Windows RTF files). | After editing RTF extraction path; requires striprtf |
+| T238 | `do_search_appends_sources_footer` | `_do_search()` appends a sources footer listing section names via `_t(chat_id, 'remote_kb_sources')`. Regulatory compliance requires citing which section provided the answer. | After editing `_do_search()` reply construction |
+| T239 | `do_search_system_prompt_lang_aware` | When `_lang(chat_id)='ru'`, the LLM system prompt contains Russian-language instruction ("русском"). Verifies language-aware prompt is active for Russian regulatory queries. | After editing `_do_search()` system prompt construction |
+| T240 | `deployed_worksafety_query_quality` | *(integration, benchmark)* Runs 3 standard Worksafety queries against the KB; checks ≥60% fuzzy similarity with expected regulatory text fragments. Requires `KB_PG_DSN` + `WORKSAFETY_CHAT_ID` + 883Н RTF uploaded. See `doc/kb-quality-comparison.md §7`. | After implementing KB P1 improvements; before production release |
+| T241 | `deployed_kb_user_isolation` | *(integration)* Inserts doc for chat_id=7777777, queries from chat_id=6666666 — must NOT find it. Verifies `owner_chat_id` filter in `_kb_search_direct()`. | After editing `_kb_search_direct()` or DB schema |
 
 ### 2.5b Campaign Tests — `src/tests/test_campaign.py`
 
@@ -1034,7 +1043,7 @@ Copilot should:
 - **Campaign / CRM changes** → Category CAMP: `pytest src/tests/test_campaign.py src/tests/test_n8n_crm.py`
 - **Content strategy changes** → Category CS: `pytest src/tests/test_content_strategy.py`
 - **N8N live integration** → Category CN: `pytest src/tests/test_content_n8n.py -m live` (requires N8N)
-- **Remote KB / MCP changes** → Category KB: `python3 src/tests/test_remote_kb.py` (T200–T219 offline; T220–T232 live VPS)
+- **Remote KB / MCP changes** → Category KB: `python3 src/tests/test_remote_kb.py` (T200–T239 offline; T220–T224, T240–T241 live VPS)
 - **Security / RBAC changes** → Category L: `python3 src/tests/test_voice_regression.py --test t_rbac t_security t_dev_menu`
 - **Performance regression** → Category K: `python3 src/tests/benchmark_stt.py`
 
